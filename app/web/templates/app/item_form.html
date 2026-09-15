@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 720px;">
+<h1>Add stock item</h1>
+<p class="lede">Anything Square does not count for you: the milk, the flour, the beans in the hopper.</p>
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<form class="card" method="post" action="/app/items/new">
+  <div class="row">
+    <div class="field" style="flex: 2 1 260px;">
+      <label for="name">Name</label>
+      <input id="name" name="name" required autofocus placeholder="Whole milk">
+    </div>
+    <div class="field">
+      <label for="category">Category</label>
+      <input id="category" name="category" placeholder="Dairy">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="location_id">Location</label>
+      <select id="location_id" name="location_id" required>
+        {% for location in locations %}
+        <option value="{{ location.id }}">{{ location.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="dimension">Tracked by</label>
+      <select id="dimension" name="dimension" required onchange="syncUnits()">
+        <option value="count">Count</option>
+        <option value="weight">Weight</option>
+        <option value="volume">Volume</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="stock_unit">Stock unit</label>
+      <select id="stock_unit" name="stock_unit" required></select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="quantity">Quantity on hand now</label>
+      <input id="quantity" name="quantity" inputmode="decimal" value="0" required>
+    </div>
+    <div class="field">
+      <label for="reorder_point">Reorder at</label>
+      <input id="reorder_point" name="reorder_point" inputmode="decimal" value="0">
+    </div>
+    <div class="field">
+      <label for="par_level">Par level (optional)</label>
+      <input id="par_level" name="par_level" inputmode="decimal" placeholder="top up to">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="cost_per_unit">Cost per stock unit</label>
+      <input id="cost_per_unit" name="cost_per_unit" inputmode="decimal" value="0">
+    </div>
+    <div class="field">
+      <label for="retail_price">Sells for (per unit)</label>
+      <input id="retail_price" name="retail_price" inputmode="decimal"
+             placeholder="leave empty if not sold as it is">
+    </div>
+    <div class="field">
+      <label for="receive_unit">Delivered as</label>
+      <select id="receive_unit" name="receive_unit"></select>
+    </div>
+    <div class="field">
+      <label for="pack_size">Pack size (in stock units)</label>
+      <input id="pack_size" name="pack_size" inputmode="decimal" placeholder="e.g. 6 for a 6 x 1L case">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="supplier">Supplier</label>
+      <input id="supplier" name="supplier">
+    </div>
+    <div class="field">
+      <label for="sku">Supplier SKU</label>
+      <input id="sku" name="sku" placeholder="as printed on the invoice">
+    </div>
+    <div class="field">
+      <label for="upc">Barcode (UPC/EAN)</label>
+      <input id="upc" name="upc" inputmode="numeric" placeholder="optional">
+    </div>
+    <div class="field">
+      <label for="lead_time_days">Lead time (days)</label>
+      <input id="lead_time_days" name="lead_time_days" type="number" min="0" value="2">
+    </div>
+  </div>
+
+  <button class="btn" type="submit">Add item</button>
+  <a class="btn secondary" href="/app">Cancel</a>
+</form>
+</div>
+
+<script>
+  const UNITS = {
+    count: [{% for unit in UNITS_BY_DIMENSION[Dimension.COUNT] %}["{{ unit.code }}", "{{ unit.label }}"],{% endfor %}],
+    weight: [{% for unit in UNITS_BY_DIMENSION[Dimension.WEIGHT] %}["{{ unit.code }}", "{{ unit.label }}"],{% endfor %}],
+    volume: [{% for unit in UNITS_BY_DIMENSION[Dimension.VOLUME] %}["{{ unit.code }}", "{{ unit.label }}"],{% endfor %}]
+  };
+  function fill(select, options) {
+    select.innerHTML = "";
+    for (const [code, label] of options) {
+      const option = document.createElement("option");
+      option.value = code;
+      option.textContent = label;
+      select.appendChild(option);
+    }
+  }
+  function syncUnits() {
+    const dimension = document.getElementById("dimension").value;
+    fill(document.getElementById("stock_unit"), UNITS[dimension]);
+    fill(document.getElementById("receive_unit"), UNITS[dimension].concat([["each", "case / box"]]));
+  }
+  syncUnits();
+</script>
+{% endblock %}

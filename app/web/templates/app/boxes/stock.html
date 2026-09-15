@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}<div class="notice {{ flash.kind }}">{{ flash.message }}</div>{% endif %}
+<p class="small"><a href="/app/boxes">&larr; Boxes</a></p>
+<h1>Stock check</h1>
+<p class="lede">Each item that paid boxes hold, against Square's count. Reconcile retries anything Square missed
+and settles units the till sold after a box was paid. It also runs by itself every ten minutes.</p>
+<form method="post" action="/app/boxes/reconcile" style="margin-bottom:16px"><button class="btn" type="submit">Reconcile now</button></form>
+
+{% if not rows %}
+<div class="card"><p class="muted" style="margin:0">No paid boxes are holding stock right now.</p></div>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <tr>
+      <th>Item</th><th class="num">Square count</th><th class="num">In paid boxes</th><th class="num">Packed, not collected</th>
+      <th class="num">Not yet in Square</th><th class="num">Till may sell</th><th class="num">On the shelf</th><th>Issues</th>
+    </tr>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.item.name }}</td>
+      <td class="num">{{ row.position.count_base|plain(row.item.stock_unit) }}</td>
+      <td class="num">{{ row.position.allocated_base|plain(row.item.stock_unit) }}</td>
+      <td class="num">{{ row.position.packed_base|plain(row.item.stock_unit) }}</td>
+      <td class="num">{{ row.position.unapplied_base|plain(row.item.stock_unit) }}</td>
+      <td class="num">{{ row.position.store_available_base|plain(row.item.stock_unit) }}</td>
+      <td class="num">{{ row.position.on_shelf_base|plain(row.item.stock_unit) }}</td>
+      <td class="small {{ 'tone-bad' if row.issues else 'tone-good' }}">{{ row.issues|join('; ') if row.issues else "in step" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

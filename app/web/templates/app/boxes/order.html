@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}<div class="notice {{ flash.kind }}">{{ flash.message }}</div>{% endif %}
+<p class="small"><a href="/app/boxes">&larr; Boxes</a></p>
+<h1>{{ order.box_type|title }} box #{{ order.id }}</h1>
+<p class="lede"><span class="pill {{ order.status.value }}">{{ order.status.value.replace('_', ' ') }}</span>
+  for {{ customer.first_name or "" }} {{ customer.email }}{% if order.pickup_on %} &middot; pickup {{ order.pickup_on }}{% endif %}
+  {% if order.rules %}&middot; <span class="small muted">rules {{ order.rules }}</span>{% endif %}</p>
+{% if order.attention %}<div class="notice error">{{ order.attention }}</div>{% endif %}
+
+<div class="grid cols-4">
+  <div class="card">
+    <div class="stat-label">Due</div>
+    <div class="stat">{{ order.amount_due_cents|money(currency) }}</div>
+    <div class="small muted">price {{ order.price_cents|money(currency) }}
+      {% if order.discount_cents %}&middot; referral {{ order.discount_cents|money(currency) }}{% endif %}
+      {% if order.credit_cents %}&middot; credit {{ order.credit_cents|money(currency) }}{% endif %}</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Contribution</div>
+    <div class="stat">{{ contribution|money(currency) }}</div>
+    <div class="small muted">after snacks, packaging and card fee</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Allergies</div>
+    <div class="stat" style="font-size:18px">
+      {% if customer.allergens is none %}<span class="tone-bad">not answered</span>
+      {% elif customer.allergens == "" %}none{% else %}{{ customer.allergens.replace(';', ', ').replace('_', ' ') }}{% endif %}
+    </div>
+    {% if customer.dietary %}<div class="small">{{ customer.dietary }}</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="stat-label">Payment</div>
+    <div class="stat" style="font-size:18px">{{ order.payment_source or "unpaid" }}</div>
+    {% if referral %}<div class="small muted">referral {{ referral.status.value }}</div>{% endif %}
+  </div>
+</div>
+
+<h2>Packing list</h2>
+<p class="small muted">Take each unit from a lot at least {{ box.min_days_after_pickup + box.pickup_after_days }} days from its date,
+and tick it as it goes in. Packing re-reads Square first, so anything the till sold since payment shows up here.</p>
+<form method="post" action="/app/boxes/{{ order.id }}/pack">
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>Item</th><th>Why it was picked</th><th class="num">Fit</th><th class="num">Shelf</th><th>Status</th><th></th></tr>
+      {% for line, item in lines %}{% if line.status.value != "released" %}
+      <tr>
+        <td>{% if order.status.value == "paid" and line.status.value == "allocated" %}<input type="checkbox" name="line" value="{{ line.id }}" style="width:auto">{% endif %}</td>
+        <td>{{ item.name }}</td>
+        <td class="small">{{ line.why }}
+          {% if line.driver == "shelf" %}<span class="pill waste_risk">shelf</span>{% elif line.driver == "packer" %}<span class="pill count">packer</span>{% endif %}</td>
+        <td class="num">{{ line.fit }}</td>
+        <td class="num">{{ line.shelf }}</td>
+        <td><span class="pill {{ line.status.value }}">{{ line.status.value }}</span>
+          {% if not line.count_applied and line.status.value in ["allocated", "packed"] %}<div class="small tone-warn">Square not told yet</div>{% endif %}</td>
+        <td>{% if order.status.value == "paid" %}<a class="small" href="/app/boxes/{{ order.id }}?swap={{ line.id }}">Swap</a>{% endif %}</td>
+      </tr>
+      {% if line.id in options %}
+      <tr>
+        <td></td>
+        <td colspan="6">
+          {% if options[line.id] %}
+            <div class="small muted">Replace {{ item.name }} with:</div>
+            {% for pick in options[line.id] %}
+            <div style="margin:4px 0">
+              <button class="btn small secondary" type="submit" formaction="/app/boxes/{{ order.id }}/lines/{{ line.id }}/replace"
+                      name="stock_item_id" value="{{ pick.candidate.stock_item_id }}">{{ pick.candidate.name }}</button>
+              <span class="small muted">{{ pick.why }}</span>
+            </div>
+            {% endfor %}
+          {% else %}
+            <span class="small tone-bad">Nothing boxable fits in its place. Mark more stock boxable, or refund the order.</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endif %}
+      {% endif %}{% endfor %}
+    </table>
+  </div>
+  {% if order.status.value == "paid" %}<p><button class="btn" type="submit">Mark packed</button></p>{% endif %}
+</form>
+
+<h2>Actions</h2>
+<div class="row" style="align-items:flex-start">
+  {% if order.status.value == "pending_payment" %}
+  <form method="post" action="/app/boxes/{{ order.id }}/paid"><button class="btn" type="submit">Paid at the counter</button></form>
+  <form method="post" action="/app/boxes/{{ order.id }}/cancel"><button class="btn secondary" type="submit">Cancel</button></form>
+  {% endif %}
+  {% if order.status.value == "packed" %}
+  <form method="post" action="/app/boxes/{{ order.id }}/picked-up"><button class="btn" type="submit">Picked up</button></form>
+  {% endif %}
+  {% if order.status.value in ["paid", "packed", "picked_up"] %}
+  <form class="card" method="post" action="/app/boxes/{{ order.id }}/refund">
+    <strong>Refund</strong>
+    {% if order.status.value == "paid" %}
+      <div class="small muted">Nothing has left the shelf, so its snacks go back into the till's count.</div>
+    {% else %}
+      <label style="font-weight:500"><input type="checkbox" name="restock" style="width:auto"> Put the snacks back on the shelf</label>
+      <div class="small muted">Only if they are sealed, in date and safe to sell again.</div>
+    {% endif %}
+    <button class="btn secondary small" type="submit" style="margin-top:8px">Record refund</button>
+    <div class="small muted">This records it here. Give the money back in Square as well.</div>
+  </form>
+  {% endif %}
+  {% if order.status.value == "refunded" and has_packed %}
+  <form method="post" action="/app/boxes/{{ order.id }}/restock"><button class="btn secondary" type="submit">Put these snacks back on the shelf</button></form>
+  {% endif %}
+</div>
+{% endblock %}

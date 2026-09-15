@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block content %}
+{% if request.query_params.get("labelled") %}
+  <div class="notice ok">Dated. That stock will now be sold first-expired-first-out.</div>
+{% elif request.query_params.get("removed") %}
+  <div class="notice ok">Date removed. The stock itself is unchanged.</div>
+{% elif request.query_params.get("coverage") %}
+  <div class="notice ok">Noted. That item is out of the coverage figure from now on.</div>
+{% elif request.query_params.get("error") == "invalid" %}
+  <div class="notice error">Enter a quantity above zero and a valid date.</div>
+{% endif %}
+
+<h1>Expiring</h1>
+<p class="lede">Dated stock, sold first-expired-first-out. What will not sell in time is projected
+from the last four weeks of sales.</p>
+
+<div class="grid cols-3" style="margin: 18px 0 8px;">
+  <div class="card">
+    <div class="stat-label">May expire unsold &middot; next {{ horizon }} days</div>
+    <div class="stat" style="color: var(--warn);">{{ at_risk_cents|money(currency) }}</div>
+    <div class="small muted">{{ at_risk_products }} product{{ "s" if at_risk_products != 1 else "" }}, at cost</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Past its date, still counted</div>
+    <div class="stat" style="color: var(--danger);">{{ expired_cents|money(currency) }}</div>
+    <div class="small muted">{{ expired_products }} product{{ "s" if expired_products != 1 else "" }}</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Dated lots on the shelf</div>
+    <div class="stat">{{ rows|length }}</div>
+    <div class="small muted">as of {{ today.strftime("%d %b") }}</div>
+  </div>
+</div>
+
+{% if locations|length > 1 %}
+<p class="small">
+  Location:
+  <a href="/app/expiring">All</a>
+  {% for location in locations %}
+    &middot; <a href="/app/expiring?location={{ location.id }}">{{ location.name }}</a>
+  {% endfor %}
+</p>
+{% endif %}
+
+{% if not rows %}
+<div class="card">
+  <h2 style="margin-top:0;">No dated stock yet</h2>
+  <p class="small muted" style="margin-bottom:0;">Stock gets a date two ways: receive a delivery and
+  enter the best-before on the line &mdash; one date covers the whole line &mdash; or date what is
+  already on the shelf below.</p>
+</div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Best before</th>
+      <th>On shelf</th>
+      <th>Won&rsquo;t sell in time</th>
+      <th>At cost</th>
+      <th>Do this</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    {% set item = row.item %}
+    {% set p = row.position %}
+    <tr>
+      <td>
+        <strong>{{ item.name }}</strong>
+        {% if item.location_name and locations|length > 1 %}
+          <div class="small muted">{{ item.location_name }}</div>
+        {% endif %}
+      </td>
+      <td style="white-space:nowrap;">
+        {{ p.batch.expires_on.strftime("%d %b") }}
+        <div class="small muted">
+          {% if p.days_left < 0 %}{{ -p.days_left }} day{{ "s" if p.days_left != -1 else "" }} ago
+          {% elif p.days_left == 0 %}today
+          {% else %}in {{ p.days_left }} day{{ "s" if p.days_left != 1 else "" }}{% endif %}
+        </div>
+      </td>
+      <td>{{ p.remaining_base|approx(item.stock_unit) }}</td>
+      <td>
+        {% if row.status == "expired" %}{{ p.remaining_base|approx(item.stock_unit) }}
+        {% elif p.projected_leftover_base is none %}<span class="muted">no sales data</span>
+        {% elif p.projected_leftover_base > 0 %}{{ p.projected_leftover_base|approx(item.stock_unit) }}
+        {% else %}<span class="muted">&ndash;</span>{% endif %}
+      </td>
+      <td>
+        {% if row.status in ("expired", "at_risk") %}{{ p.at_risk_cents|money(currency) }}
+        {% else %}<span class="muted">&ndash;</span>{% endif %}
+      </td>
+      <td>
+        <span class="pill {{ row.status }}">
+          {% if row.status == "expired" %}Take off sale
+          {% elif row.status == "at_risk" %}Front &amp; mark down
+          {% elif row.status == "sell_first" %}Sell this lot first
+          {% elif row.status == "no_signal" %}Watch the date
+          {% else %}On track{% endif %}
+        </span>
+        {% if row.status == "expired" %}
+          <div class="small muted">then record a count</div>
+        {% endif %}
+      </td>
+      <td>
+        <form method="post" action="/app/expiring/{{ p.batch.id }}/remove"
+              onsubmit="return confirm('Remove this date? The stock itself is not changed.');">
+          <button class="btn small secondary" type="submit" title="Remove a wrongly entered date">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="small muted">Sales are assumed to take the soonest-dated stock first. Stock with no date
+is treated as the oldest on the shelf, so dating it gives a sharper projection. Recording a count
+re-sets everything from what is actually there.</p>
+{% endif %}
+
+<h2>Expiration tracking coverage</h2>
+<div class="card">
+  <div style="display:flex; gap:24px; align-items:baseline; flex-wrap:wrap;">
+    <div>
+      <div class="stat" style="color: {{ 'var(--accent-dark)' if coverage.percent >= 80 else 'var(--warn)' }};">
+        {{ coverage.percent }}%
+      </div>
+      <div class="small muted">of stock that can expire has a date</div>
+    </div>
+    <div>
+      <div class="stat">{{ coverage.needs_dates|length }}</div>
+      <div class="small muted">
+        product{{ "s" if coverage.needs_dates|length != 1 else "" }} still need
+        {{ "a date" if coverage.needs_dates|length == 1 else "dates" }}
+      </div>
+    </div>
+    <div>
+      <div class="stat">{{ coverage.dated_items }}/{{ coverage.eligible_items }}</div>
+      <div class="small muted">fully dated</div>
+    </div>
+  </div>
+
+  {% if coverage.needs_dates %}
+  <p class="small muted" style="margin:14px 0 6px;">Most valuable first. Anything that never goes
+  off can be taken out of this figure, so the percentage means something.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Item</th><th>Undated</th><th>At cost</th><th></th></tr></thead>
+    <tbody>
+    {% for row in coverage.needs_dates[:12] %}
+      <tr>
+        <td><strong>{{ row.item.name }}</strong></td>
+        <td>{{ row.undated_base|approx(row.item.stock_unit) }}</td>
+        <td>{{ row.undated_cents|money(currency) }}</td>
+        <td>
+          <form method="post" action="/app/expiring/perishable">
+            <input type="hidden" name="stock_item_id" value="{{ row.item.id }}">
+            <input type="hidden" name="perishable" value="no">
+            <button class="btn small secondary" type="submit">Never expires</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if coverage.needs_dates|length > 12 %}
+    <p class="small muted" style="margin:10px 0 0;">
+      and {{ coverage.needs_dates|length - 12 }} more.
+    </p>
+  {% endif %}
+  {% else %}
+    <p class="small muted" style="margin:14px 0 0;">Everything that can expire carries a date.</p>
+  {% endif %}
+</div>
+
+<h2>Date stock already on the shelf</h2>
+<div class="card">
+  <form method="post" action="/app/expiring/label" class="row">
+    <div>
+      <label for="stock_item_id">Item</label>
+      <select id="stock_item_id" name="stock_item_id" required>
+        {% for item in items %}
+          <option value="{{ item.id }}">{{ item.name }} ({{ item.stock_unit }}){% if item.location_name and locations|length > 1 %} &middot; {{ item.location_name }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="quantity">How much has this date</label>
+      <input id="quantity" name="quantity" inputmode="decimal" required placeholder="e.g. 24">
+    </div>
+    <div>
+      <label for="expires_on">Best before</label>
+      <input id="expires_on" name="expires_on" type="date" required min="{{ today.isoformat() }}">
+    </div>
+    <div style="flex: 0 0 auto;">
+      <button class="btn" type="submit">Add date</button>
+    </div>
+  </form>
+  <p class="small muted" style="margin:10px 0 0;">Check one pack and enter the date for all of them.
+  The quantity is in the item&rsquo;s own unit, and your stock level does not change.</p>
+</div>
+{% endblock %}

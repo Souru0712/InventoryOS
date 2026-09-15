@@ -1,0 +1,18 @@
+{% if not orders %}
+<div class="card"><p class="muted" style="margin:0">No boxes yet.</p></div>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <tr><th>Order</th><th>Box</th><th>Status</th><th class="num">Due</th><th></th></tr>
+    {% for o in orders %}
+    <tr>
+      <td>#{{ o.id }}</td>
+      <td>{{ o.box_type|title }}</td>
+      <td><span class="pill {{ o.status.value }}">{{ o.status.value.replace('_', ' ') }}</span></td>
+      <td class="num">{{ o.amount_due_cents|money(currency) }}</td>
+      <td><a href="/shop/{{ shop.id }}/me/orders/{{ o.id }}">View</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}

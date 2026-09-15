@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+{% if request.query_params.get("started") %}
+  <div class="notice ok">Markdown started. Change the price on your POS to match.</div>
+{% elif request.query_params.get("dismissed") %}
+  <div class="notice ok">Dismissed. That item will not come back here.</div>
+{% elif request.query_params.get("snoozed") %}
+  <div class="notice ok">Put off until tomorrow, when it is worked out again from the shelf.</div>
+{% elif request.query_params.get("ended") %}
+  <div class="notice ok">Markdown ended.</div>
+{% endif %}
+
+<h1>Promotions</h1>
+<p class="lede">Stock that will not sell before its date, and what it would take to move it.
+Every figure below comes from your own sales, not from a guess.</p>
+
+{% if running %}
+<h2>Running now</h2>
+<div class="grid cols-3">
+  {% for row in running %}
+  <div class="card">
+    <strong>{{ row.item.name }}</strong>
+    <div class="stat" style="margin-top:6px;">
+      {{ (row.promotion.accepted_price_cents or row.promotion.suggested_price_cents)|money(currency) }}
+    </div>
+    <div class="small muted">
+      was {{ row.promotion.normal_price_cents|money(currency) }} &middot;
+      day {{ row.days_running + 1 }}
+    </div>
+    <p class="small" style="margin:10px 0 0;">
+      {% if row.lift %}
+        Selling <strong>{{ row.lift }}x</strong> faster:
+        {{ row.promotion.velocity_before|approx_amount(row.item.stock_unit) }} to
+        {{ row.velocity_during|approx_amount(row.item.stock_unit) }} a day.
+      {% elif row.velocity_during is not none %}
+        {{ row.velocity_during|approx_amount(row.item.stock_unit) }} a day so far.
+      {% else %}
+        No sales recorded yet.
+      {% endif %}
+    </p>
+    <form method="post" action="/app/promotions/{{ row.promotion.id }}/end" style="margin-top:10px;">
+      <button class="btn small secondary" type="submit">End it</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Suggested{% if at_risk_cents %} &middot; {{ at_risk_cents|money(currency) }} at risk{% endif %}</h2>
+
+{% if not suggestions %}
+<div class="card">
+  <p style="margin:0;"><strong>Nothing needs marking down.</strong></p>
+  <p class="small muted" style="margin:8px 0 0;">Either your dated stock is on course to sell
+  before its date, or the items that are not have no selling price set yet. Prices come from
+  Square when you sync; you can also set one on the item.</p>
+</div>
+{% endif %}
+
+{% for s in suggestions %}
+<div class="card" style="margin-bottom:14px;">
+  <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <div style="flex:1 1 260px;">
+      <span class="pill {{ 'out_of_stock' if s.urgency == 'critical' else 'low_stock' }}">
+        {{ s.urgency }}
+      </span>
+      <h3 style="margin:8px 0 2px; font-size:17px;">{{ s.item.name }}</h3>
+      <div class="small muted">
+        {{ s.units_at_risk_base|approx_amount(s.item.stock_unit) }} projected to be left over,
+        {{ s.cost_at_risk_cents|money(currency) }} at cost
+      </div>
+
+      <ul class="small" style="margin:12px 0 0; padding-left:18px; color: var(--muted);">
+        {% for reason in s.reasons %}<li>{{ reason }}</li>{% endfor %}
+      </ul>
+    </div>
+
+    <div style="flex:0 1 220px;">
+      <div class="stat-label">Suggested price</div>
+      <div class="stat">{{ s.suggested_price_cents|money(currency) }}</div>
+      <div class="small muted">
+        was {{ s.normal_price_cents|money(currency) }} &middot; {{ s.discount_percent }}% off
+      </div>
+      <div class="small muted" style="margin-top:8px;">
+        If it all clears: {{ s.expected_revenue_cents|money(currency) }} back, instead of losing
+        {{ s.cost_at_risk_cents|money(currency) }}.
+      </div>
+
+      <form method="post" action="/app/promotions/accept" style="margin-top:12px;">
+        <input type="hidden" name="stock_item_id" value="{{ s.item.stock_item_id }}">
+        <div class="field" style="margin-bottom:8px;">
+          <label for="price-{{ s.item.stock_item_id }}">Price to use</label>
+          <input id="price-{{ s.item.stock_item_id }}" name="price" inputmode="decimal"
+                 placeholder="{{ '%.2f'|format(s.suggested_price_cents / 100) }}">
+        </div>
+        <button class="btn" type="submit">Start markdown</button>
+      </form>
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <form method="post" action="/app/promotions/snooze">
+          <input type="hidden" name="stock_item_id" value="{{ s.item.stock_item_id }}">
+          <button class="btn small secondary" type="submit">Tomorrow</button>
+        </form>
+        <form method="post" action="/app/promotions/dismiss">
+          <input type="hidden" name="stock_item_id" value="{{ s.item.stock_item_id }}">
+          <button class="btn small secondary" type="submit">Dismiss</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% if suggestions %}
+<p class="small muted">Prices are rounded down to the nearest 5c and never taken below a 20%
+margin over cost. StockPulse does not change your Square prices: it tells you what to change
+them to.</p>
+{% endif %}
+{% endblock %}

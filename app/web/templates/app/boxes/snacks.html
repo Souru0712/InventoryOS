@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}<div class="notice {{ flash.kind }}">{{ flash.message }}</div>{% endif %}
+<p class="small"><a href="/app/boxes">&larr; Boxes</a></p>
+<h1>Snacks</h1>
+<p class="lede">What can go in a box. An item needs its allergens read from the label, and a dated lot, before
+it is ever picked. Only items counted in units are listed.</p>
+
+{% for item, p in rows %}
+{% set state = "unknown" if not p or p.allergens is none else ("none" if p.allergens == "" else "listed") %}
+<form class="card" method="post" action="/app/boxes/snacks/{{ item.id }}" style="margin-bottom:10px">
+  <div class="row">
+    <div style="flex:2 1 240px">
+      <strong>{{ item.name }}</strong>
+      <div class="small muted">{{ item.category or "no category" }} &middot; {{ item.qty_base|qty(item.stock_unit) }}</div>
+    </div>
+    <label style="flex:0 0 auto; font-weight:500"><input type="checkbox" name="boxable" style="width:auto" {% if p and p.boxable %}checked{% endif %}> Boxable</label>
+    <div style="flex:0 1 120px"><label for="origin-{{ item.id }}">Origin</label>
+      <input id="origin-{{ item.id }}" name="origin" value="{{ p.origin if p else '' }}" placeholder="JP"></div>
+  </div>
+  <div class="small" style="margin-top:8px">Flavours:
+    {% for f in flavors %}
+    <label style="display:inline; font-weight:500; margin-right:10px">
+      <input type="checkbox" name="flavor_{{ f }}" style="width:auto" {% if p and f in p.flavors.split(';') %}checked{% endif %}> {{ f }}
+    </label>
+    {% endfor %}
+  </div>
+  <div class="small" style="margin-top:6px">Allergens on the label:
+    {% for s, label in [("unknown", "not read yet"), ("none", "none"), ("listed", "these:")] %}
+    <label style="display:inline; font-weight:500; margin-right:10px">
+      <input type="radio" name="allergens_state" value="{{ s }}" style="width:auto" {% if state == s %}checked{% endif %}> {{ label }}
+    </label>
+    {% endfor %}
+    {% for a in allergens %}
+    <label style="display:inline; font-weight:500; margin-right:8px">
+      <input type="checkbox" name="allergen_{{ a }}" style="width:auto" {% if p and p.allergens and a in p.allergens.split(';') %}checked{% endif %}> {{ a.replace('_', ' ') }}
+    </label>
+    {% endfor %}
+  </div>
+  <button class="btn small" type="submit" style="margin-top:8px">Save</button>
+</form>
+{% else %}
+<div class="card"><p class="muted" style="margin:0">No counted stock items yet. Sync Square first.</p></div>
+{% endfor %}
+{% endblock %}

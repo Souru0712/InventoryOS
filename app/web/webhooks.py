@@ -1,0 +1,140 @@
+"""Square calls us when stock moves at the till, so our numbers do not go stale between syncs."""
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.config import get_settings
+from app.db import get_db
+from app.load.upsert import apply_provider_counts
+from app.models import Location, ProviderConnection, StockItem, TrackMode
+from app.orchestration import boxes as box_orders
+from app.providers.square.webhooks import (
+    INVENTORY_COUNT_UPDATED,
+    PAYMENT_UPDATED,
+    REFUND_EVENTS,
+    inventory_counts,
+    merchant_id,
+    verify_signature,
+)
+from app.transform.square_normalize import normalize_counts
+
+log = logging.getLogger(__name__)
+router = APIRouter()
+
+NOTIFICATION_PATH = "/webhooks/square"
+
+
+def _tenant_for(db: Session, merchant: str) -> int | None:
+    connection = db.scalars(
+        select(ProviderConnection).where(
+            ProviderConnection.provider == "square",
+            ProviderConnection.merchant_id == merchant,
+            ProviderConnection.status == "active",
+        )
+    ).first()
+    return connection.tenant_id if connection else None
+
+
+def _drop_stale(db: Session, tenant_id: int, rows: list[dict]) -> list[dict]:
+    """Square warns that offline tills deliver counts out of order; older news never wins.
+
+    last_synced_at is when we last read this item, so a count calculated before that is
+    already reflected in what we hold.
+    """
+    locations = {
+        loc.provider_location_id: loc.id
+        for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
+    }
+    items = {
+        (item.location_id, item.provider_variation_id): item
+        for item in db.scalars(
+            select(StockItem).where(
+                StockItem.tenant_id == tenant_id, StockItem.track_mode == TrackMode.PROVIDER
+            )
+        )
+        if item.provider_variation_id
+    }
+
+    fresh = []
+    for row in rows:
+        location_id = locations.get(row["provider_location_id"])
+        item = items.get((location_id, row["provider_item_id"])) if location_id else None
+        if item is None:
+            continue
+        calculated_at = _parse(row.get("calculated_at"))
+        last_seen = _aware(item.last_synced_at)
+        if calculated_at and last_seen and calculated_at < last_seen:
+            log.info("ignored a stale count for item %s", item.id)
+            continue
+        fresh.append(row)
+    return fresh
+
+
+def _parse(stamp: str | None) -> datetime | None:
+    if not stamp:
+        return None
+    try:
+        return _aware(datetime.fromisoformat(stamp.replace("Z", "+00:00")))
+    except ValueError:
+        return None
+
+
+def _aware(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+@router.post(NOTIFICATION_PATH)
+async def square_webhook(request: Request, db: Session = Depends(get_db)):
+    settings = get_settings()
+    key = settings.square_webhook_signature_key
+    if not key:
+        raise HTTPException(status_code=503, detail="SQUARE_WEBHOOK_SIGNATURE_KEY is not set")
+
+    body = await request.body()
+    signature = request.headers.get("x-square-hmacsha256-signature", "")
+    url = settings.app_base_url.rstrip("/") + NOTIFICATION_PATH
+    if not verify_signature(url, body, signature, key):
+        log.warning("rejected a square webhook with a bad signature")
+        raise HTTPException(status_code=400, detail="invalid signature")
+
+    try:
+        event = json.loads(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="body is not JSON") from exc
+
+    if event.get("type") in (PAYMENT_UPDATED, *REFUND_EVENTS):
+        tenant_id = _tenant_for(db, merchant_id(event))
+        if tenant_id is None:
+            log.info("square webhook for unknown merchant %s", merchant_id(event))
+            return {"ignored": "unknown merchant"}
+        handle = (
+            box_orders.handle_square_payment
+            if event["type"] == PAYMENT_UPDATED
+            else box_orders.handle_square_refund
+        )
+        result = handle(db, tenant_id, event)
+        db.commit()
+        return result
+
+    if event.get("type") != INVENTORY_COUNT_UPDATED:
+        return {"ignored": event.get("type")}
+
+    tenant_id = _tenant_for(db, merchant_id(event))
+    if tenant_id is None:
+        # A merchant we do not know is not an error worth retrying.
+        log.info("square webhook for unknown merchant %s", merchant_id(event))
+        return {"ignored": "unknown merchant"}
+
+    rows = _drop_stale(db, tenant_id, normalize_counts(inventory_counts(event)))
+    updated = apply_provider_counts(db, tenant_id, rows) if rows else 0
+    db.commit()
+    log.info("square webhook updated %s counts for tenant %s", updated, tenant_id)
+    return {"updated": updated}

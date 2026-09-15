@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Pricing</h1>
+<p class="lede">Cancel any time. The setup package is a one-off &mdash; we do the configuration with you.</p>
+
+<div class="grid cols-3">
+  {% for plan in plans %}
+  <div class="card">
+    <div class="stat-label">{{ plan.name }}</div>
+    <div class="stat">${{ plan.price }}<span class="small muted">{{ "" if plan.one_time else "/mo" }}</span></div>
+    <p class="small muted">{{ plan.blurb }}</p>
+    <ul class="small" style="padding-left: 18px; color: var(--muted);">
+      {% for feature in plan.features %}<li>{{ feature }}</li>{% endfor %}
+    </ul>
+    {% if plan.one_time %}
+      <a class="btn small" href="mailto:{{ settings.support_email }}?subject=Setup%20package">Book setup</a>
+    {% elif tenant %}
+      <form method="post" action="/billing/checkout">
+        <input type="hidden" name="plan" value="{{ plan.id }}">
+        <button class="btn small" type="submit">Choose {{ plan.name }}</button>
+      </form>
+    {% else %}
+      <a class="btn small" href="/signup">Start free</a>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Questions we get asked</h2>
+<div class="card">
+  <p class="small"><strong>Do I have to change how I use Square?</strong> No. StockPulse reads your
+  Square catalog, inventory and orders, and writes corrected counts back when you ask it to.</p>
+  <p class="small"><strong>What if I weigh things instead of counting them?</strong> That is the
+  point. Stock can be tracked by count, by weight or by volume, and each one gets the right
+  reorder logic.</p>
+  <p class="small"><strong>Can you set it up for me?</strong> Yes &mdash; that is the setup package.
+  We build your stock list, set your reorder points from real sales, and hand it over working.</p>
+  <p class="small" style="margin-bottom:0;"><strong>Where is my data?</strong> Your data is yours.
+  See the <a href="/privacy">privacy policy</a>.</p>
+</div>
+{% endblock %}

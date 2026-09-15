@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<body style="margin:0; padding:24px; background:#f7faf8; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; color:#14211c;">
+  <div style="max-width:600px; margin:0 auto; background:#fff; border:1px solid #dbe4df; border-radius:12px; padding:24px;">
+    <p style="margin:0 0 4px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:#5d6f67;">
+      {{ tenant.name }}
+    </p>
+    <h1 style="margin:0 0 6px; font-size:22px;">
+      Week of {{ report.period_start.strftime("%d %b") }} &ndash; {{ report.period_end.strftime("%d %b") }}
+    </h1>
+
+    <table style="width:100%; border-collapse:collapse; margin:16px 0;">
+      <tr>
+        <td style="padding:12px; background:#f2f6f4; border-radius:8px;">
+          <div style="font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:#5d6f67;">Net sales</div>
+          <div style="font-size:22px; font-weight:700;">{{ money(report.net_cents) }}</div>
+          {% if report.net_change_pct is not none %}
+            <div style="font-size:12px; color:#5d6f67;">{{ report.net_change_pct }}% vs last week</div>
+          {% endif %}
+        </td>
+        <td style="width:12px;"></td>
+        <td style="padding:12px; background:#f2f6f4; border-radius:8px;">
+          <div style="font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:#5d6f67;">Stock on hand</div>
+          <div style="font-size:22px; font-weight:700;">{{ money(report.inventory_value_cents) }}</div>
+          <div style="font-size:12px; color:#5d6f67;">{{ report.alerts|length }} need attention</div>
+        </td>
+      </tr>
+    </table>
+
+    {% if alerts %}
+    <h2 style="font-size:16px; margin:22px 0 8px;">Order this week</h2>
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      {% for alert in alerts %}
+      <tr>
+        <td style="padding:9px 0; border-bottom:1px solid #eef2f0;">
+          <strong>{{ alert.name }}</strong>
+          <div style="color:#5d6f67; font-size:13px;">{{ alert.message }}</div>
+        </td>
+        <td style="padding:9px 0; border-bottom:1px solid #eef2f0; text-align:right; white-space:nowrap;">
+          {{ alert.suggested }}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+
+    {% if report.top_sellers %}
+    <h2 style="font-size:16px; margin:22px 0 8px;">Top sellers</h2>
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      {% for seller in report.top_sellers %}
+      <tr>
+        <td style="padding:7px 0; border-bottom:1px solid #eef2f0;">{{ seller.name }}</td>
+        <td style="padding:7px 0; border-bottom:1px solid #eef2f0; text-align:right;">{{ seller.units }}</td>
+        <td style="padding:7px 0; border-bottom:1px solid #eef2f0; text-align:right;">{{ money(seller.net_cents) }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+
+    <p style="margin:22px 0 0;">
+      <a href="{{ base_url }}/app/report"
+         style="display:inline-block; background:#12855f; color:#fff; text-decoration:none; padding:11px 18px; border-radius:9px; font-weight:600;">
+        See the full report
+      </a>
+    </p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}<div class="notice {{ flash.kind }}">{{ flash.message }}</div>{% endif %}
+<h1>Snack boxes</h1>
+<p class="lede">
+  {% if box.is_open %}Open for orders at <a href="/shop/{{ tenant.id }}">/shop/{{ tenant.id }}</a>.
+  {% else %}<span class="tone-warn">Closed to new orders.</span>{% endif %}
+  <a href="/app/boxes/settings">Settings</a> &middot; <a href="/app/boxes/snacks">Snacks</a> &middot;
+  <a href="/app/boxes/stock">Stock check</a> &middot; <a href="/app/boxes/referrals">Referrals</a>
+</p>
+
+{% if report %}
+<div class="notice error">{{ report|length }} item(s) disagree with Square or the till.
+  <a href="/app/boxes/stock">Open the stock check</a></div>
+{% endif %}
+
+{% for key, label in [("attention", "Needs attention"), ("paid", "Paid - to pack"), ("packed", "Packed - waiting for pickup"), ("pending_payment", "Waiting for payment"), ("done", "Recent")] %}
+<h2>{{ label }} <span class="muted small">{{ groups[key]|length }}</span></h2>
+{% if groups[key] %}
+<div class="table-wrap">
+  <table>
+    <tr><th>Order</th><th>Customer</th><th>Box</th><th>Status</th><th>Pickup</th><th></th></tr>
+    {% for order, customer in groups[key] %}
+    <tr>
+      <td>#{{ order.id }}</td>
+      <td>{{ customer.first_name or customer.email }}</td>
+      <td>{{ order.box_type|title }}</td>
+      <td><span class="pill {{ order.status.value }}">{{ order.status.value.replace('_', ' ') }}</span>
+        {% if key == "attention" %}<div class="small tone-bad">{{ order.attention }}</div>{% endif %}</td>
+      <td>{{ order.pickup_on or "-" }}</td>
+      <td><a href="/app/boxes/{{ order.id }}">Open</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% else %}
+<p class="small muted">None.</p>
+{% endif %}
+{% endfor %}
+{% endblock %}

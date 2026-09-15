@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+  <div style="flex: 1 1 420px;">
+    <h1>Reorder</h1>
+    <p class="lede">What to order, grouped by who you order it from. Quantities top up to the par
+    level, or cover the lead time plus two weeks of sales where no par is set.</p>
+  </div>
+  {% if groups %}
+    <a class="btn small secondary" href="/app/reorder.csv" style="flex: none; margin-top: 6px;">Download as CSV</a>
+  {% endif %}
+</div>
+
+{% if not groups %}
+<div class="card">
+  <p style="margin:0;"><strong>Nothing to reorder.</strong></p>
+  <p class="small muted" style="margin:8px 0 0;">Everything is above its reorder point and will
+  last until a delivery could arrive.</p>
+</div>
+{% endif %}
+
+{% for supplier, lines in groups %}
+<h2>{{ supplier or "No supplier set" }}</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Item</th><th>Why</th><th>On hand</th><th>Uses / day</th><th>Stockout</th><th>Lead time</th><th>Order</th></tr>
+  </thead>
+  <tbody>
+  {% for line in lines %}
+    {% set item = line.health.item %}
+    <tr>
+      <td>
+        <strong>{{ item.name }}</strong>
+        {% if item.location_name %}<div class="small muted">{{ item.location_name }}</div>{% endif %}
+      </td>
+      <td><span class="pill {{ 'out_of_stock' if line.reason == 'out_of_stock' else 'low_stock' }}">{{ line.reason_label }}</span></td>
+      <td>{{ item.qty_base|qty(item.stock_unit) }}</td>
+      <td class="small">
+        {% if line.health.has_sales_signal %}{{ line.health.velocity_per_day|approx(item.stock_unit) }}{% else %}<span class="muted">no sales data</span>{% endif %}
+      </td>
+      <td>
+        {% if line.days_to_stockout is none %}<span class="muted">&ndash;</span>
+        {% elif line.days_to_stockout <= 0 %}<strong>now</strong>
+        {% else %}in {{ "%.1f"|format(line.days_to_stockout) }} days{% endif %}
+      </td>
+      <td class="small">{{ item.lead_time_days }} day{{ "s" if item.lead_time_days != 1 else "" }}</td>
+      <td>
+        {% if line.order_base > 0 %}<strong>{{ line.order_base|approx(item.stock_unit) }}</strong>
+        {% else %}<span class="small muted">set a par level</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endfor %}
+{% endblock %}

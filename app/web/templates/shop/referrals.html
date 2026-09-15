@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Refer a friend</h1>
+<div class="grid cols-4">
+  <div class="card"><div class="stat-label">Your code</div><div class="stat" style="font-size:22px">{{ summary.code }}</div></div>
+  <div class="card"><div class="stat-label">Friends referred</div><div class="stat">{{ summary.referred }}</div></div>
+  <div class="card"><div class="stat-label">Successful</div><div class="stat">{{ summary.successful }}</div>
+    <div class="small muted">{{ summary.pending }} waiting for pickup</div></div>
+  <div class="card"><div class="stat-label">Credit available</div><div class="stat">{{ summary.available_cents|money(currency) }}</div>
+    <div class="small muted">earned {{ summary.earned_cents|money(currency) }}{% if summary.reversed_cents %},
+      reversed {{ summary.reversed_cents|money(currency) }}{% endif %}</div></div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <p style="margin-top:0">Your friend gets <strong>{{ box.referral_discount_cents|money(currency) }} off</strong> their first box.
+  You get <strong>{{ box.referral_reward_cents|money(currency) }} store credit</strong> when they pick it up.</p>
+  <p class="small muted" style="margin-bottom:0">Credit is only earned on a friend's first box, once it is picked up.
+  If that box is refunded later the credit is reversed, even if you have already used it: the difference comes
+  off future credit and is never charged to you.</p>
+</div>
+
+<h2>Credit history</h2>
+{% if not summary.transactions %}
+<div class="card"><p class="muted" style="margin:0">Nothing yet.</p></div>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <tr><th>When</th><th>What</th><th class="num">Amount</th></tr>
+    {% for t in summary.transactions %}
+    <tr>
+      <td>{{ t.created_at.strftime('%Y-%m-%d') }}</td>
+      <td>{{ t.kind.value.replace('_', ' ') }}{% if t.note %} <span class="small muted">- {{ t.note }}</span>{% endif %}</td>
+      <td class="num">{{ t.amount_cents|money(currency) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

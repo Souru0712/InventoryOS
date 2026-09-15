@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block content %}
+{% if request.query_params.get("connected") %}
+  <div class="notice ok">Square is connected and your first sync has run.</div>
+{% endif %}
+{% if request.query_params.get("error") == "not_connected" %}
+  <div class="notice error">Connect Square before syncing.</div>
+{% elif request.query_params.get("error") == "sync_failed" %}
+  <div class="notice error">The sync failed. Check the server logs for the reason.</div>
+{% elif request.query_params.get("error") == "first_sync_failed" %}
+  <div class="notice error">Square is connected, but the first sync failed. Try Sync now.</div>
+{% endif %}
+
+<div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+  <div>
+    <h1>{{ tenant.name }}</h1>
+    <p class="lede">
+      {% if last_run and last_run.finished_at %}
+        Last synced {{ last_run.finished_at.strftime("%d %b %H:%M") }} UTC.
+      {% else %}
+        Not synced yet.
+      {% endif %}
+    </p>
+  </div>
+  <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+    {% if connection %}
+      <form method="post" action="/app/sync"><button class="btn small" type="submit">Sync now</button></form>
+    {% else %}
+      <a class="btn small" href="/connect/square">Connect Square</a>
+    {% endif %}
+    <form method="post" action="/app/recalculate">
+      <button class="btn small secondary" type="submit">Recalculate</button>
+    </form>
+    <a class="btn small secondary" href="/app/receiving">Receive delivery</a>
+    <a class="btn small secondary" href="/app/items/new">Add item</a>
+  </div>
+</div>
+
+{% if rows %}{% include "app/_health_block.html" %}{% endif %}
+
+<div class="grid cols-4" style="margin: 18px 0 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+  <div class="card">
+    <div class="stat-label">Needs attention</div>
+    <div class="stat">{{ at_risk }}</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Stock on hand</div>
+    <div class="stat">{{ total_value|money(currency) }}</div>
+  </div>
+  {% if expiry %}
+  <a class="card" href="/app/expiring" style="text-decoration:none; color:inherit;">
+    <div class="stat-label">May expire unsold</div>
+    <div class="stat" style="color: var(--warn);">{{ expiry.at_risk_cents|money(currency) }}</div>
+    <div class="small muted">
+      {{ expiry.at_risk_products }} product{{ "s" if expiry.at_risk_products != 1 else "" }}
+      {% if expiry.expired_cents %}&middot; {{ expiry.expired_cents|money(currency) }} past date{% endif %}
+    </div>
+  </a>
+  {% endif %}
+  {% for name, bucket in by_dimension.items() %}
+  <div class="card">
+    <div class="stat-label"><span class="pill {{ name }}">{{ name }}</span></div>
+    <div class="stat">{{ bucket.count }}</div>
+    <div class="small muted">{{ bucket.value_cents|money(currency) }} &middot; {{ bucket.at_risk }} at risk</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if locations|length > 1 %}
+<p class="small">
+  Location:
+  <a href="/app">All</a>
+  {% for location in locations %}
+    &middot; <a href="/app?location={{ location.id }}">{{ location.name }}</a>
+  {% endfor %}
+</p>
+{% endif %}
+
+{% if not rows %}
+<div class="card">
+  <h2 style="margin-top:0;">Nothing here yet</h2>
+  <p class="small muted">Connect Square to pull in the items it already counts, then add the things
+  it does not &mdash; the milk, the flour, the beans you weigh out.</p>
+  <p><a class="btn small" href="/connect/square">Connect Square</a>
+     <a class="btn small secondary" href="/app/items/new">Add a stock item</a></p>
+</div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Type</th>
+      <th>On hand</th>
+      <th>Reorder at</th>
+      <th>Cover</th>
+      <th>Uses / day</th>
+      <th>Value</th>
+      <th>Order</th>
+      <th>Status</th>
+      <th>Record count</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    {% set item = row.item %}
+    <tr>
+      <td>
+        <strong>{{ item.name }}</strong>
+        {% if item.location_name and locations|length > 1 %}
+          <div class="small muted">{{ item.location_name }}</div>
+        {% endif %}
+        {% if row.alert %}<div class="small muted">{{ row.alert.message }}</div>{% endif %}
+      </td>
+      <td><span class="pill {{ item.dimension.value }}">{{ item.dimension.value }}</span></td>
+      <td>{{ item.qty_base|qty(item.stock_unit) }}</td>
+      <td>{{ item.reorder_point_base|qty(item.stock_unit) }}</td>
+      <td>{% if row.cover is not none %}{{ row.cover }} d{% else %}<span class="muted">&ndash;</span>{% endif %}</td>
+      <td class="small">{{ row.velocity|qty(item.stock_unit) }}</td>
+      <td>{{ row.value_cents|money(currency) }}</td>
+      <td class="small">
+        {% if row.suggested > 0 %}{{ row.suggested|qty(item.stock_unit) }}{% else %}<span class="muted">&ndash;</span>{% endif %}
+      </td>
+      <td><span class="pill {{ row.status }}">{{ row.status.replace("_", " ") }}</span></td>
+      <td>
+        <form method="post" action="/app/items/{{ item.id }}/count" style="display:flex; gap:6px;">
+          <input name="quantity" type="text" inputmode="decimal" style="width:88px;"
+                 placeholder="{{ item.qty_base|plain(item.stock_unit) }}" required>
+          <button class="btn small secondary" type="submit">Save</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="small muted">Cover is how many days the current quantity lasts at the last four weeks of
+sales. Recording a count re-anchors the item &mdash; for weight and volume, depletion restarts from
+the number you enter.</p>
+{% endif %}
+{% endblock %}

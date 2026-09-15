@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}<div class="notice {{ flash.kind }}">{{ flash.message }}</div>{% endif %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<h1>Hi{% if customer.first_name %} {{ customer.first_name }}{% endif %}</h1>
+<p class="lede">Store credit available: <strong>{{ summary.available_cents|money(currency) }}</strong>
+{% if summary.balance_cents < 0 %}&middot; <span class="tone-warn">{{ (0 - summary.balance_cents)|money(currency) }}
+will come off future credit</span>{% endif %}</p>
+
+{% if customer.allergens is none %}
+<div class="notice error">Before your first box,
+  <a href="/shop/{{ shop.id }}/me/preferences">tell us about allergies</a> - even if the answer is none.</div>
+{% endif %}
+
+<h2>Order a box</h2>
+{% if not box.is_open %}
+<div class="card"><p style="margin:0">Boxes are not open for orders right now.</p></div>
+{% else %}
+<form class="card" method="post" action="/shop/{{ shop.id }}/me/orders">
+  <div class="grid cols-3">
+    {% for t in box_types %}
+    <label class="card" style="cursor:pointer; font-weight:400;">
+      <input type="radio" name="box_type" value="{{ t.key }}" style="width:auto" {% if loop.first %}checked{% endif %}>
+      <strong>{{ t.key|title }}</strong> &middot; {{ t.price_cents|money(currency) }}
+      <div class="small muted">{{ t.blurb }}</div>
+    </label>
+    {% endfor %}
+  </div>
+  <div class="row" style="margin-top:14px">
+    <div class="field">
+      <label for="referral_code">A friend's referral code (first box only)</label>
+      <input id="referral_code" name="referral_code" placeholder="SNACK-XXXXXX" autocomplete="off">
+    </div>
+    <div class="field">
+      <label style="font-weight:500"><input type="checkbox" name="use_credit" style="width:auto" checked> Use my store credit</label>
+    </div>
+  </div>
+  <button class="btn" type="submit">Order</button>
+  <p class="small muted" style="margin-bottom:0">Nothing is set aside until the box is paid for. Referral credit is
+  earned when a friend's first box is picked up, and reversed if that box is later refunded.</p>
+</form>
+{% endif %}
+
+<h2>Recent orders</h2>
+{% include "shop/_orders_table.html" %}
+<p class="small"><a href="/shop/{{ shop.id }}/me/orders">All orders</a></p>
+{% endblock %}

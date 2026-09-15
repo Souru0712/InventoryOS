@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 560px;">
+  <h1>You are subscribed</h1>
+  <p class="lede">Thanks &mdash; {{ tenant.name }} is on the {{ tenant.plan.value }} plan.</p>
+  <div class="card">
+    <p style="margin-top:0;">Next: make sure your reorder points reflect how you actually run.</p>
+    <p><a class="btn" href="/app">Open inventory</a></p>
+    <p class="small muted" style="margin-bottom:0;">Anything wrong with the invoice or the plan?
+      Email <a href="mailto:{{ settings.support_email }}">{{ settings.support_email }}</a>.</p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title or "StockPulse" }}</title>
+<style>
+  :root {
+    --ink: #14211c; --muted: #5d6f67; --line: #dbe4df; --bg: #f7faf8;
+    --accent: #12855f; --accent-dark: #0d6146; --warn: #b45309; --danger: #b02a1e;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  /* An author display rule otherwise beats the browser's own [hidden] style. */
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         color: var(--ink); background: var(--bg); }
+  a { color: var(--accent-dark); }
+  header.site { background: var(--card); border-bottom: 1px solid var(--line); }
+  header.site .inner, main.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  header.site .inner { display: flex; align-items: center; gap: 24px; height: 62px; }
+  header.site nav { margin-left: auto; display: flex; gap: 18px; align-items: center; }
+  .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; text-decoration: none; color: var(--ink); }
+  .brand span { color: var(--accent); }
+  main.wrap { padding-top: 28px; padding-bottom: 60px; }
+  h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 6px; }
+  h2 { font-size: 20px; margin: 32px 0 12px; }
+  p.lede { color: var(--muted); margin-top: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid.cols-4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .stat { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .stat-label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: #f2f6f4; }
+  tr:last-child td { border-bottom: none; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.ok { background: #e4f4ec; color: var(--accent-dark); }
+  .pill.low_stock { background: #fdf0dd; color: var(--warn); }
+  .pill.out_of_stock { background: #fbe6e3; color: var(--danger); }
+  .pill.stale_count { background: #eceff1; color: var(--muted); }
+  .pill.expired { background: #fbe6e3; color: var(--danger); }
+  .pill.at_risk, .pill.waste_risk { background: #fdf0dd; color: var(--warn); }
+  .pill.sell_first { background: #e4f4ec; color: var(--accent-dark); }
+  .pill.on_track, .pill.no_signal { background: #eceff1; color: var(--muted); }
+  .pill.count { background: #e8eefb; color: #274b9c; }
+  .pill.weight { background: #f3ecfb; color: #6b3fa0; }
+  .pill.volume { background: #e2f3f6; color: #1c6b7a; }
+  .pill.band-excellent, .pill.band-healthy { background: #e4f4ec; color: var(--accent-dark); }
+  .pill.band-needs_attention { background: #fdf0dd; color: var(--warn); }
+  .pill.band-at_risk, .pill.band-critical { background: #fbe6e3; color: var(--danger); }
+  .pill.band-unscored { background: #eceff1; color: var(--muted); }
+  .pill.pending_payment, .pill.allocated { background: #e8eefb; color: #274b9c; }
+  .pill.paid { background: #fdf0dd; color: var(--warn); }
+  .pill.packed, .pill.picked_up { background: #e4f4ec; color: var(--accent-dark); }
+  .pill.cancelled, .pill.released { background: #eceff1; color: var(--muted); }
+  .pill.refunded, .pill.short { background: #fbe6e3; color: var(--danger); }
+  .tone-bad { color: var(--danger); } .tone-warn { color: var(--warn); }
+  .tone-good { color: var(--accent-dark); } .tone-info { color: var(--muted); }
+  .findings { list-style: none; margin: 10px 0 0; padding: 0; }
+  .findings li { position: relative; padding: 4px 0 4px 16px; font-size: 14px; }
+  .findings li::before { content: ""; position: absolute; left: 0; top: 11px; width: 8px; height: 8px;
+                         border-radius: 50%; background: currentColor; }
+  .findings a { color: inherit; }
+  .health-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin: 18px 0 16px; }
+  .health-score { text-decoration: none; color: inherit; display: block; }
+  .health-number { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; margin: 4px 0 6px; }
+  .health-number span { font-size: 18px; color: var(--muted); font-weight: 600; margin-left: 2px; }
+  .health-number.big { font-size: 64px; }
+  .actions ul { margin: 4px 0 8px; padding-left: 18px; font-size: 14px; }
+  .action-tier { font-size: 13px; font-weight: 700; margin-top: 10px; }
+  .health-hero { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .health-context { flex: 1 1 320px; }
+  .change-lines { margin: 4px 0 0; padding-left: 0; list-style: none; }
+  .change-lines .num { display: inline-block; min-width: 34px; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .dimensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .dimension .rule { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+  .item-list { padding-top: 2px; }
+  .num { font-variant-numeric: tabular-nums; }
+  @media (max-width: 760px) { .health-top { grid-template-columns: 1fr; } }
+  .btn { display: inline-block; border: 0; border-radius: 9px; padding: 10px 16px; font-size: 15px;
+         font-weight: 600; cursor: pointer; text-decoration: none; background: var(--accent); color: #fff; }
+  .btn:hover { background: var(--accent-dark); }
+  .btn.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  .btn.small { padding: 6px 11px; font-size: 13px; }
+  input, select, textarea { font: inherit; padding: 9px 11px; border: 1px solid var(--line);
+                            border-radius: 8px; background: #fff; width: 100%; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+  .field { margin-bottom: 14px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .row > * { flex: 1 1 160px; }
+  .notice { border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; font-size: 14px; }
+  .notice.error { background: #fbe6e3; color: var(--danger); }
+  .notice.ok { background: #e4f4ec; color: var(--accent-dark); }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  footer.site { border-top: 1px solid var(--line); padding: 26px 20px; color: var(--muted); font-size: 13px; }
+  footer.site .inner { max-width: 1080px; margin: 0 auto; display: flex; gap: 18px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="inner">
+    {% if shop %}
+    <a class="brand" href="/shop/{{ shop.id }}">{{ shop.name }}</a>
+    {% else %}
+    <a class="brand" href="/">Stock<span>Pulse</span></a>
+    {% endif %}
+    <nav>
+      {% if shop %}
+        {% if customer %}
+        <a href="/shop/{{ shop.id }}/me">My box</a>
+        <a href="/shop/{{ shop.id }}/me/orders">Orders</a>
+        <a href="/shop/{{ shop.id }}/me/preferences">Preferences</a>
+        <a href="/shop/{{ shop.id }}/me/referrals">Refer a friend</a>
+        <a href="/shop/{{ shop.id }}/logout">Sign out</a>
+        {% else %}
+        <a class="btn small" href="/shop/{{ shop.id }}/login">Sign in</a>
+        {% endif %}
+      {% elif tenant %}
+        <a href="/app">Inventory</a>
+        <a href="/app/scan">Scan</a>
+        <a href="/app/receiving">Receiving</a>
+        <a href="/app/expiring">Expiring</a>
+        <a href="/app/promotions">Promotions</a>
+        <a href="/app/boxes">Boxes</a>
+        <a href="/app/reorder">Reorder</a>
+        <a href="/app/report">Report</a>
+        <a href="/logout">Log out</a>
+      {% else %}
+        <a href="/pricing">Pricing</a>
+        <a href="/login">Log in</a>
+        <a class="btn small" href="/signup">Start free</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+<footer class="site">
+  <div class="inner">
+    <span>StockPulse</span>
+    <a href="/pricing">Pricing</a>
+    <a href="/terms">Terms</a>
+    <a href="/privacy">Privacy</a>
+    <a href="mailto:{{ settings.support_email }}">{{ settings.support_email }}</a>
+  </div>
+</footer>
+</body>
+</html>

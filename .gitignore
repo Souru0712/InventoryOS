@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+*.db
+.pytest_cache/
+*.egg-info/
+
+# alembic scratch databases
+.alembic-scratch.db
+
+# local secrets and backups
+.env.*
+!.env.example
+*.db.bak-*
+
+# runtime data: uploads, design scratch
+var/
+
+# local tooling
+.claude/
+.agents/

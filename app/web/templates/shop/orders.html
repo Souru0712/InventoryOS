@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}<div class="notice {{ flash.kind }}">{{ flash.message }}</div>{% endif %}
+<h1>Orders</h1>
+<p class="lede">Every box you have ordered, paid for, collected or had refunded.</p>
+{% include "shop/_orders_table.html" %}
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Receiving</h1>
+<p class="lede">Photograph the delivery note. We read the lines, match them to your stock, and you
+confirm.</p>
+{% if request.query_params.get("error") %}
+  <div class="notice error">{{ request.query_params.get("error") }}</div>
+{% endif %}
+
+{% if not locations %}
+  <div class="card">
+    <p style="margin:0;">Connect Square (or add a location) before receiving deliveries.</p>
+  </div>
+{% else %}
+<form class="card" method="post" action="/app/receiving" enctype="multipart/form-data">
+  <div class="row">
+    <div class="field">
+      <label for="location_id">Delivered to</label>
+      <select id="location_id" name="location_id" required>
+        {% for location in locations %}
+        <option value="{{ location.id }}">{{ location.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="kind">Document</label>
+      <select id="kind" name="kind">
+        <option value="invoice">Supplier invoice</option>
+        <option value="delivery_note">Delivery note</option>
+      </select>
+    </div>
+    <div class="field" style="flex: 2 1 260px;">
+      <label for="photo">Photo or PDF</label>
+      <input id="photo" name="photo" type="file" accept="image/*,application/pdf" capture="environment" required>
+    </div>
+  </div>
+  <button class="btn" type="submit">Upload and read</button>
+</form>
+{% endif %}
+
+<h2>Recent deliveries</h2>
+{% if not documents %}
+  <p class="small muted">Nothing received yet.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Date</th><th>Supplier</th><th>Invoice</th><th>Lines</th><th>Total</th><th>Status</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for document in documents %}
+    <tr>
+      <td class="small">{{ (document.invoice_date or document.uploaded_at).strftime("%d %b %Y") }}</td>
+      <td>{{ document.supplier or "-" }}</td>
+      <td class="small">{{ document.invoice_number or "-" }}</td>
+      <td>{{ document.lines|length }}</td>
+      <td>{{ document.total_cents|money(document.currency) }}</td>
+      <td>
+        <span class="pill {{ 'ok' if document.status.value == 'applied' else 'low_stock' if document.status.value == 'needs_review' else 'stale_count' }}">
+          {{ document.status.value.replace("_", " ") }}
+        </span>
+      </td>
+      <td><a class="btn small secondary" href="/app/receiving/{{ document.id }}">Review</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

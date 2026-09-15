@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Week of {{ report.period_start.strftime("%d %b") }} &ndash; {{ report.period_end.strftime("%d %b %Y") }}</h1>
+<p class="lede">This is what goes out by email every week.</p>
+
+<div class="grid cols-4">
+  <div class="card">
+    <div class="stat-label">Net sales</div>
+    <div class="stat">{{ report.net_cents|money }}</div>
+    {% if report.net_change_pct is not none %}
+      <div class="small muted">{{ report.net_change_pct }}% vs the week before</div>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="stat-label">Units sold</div>
+    <div class="stat">{{ report.orders_units }}</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Stock on hand</div>
+    <div class="stat">{{ report.inventory_value_cents|money }}</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Alerts</div>
+    <div class="stat">{{ report.alerts|length }}</div>
+  </div>
+</div>
+
+<h2>Needs attention</h2>
+{% if not report.alerts %}
+  <p class="small muted">Nothing is low. Good week.</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>What is happening</th><th>Suggested order</th></tr></thead>
+  <tbody>
+  {% for alert in report.alerts %}
+    {% set item = items.get(alert.stock_item_id) %}
+    <tr>
+      <td><strong>{{ item.name if item else "item" }}</strong>
+        {% if item %}<span class="pill {{ item.dimension.value }}">{{ item.dimension.value }}</span>{% endif %}
+      </td>
+      <td class="small">{{ alert.message }}</td>
+      <td>{% if item and alert.suggested_order_base > 0 %}{{ alert.suggested_order_base|qty(item.stock_unit) }}{% else %}&ndash;{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2>By stock type</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Type</th><th>Items</th><th>Value</th><th>At risk</th></tr></thead>
+  <tbody>
+  {% for roll in report.by_dimension %}
+    <tr>
+      <td><span class="pill {{ roll.dimension }}">{{ roll.dimension }}</span></td>
+      <td>{{ roll.item_count }}</td>
+      <td>{{ roll.value_cents|money }}</td>
+      <td>{{ roll.at_risk }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Top sellers</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>Units</th><th>Net</th></tr></thead>
+  <tbody>
+  {% for seller in report.top_sellers %}
+    <tr><td>{{ seller.name }}</td><td>{{ seller.units }}</td><td>{{ seller.net_cents|money }}</td></tr>
+  {% else %}
+    <tr><td colspan="3" class="small muted">No sales in this period.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

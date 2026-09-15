@@ -1,0 +1,451 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .scan-wrap { max-width: 560px; }
+  .viewport { position: relative; background: #0d1613; border-radius: 14px; overflow: hidden;
+              aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; }
+  .viewport video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .viewport .placeholder { color: #9fb3ac; font-size: 14px; text-align: center; padding: 0 24px; }
+  .reticle { position: absolute; inset: 18% 10%; border: 2px solid rgba(255,255,255,.9);
+             border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,.28); pointer-events: none; }
+  .reticle::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px;
+                    background: rgba(255,110,90,.95); }
+  .cam-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .scan-status { font-size: 13px; color: var(--muted); min-height: 20px; margin-top: 8px; }
+  .scan-status.bad { color: var(--danger); }
+  .scan-status.good { color: var(--accent-dark); }
+  .hit { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+  .hit .qty { font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+  .code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px;
+          color: var(--muted); letter-spacing: .04em; }
+  .pack-toggle { display: flex; gap: 6px; }
+  .pack-toggle button { flex: 1; }
+  .pack-toggle button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .steps { display: grid; gap: 14px; }
+</style>
+
+<div class="scan-wrap">
+  <h1>Scan</h1>
+  <p class="lede">Point the camera at a barcode. Nothing changes until you confirm it.</p>
+
+  <div class="viewport" id="viewport">
+    <div class="placeholder" id="placeholder">Camera is off.<br>Start it below, or type a code by hand.</div>
+    <video id="video" playsinline muted hidden></video>
+    <div class="reticle" id="reticle" hidden></div>
+  </div>
+
+  <div class="cam-bar">
+    <button class="btn" id="start" type="button">Start camera</button>
+    <button class="btn secondary" id="stop" type="button" hidden>Stop</button>
+    <button class="btn secondary" id="torch" type="button" hidden>Light</button>
+  </div>
+  <div class="scan-status" id="status"></div>
+
+  <div class="card" style="margin-top:14px;">
+    <form id="manual-form" class="row" style="margin:0;">
+      <div style="flex:2 1 200px;">
+        <label for="manual">Or enter the code</label>
+        <input id="manual" name="manual" inputmode="numeric" autocomplete="off"
+               placeholder="041000123456">
+      </div>
+      <div style="flex:0 0 auto; align-self:flex-end;">
+        <button class="btn secondary" type="submit">Look up</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="panel" class="steps" style="margin-top:16px;"></div>
+</div>
+
+<script src="/static/vendor/zxing.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  const ITEMS = {{ item_options | tojson }};
+  const FORMATS = ["upc_a", "upc_e", "ean_13", "ean_8", "code_128", "code_39", "itf"];
+  const LOCK_MS = 1500;
+
+  const el = (id) => document.getElementById(id);
+  const video = el("video"), statusLine = el("status"), panel = el("panel");
+  let stream = null, detector = null, zxing = null, rafId = null;
+  let lockedUntil = 0, lastCode = "";
+
+  function setStatus(text, kind) {
+    statusLine.textContent = text || "";
+    statusLine.className = "scan-status" + (kind ? " " + kind : "");
+  }
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // --- camera -------------------------------------------------------------
+  async function start() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setStatus("This browser cannot open a camera. Type the code instead.", "bad");
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } }, audio: false,
+      });
+    } catch (err) {
+      const denied = err && (err.name === "NotAllowedError" || err.name === "SecurityError");
+      setStatus(denied
+        ? "Camera permission was refused. Allow it in the browser, or type the code."
+        : "No camera available here. Type the code instead.", "bad");
+      return;
+    }
+    video.srcObject = stream;
+    video.hidden = false;
+    el("placeholder").hidden = true;
+    el("reticle").hidden = false;
+    el("start").hidden = true;
+    el("stop").hidden = false;
+    await video.play();
+
+    const track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps && caps.torch) el("torch").hidden = false;
+
+    if ("BarcodeDetector" in window) {
+      try {
+        const supported = await window.BarcodeDetector.getSupportedFormats();
+        detector = new window.BarcodeDetector({ formats: FORMATS.filter((f) => supported.includes(f)) });
+        setStatus("Ready. Hold the barcode inside the frame.");
+        loop();
+        return;
+      } catch (err) { detector = null; }
+    }
+    startZxing();
+  }
+
+  function loop() {
+    rafId = requestAnimationFrame(async () => {
+      if (!detector || !stream) return;
+      try {
+        const found = await detector.detect(video);
+        if (found && found.length) handle(found[0].rawValue, found[0].format);
+      } catch (err) { /* a dropped frame is not worth reporting */ }
+      loop();
+    });
+  }
+
+  function startZxing() {
+    if (!window.ZXing || !window.ZXing.BrowserMultiFormatReader) {
+      setStatus("This browser cannot read barcodes. Type the code instead.", "bad");
+      return;
+    }
+    zxing = new window.ZXing.BrowserMultiFormatReader();
+    setStatus("Ready. Hold the barcode inside the frame.");
+    zxing.decodeFromStream(stream, video, (result) => {
+      if (result) handle(result.getText(), String(result.getBarcodeFormat && result.getBarcodeFormat()));
+    }).catch(() => setStatus("The camera started but decoding failed. Type the code instead.", "bad"));
+  }
+
+  function stop() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null; detector = null;
+    if (zxing) { try { zxing.reset(); } catch (e) {} zxing = null; }
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+    video.hidden = true; video.srcObject = null;
+    el("placeholder").hidden = false;
+    el("reticle").hidden = true;
+    el("start").hidden = false;
+    el("stop").hidden = true;
+    el("torch").hidden = true;
+    setStatus("");
+  }
+
+  async function toggleTorch() {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    const on = track.__torch === true;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: !on }] });
+      track.__torch = !on;
+    } catch (err) { setStatus("This camera has no controllable light.", "bad"); }
+  }
+
+  // --- one scan at a time -------------------------------------------------
+  function handle(raw, format) {
+    const now = Date.now();
+    // A camera reports the same barcode many times a second; one scan is one action.
+    if (!raw || (raw === lastCode && now < lockedUntil)) return;
+    lastCode = raw;
+    lockedUntil = now + LOCK_MS;
+    if (navigator.vibrate) navigator.vibrate(40);
+    lookup(raw, (format || "").toLowerCase());
+  }
+
+  async function lookup(code, symbology) {
+    setStatus("Looking up " + code + "…");
+    const query = new URLSearchParams({ code: code });
+    if (symbology) query.set("symbology", symbology);
+    let data;
+    try {
+      const res = await fetch("/app/scan/lookup?" + query.toString(), { headers: { "Accept": "application/json" } });
+      data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "lookup failed");
+    } catch (err) {
+      setStatus(err.message || "Lookup failed.", "bad");
+      return;
+    }
+    setStatus("");
+    data.found ? renderHit(data) : renderUnknown(data);
+  }
+
+  // --- screens ------------------------------------------------------------
+  function renderHit(data) {
+    const it = data.item;
+    panel.innerHTML =
+      '<div class="card">' +
+        '<div class="hit">' +
+          '<div><strong style="font-size:17px;">' + esc(it.name) + '</strong>' +
+            '<div class="code">' + esc(data.identifier_type.toUpperCase()) + " " + esc(data.code) + '</div>' +
+            (it.location ? '<div class="small muted">' + esc(it.location) + '</div>' : "") +
+          '</div>' +
+          '<div style="text-align:right;">' +
+            '<div class="qty">' + esc(it.qty_label) + '</div>' +
+            '<div class="small muted">on hand' +
+              (it.cover_days ? " &middot; " + esc(it.cover_days) + " d cover" : "") + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<p style="margin:14px 0 0; display:flex; gap:8px; flex-wrap:wrap;">' +
+          '<button class="btn" type="button" data-act="receive">Receive</button>' +
+          '<button class="btn secondary" type="button" data-act="count">Correct count</button>' +
+          '<a class="btn secondary" href="/app">Inventory</a>' +
+        '</p>' +
+      '</div>';
+    panel.querySelector('[data-act="receive"]').onclick = () => renderReceive(data);
+    panel.querySelector('[data-act="count"]').onclick = () => renderCount(data);
+  }
+
+  function renderUnknown(data) {
+    const options = ITEMS.map((i) =>
+      '<option value="' + i.id + '">' + esc(i.name) + " (" + esc(i.stock_unit) + ")</option>").join("");
+    panel.innerHTML =
+      '<div class="card">' +
+        '<strong>Not recognised</strong>' +
+        '<div class="code">' + esc(data.code) + '</div>' +
+        (data.misread
+          ? '<div class="notice error" style="margin-top:10px;">That code&rsquo;s check digit does not add up, so it may have been misread. Try again before linking it.</div>'
+          : '<p class="small muted" style="margin:8px 0 0;">Link it to an item once and every later scan is instant.</p>') +
+        '<form id="link-form" style="margin-top:12px;">' +
+          '<div class="field"><label for="link-item">Item</label>' +
+          '<select id="link-item" name="stock_item_id" required>' + options + '</select></div>' +
+          '<button class="btn" type="submit">Link this code</button>' +
+        '</form>' +
+      '</div>';
+    panel.querySelector("#link-form").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const body = new FormData();
+      body.set("code", data.code);
+      body.set("stock_item_id", panel.querySelector("#link-item").value);
+      const res = await fetch("/app/scan/link", { method: "POST", body: body });
+      const out = await res.json();
+      if (!res.ok) { setStatus(out.detail || "Could not link that code.", "bad"); return; }
+      setStatus("Linked. Scanning it again will find it straight away.", "good");
+      renderHit(out);
+    };
+  }
+
+  function renderReceive(data) {
+    const it = data.item;
+    const packs = it.pack_size
+      ? '<div class="pack-toggle" style="margin-bottom:10px;">' +
+          '<button class="btn small secondary" type="button" data-packs="0" aria-pressed="true">' + esc(it.unit) + '</button>' +
+          '<button class="btn small secondary" type="button" data-packs="1" aria-pressed="false">packs of ' + esc(it.pack_size) + '</button>' +
+        '</div>'
+      : "";
+    panel.innerHTML =
+      '<div class="card">' +
+        '<strong>Receive ' + esc(it.name) + '</strong>' +
+        '<form id="recv-form" style="margin-top:12px;">' +
+          packs +
+          '<div class="field"><label for="qty">How many arrived</label>' +
+            '<input id="qty" name="quantity" inputmode="decimal" required autofocus placeholder="24"></div>' +
+          '<div class="field"><label for="exp">Best before (leave empty if none)</label>' +
+            '<input id="exp" name="expires_on" type="date">' +
+            '<div style="display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">' +
+              '<button class="btn small secondary" type="button" data-act="scan-date">Scan the date</button>' +
+              '<span class="small muted" id="date-note"></span>' +
+            '</div></div>' +
+          '<input type="hidden" name="date_type" id="date-type" value="unknown">' +
+          '<input type="hidden" name="date_confidence" id="date-conf" value="">' +
+          '<button class="btn" type="submit">Confirm</button> ' +
+          '<button class="btn secondary" type="button" data-act="back">Back</button>' +
+        '</form>' +
+      '</div>';
+    let asPacks = false;
+    panel.querySelectorAll("[data-packs]").forEach((button) => {
+      button.onclick = () => {
+        asPacks = button.dataset.packs === "1";
+        panel.querySelectorAll("[data-packs]").forEach((b) =>
+          b.setAttribute("aria-pressed", String(b === button)));
+      };
+    });
+    panel.querySelector('[data-act="back"]').onclick = () => renderHit(data);
+    panel.querySelector('[data-act="scan-date"]').onclick = () => captureDate(it);
+    panel.querySelector("#recv-form").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const body = new FormData(ev.target);
+      body.set("stock_item_id", it.id);
+      body.set("as_packs", asPacks ? "true" : "false");
+      const res = await fetch("/app/scan/receive", { method: "POST", body: body });
+      const out = await res.json();
+      if (!res.ok) { setStatus(out.detail || "Could not receive that.", "bad"); return; }
+      renderDone(it.name, "Received " + out.received_text + ". Now " + out.qty_text + " on hand.", out);
+    };
+  }
+
+  function renderCount(data) {
+    const it = data.item;
+    panel.innerHTML =
+      '<div class="card">' +
+        '<strong>Count ' + esc(it.name) + '</strong>' +
+        '<p class="small muted" style="margin:6px 0 0;">Enter what is actually on the shelf. This replaces the number, it does not add to it.</p>' +
+        '<form id="count-form" style="margin-top:12px;">' +
+          '<div class="field"><label for="cqty">Counted (' + esc(it.unit) + ')</label>' +
+            '<input id="cqty" name="quantity" inputmode="decimal" required autofocus placeholder="' + esc(it.qty) + '"></div>' +
+          '<button class="btn" type="submit">Save count</button> ' +
+          '<button class="btn secondary" type="button" data-act="back">Back</button>' +
+        '</form>' +
+      '</div>';
+    panel.querySelector('[data-act="back"]').onclick = () => renderHit(data);
+    panel.querySelector("#count-form").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const body = new FormData(ev.target);
+      body.set("stock_item_id", it.id);
+      const res = await fetch("/app/scan/count", { method: "POST", body: body });
+      const out = await res.json();
+      if (!res.ok) { setStatus(out.detail || "Could not save that count.", "bad"); return; }
+      renderDone(it.name, "Counted. Now " + out.qty_text + " on hand.", out);
+    };
+  }
+
+  function renderDone(name, message, out) {
+    panel.innerHTML =
+      '<div class="card">' +
+        '<div class="notice ok" style="margin:0;">' + esc(message) + '</div>' +
+        '<p class="small muted" style="margin:10px 0 0;">' +
+          (out.pushed_to_pos
+            ? "Square was updated."
+            : out.pos_tracked
+              ? "Square could not be reached, so it will be corrected on the next sync."
+              : "Kept here; Square does not count this item.") +
+          (out.dated ? " The batch is dated, so it will show on Expiring." : "") +
+        '</p>' +
+        '<p style="margin:14px 0 0;">' +
+          '<button class="btn" type="button" data-act="again">Scan the next one</button> ' +
+          '<a class="btn secondary" href="/app/expiring">Expiring</a>' +
+        '</p>' +
+      '</div>';
+    panel.querySelector('[data-act="again"]').onclick = () => {
+      panel.innerHTML = "";
+      lastCode = "";
+      el("manual").value = "";
+      el("manual").focus();
+    };
+  }
+
+  // --- reading the printed date -------------------------------------------
+  // The product is already known by this point, so the camera only has to answer
+  // "which date", never "which product".
+  const DATE_LABELS = {
+    best_before: "Best before", use_by: "Use by", sell_by: "Sell by",
+    expiry: "Expires", packed: "Packed on", unknown: "Date",
+  };
+
+  function cropFrame() {
+    // Send the middle of the frame, where the reticle is: a smaller, sharper crop reads
+    // far better than a photo of the whole package.
+    const w = video.videoWidth, h = video.videoHeight;
+    if (!w || !h) return null;
+    const cw = Math.round(w * 0.8), ch = Math.round(h * 0.44);
+    const canvas = document.createElement("canvas");
+    canvas.width = cw; canvas.height = ch;
+    canvas.getContext("2d").drawImage(video, Math.round((w - cw) / 2), Math.round((h - ch) / 2),
+                                      cw, ch, 0, 0, cw, ch);
+    return canvas;
+  }
+
+  async function captureDate(item) {
+    const note = el("date-note");
+    if (!stream) {
+      note.textContent = "Start the camera first, or type the date.";
+      return;
+    }
+    const canvas = cropFrame();
+    if (!canvas) { note.textContent = "The camera is not ready yet."; return; }
+    note.textContent = "Reading…";
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    const body = new FormData();
+    body.set("photo", blob, "date.jpg");
+    let out;
+    try {
+      const res = await fetch("/app/scan/expiry", { method: "POST", body: body });
+      out = await res.json();
+      if (!res.ok) throw new Error(out.detail || "could not read the photo");
+    } catch (err) {
+      note.textContent = (err.message || "Could not read that.") + " Try again, or type it.";
+      return;
+    }
+    if (!out.found) {
+      note.textContent = (out.note || "No date found.") + " Try again, or type it.";
+      return;
+    }
+    applyDate(out);
+  }
+
+  function applyDate(out) {
+    const note = el("date-note");
+    const pretty = new Date(out.date + "T00:00:00").toLocaleDateString(undefined,
+      { day: "numeric", month: "long", year: "numeric" });
+    const kind = DATE_LABELS[out.date_type] || DATE_LABELS.unknown;
+
+    if (!out.needs_confirmation) {
+      el("exp").value = out.date;
+      el("date-type").value = out.date_type;
+      el("date-conf").value = out.confidence.toFixed(2);
+      note.textContent = kind + " " + pretty + ", read from the photo.";
+      return;
+    }
+
+    // Not sure enough to fill it in silently, so ask.
+    const why = !out.is_expiry
+      ? "That looks like a packing date, not a best-before."
+      : (out.note ? "Not certain: " + out.note + "." : "Not certain.");
+    note.innerHTML = "";
+    const ask = document.createElement("span");
+    ask.innerHTML = esc(why) + " We read <strong>" + esc(kind + " " + pretty) +
+      "</strong>. <button class=\"btn small\" type=\"button\" data-act=\"yes\">Use it</button> " +
+      "<button class=\"btn small secondary\" type=\"button\" data-act=\"retake\">Retake</button>";
+    note.appendChild(ask);
+    ask.querySelector('[data-act="yes"]').onclick = () => {
+      el("exp").value = out.date;
+      el("date-type").value = out.date_type;
+      el("date-conf").value = out.confidence.toFixed(2);
+      note.textContent = kind + " " + pretty + ", confirmed.";
+    };
+    ask.querySelector('[data-act="retake"]').onclick = () => { note.textContent = ""; };
+  }
+
+  // --- wiring -------------------------------------------------------------
+  el("start").onclick = start;
+  el("stop").onclick = stop;
+  el("torch").onclick = toggleTorch;
+  el("manual-form").onsubmit = (ev) => {
+    ev.preventDefault();
+    const code = el("manual").value.trim();
+    if (code) { lastCode = ""; lookup(code, ""); }
+  };
+  window.addEventListener("pagehide", stop);
+  if (!window.isSecureContext) {
+    setStatus("Cameras only work over https (or on localhost). Typing a code still works.", "bad");
+  }
+})();
+</script>
+{% endblock %}

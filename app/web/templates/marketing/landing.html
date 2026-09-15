@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title or "StockPulse" }} &mdash; stock that counts itself</title>
+<meta name="description" content="StockPulse connects to Square and keeps inventory current by count, weight and volume. Photograph a delivery invoice and the counts update themselves.">
+<link rel="stylesheet" href="/static/landing.css">
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="mark" href="/"><i></i><b>StockPulse</b></a>
+    <nav class="site-nav">
+      <a href="#dimensions">How it works</a>
+      <a href="#receiving">Receiving</a>
+      <a href="#pricing">Pricing</a>
+    </nav>
+    <a class="ghost" href="/login">Sign in</a>
+  </div>
+</header>
+
+<main>
+
+  {# ---- 1. hero ---------------------------------------------------- #}
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="grain"></div>
+    <div class="wrap">
+      <div class="hero-lede">
+        <div class="eyebrow"><s></s><span class="lbl">For small businesses on Square</span></div>
+        <h1 class="d1">Stock that<br>counts itself.</h1>
+        <p class="body">Connect Square once. Bags, grams and millilitres stay current &mdash; and you
+          are told what runs out next.</p>
+        <div class="hero-cta">
+          <a class="pill" href="/signup">See it on your own stock</a>
+          <a class="link" href="#receiving">Watch a delivery get received</a>
+        </div>
+        <p class="small hero-note">Free to start. No card required.</p>
+      </div>
+
+      <div class="panel" aria-hidden="true">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="lbl">Live stock</div>
+              <div class="h3">Ivy Lane Coffee &mdash; Bridge St</div>
+            </div>
+            <span class="chip">Synced 2 min ago</span>
+          </div>
+          <div class="stock-row head">
+            <span>Item</span><span>Track</span><span>On hand</span>
+            <span style="text-align:right">Cover</span>
+          </div>
+          <div class="stock-row">
+            <div class="it"><i class="dot low"></i>Oat milk 1L</div>
+            <div class="mode">Volume</div><div class="qty">18.4 L</div><div class="cov low">2.1</div>
+          </div>
+          <div class="stock-row">
+            <div class="it"><i class="dot"></i>House blend beans</div>
+            <div class="mode">Weight</div><div class="qty">6.2 kg</div><div class="cov">5.4</div>
+          </div>
+          <div class="stock-row">
+            <div class="it"><i class="dot"></i>12oz cups</div>
+            <div class="mode">Count</div><div class="qty">1&nbsp;480</div><div class="cov">9.0</div>
+          </div>
+          <div class="stock-row">
+            <div class="it"><i class="dot low"></i>Vanilla syrup</div>
+            <div class="mode">Volume</div><div class="qty">2&nbsp;900 ml</div><div class="cov low">1.3</div>
+          </div>
+          <div class="stock-row">
+            <div class="it"><i class="dot"></i>Semi-skimmed 2L</div>
+            <div class="mode">Volume</div><div class="qty">44.0 L</div><div class="cov">6.8</div>
+          </div>
+          <div class="stock-row">
+            <div class="it"><i class="dot"></i>Pastry boxes</div>
+            <div class="mode">Count</div><div class="qty">320</div><div class="cov">11.2</div>
+          </div>
+        </div>
+        <div class="alert-card"><i class="dot"></i><span>2 items below reorder point</span></div>
+      </div>
+    </div>
+  </section>
+
+  {# ---- 2. trust --------------------------------------------------- #}
+  <section class="trust on-dark" id="trust">
+    <div class="grain"></div>
+    <div class="wrap">
+      <div class="lbl">Works with the Square account you already have</div>
+      <p class="trust-lead">Square stays the source of truth.<br>StockPulse keeps it honest.</p>
+      <div class="facts">
+        <div class="f">
+          <div class="k">Read</div>
+          <p class="v">Catalog, inventory and orders, pulled on a sync cadence you set.</p>
+        </div>
+        <div class="f">
+          <div class="k">Write back</div>
+          <p class="v">Corrected counts pushed to Square, so the storefront stops overselling.</p>
+        </div>
+        <div class="f">
+          <div class="k">At rest</div>
+          <p class="v">Your Square connection is encrypted, and renews itself before it expires.</p>
+        </div>
+        <div class="f">
+          <div class="k">Never guessed</div>
+          <p class="v">A line we cannot match with confidence is flagged for you, never applied quietly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ---- 3. dimensions ---------------------------------------------- #}
+  <section class="dims" id="dimensions">
+    <div class="grain"></div>
+    <div class="dims-rail" aria-hidden="true"><em></em><span>01 &mdash; How quantity stays true</span></div>
+    <div class="wrap">
+      <div class="dims-head">
+        <div class="lbl">Count &middot; Weight &middot; Volume</div>
+        <h2 class="h2">Businesses do not hold stock<br>one way. So we don't count it one way.</h2>
+      </div>
+      <div class="bento">
+        <div class="cell">
+          <div class="glyph">each</div>
+          <h3 class="h3">Count</h3>
+          <p class="ex">Bagged beans, cartons, cups, pastry boxes.</p>
+          <span class="tag"><i></i>Square counts it</span>
+          <p class="how">Square owns the number. We sync it and push corrections back.</p>
+        </div>
+        <div class="cell derived">
+          <div class="glyph">g</div>
+          <h3 class="h3">Weight</h3>
+          <p class="ex">Flour, deli ham, beans in the hopper.</p>
+          <span class="tag"><i></i>We count it</span>
+          <p class="how">Last physical count, minus what the recipes consumed since.</p>
+        </div>
+        <div class="cell derived">
+          <div class="glyph">ml</div>
+          <h3 class="h3">Volume</h3>
+          <p class="ex">Milk, syrup, cold brew on tap.</p>
+          <span class="tag"><i></i>We count it</span>
+          <p class="how">One latte takes 220 ml of milk out of stock. Automatically.</p>
+        </div>
+      </div>
+      <p class="small dims-support">Stock is shown in whatever unit you actually think in. Every
+        physical count and every delivery re-anchors the item, so error cannot accumulate.</p>
+    </div>
+  </section>
+
+  {# ---- 4. receiving ----------------------------------------------- #}
+  <section class="recv" id="receiving">
+    <div class="shot" aria-hidden="true">
+      <div class="doc">
+        <div class="doc-head"><b>Harbour Dairy Co.</b><em>Delivery note 40118</em></div>
+        <div class="doc-line"><span>Semi-skimmed 2L</span><span>12 x 2L</span></div>
+        <div class="doc-line hit"><span>Oat milk 1L</span><span>4 cases of 6 x 1L</span></div>
+        <div class="doc-line"><span>Double cream</span><span>6 x 1L</span></div>
+        <div class="doc-line"><span>Salted butter</span><span>2 kg</span></div>
+        <div class="doc-line"><span>Natural yoghurt 500g</span><span>10 tubs</span></div>
+        <div class="doc-foot">Delivered 06 Sep</div>
+      </div>
+      <div class="callout">
+        <span class="src">&ldquo;4 cases of 6 x 1L&rdquo;</span>
+        <span class="arw">&rarr;</span>
+        <span class="res">24&nbsp;000 ml</span>
+      </div>
+      <div class="flag"><i></i>Salted butter &mdash; weight line on a volume item. Flagged, never guessed.</div>
+      <div class="tint"></div><div class="vig"></div>
+    </div>
+    <div class="recv-side">
+      <div class="lbl">02 &mdash; Receiving</div>
+      <h2 class="h2">Photograph the delivery note. Do not type it.</h2>
+      <p class="body">The job that actually hurts is re-typing a delivery note into the POS. So don't.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="n">01</div>
+          <p class="t"><b>Read.</b> Photo or PDF, filed as the receiving record &mdash; the same invoice cannot be
+            received twice.</p>
+        </div>
+        <div class="step">
+          <div class="n">02</div>
+          <p class="t"><b>Resolve.</b> Each line matched to a stock item, quantities converted into base
+            units via pack size.</p>
+        </div>
+        <div class="step">
+          <div class="n">03</div>
+          <p class="t"><b>Confirm.</b> You approve, stock moves, and the supplier's wording is saved as an
+            alias for next time.</p>
+        </div>
+      </div>
+      <a class="link" href="/signup">See the review screen</a>
+    </div>
+  </section>
+
+  {# ---- 5. the loop ------------------------------------------------ #}
+  <section class="loop" id="loop">
+    <div class="grain"></div>
+    <div class="wrap">
+      <div class="scale" aria-hidden="true">
+        <div class="ticks"></div><div class="base"></div>
+        <div class="mk" style="left:9%">
+          <div class="k">Sync</div><div class="cap"></div><div class="stem" style="height:6.5rem"></div>
+          <p class="c">Catalog, counts and orders, on the cadence you set.</p>
+        </div>
+        <div class="mk" style="left:36%">
+          <div class="k">Draw down</div><div class="cap"></div><div class="stem" style="height:10.5rem"></div>
+          <p class="c">Recipes consume stock as the orders land.</p>
+        </div>
+        <div class="mk" style="left:63%">
+          <div class="k">Alert</div><div class="cap"></div><div class="stem" style="height:8rem"></div>
+          <p class="c">Below the reorder point &mdash; once per cooldown, not endlessly.</p>
+        </div>
+        <div class="mk" style="left:90%">
+          <div class="k">Re-anchor</div><div class="cap"></div><div class="stem" style="height:12.5rem"></div>
+          <p class="c">A delivery or a physical count resets the drift to zero.</p>
+        </div>
+      </div>
+      <div class="loop-low">
+        <div class="lbl">03 &mdash; The loop</div>
+        <h2 class="h2">It runs whether you<br>look at it or not.</h2>
+        <p class="body">Nobody opens an inventory tool every morning. So the work happens on a schedule,
+          the alerts come to you, and the only thing you are asked to do is photograph a delivery.</p>
+      </div>
+    </div>
+  </section>
+
+  {# ---- 6. pricing ------------------------------------------------- #}
+  <section class="price" id="pricing">
+    <div class="grain"></div>
+    <div class="wrap">
+      <div class="price-head">
+        <div class="lbl">04 &mdash; Pricing</div>
+        <h2 class="h2">Two plans, and a setup<br>you don't have to do yourself.</h2>
+      </div>
+      <div class="plans">
+        {% for plan in plans %}
+        <div class="plan{% if plan.one_time %} lead{% endif %}">
+          <div class="pn">{{ plan.name }}</div>
+          <div class="amt">
+            <b>${{ plan.price }}</b>
+            <s>{{ "one time" if plan.one_time else "per month" }}</s>
+          </div>
+          <p class="bl">{{ plan.blurb }}</p>
+          <ul>
+            {% for feature in plan.features %}
+            <li><i>&#9679;</i><span>{{ feature }}</span></li>
+            {% endfor %}
+          </ul>
+          <div class="plan-cta">
+            {% if plan.one_time %}
+              <a class="link" href="mailto:{{ settings.support_email }}?subject=Setup%20package">Book setup</a>
+            {% else %}
+              <a class="link" href="/signup">Choose {{ plan.name }}</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="price-close">
+        <p class="small">Free to start. Connect your Square account when you are ready.</p>
+        <div class="cluster">
+          <a class="link" href="/signup">Or start on Starter</a>
+          <a class="pill" href="mailto:{{ settings.support_email }}?subject=Setup%20package">Book the $149 setup</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-foot on-dark">
+  <div class="wrap">
+    <div class="mark"><i></i><b>StockPulse</b></div>
+    <nav>
+      <a href="/pricing">Pricing</a>
+      <a href="/login">Sign in</a>
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
+      <a href="mailto:{{ settings.support_email }}">{{ settings.support_email }}</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

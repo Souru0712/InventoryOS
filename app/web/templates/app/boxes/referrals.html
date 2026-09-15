@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+{% if flash %}<div class="notice {{ flash.kind }}">{{ flash.message }}</div>{% endif %}
+<p class="small"><a href="/app/boxes">&larr; Boxes</a></p>
+<h1>Referrals and credit</h1>
+<p class="lede">Every referral with both people and where it stands, and the credit ledger behind every balance.
+Rows are never edited: corrections are new rows.</p>
+
+<h2>Referrals</h2>
+{% if not ledger %}
+<div class="card"><p class="muted" style="margin:0">No referrals yet.</p></div>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <tr><th>Referrer</th><th>Friend</th><th>First box</th><th class="num">Reward</th><th>Status</th><th>Since</th></tr>
+    {% for row in ledger %}
+    <tr>
+      <td>{{ row.referrer.email if row.referrer else "-" }}</td>
+      <td>{{ row.referred.email if row.referred else "-" }}</td>
+      <td>{% if row.order %}<a href="/app/boxes/{{ row.order.id }}">#{{ row.order.id }}</a> {{ row.order.status.value.replace('_', ' ') }}{% else %}-{% endif %}</td>
+      <td class="num">{{ row.referral.reward_cents|money(currency) }}</td>
+      <td><span class="pill {{ 'picked_up' if row.referral.status.value == 'rewarded' else ('refunded' if row.referral.status.value == 'reversed' else 'cancelled' if row.referral.status.value == 'cancelled' else 'pending_payment') }}">{{ row.referral.status.value }}</span></td>
+      <td class="small">{{ row.referral.created_at.strftime('%Y-%m-%d') }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<h2>Adjust a balance</h2>
+{% if people %}
+<form class="card row" method="post" id="adjust" action="/app/boxes/customers/{{ people[0].id }}/credit"
+      onsubmit="this.action='/app/boxes/customers/' + this.querySelector('#who').value + '/credit'">
+  <div class="field"><label for="who">Customer</label>
+    <select id="who">{% for c in people %}<option value="{{ c.id }}">{{ c.email }} ({{ balances[c.id]|money(currency) }})</option>{% endfor %}</select></div>
+  <div class="field"><label for="amount">Amount (negative to remove)</label><input id="amount" name="amount" placeholder="5.00" required></div>
+  <div class="field"><label for="note">Why</label><input id="note" name="note" required></div>
+  <div class="field"><button class="btn" type="submit">Adjust</button></div>
+</form>
+{% endif %}
+
+<h2>Credit ledger</h2>
+{% if not credits %}
+<div class="card"><p class="muted" style="margin:0">No credit has moved yet.</p></div>
+{% else %}
+<div class="table-wrap">
+  <table>
+    <tr><th>When</th><th>Customer</th><th>Kind</th><th>Reference</th><th class="num">Amount</th><th>Note</th></tr>
+    {% for tx, person in credits %}
+    <tr>
+      <td class="small">{{ tx.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{{ person.email }}</td>
+      <td>{{ tx.kind.value.replace('_', ' ') }}</td>
+      <td class="small muted">{{ tx.reference }}</td>
+      <td class="num">{{ tx.amount_cents|money(currency) }}</td>
+      <td class="small">{{ tx.note or "" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

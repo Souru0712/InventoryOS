@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Privacy Policy</h1>
+<p class="lede">Draft for review &mdash; have a lawyer check this before you take money.</p>
+
+<div class="card small">
+  <h2 style="margin-top:0;">What we collect</h2>
+  <ul>
+    <li><strong>Account details:</strong> your business name, email address and a hashed password.</li>
+    <li><strong>Point-of-sale data:</strong> locations, catalog items, inventory counts and order
+      line items, read from the account you connect.</li>
+    <li><strong>Documents you upload:</strong> photographs of supplier invoices and delivery notes,
+      and the line items read from them.</li>
+    <li><strong>Usage data:</strong> basic logs needed to operate and debug the service.</li>
+  </ul>
+
+  <h2>How we use it</h2>
+  <p>To show you your inventory, detect low stock, send the alerts and reports you configure, and
+  write corrected counts back to your point-of-sale system when you ask. We do not sell your data
+  and we do not use it to build profiles of your customers.</p>
+
+  <h2>Processors we rely on</h2>
+  <p>Your point-of-sale provider (to read and write your data), our hosting and email providers, our
+  payment processor, and an AI provider used solely to read the invoice photographs you upload.
+  Uploaded documents are sent for that extraction and are not used to train models.</p>
+
+  <h2>Retention</h2>
+  <p>We keep your data while your account is active. On request we delete your account data,
+  including uploaded documents, within 30 days, except where we must keep records for tax or legal
+  reasons.</p>
+
+  <h2>Security</h2>
+  <p>Point-of-sale access tokens are encrypted at rest. Passwords are stored only as salted hashes.
+  Each business's data is isolated and queries are scoped to the signed-in account.</p>
+
+  <h2>Your rights</h2>
+  <p>You can request access to, correction of, or deletion of your data at any time by emailing us.</p>
+
+  <h2>Contact</h2>
+  <p style="margin-bottom:0;"><a href="mailto:{{ settings.support_email }}">{{ settings.support_email }}</a></p>
+</div>
+{% endblock %}

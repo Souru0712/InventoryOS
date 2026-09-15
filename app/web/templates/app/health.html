@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Inventory health</h1>
+<p class="lede">How healthy your stock is right now, and exactly why. Every dimension is scored by
+a rule written next to it.</p>
+
+<div class="health-hero card">
+  <div>
+    {% if report.score is not none %}
+      <div class="health-number big">{{ report.score }}<span>/100</span></div>
+    {% else %}
+      <div class="health-number big muted">&ndash;</div>
+    {% endif %}
+    <span class="pill band-{{ report.band }}">{{ report.band_label }}</span>
+  </div>
+  <div class="health-context">
+    {% if trend.benchmark %}
+      <p style="margin:0;">
+        <strong>{{ trend.benchmark.percent|abs }}% {{ "better" if trend.benchmark.percent >= 0 else "worse" }}</strong>
+        than your {{ trend.benchmark.days }}-day average of {{ trend.benchmark.average }}.
+      </p>
+    {% else %}
+      <p class="small muted" style="margin:0;">A comparison with your own average appears after three
+      nights of history. It is recorded automatically every night.</p>
+    {% endif %}
+
+    {% if trend.change %}
+      <p style="margin:12px 0 4px;">
+        <strong>{{ "%+d"|format(trend.change.points) }} point{{ "s" if trend.change.points|abs != 1 else "" }}</strong>
+        since {{ trend.compared_with.strftime("%d %b") }}
+      </p>
+      {% if trend.change.lines %}
+      <ul class="small change-lines">
+        {% for points, line in trend.change.lines %}
+          <li><span class="num">{{ "%+d"|format(points) }}</span> {{ line }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="small muted" style="margin:0;">Nothing measurable changed.</p>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<h2>The five dimensions</h2>
+<div class="dimensions">
+  {% for c in report.components %}
+  <div class="card dimension" id="{{ c.key }}">
+    <div class="dimension-head">
+      <div>
+        <div class="stat-label">{{ c.label }} &middot; {{ (c.weight * 100)|int }}% of the score</div>
+        {% if c.measured %}
+          <div class="stat tone-{{ c.tone }}">{{ c.score }}<span class="small muted">/100</span></div>
+        {% else %}
+          <div class="stat muted">Not scored</div>
+        {% endif %}
+      </div>
+    </div>
+    <ul class="findings">
+      {% for finding in c.findings %}
+        <li class="tone-{{ finding.tone }}">
+          {% if finding.link %}<a href="{{ finding.link }}">{{ finding.text }}</a>{% else %}{{ finding.text }}{% endif %}
+          {% if finding.item_ids and c.key in ("overstock", "data") %}
+            <div class="small muted item-list">
+              {% for item_id in finding.item_ids[:12] %}{{ by_id[item_id].item.name }}{% if not loop.last %}, {% endif %}{% endfor %}
+              {% if finding.item_ids|length > 12 %} and {{ finding.item_ids|length - 12 }} more{% endif %}
+            </div>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <p class="small muted rule">{{ c.rule }}</p>
+  </div>
+  {% endfor %}
+</div>
+
+{% if trend.history %}
+<h2>Last {{ trend.history|length }} night{{ "s" if trend.history|length != 1 else "" }}</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Night of</th><th>Score</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for row in trend.history|reverse %}
+      <tr>
+        <td>{{ row.dt.strftime("%a %d %b") }}</td>
+        <td class="num">{{ row.score if row.score is not none else "&ndash;"|safe }}</td>
+        <td><span class="pill band-{{ row.band }}">{{ row.band.replace("_", " ") }}</span></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<p class="small muted" style="margin-top:22px;">Status bands: 90 and above excellent, 75 healthy,
+60 needs attention, 40 at risk, below 40 critical. A dimension with nothing to measure is left out
+and the rest are reweighted, rather than scoring a perfect 100 for data that does not exist.</p>
+{% endblock %}

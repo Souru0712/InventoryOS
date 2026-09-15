@@ -1,0 +1,45 @@
+{# The score, why it is what it is, and what to do about it. Needs `health` in context. #}
+{% set report = health.report %}
+{% set actions = health.actions %}
+<div class="health-top">
+  {# A plain box, not a link: the findings inside are links, and a link inside a link is invalid
+     HTML that the browser "repairs" by throwing the findings out of the card. #}
+  <div class="card health-score">
+    <div class="stat-label">Inventory health</div>
+    {% if report.score is not none %}
+      <div class="health-number">{{ report.score }}<span>/100</span></div>
+    {% else %}
+      <div class="health-number muted">&ndash;</div>
+    {% endif %}
+    <span class="pill band-{{ report.band }}">{{ report.band_label }}</span>
+    <ul class="findings">
+      {% for finding in report.headline %}
+        <li class="tone-{{ finding.tone }}">
+          {% if finding.link %}<a href="{{ finding.link }}">{{ finding.text }}</a>{% else %}{{ finding.text }}{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <a class="small" href="/app/health">See how it is worked out &rarr;</a>
+  </div>
+
+  <div class="card actions">
+    <div class="stat-label">Today&rsquo;s actions</div>
+    {% if actions.urgent %}
+      <div class="action-tier tone-bad">{{ actions.urgent|length }} urgent</div>
+      <ul>
+        {% for action in actions.urgent %}<li><a href="{{ action.link }}">{{ action.text }}</a></li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% if actions.recommended %}
+      <div class="action-tier tone-warn">{{ actions.recommended|length }} recommended</div>
+      <ul>
+        {% for action in actions.recommended %}<li><a href="{{ action.link }}">{{ action.text }}</a></li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% if not actions.urgent and not actions.recommended %}
+      <p style="margin:6px 0 0;"><strong>Nothing needs doing today.</strong></p>
+    {% endif %}
+    <div class="action-tier tone-good">{{ actions.healthy_items }} healthy</div>
+    <p class="small muted" style="margin:2px 0 0;">No action required.</p>
+  </div>
+</div>

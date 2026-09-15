@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 440px; margin: 20px auto;">
+  <h1>Sign in to {{ shop.name }}</h1>
+  <form class="card" method="post" action="/shop/{{ shop.id }}/auth">
+    <input type="hidden" name="token" value="{{ token }}">
+    <p style="margin-top:0">Press the button to finish signing in.</p>
+    <button class="btn" type="submit">Sign in</button>
+  </form>
+  <p class="small muted">This extra step stops email scanners from using up your link before you do.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+# A production replica on one machine: Postgres, the web app and the scheduler in separate
+# containers, with the database and the invoice photos on named volumes that outlive them.
+#
+#   docker compose up --build -d
+#   docker compose restart web scheduler      # inventory and photos are still there
+#   docker compose up -d --scale scheduler=2  # one runs the jobs, the other stands by
+#
+# SECRET_KEY and ENCRYPTION_KEY come from the shell or .env; startup refuses placeholders.
+name: stockpulse
+
+x-app: &app
+  image: stockpulse:local
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+  environment:
+    APP_ENV: staging
+    APP_BASE_URL: http://localhost:8080
+    DATABASE_URL: postgresql+psycopg://stockpulse:stockpulse@db:5432/stockpulse
+    SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+    STORAGE_BACKEND: local
+    UPLOAD_DIR: /app/var/uploads
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    SMTP_HOST: ${SMTP_HOST:-}
+    SENTRY_DSN: ${SENTRY_DSN:-}
+    RELEASE: ${RELEASE:-local}
+  volumes:
+    - uploads:/app/var/uploads
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stockpulse
+      POSTGRES_PASSWORD: stockpulse
+      POSTGRES_DB: stockpulse
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stockpulse -d stockpulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  web:
+    <<: *app
+    build: .
+    ports:
+      - "127.0.0.1:8080:8000"
+    healthcheck:
+      # The slim image has no curl; urlopen raises on a 503, which fails the check.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  scheduler:
+    <<: *app
+    command: ["python", "-m", "app.cli", "scheduler"]
+
+volumes:
+  pgdata:
+  uploads:

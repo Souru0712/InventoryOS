@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Terms of Service</h1>
+<p class="lede">Last updated: {{ "%s"|format("on first publication") }}. Draft for review &mdash; have a
+lawyer check this before you take money.</p>
+
+<div class="card small">
+  <h2 style="margin-top:0;">1. The service</h2>
+  <p>StockPulse reads inventory, catalog and order data from your point-of-sale account, shows it
+  back to you, alerts you about low stock, and can write corrected counts back to that account when
+  you ask it to.</p>
+
+  <h2>2. Your account</h2>
+  <p>You are responsible for keeping your login credentials secret and for the actions taken under
+  your account. Tell us promptly if you believe your account has been used without permission.</p>
+
+  <h2>3. Your data</h2>
+  <p>Your business data remains yours. You grant us permission to process it solely to provide the
+  service. You can export it or ask us to delete it at any time.</p>
+
+  <h2>4. Accuracy</h2>
+  <p>Quantities shown are calculated from the data your point-of-sale system provides, from documents
+  you upload, and from counts you enter. They are an aid to running your business, not a guarantee.
+  Verify before making purchasing decisions with material consequences.</p>
+
+  <h2>5. Payment</h2>
+  <p>Subscriptions are billed monthly in advance and can be canceled at any time, effective at the end
+  of the current period. Setup fees are one-off and non-refundable once the work has been done.</p>
+
+  <h2>6. Availability</h2>
+  <p>We aim to keep the service available but do not promise uninterrupted access. Scheduled
+  maintenance will be announced where practical.</p>
+
+  <h2>7. Liability</h2>
+  <p>To the extent permitted by law, our total liability is limited to the fees you paid in the three
+  months before the claim arose.</p>
+
+  <h2>8. Ending the agreement</h2>
+  <p>You may stop using the service at any time. We may suspend an account for non-payment or misuse,
+  with notice where reasonable.</p>
+
+  <h2>9. Contact</h2>
+  <p style="margin-bottom:0;">Questions: <a href="mailto:{{ settings.support_email }}">{{ settings.support_email }}</a>.</p>
+</div>
+{% endblock %}
