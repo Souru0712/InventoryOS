@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.load.upsert import apply_provider_counts
-from app.models import Location, ProviderConnection, StockItem, TrackMode
+from app.models import Location, ProviderConnection, StockItem, SyncRun, TrackMode
 from app.orchestration import boxes as box_orders
+from app.orchestration.sync import NotConnected, sync_catalog
 from app.providers.square.webhooks import (
+    CATALOG_VERSION_UPDATED,
     INVENTORY_COUNT_UPDATED,
     PAYMENT_UPDATED,
     REFUND_EVENTS,
@@ -28,6 +30,8 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 NOTIFICATION_PATH = "/webhooks/square"
+# Editing a catalog sends an event per change; one pull covers a burst of them.
+CATALOG_DEBOUNCE = timedelta(seconds=60)
 
 
 def _tenant_for(db: Session, merchant: str) -> int | None:
@@ -91,6 +95,17 @@ def _aware(value: datetime | None) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def _catalog_read_recently(db: Session, tenant_id: int) -> bool:
+    last = db.scalars(
+        select(SyncRun)
+        .where(SyncRun.tenant_id == tenant_id, SyncRun.kind == "catalog")
+        .order_by(SyncRun.started_at.desc())
+        .limit(1)
+    ).first()
+    started = _aware(last.started_at) if last else None
+    return bool(started and datetime.now(timezone.utc) - started < CATALOG_DEBOUNCE)
+
+
 @router.post(NOTIFICATION_PATH)
 async def square_webhook(request: Request, db: Session = Depends(get_db)):
     settings = get_settings()
@@ -123,6 +138,23 @@ async def square_webhook(request: Request, db: Session = Depends(get_db)):
         result = handle(db, tenant_id, event)
         db.commit()
         return result
+
+    if event.get("type") == CATALOG_VERSION_UPDATED:
+        tenant_id = _tenant_for(db, merchant_id(event))
+        if tenant_id is None:
+            log.info("square webhook for unknown merchant %s", merchant_id(event))
+            return {"ignored": "unknown merchant"}
+        # The event carries only a version number, so the catalog itself has to be re-read.
+        if _catalog_read_recently(db, tenant_id):
+            return {"ignored": "catalog was just read"}
+        try:
+            stats = sync_catalog(db, tenant_id)
+        except NotConnected:
+            log.info("catalog event for tenant %s, which is not connected", tenant_id)
+            return {"ignored": "not connected"}
+        db.commit()
+        log.info("catalog event re-read the catalog for tenant %s: %s", tenant_id, stats)
+        return {"catalog": stats}
 
     if event.get("type") != INVENTORY_COUNT_UPDATED:
         return {"ignored": event.get("type")}

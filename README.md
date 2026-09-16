@@ -143,8 +143,20 @@ environment goes through migrations.
 3. Copy the app ID and secret into `.env`; keep `SQUARE_ENV=sandbox` until you have a real merchant.
 4. Scopes requested: `MERCHANT_PROFILE_READ`, `ITEMS_READ`, `INVENTORY_READ`, `INVENTORY_WRITE`,
    `ORDERS_READ`. `INVENTORY_WRITE` is what lets corrected counts flow back.
+5. Webhooks: notification URL `{APP_BASE_URL}/webhooks/square`, subscribed to
+   `inventory.count.updated`, `catalog.version.updated`, `payment.updated`, `refund.created` and
+   `refund.updated`. Put the signature key in `SQUARE_WEBHOOK_SIGNATURE_KEY`; unset, the endpoint
+   refuses every event, and a bad signature is refused whatever the payload says.
 
 Access tokens are Fernet-encrypted at rest and refreshed automatically a week before expiry.
+
+Webhooks are the fast path; the hourly sync is the correct one. A count that arrives late, out of
+order, or not at all is put right by the next run, which re-reads Square's own counts — so a sale
+cannot quietly go missing here. A catalog event re-reads the catalog, at most once a minute
+however many edits arrive. A variation deleted or archived in Square is marked inactive here and
+never deleted: it leaves the shelf, the alerts and the reorder list, and its counts, receipts and
+sales stay where they are. The dashboard says whether Square is connected, when it last synced,
+and what the last failure was.
 
 ## Onboarding a customer by hand
 

@@ -15,12 +15,20 @@
   <div>
     <h1>{{ tenant.name }}</h1>
     <p class="lede">
-      {% if last_run and last_run.finished_at %}
-        Last synced {{ last_run.finished_at.strftime("%d %b %H:%M") }} UTC.
+      {% if not sync.connected %}
+        Square is not connected.
+      {% elif sync.last_success_at %}
+        Square connected. Last synced {{ sync.last_success_at.strftime("%d %b %H:%M") }} UTC.
       {% else %}
-        Not synced yet.
+        Square connected. Not synced yet.
       {% endif %}
     </p>
+    {% if sync.error %}
+      <p class="small" style="color:var(--danger, #b3261e); margin:-6px 0 0;">
+        Last attempt failed{% if sync.failed_at %} at {{ sync.failed_at.strftime("%d %b %H:%M") }} UTC{% endif %}:
+        {{ sync.error }}
+      </p>
+    {% endif %}
   </div>
   <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
     {% if connection %}

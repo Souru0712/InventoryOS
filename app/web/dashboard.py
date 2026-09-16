@@ -20,6 +20,7 @@ from app.models import (
     StockBatch,
     StockItem,
     SyncRun,
+    SyncStatus,
     Tenant,
     TrackMode,
     User,
@@ -133,6 +134,7 @@ def dashboard(
         .order_by(SyncRun.started_at.desc())
         .limit(1)
     ).first()
+    sync = _sync_status(db, tenant.id, connection, last_run)
 
     by_dimension: dict[str, dict] = {}
     for row in rows:
@@ -157,6 +159,7 @@ def dashboard(
             "selected_location": location,
             "connection": connection,
             "last_run": last_run,
+            "sync": sync,
             "by_dimension": by_dimension,
             "total_value": sum(row["value_cents"] for row in rows),
             "at_risk": sum(1 for row in rows if row["status"] != "ok"),
@@ -165,6 +168,28 @@ def dashboard(
             "health": current_health(db, tenant.id, location),
         },
     )
+
+
+def _sync_status(
+    db: Session, tenant_id: int, connection: ProviderConnection | None, last_run: SyncRun | None
+) -> dict:
+    """What the merchant needs to know: is it connected, when did it last work, what broke.
+
+    A failure is only worth showing while it is still the latest word; a later success clears it.
+    """
+    last_success = db.scalars(
+        select(SyncRun)
+        .where(SyncRun.tenant_id == tenant_id, SyncRun.status == SyncStatus.SUCCESS)
+        .order_by(SyncRun.started_at.desc())
+        .limit(1)
+    ).first()
+    failing = last_run is not None and last_run.status is SyncStatus.FAILED
+    return {
+        "connected": connection is not None,
+        "last_success_at": last_success.finished_at if last_success else None,
+        "error": (last_run.error or "")[:200] if failing else None,
+        "failed_at": last_run.finished_at if failing else None,
+    }
 
 
 @router.get("/app/expiring", response_class=HTMLResponse)

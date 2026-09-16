@@ -52,6 +52,12 @@ def upsert_locations(db: Session, tenant_id: int, rows: list[dict], provider: st
     return changed
 
 
+SOLD_ITEM_FIELDS = (
+    "provider_item_id", "name", "category", "sku", "price_cents", "currency", "sell_unit",
+    "is_active",
+)
+
+
 def upsert_sold_items(db: Session, tenant_id: int, rows: list[dict], provider: str = "square") -> int:
     existing = {
         item.provider_item_id: item
@@ -61,7 +67,8 @@ def upsert_sold_items(db: Session, tenant_id: int, rows: list[dict], provider: s
     }
     changed = 0
     for row in rows:
-        fields = {k: v for k, v in row.items() if k != "tracks_inventory"}
+        # Named, not "everything the normalizer produced": a new key there is not a new column.
+        fields = {key: row[key] for key in SOLD_ITEM_FIELDS if key in row}
         item = existing.get(row["provider_item_id"])
         if item is None:
             db.add(SoldItem(tenant_id=tenant_id, provider=provider, **fields))
@@ -78,10 +85,14 @@ def upsert_sold_items(db: Session, tenant_id: int, rows: list[dict], provider: s
 def ensure_tracked_stock_items(
     db: Session, tenant_id: int, catalog_rows: list[dict], provider: str = "square"
 ) -> int:
-    """Create a countable stock item for every POS-tracked variation."""
+    """Create a countable stock item for every POS-tracked variation, at that POS's locations."""
     locations = list(
         db.scalars(
-            select(Location).where(Location.tenant_id == tenant_id, Location.is_active.is_(True))
+            select(Location).where(
+                Location.tenant_id == tenant_id,
+                Location.provider == provider,
+                Location.is_active.is_(True),
+            )
         )
     )
     if not locations:
@@ -117,6 +128,42 @@ def ensure_tracked_stock_items(
             created += 1
     db.flush()
     return created
+
+
+def sync_catalog_presence(
+    db: Session, tenant_id: int, catalog_rows: list[dict], provider: str = "square"
+) -> int:
+    """Follow Square's catalog in and out of existence, without losing a row.
+
+    A variation the merchant deleted or archived is marked inactive, so it leaves the shelf,
+    the alerts and the reorder list, while its counts, receipts and sales stay exactly where
+    they are. Restore it in Square and it comes back on its own.
+    """
+    present = {row["provider_item_id"] for row in catalog_rows}
+    changed = 0
+
+    for sold in db.scalars(
+        select(SoldItem).where(SoldItem.tenant_id == tenant_id, SoldItem.provider == provider)
+    ):
+        wanted = sold.provider_item_id in present
+        if sold.is_active is not wanted:
+            sold.is_active = wanted
+            changed += 1
+
+    for item in db.scalars(
+        select(StockItem).where(
+            StockItem.tenant_id == tenant_id, StockItem.track_mode == TrackMode.PROVIDER
+        )
+    ):
+        if not item.provider_variation_id:
+            continue
+        wanted = item.provider_variation_id in present
+        if item.is_active is not wanted:
+            item.is_active = wanted
+            changed += 1
+
+    db.flush()
+    return changed
 
 
 def apply_provider_counts(db: Session, tenant_id: int, rows: list[dict]) -> int:

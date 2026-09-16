@@ -271,6 +271,8 @@ class SyncRun(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="square")
+    # full: the hourly reconciliation. catalog: a catalog change, pulled on its own.
+    kind: Mapped[str] = mapped_column(String(16), default="full")
     status: Mapped[SyncStatus] = mapped_column(Enum(SyncStatus), default=SyncStatus.RUNNING)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)

@@ -6,6 +6,7 @@ import hashlib
 import hmac
 
 INVENTORY_COUNT_UPDATED = "inventory.count.updated"
+CATALOG_VERSION_UPDATED = "catalog.version.updated"
 PAYMENT_UPDATED = "payment.updated"
 REFUND_EVENTS = ("refund.created", "refund.updated")
 

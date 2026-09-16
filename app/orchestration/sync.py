@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.load.upsert import (
     apply_provider_counts,
     ensure_tracked_stock_items,
+    sync_catalog_presence,
     upsert_locations,
     upsert_sales_daily,
     sync_identifiers_from_catalog,
@@ -80,10 +81,54 @@ def _access_token(db: Session, connection: ProviderConnection) -> str:
     return decrypt(connection.access_token_enc)
 
 
-def run_sync(db: Session, tenant_id: int, days_back: int = SALES_LOOKBACK_DAYS) -> dict:
-    """Full pull for one tenant. Idempotent, safe to re-run."""
+def _pull_catalog(db: Session, tenant_id: int, client: SquareClient) -> tuple[list[dict], dict]:
+    """Locations and catalog: the part of a sync that a catalog change invalidates."""
+    stats: dict[str, int] = {
+        "locations": upsert_locations(db, tenant_id, normalize_locations(client.locations()))
+    }
+    catalog_rows = normalize_catalog(client.catalog_objects(("ITEM", "CATEGORY", "MEASUREMENT_UNIT")))
+    stats["sold_items"] = upsert_sold_items(db, tenant_id, catalog_rows)
+    stats["stock_items_created"] = ensure_tracked_stock_items(db, tenant_id, catalog_rows)
+    stats["identifiers"] = sync_identifiers_from_catalog(db, tenant_id, catalog_rows)
+    stats["prices"] = sync_retail_prices(db, tenant_id, catalog_rows)
+    stats["presence_changed"] = sync_catalog_presence(db, tenant_id, catalog_rows)
+    return catalog_rows, stats
+
+
+def sync_catalog(db: Session, tenant_id: int) -> dict:
+    """Re-read the catalog alone, which is all a catalog change needs. Safe to repeat."""
     connection = active_connection(db, tenant_id)
-    run = SyncRun(tenant_id=tenant_id, provider=connection.provider)
+    run = SyncRun(tenant_id=tenant_id, provider=connection.provider, kind="catalog")
+    db.add(run)
+    db.flush()
+    try:
+        token = _access_token(db, connection)
+        with SquareClient(token) as client:
+            _rows, stats = _pull_catalog(db, tenant_id, client)
+    except Exception as exc:
+        run.status = SyncStatus.FAILED
+        run.finished_at = datetime.now(timezone.utc)
+        run.error = f"{type(exc).__name__}: {exc}"
+        db.commit()
+        log.exception("catalog sync failed for tenant %s", tenant_id)
+        raise
+
+    run.status = SyncStatus.SUCCESS
+    run.finished_at = datetime.now(timezone.utc)
+    run.stats_json = json.dumps(stats, default=str)
+    db.flush()
+    log.info("catalog sync for tenant %s: %s", tenant_id, stats)
+    return stats
+
+
+def run_sync(db: Session, tenant_id: int, days_back: int = SALES_LOOKBACK_DAYS) -> dict:
+    """Full pull for one tenant. Idempotent, safe to re-run.
+
+    This is the reconciliation pass: webhooks keep counts current between runs, and this run
+    is what makes them right again if one was missed, dropped, or arrived out of order.
+    """
+    connection = active_connection(db, tenant_id)
+    run = SyncRun(tenant_id=tenant_id, provider=connection.provider, kind="full")
     db.add(run)
     db.flush()
 
@@ -91,17 +136,8 @@ def run_sync(db: Session, tenant_id: int, days_back: int = SALES_LOOKBACK_DAYS) 
     try:
         token = _access_token(db, connection)
         with SquareClient(token) as client:
-            stats["locations"] = upsert_locations(
-                db, tenant_id, normalize_locations(client.locations())
-            )
-
-            catalog_rows = normalize_catalog(
-                client.catalog_objects(("ITEM", "CATEGORY", "MEASUREMENT_UNIT"))
-            )
-            stats["sold_items"] = upsert_sold_items(db, tenant_id, catalog_rows)
-            stats["stock_items_created"] = ensure_tracked_stock_items(db, tenant_id, catalog_rows)
-            stats["identifiers"] = sync_identifiers_from_catalog(db, tenant_id, catalog_rows)
-            stats["prices"] = sync_retail_prices(db, tenant_id, catalog_rows)
+            catalog_rows, catalog_stats = _pull_catalog(db, tenant_id, client)
+            stats.update(catalog_stats)
 
             locations = list(
                 db.scalars(
