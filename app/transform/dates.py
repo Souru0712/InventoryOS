@@ -129,24 +129,27 @@ def _candidates(text: str, today: date, prefer: str) -> list[tuple[date, Decimal
             found.append((value, ONE, None))
 
     for match in MONTH_WORD_DAY.finditer(text):
-        year, short = _year(match["y"], today)
+        year, _short = _year(match["y"], today)
         if value := _build(year, MONTHS[match["mon"].lower()], int(match["d"])):
-            found.append((value, Decimal("0.97") if short else ONE, None))
+            found.append((value, ONE, None))
 
     for match in DAY_MONTH_WORD.finditer(text):
-        year, short = _year(match["y"], today)
+        year, _short = _year(match["y"], today)
         if value := _build(year, MONTHS[match["mon"].lower()], int(match["d"])):
-            found.append((value, Decimal("0.97") if short else ONE, None))
+            found.append((value, ONE, None))
 
     for match in MONTH_WORD_YEAR.finditer(text):
-        year, short = _year(match["y"], today)
+        year, _short = _year(match["y"], today)
         if value := _build(year, MONTHS[match["mon"].lower()], None):
-            found.append((value, Decimal("0.92") if short else Decimal("0.95"), "month only"))
+            found.append((value, Decimal("0.95"), "month only"))
 
     for match in NUMERIC.finditer(text):
         a, b = int(match["a"]), int(match["b"])
-        year, short = _year(match["c"], today)
-        penalty = Decimal("0.97") if short else ONE
+        year, _short = _year(match["c"], today)
+        # Two digits of year cost nothing: stock is never dated 1926, and a date outside the
+        # range stock carries is caught by _plausible. What makes a date uncertain is the
+        # day-and-month order, below, and that is penalised properly.
+        penalty = ONE
 
         if match["c"] is None:
             # Two numbers alone: a month and a year, so the end of that month.

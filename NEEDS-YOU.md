@@ -130,16 +130,32 @@ the original is still kept.
 
 ## 8. Best-before scanning (Workstream 5)
 
-The whole workstream is real-world validation, so it is almost entirely yours to supply:
+The harness is built and the text shapes are covered offline. What is missing is photographs of
+real packaging, which only you can take.
 
 - [ ] Photograph real products covering: large obvious dates, tiny printed dates, curved packaging,
       low-contrast dates
 - [ ] Cover the wordings: `BEST BY`, `EXP`, `USE BY`, `SELL BY`
 - [ ] Cover the formats: numeric (`10/24/26`), textual (`24 OCT 2026`), and ambiguous (`10/11/26`)
-- [ ] Put them in one folder with a note of the correct date for each
+- [ ] Put them in one folder with a `cases.json` saying what each one actually says:
 
-Then I run the corpus, check the confidence recorded per batch, confirm ambiguous dates are flagged
-rather than guessed, and turn every failure into a regression test.
+```json
+[
+  {"file": "yoghurt.jpg", "expected": "2026-10-24", "note": "tiny print on a curved pot"},
+  {"file": "milk.jpg", "expected": "2026-09-22", "prefer": "dmy", "note": "low contrast"},
+  {"file": "lot-code-only.jpg", "expected": null, "note": "no date printed at all"}
+]
+```
+
+Then, with `ANTHROPIC_API_KEY` set:
+
+```bash
+python -m app.cli expiry-corpus var/date-photos --prefer mdy --write-failures
+```
+
+It prints how many were read correctly with no question asked, how many were asked about, and how
+many were wrong — and adds every failure to the regression corpus. A dozen products is enough to
+answer "does this beat typing them in".
 
 ## 9. Stripe billing (Workstream 6)
 

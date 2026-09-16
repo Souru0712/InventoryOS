@@ -72,6 +72,28 @@ lines nobody had to touch, which fields go wrong most, which suppliers are worst
 names keep needing the same fix. That last one is usually solved by setting a barcode or an alias.
 The receiving page shows the same summary.
 
+## Dates on packaging
+
+A photo of a best-before date is read twice: the model transcribes what is printed, and
+`app/transform/dates.py` parses that transcription. Agreement is what earns the confidence to
+apply a date without asking; anything else goes to a person. `10/11/26` is October 11th in Chicago
+and November 10th in London, so it is read the way the merchant's country writes dates **and
+flagged**, never applied silently. A packing date is always questioned, because it says nothing
+about when stock goes off. Whatever is applied keeps its confidence and its kind on the batch, so
+"why is this lot dated the 24th" is answerable months later.
+
+`tests/corpus/printed_dates.json` is the regression corpus: every date shape the app has met, as
+text, with what it must make of each. To score real photographs, put them in a folder with a
+`cases.json` saying what each one really says, and run:
+
+```bash
+python -m app.cli expiry-corpus var/date-photos --prefer mdy --write-failures
+```
+
+It reports how many were read correctly with no question asked, how many were asked about, and how
+many were wrong — a wrong date applied unasked is the only true failure, and `--write-failures`
+adds each one to the corpus so it cannot come back unnoticed.
+
 ## What Square is told
 
 Square owns the count for its own SKUs, so every write has to say which kind of fact it is.

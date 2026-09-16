@@ -5,6 +5,7 @@ import argparse
 import logging
 import random
 import sys
+from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -31,6 +32,13 @@ from app.monitoring import init_monitoring
 from app.notify.email import suppress, unsuppress
 from app.orchestration import scheduler
 from app.orchestration.alerts import evaluate_and_store, send_alert_digest
+from app.orchestration.expiry_corpus import (
+    MANIFEST,
+    add_to_corpus,
+    as_regression_cases,
+    report as corpus_report,
+    run_corpus,
+)
 from app.orchestration.extraction_quality import correction_stats, correction_summary
 from app.orchestration.health import current as current_health, record_snapshot
 from app.orchestration.reporting import send_weekly_report, weekly_report
@@ -193,6 +201,18 @@ def cmd_extraction_quality(args: argparse.Namespace) -> int:
     for product in stats["products"]:
         print(f"  ! {product['name'][:40]:<40} corrected {product['corrections']} times")
     return 0
+
+
+def cmd_expiry_corpus(args: argparse.Namespace) -> int:
+    """Read a folder of photographed packages and score the dates against the right answers."""
+    folder = Path(args.folder)
+    results = run_corpus(folder, prefer=args.prefer)
+    print(corpus_report(results))
+    if args.write_failures:
+        corpus_path = Path(__file__).resolve().parent.parent / "tests" / "corpus" / "printed_dates.json"
+        added = add_to_corpus(as_regression_cases(results), corpus_path)
+        print(f"added {added} case{'s' if added != 1 else ''} to {corpus_path.name}")
+    return 1 if any(result.verdict == "WRONG" for result in results) else 0
 
 
 def cmd_parse_doc(args: argparse.Namespace) -> int:
@@ -415,6 +435,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tenant", type=int, required=True)
     p.add_argument("--days", type=int, default=90)
     p.set_defaults(func=cmd_extraction_quality)
+
+    p = sub.add_parser("expiry-corpus", help="score the date reader against real photographs")
+    p.add_argument("folder", help=f"folder holding the photos and their {MANIFEST}")
+    p.add_argument("--prefer", choices=("mdy", "dmy"), default="mdy",
+                   help="how the merchant's country writes dates")
+    p.add_argument("--write-failures", action="store_true",
+                   help="add what went wrong to the offline regression corpus")
+    p.set_defaults(func=cmd_expiry_corpus)
 
     p = sub.add_parser("parse-doc", help="re-read an uploaded invoice")
     p.add_argument("--document", type=int, required=True)

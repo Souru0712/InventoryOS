@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.config import get_settings
+from app.extract.images import prepare_for_model
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +100,9 @@ class ClaudeExpiryReader:
             raise ExpiryReadError(f"unsupported image type {media_type!r}")
         if not image:
             raise ExpiryReadError("the photo was empty")
+
+        # A date is photographed close up on a 12-megapixel phone; send what the model reads.
+        image, media_type = prepare_for_model(image, media_type)
 
         response = self._client.messages.create(
             model=self._model,

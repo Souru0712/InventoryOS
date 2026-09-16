@@ -1,0 +1,114 @@
+{
+  "_comment": [
+    "Every date the reader has ever got wrong, plus the shapes packaging is known to use.",
+    "A case is: the text as transcribed from the packaging, the merchant's date order, and what",
+    "the app must make of it. 'confident' false means the app must ASK rather than apply it.",
+    "Add a case whenever a real photo is read wrongly - `python -m app.cli expiry-corpus DIR",
+    "--write-failures` does it for you - so the same mistake can never come back unnoticed."
+  ],
+  "today": "2026-09-16",
+  "cases": [
+    {
+      "id": "best-by-slash-us",
+      "text": "BEST BY 10/24/26",
+      "prefer": "mdy",
+      "expect": {"date": "2026-10-24", "type": "best_before", "confident": true}
+    },
+    {
+      "id": "best-before-dot-uk",
+      "text": "BEST BEFORE 24.10.26",
+      "prefer": "dmy",
+      "expect": {"date": "2026-10-24", "type": "best_before", "confident": true}
+    },
+    {
+      "id": "exp-textual-day-first",
+      "text": "EXP 24 OCT 2026",
+      "prefer": "dmy",
+      "expect": {"date": "2026-10-24", "type": "expiry", "confident": true}
+    },
+    {
+      "id": "exp-textual-month-first",
+      "text": "EXP OCT 24, 2026",
+      "prefer": "mdy",
+      "expect": {"date": "2026-10-24", "type": "expiry", "confident": true}
+    },
+    {
+      "id": "use-by-iso",
+      "text": "USE BY 2026-10-24",
+      "prefer": "dmy",
+      "expect": {"date": "2026-10-24", "type": "use_by", "confident": true}
+    },
+    {
+      "id": "sell-by-us",
+      "text": "SELL BY 10/24/26",
+      "prefer": "mdy",
+      "expect": {"date": "2026-10-24", "type": "sell_by", "confident": true}
+    },
+    {
+      "id": "display-until",
+      "text": "DISPLAY UNTIL 24 OCT",
+      "prefer": "dmy",
+      "expect": {"date": "2026-10-24", "type": "sell_by", "confident": true}
+    },
+    {
+      "id": "ambiguous-either-way-us",
+      "text": "EXP 10/11/26",
+      "prefer": "mdy",
+      "expect": {"date": "2026-10-11", "type": "expiry", "confident": false, "note": "swapped"}
+    },
+    {
+      "id": "ambiguous-either-way-uk",
+      "text": "EXP 10/11/26",
+      "prefer": "dmy",
+      "expect": {"date": "2026-11-10", "type": "expiry", "confident": false, "note": "swapped"}
+    },
+    {
+      "id": "day-above-twelve-settles-it",
+      "text": "BB 24/10/26",
+      "prefer": "mdy",
+      "expect": {"date": "2026-10-24", "type": "best_before", "confident": true}
+    },
+    {
+      "id": "dot-matrix-spaced-separators",
+      "text": "BEST BEFORE 24 . 10 . 26  LOT 4471",
+      "prefer": "dmy",
+      "expect": {"date": "2026-10-24", "type": "best_before", "confident": true}
+    },
+    {
+      "id": "month-and-year-only",
+      "text": "BEST BEFORE END OCT 2026",
+      "prefer": "dmy",
+      "expect": {"date": "2026-10-31", "type": "best_before", "confident": true, "note": "month"}
+    },
+    {
+      "id": "six-digits-no-separators",
+      "text": "EXP 241026",
+      "prefer": "dmy",
+      "expect": {"date": "2026-10-24", "type": "expiry", "confident": false, "note": "separators"}
+    },
+    {
+      "id": "packing-date-is-not-an-expiry",
+      "text": "PKD 24/09/26",
+      "prefer": "dmy",
+      "expect": {"date": "2026-09-24", "type": "packed", "confident": false, "is_expiry": false}
+    },
+    {
+      "id": "no-label-at-all",
+      "text": "24 OCT 2026",
+      "prefer": "dmy",
+      "expect": {"date": "2026-10-24", "type": "unknown", "confident": false, "note": "label"}
+    },
+    {
+      "id": "lot-code-is-not-a-date",
+      "text": "LOT L4471A PROD OF USA",
+      "prefer": "mdy",
+      "expect": {"date": null}
+    },
+    {
+      "id": "date-long-past-is-flagged",
+      "text": "BEST BEFORE 24 OCT 2019",
+      "prefer": "dmy",
+      "expect": {"date": "2019-10-24", "type": "best_before", "confident": false, "note": "range"}
+    }
+  ]
+}

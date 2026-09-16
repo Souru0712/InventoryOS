@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.models import ProductIdentifier, StockItem, Tenant, TrackMode, User
 from app.orchestration.scanning import (
@@ -300,7 +301,9 @@ def codes_for_item(
         {"codes": [{"value": r.value, "type": r.identifier_type.value, "source": r.source} for r in rows]}
     )
 
-MAX_PHOTO_BYTES = 4 * 1024 * 1024
+def _photo_limit() -> int:
+    """The same limit as an invoice photo: the image is shrunk before it is sent anywhere."""
+    return get_settings().max_upload_mb * 1024 * 1024
 
 
 @router.post("/app/scan/expiry")
@@ -314,8 +317,11 @@ async def scan_expiry(
     image = await photo.read()
     if not image:
         raise HTTPException(status_code=400, detail="the photo was empty")
-    if len(image) > MAX_PHOTO_BYTES:
-        raise HTTPException(status_code=400, detail="that photo is too large")
+    if len(image) > _photo_limit():
+        raise HTTPException(
+            status_code=400,
+            detail=f"that photo is larger than the {get_settings().max_upload_mb} MB limit",
+        )
 
     reading = read_expiry_photo(
         image,
