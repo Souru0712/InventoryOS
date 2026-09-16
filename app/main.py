@@ -27,6 +27,7 @@ from app.web import (
     promotions,
     receiving,
     scanning,
+    settings as settings_page,
     shop,
     webhooks,
 )
@@ -75,6 +76,7 @@ app.include_router(receiving.router)
 app.include_router(health.router)
 app.include_router(promotions.router)
 app.include_router(scanning.router)
+app.include_router(settings_page.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

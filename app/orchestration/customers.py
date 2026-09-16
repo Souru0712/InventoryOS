@@ -25,7 +25,7 @@ from app.models import (
     StockItem,
     Tenant,
 )
-from app.notify.email import render, send_email
+from app.notify.email import render_pair, send_email
 from app.orchestration.referrals import new_referral_code
 from app.transform.taste import NOVELTY_LEVELS, RATINGS, SPICE_LEVELS, Received, Review, Stated, Taste, build_taste
 
@@ -107,11 +107,10 @@ def issue_login_link(db: Session, customer: Customer, now: datetime | None = Non
 
     url = f"{settings.app_base_url.rstrip('/')}/shop/{customer.tenant_id}/auth?token={raw}"
     store = db.get(Tenant, customer.tenant_id).name
+    html, text = render_pair("email/customer_login", url=url, store=store, minutes=minutes)
     sent = send_email(
         db, customer.tenant_id, customer.email, f"Your sign-in link for {store}",
-        render("email/customer_login.html", url=url, store=store, minutes=minutes),
-        kind="customer_login",
-        text=f"Sign in to {store}: {url}\nThe link works once and expires in {minutes} minutes.",
+        html, kind="customer_login", text=text,
     )
     if not sent and not settings.smtp_host:
         # Without a mail server the link is otherwise unusable; with one it never reaches a log.

@@ -96,6 +96,11 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
+    # What this person wants sent. Sign-in links and receipts ignore these: they were asked for.
+    wants_stock_alerts: Mapped[bool] = mapped_column(Boolean, default=True)
+    wants_expiry_alerts: Mapped[bool] = mapped_column(Boolean, default=True)
+    wants_weekly_report: Mapped[bool] = mapped_column(Boolean, default=True)
+
     tenant: Mapped[Tenant] = relationship(back_populates="users")
 
 
@@ -278,6 +283,24 @@ class SyncRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
     stats_json: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class EmailSuppression(Base):
+    """An address we must stop sending to: it bounced, or someone marked us as spam.
+
+    Kept apart from users and customers on purpose - the provider reports an address, and the
+    same address may belong to both, or to neither any more.
+    """
+
+    __tablename__ = "email_suppressions"
+    __table_args__ = (UniqueConstraint("email"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    # bounce | complaint | manual
+    source: Mapped[str] = mapped_column(String(20), default="bounce")
+    reason: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class EmailLog(Base):

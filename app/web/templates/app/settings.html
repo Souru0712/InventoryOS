@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+{% if request.query_params.get("saved") %}
+  <div class="notice ok">Saved. This applies to {{ user.email }}.</div>
+{% endif %}
+
+<h1>Settings</h1>
+<p class="lede">What StockPulse sends to {{ user.email }}.</p>
+
+{% if suppressed %}
+<div class="notice error">
+  We stopped emailing this address because {{ "it bounced" if suppressed.source == "bounce" else "of a spam complaint" if suppressed.source == "complaint" else "it was suppressed by hand" }}.
+  {% if suppressed.reason %}<br><span class="small">{{ suppressed.reason }}</span>{% endif %}
+  <br><span class="small">Email {{ support_email or "support" }} once the address works again and we will switch it back on.</span>
+</div>
+{% endif %}
+
+<form method="post" action="/app/settings/email" class="card" style="max-width:620px;">
+  {% for field, attribute, label, description in email_settings %}
+  <label style="display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--line, #eef2f0);">
+    <input type="checkbox" name="{{ field }}" value="1" {% if user[attribute] %}checked{% endif %}
+           style="margin-top:3px;">
+    <span>
+      <strong>{{ label }}</strong>
+      <div class="small muted">{{ description }}</div>
+    </span>
+  </label>
+  {% endfor %}
+  <p style="margin:16px 0 0;">
+    <button class="btn" type="submit">Save</button>
+  </p>
+</form>
+
+<p class="small muted" style="max-width:620px;">
+  Sign-in links and anything else you asked for are always sent, whatever is ticked here.
+</p>
+{% endblock %}

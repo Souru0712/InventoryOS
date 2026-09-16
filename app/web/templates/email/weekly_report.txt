@@ -1,0 +1,26 @@
+{{ tenant.name }}
+Week of {{ report.period_start.strftime("%d %b") }} to {{ report.period_end.strftime("%d %b") }}
+
+Net sales: {{ money(report.net_cents) }}{% if report.net_change_pct is not none %} ({{ report.net_change_pct }}% vs last week){% endif %}
+
+Stock on hand: {{ money(report.inventory_value_cents) }}
+Needing attention: {{ report.alerts|length }}
+
+{% if alerts %}
+ORDER THIS WEEK
+{% for alert in alerts %}
+* {{ alert.name }} - {{ alert.message }}{% if alert.suggested %}
+  Order about {{ alert.suggested }}{% endif %}
+
+{% endfor %}
+{% endif %}
+{% if report.top_sellers %}
+TOP SELLERS
+{% for seller in report.top_sellers %}
+* {{ seller.name }}: {{ seller.units }} sold, {{ money(seller.net_cents) }}
+{% endfor %}
+{% endif %}
+
+The full report: {{ base_url }}/app/report
+
+Delivered by StockPulse. Choose which emails you get at {{ base_url }}/app/settings

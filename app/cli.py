@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.config import require_deployable
 from app.db import init_db, run_migrations, session_scope, stamp_migrations
 from app.models import (
+    EmailSuppression,
     InventoryCount,
     Location,
     IdentifierType,
@@ -27,6 +28,7 @@ from app.models import (
     User,
 )
 from app.monitoring import init_monitoring
+from app.notify.email import suppress, unsuppress
 from app.orchestration import scheduler
 from app.orchestration.alerts import evaluate_and_store, send_alert_digest
 from app.orchestration.health import current as current_health, record_snapshot
@@ -119,6 +121,24 @@ def cmd_scheduler(_: argparse.Namespace) -> int:
     require_deployable()
     init_db()
     return scheduler.run_forever()
+
+
+def cmd_email(args: argparse.Namespace) -> int:
+    """Stop or resume sending to an address, and see what is currently suppressed."""
+    with session_scope() as db:
+        if args.suppress:
+            entry = suppress(db, args.suppress, args.reason or "suppressed by hand", source="manual")
+            print(f"suppressed {entry.email}: {entry.reason}")
+            return 0
+        if args.allow:
+            print(f"sending to {args.allow} again" if unsuppress(db, args.allow)
+                  else f"{args.allow} was not suppressed")
+            return 0
+        rows = list(db.scalars(select(EmailSuppression).order_by(EmailSuppression.created_at)))
+        for row in rows:
+            print(f"{row.email:<40} {row.source:<10} {row.reason or ''}")
+        print(f"{len(rows)} suppressed address{'es' if len(rows) != 1 else ''}")
+    return 0
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
@@ -350,6 +370,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser(
         "scheduler", help="run scheduled jobs; one holds the lock, any others stand by"
     ).set_defaults(func=cmd_scheduler)
+
+    p = sub.add_parser("email", help="see or change suppressed email addresses")
+    p.add_argument("--suppress", help="stop sending to this address")
+    p.add_argument("--allow", help="send to this address again")
+    p.add_argument("--reason", help="why, when suppressing")
+    p.set_defaults(func=cmd_email)
 
     p = sub.add_parser("sync", help="pull Square data for one tenant")
     p.add_argument("--tenant", type=int, required=True)

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import EmailLog, Tenant, User
-from app.notify.email import render, send_email
+from app.notify.email import render_pair, send_email, wants
 from app.orchestration.alerts import proposals_for
 from app.orchestration.views import sale_rows, sold_item_names, stock_views
 from app.transform.reports import WeeklyReport, build_weekly_report, money, week_bounds
@@ -71,8 +71,8 @@ def send_weekly_report(db: Session, tenant_id: int, today: date | None = None) -
         for alert in report.alerts
     ]
 
-    html = render(
-        "email/weekly_report.html",
+    html, text = render_pair(
+        "email/weekly_report",
         tenant=tenant,
         report=report,
         alerts=alert_rows,
@@ -89,12 +89,13 @@ def send_weekly_report(db: Session, tenant_id: int, today: date | None = None) -
         for user in db.scalars(
             select(User).where(User.tenant_id == tenant_id, User.is_active.is_(True))
         )
+        if wants(user, "weekly_report")
     ]
     if not recipients:
-        log.warning("tenant %s has no active users for the weekly report", tenant_id)
+        log.info("tenant %s has nobody who wants the weekly report", tenant_id)
         return False
 
     sent = False
     for recipient in recipients:
-        sent = send_email(db, tenant_id, recipient, subject, html, "weekly_report") or sent
+        sent = send_email(db, tenant_id, recipient, subject, html, "weekly_report", text) or sent
     return sent

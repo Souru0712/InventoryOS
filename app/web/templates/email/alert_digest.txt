@@ -1,0 +1,23 @@
+{{ tenant.name }}
+
+{% if at_risk_cents %}
+{{ money(at_risk_cents, currency) }} of stock may expire unsold, at cost.
+{{ rows|length }} item{{ "s" if rows|length != 1 else "" }} need attention.
+{% else %}
+{{ rows|length }} item{{ "s" if rows|length != 1 else "" }} need attention.
+{% endif %}
+
+{% for row in rows %}
+* {{ row.name }} - {{ row.message }}
+  {{ row.quantity }}{% if row.value_cents %}, {{ money(row.value_cents, currency) }} at cost{% endif %}{% if row.days_of_cover is not none %}, {{ "%.1f"|format(row.days_of_cover) }} days of cover{% endif %}
+
+{% endfor %}
+
+{% if at_risk_cents %}
+See what to do: {{ base_url }}/app/expiring
+{% else %}
+Open inventory: {{ base_url }}/app
+{% endif %}
+
+Delivered by StockPulse. Adjust your reorder points to change what shows up here,
+or choose which emails you get at {{ base_url }}/app/settings
