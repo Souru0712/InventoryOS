@@ -53,8 +53,10 @@ point, plus days-of-cover against the supplier lead time.
 The job that actually hurts is re-typing a delivery note into the POS. Instead:
 
 1. `POST /app/receiving` — photo or PDF is stored as the receiving record (deduplicated by SHA-256).
-2. `app/extract/invoice.py` reads it with Claude vision under a JSON schema, so the output always
-   parses. No key configured → a stub extractor, and the lines can be entered by hand.
+2. `app/extract/invoice.py` reads it with Claude vision under a JSON schema, and checks the reply
+   against that schema before anything downstream trusts it. The photo is turned upright and
+   shrunk to 1568px first, because that is what the model reads anyway — the original is kept
+   untouched in storage. No key configured → a stub extractor, and lines can be entered by hand.
 3. `app/transform/receiving.py` (pure) matches each line to a stock item and resolves the quantity:
    `"4 cases of 6 x 1L"` → 24 000 ml, `"2 sacks"` → 50 kg via the item's pack size, `"3 boxes"` →
    1500 cups. A weight line against a volume item is **flagged, never guessed**.
@@ -62,6 +64,13 @@ The job that actually hurts is re-typing a delivery note into the POS. Instead:
    supplier's wording is saved as an alias — the next invoice from them matches on its own.
 5. Where Square owns the count, what arrived is pushed back as an adjustment via
    `inventory/changes/batch-create` - see below.
+
+Every change a reviewer makes - the item, the quantity, the cost, the date, the supplier - is
+recorded against the line as an `extraction_corrections` row, with what the reader said and what
+the human made it. `python -m app.cli extraction-quality --tenant N` reads them back: the share of
+lines nobody had to touch, which fields go wrong most, which suppliers are worst, and which product
+names keep needing the same fix. That last one is usually solved by setting a barcode or an alias.
+The receiving page shows the same summary.
 
 ## What Square is told
 

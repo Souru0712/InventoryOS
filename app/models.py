@@ -527,6 +527,29 @@ class HealthSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class ExtractionCorrection(Base):
+    """One thing the reviewer changed about what the reader produced.
+
+    This is how the extraction is judged: not "did it return JSON" but "how much did somebody
+    have to fix before receiving the delivery".
+    """
+
+    __tablename__ = "extraction_corrections"
+    __table_args__ = (Index("ix_extraction_corrections_tenant_field", "tenant_id", "field"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"), index=True)
+    # Null for a document-level field such as the supplier.
+    document_line_id: Mapped[int | None] = mapped_column(ForeignKey("document_lines.id"))
+    # quantity | product_match | cost | supplier | invoice_number | expiry
+    field: Mapped[str] = mapped_column(String(24))
+    ai_value: Mapped[str | None] = mapped_column(String(300))
+    corrected_value: Mapped[str | None] = mapped_column(String(300))
+    corrected_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class StockAlias(Base):
     """Supplier wording learned from a confirmed match, so the next invoice is automatic."""
 

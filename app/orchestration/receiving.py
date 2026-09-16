@@ -12,11 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.extract.invoice import ExtractionError, Extractor, get_extractor
+from app.extract.invoice import SUPPORTED_MEDIA, ExtractionError, Extractor, get_extractor
 from app.models import (
     Document,
     DocumentLine,
     DocumentStatus,
+    ExtractionCorrection,
     InventoryCount,
     LineStatus,
     ProductIdentifier,
@@ -53,6 +54,48 @@ class LineDecision:
     apply: bool = True
     # One date for the whole line: 48 bottles from one delivery share a best-before.
     expires_on: date | None = None
+    # What the line actually cost, when the reviewer corrects the reader.
+    line_total_cents: int | None = None
+
+
+# What a reviewer can change, and what each correction is called in the statistics.
+CORRECTION_FIELDS = ("product_match", "quantity", "cost", "expiry", "supplier", "invoice_number")
+
+
+def record_correction(
+    db: Session,
+    document: Document,
+    field: str,
+    ai_value: object,
+    corrected_value: object,
+    line_id: int | None = None,
+    user_id: int | None = None,
+) -> ExtractionCorrection | None:
+    """Keep one change the reviewer made, if it really is a change."""
+    before, after = _as_text(ai_value), _as_text(corrected_value)
+    if before == after:
+        return None
+    correction = ExtractionCorrection(
+        tenant_id=document.tenant_id,
+        document_id=document.id,
+        document_line_id=line_id,
+        field=field,
+        ai_value=before,
+        corrected_value=after,
+        corrected_by=user_id,
+    )
+    db.add(correction)
+    db.flush()
+    return correction
+
+
+def _as_text(value: object) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, Decimal):
+        # 24 and 24.0000 are the same quantity, and not a correction; and no exponent notation.
+        return format(value.normalize(), "f")
+    return str(value)[:300]
 
 
 def save_upload(
@@ -73,6 +116,13 @@ def save_upload(
     if len(content) > limit:
         raise UploadRejected(f"file is larger than the {settings.max_upload_mb} MB limit")
 
+    suffix = Path(filename).suffix.lower()
+    if suffix not in SUPPORTED_MEDIA:
+        raise UploadRejected(
+            f"{suffix or 'that file type'} cannot be read; "
+            f"use {', '.join(sorted(SUPPORTED_MEDIA))}"
+        )
+
     digest = hashlib.sha256(content).hexdigest()
     existing = db.scalars(
         select(Document).where(Document.tenant_id == tenant_id, Document.sha256 == digest)
@@ -81,7 +131,6 @@ def save_upload(
         log.info("tenant %s re-uploaded document %s", tenant_id, existing.id)
         return existing
 
-    suffix = Path(filename).suffix.lower() or ".jpg"
     key = f"{tenant_id}/{digest}{suffix}"
     try:
         get_storage().put(key, content, content_type or "image/jpeg")
@@ -225,7 +274,11 @@ def _to_row(document: Document, result: MatchResult) -> DocumentLine:
 
 
 def apply_document(
-    db: Session, document_id: int, decisions: list[LineDecision], now: datetime | None = None
+    db: Session,
+    document_id: int,
+    decisions: list[LineDecision],
+    now: datetime | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Receive the delivery: raise stock, date it, cost it, anchor derived items, learn the wording."""
     now = now or datetime.now(timezone.utc)
@@ -237,6 +290,11 @@ def apply_document(
         raise ValueError(f"document {document_id} has already been applied")
 
     lines = {line.id: line for line in document.lines}
+    # What the reader produced, captured before the reviewer's answers overwrite any of it.
+    proposed = {
+        line.id: (line.stock_item_id, line.received_qty_base, line.expires_on, line.line_total_cents)
+        for line in document.lines
+    }
     items = {
         item.id: item
         for item in db.scalars(
@@ -261,6 +319,13 @@ def apply_document(
             line.status = LineStatus.UNMATCHED
             continue
 
+        was_item, was_qty, was_expiry, was_total = proposed[line.id]
+        record_correction(db, document, "product_match", was_item, item.id, line.id, user_id)
+        record_correction(db, document, "quantity", was_qty, quantity, line.id, user_id)
+        if decision.line_total_cents is not None:
+            record_correction(db, document, "cost", was_total, decision.line_total_cents, line.id, user_id)
+            line.line_total_cents = decision.line_total_cents
+
         item.qty_base = Decimal(item.qty_base or 0) + Decimal(quantity)
         db.add(
             InventoryCount(
@@ -277,13 +342,17 @@ def apply_document(
         item.last_counted_at = now
 
         cost = line_cost_per_base(
-            line.line_total_cents, line.unit_price_cents, line.parsed_qty, Decimal(quantity)
+            line.line_total_cents,
+            None if decision.line_total_cents is not None else line.unit_price_cents,
+            line.parsed_qty,
+            Decimal(quantity),
         )
         if cost is not None:
             # The latest price paid is what replacing this stock costs, which is what waste costs.
             item.cost_per_base_cents = cost
 
         expires_on = decision.expires_on if decision.expires_on is not None else line.expires_on
+        record_correction(db, document, "expiry", was_expiry, expires_on, line.id, user_id)
         if expires_on is not None:
             db.add(
                 StockBatch(

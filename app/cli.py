@@ -31,6 +31,7 @@ from app.monitoring import init_monitoring
 from app.notify.email import suppress, unsuppress
 from app.orchestration import scheduler
 from app.orchestration.alerts import evaluate_and_store, send_alert_digest
+from app.orchestration.extraction_quality import correction_stats, correction_summary
 from app.orchestration.health import current as current_health, record_snapshot
 from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.receiving import parse_document
@@ -173,6 +174,24 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"  {roll.dimension:<7} {roll.item_count:>3} items  {money(roll.value_cents):>10}  {roll.at_risk} at risk")
     for alert in report.alerts[:10]:
         print(f"  ! {alert.message}")
+    return 0
+
+
+def cmd_extraction_quality(args: argparse.Namespace) -> int:
+    """How much of each invoice the owner still has to fix, and what keeps going wrong."""
+    with session_scope() as db:
+        stats = correction_stats(db, args.tenant, days=args.days)
+    print(correction_summary(stats))
+    if not stats["documents"]:
+        return 0
+    if stats["clean_rate"] is not None:
+        print(f"  lines nobody touched   {stats['clean_rate'] * 100:.0f}%")
+    for data in stats["by_field"].values():
+        print(f"  {data['label']:<26} {data['count']:>4}  ({data['rate'] * 100:.0f}%)")
+    for supplier in stats["suppliers"]:
+        print(f"  {supplier['supplier'][:30]:<30} {supplier['per_document']:>5} per invoice")
+    for product in stats["products"]:
+        print(f"  ! {product['name'][:40]:<40} corrected {product['corrections']} times")
     return 0
 
 
@@ -391,6 +410,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tenant", type=int, required=True)
     p.add_argument("--send", action="store_true", help="email it")
     p.set_defaults(func=cmd_report)
+
+    p = sub.add_parser("extraction-quality", help="how much of each invoice is corrected by hand")
+    p.add_argument("--tenant", type=int, required=True)
+    p.add_argument("--days", type=int, default=90)
+    p.set_defaults(func=cmd_extraction_quality)
 
     p = sub.add_parser("parse-doc", help="re-read an uploaded invoice")
     p.add_argument("--document", type=int, required=True)

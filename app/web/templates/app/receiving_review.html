@@ -52,10 +52,25 @@
       </div>
     {% else %}
     <form method="post" action="/app/receiving/{{ document.id }}/apply">
+      {% set applied = document.status.value == "applied" %}
+      <div class="row" style="margin-bottom:12px;">
+        <div class="field">
+          <label for="supplier">Supplier</label>
+          <input id="supplier" name="supplier" value="{{ document.supplier or '' }}"
+                 placeholder="Who delivered this" {% if applied %}disabled{% endif %}>
+        </div>
+        <div class="field">
+          <label for="invoice_number">Invoice number</label>
+          <input id="invoice_number" name="invoice_number" value="{{ document.invoice_number or '' }}"
+                 {% if applied %}disabled{% endif %}>
+        </div>
+      </div>
+      <p class="small muted" style="margin:-6px 0 12px;">The supplier name is what teaches us their
+      wording, so their next invoice matches on its own. Correct it if the reader got it wrong.</p>
       <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>On the invoice</th><th>Matched to</th><th>Receive</th><th>Best before</th><th>Confidence</th><th>Apply</th></tr>
+          <tr><th>On the invoice</th><th>Matched to</th><th>Receive</th><th>Line total</th><th>Best before</th><th>Confidence</th><th>Apply</th></tr>
         </thead>
         <tbody>
         {% for line in lines %}
@@ -83,6 +98,12 @@
               <input name="line_{{ line.id }}_qty" inputmode="decimal" style="width:96px;"
                      value="{{ line.received_qty_base|plain(matched.stock_unit) if matched else '' }}">
               <span class="small muted">{{ matched.stock_unit if matched else "" }}</span>
+            </td>
+            <td style="white-space:nowrap;">
+              <input name="line_{{ line.id }}_total" inputmode="decimal" style="width:90px;"
+                     aria-label="Line total for {{ line.parsed_name }}"
+                     value="{{ "%.2f"|format(line.line_total_cents / 100) if line.line_total_cents else "" }}"
+                     {% if document.status.value == "applied" %}disabled{% endif %}>
             </td>
             <td>
               <input type="date" name="line_{{ line.id }}_expires" style="width:auto;"

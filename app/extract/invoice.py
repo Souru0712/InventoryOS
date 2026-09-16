@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Protocol
 
 from app.config import get_settings
+from app.extract.images import prepare_for_model
 from app.transform.receiving import ParsedLine
 
 log = logging.getLogger(__name__)
@@ -84,6 +85,55 @@ Transcribe only what is printed. Never invent a product, quantity or price.
 - expiry_date is a best-before, use-by or expiry date printed against that line, as YYYY-MM-DD.
   Use null unless one is printed for the line. Never infer it from the invoice or delivery date.
 - If the image is unreadable or is not an invoice, return an empty lines array."""
+
+
+def validate_payload(payload: object, schema: dict = EXTRACT_SCHEMA, path: str = "response") -> None:
+    """Check the model's JSON against EXTRACT_SCHEMA before anything downstream trusts it.
+
+    Structured output makes this rare, not impossible: a refusal, a truncation, or a future model
+    can all produce something else, and a wrong quantity here becomes wrong stock.
+    """
+    types = schema.get("type")
+    allowed = [types] if isinstance(types, str) else list(types or [])
+    if not _is_type(payload, allowed):
+        raise ExtractionError(f"{path}: expected {' or '.join(allowed)}, got {type(payload).__name__}")
+    if payload is None:
+        return
+
+    if "object" in allowed and isinstance(payload, dict):
+        properties = schema.get("properties") or {}
+        for name in schema.get("required") or []:
+            if name not in payload:
+                raise ExtractionError(f"{path}: missing {name!r}")
+        if schema.get("additionalProperties") is False:
+            for name in payload:
+                if name not in properties:
+                    raise ExtractionError(f"{path}: unexpected field {name!r}")
+        for name, sub_schema in properties.items():
+            if name in payload:
+                validate_payload(payload[name], sub_schema, f"{path}.{name}")
+
+    if "array" in allowed and isinstance(payload, list):
+        item_schema = schema.get("items")
+        if item_schema:
+            for index, item in enumerate(payload):
+                validate_payload(item, item_schema, f"{path}[{index}]")
+
+
+def _is_type(value: object, allowed: list[str]) -> bool:
+    if not allowed:
+        return True
+    checks = {
+        "object": lambda v: isinstance(v, dict),
+        "array": lambda v: isinstance(v, list),
+        "string": lambda v: isinstance(v, str),
+        "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+        # An invoice line may read 2.5 kg, so a number is either.
+        "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
+        "boolean": lambda v: isinstance(v, bool),
+        "null": lambda v: v is None,
+    }
+    return any(checks[name](value) for name in allowed if name in checks)
 
 
 @dataclass
@@ -190,7 +240,9 @@ class ClaudeInvoiceExtractor:
 
     def extract(self, content: bytes, filename: str) -> InvoiceExtract:
         media_type = _media_type(filename)
-        data = base64.standard_b64encode(content).decode()
+        # The stored original is never touched; this is only what goes over the wire.
+        payload_bytes, media_type = prepare_for_model(content, media_type)
+        data = base64.standard_b64encode(payload_bytes).decode()
 
         block_type = "document" if media_type == "application/pdf" else "image"
         response = self._client.messages.create(
@@ -230,6 +282,7 @@ class ClaudeInvoiceExtractor:
         except json.JSONDecodeError as exc:
             raise ExtractionError(f"could not parse extraction output: {exc}") from exc
 
+        validate_payload(payload)
         return _to_extract(payload, self.name)
 
 

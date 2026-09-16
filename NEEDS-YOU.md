@@ -115,14 +115,18 @@ Until all of this exists, email is logged instead of sent, which is why nothing 
 
 ## 7. Invoice photo reading (Workstream 4)
 
+The pipeline is finished and tested apart from the part only real paper can prove:
+
 - [ ] `ANTHROPIC_API_KEY` in `.env` for local development, and in production secrets later
 - [ ] A spending limit on that key you are comfortable with
 - [ ] **Real invoices**: photograph 3-5 delivery notes from different suppliers, as a phone would
-      take them, and drop them in a folder for me. Different layouts matter more than more copies
-      of the same one. Without these, step 17 cannot be done, and the "minimal corrections" claim
-      is untested.
+      take them, and drop them in a folder for me. Different layouts matter far more than more
+      copies of the same one. This is step 17, and it is what turns "the model returned JSON" into
+      "this saves the owner time".
 
-Unset, invoices fall back to manual entry and everything else still works.
+Unset, invoices fall back to manual entry and everything else still works. Photos are now turned
+upright and shrunk before they are sent, so a 12 MB phone photo costs what a 200 KB one does, and
+the original is still kept.
 
 ## 8. Best-before scanning (Workstream 5)
 

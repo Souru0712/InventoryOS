@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.extract.invoice import ExtractionError
 from app.models import Document, DocumentStatus, Location, StockItem, Tenant, User
+from app.orchestration.extraction_quality import correction_stats
 from app.orchestration.receiving import (
     LineDecision,
     UploadRejected,
     apply_document,
+    record_correction,
     parse_document,
     save_upload,
 )
@@ -34,6 +36,17 @@ def _owned(db: Session, tenant_id: int, document_id: int) -> Document:
     if document is None or document.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="document not found")
     return document
+
+
+def _cents(raw: object) -> int | None:
+    """A price typed as 12.50 or 12,50; blank means the reviewer left the reader's figure alone."""
+    text = str(raw or "").strip().replace(",", ".").lstrip("$")
+    if not text:
+        return None
+    try:
+        return int((Decimal(text) * 100).to_integral_value())
+    except (InvalidOperation, ValueError):
+        return None
 
 
 @router.get("/app/receiving", response_class=HTMLResponse)
@@ -61,6 +74,7 @@ def receiving_index(
             "tenant": tenant,
             "documents": documents,
             "locations": locations,
+            "quality": correction_stats(db, tenant.id),
         },
     )
 
@@ -171,6 +185,7 @@ async def apply_receipt(
     request: Request,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    user: User = Depends(require_user),
 ):
     """Apply the reviewed lines. The form posts one field group per line."""
     document = _owned(db, tenant.id, document_id)
@@ -208,11 +223,28 @@ async def apply_receipt(
             expires_on = date.fromisoformat(raw_date) if raw_date else None
         except ValueError:
             expires_on = None
-        # The form always posts the field, so an emptied date means the reviewer removed it.
-        line.expires_on = expires_on
-        decisions.append(LineDecision(line.id, item.id, qty_base, apply=True, expires_on=expires_on))
 
-    result = apply_document(db, document.id, decisions)
+        decisions.append(
+            LineDecision(
+                line.id,
+                item.id,
+                qty_base,
+                apply=True,
+                expires_on=expires_on,
+                line_total_cents=_cents(form.get(f"{prefix}_total")),
+            )
+        )
+
+    # The header the reader filled in is editable too: a wrong supplier teaches the wrong alias.
+    supplier = (form.get("supplier") or "").strip() or None
+    invoice_number = (form.get("invoice_number") or "").strip() or None
+    record_correction(db, document, "supplier", document.supplier, supplier, user_id=user.id)
+    record_correction(
+        db, document, "invoice_number", document.invoice_number, invoice_number, user_id=user.id
+    )
+    document.supplier, document.invoice_number = supplier, invoice_number
+
+    result = apply_document(db, document.id, decisions, user_id=user.id)
     db.commit()
     return RedirectResponse(
         f"/app/receiving/{document.id}?applied={result['applied']}&pushed={result['pushed_to_pos']}"

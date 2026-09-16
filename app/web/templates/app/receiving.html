@@ -7,6 +7,32 @@ confirm.</p>
   <div class="notice error">{{ request.query_params.get("error") }}</div>
 {% endif %}
 
+{% if quality and quality.documents %}
+<div class="card" style="margin-bottom:18px;">
+  <h2 style="margin:0 0 6px; font-size:16px;">How well the reader is doing</h2>
+  <p class="small muted" style="margin:0 0 10px;">
+    Last {{ quality.days }} days: {{ quality.documents }} invoice{{ "s" if quality.documents != 1 else "" }},
+    {{ quality.lines }} line{{ "s" if quality.lines != 1 else "" }}, {{ quality.corrections }} correction{{ "s" if quality.corrections != 1 else "" }}.
+    {% if quality.clean_rate is not none %}
+      {{ "%.0f%%"|format(quality.clean_rate * 100) }} of lines needed no change at all.
+    {% endif %}
+  </p>
+  {% if quality.by_field %}
+  <ul class="small" style="margin:0 0 6px; padding-left:18px;">
+    {% for field, data in quality.by_field.items() %}
+      <li>{{ data.label }}: {{ data.count }} ({{ "%.0f%%"|format(data.rate * 100) }})</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if quality.products %}
+  <p class="small muted" style="margin:0;">
+    Keeps needing fixing: {{ quality.products | map(attribute="name") | join(", ") }}.
+    Setting a barcode or an alias on these stops it.
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if not locations %}
   <div class="card">
     <p style="margin:0;">Connect Square (or add a location) before receiving deliveries.</p>
