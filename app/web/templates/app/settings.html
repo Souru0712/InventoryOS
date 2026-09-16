@@ -19,7 +19,7 @@
   {% for field, attribute, label, description in email_settings %}
   <label style="display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--line, #eef2f0);">
     <input type="checkbox" name="{{ field }}" value="1" {% if user[attribute] %}checked{% endif %}
-           style="margin-top:3px;">
+           style="flex:0 0 auto; width:16px; height:16px; margin:3px 0 0;">
     <span>
       <strong>{{ label }}</strong>
       <div class="small muted">{{ description }}</div>
