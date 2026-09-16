@@ -172,7 +172,11 @@ class SquareClient:
 def physical_count_change(
     catalog_object_id: str, location_id: str, quantity: str, occurred_at: datetime
 ) -> dict:
-    """Shape one PHYSICAL_COUNT change for batch-create."""
+    """Shape one PHYSICAL_COUNT change for batch-create: what someone counted on the shelf.
+
+    A count replaces Square's quantity outright, so it is only ever correct for an observation.
+    Deliveries and any quantity the app calculated go through adjustment_change instead.
+    """
     return {
         "type": "PHYSICAL_COUNT",
         "physical_count": {

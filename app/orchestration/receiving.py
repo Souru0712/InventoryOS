@@ -232,6 +232,9 @@ def apply_document(
     document = db.get(Document, document_id)
     if document is None:
         raise ValueError(f"document {document_id} not found")
+    if document.status is DocumentStatus.APPLIED:
+        # Applying twice would raise stock twice and tell Square the delivery arrived twice.
+        raise ValueError(f"document {document_id} has already been applied")
 
     lines = {line.id: line for line in document.lines}
     items = {
@@ -243,7 +246,7 @@ def apply_document(
 
     applied = 0
     batches = 0
-    touched: list[int] = []
+    received: dict[int, Decimal] = {}
     for decision in decisions:
         line = lines.get(decision.line_id)
         if line is None:
@@ -302,7 +305,7 @@ def apply_document(
         line.expires_on = expires_on
         line.status = LineStatus.APPLIED
         _learn_alias(db, document, line, item.id)
-        touched.append(item.id)
+        received[item.id] = received.get(item.id, ZERO) + Decimal(quantity)
         applied += 1
 
     document.status = DocumentStatus.APPLIED
@@ -310,18 +313,24 @@ def apply_document(
     db.flush()
 
     pushed = 0
-    provider_items = [
-        item_id for item_id in touched if items[item_id].track_mode == TrackMode.PROVIDER
-    ]
-    if provider_items:
-        from app.orchestration.sync import NotConnected, push_counts_to_square
+    # What the delivery added, never what we think the shelf now holds: a sale between the
+    # invoice and this moment must survive. Same pathway as receiving by barcode scan.
+    provider_deltas = {
+        item_id: delta
+        for item_id, delta in received.items()
+        if items[item_id].track_mode == TrackMode.PROVIDER
+    }
+    if provider_deltas:
+        from app.orchestration.sync import NotConnected, push_adjustments_to_square
 
         try:
-            pushed = push_counts_to_square(db, document.tenant_id, provider_items)
+            pushed = push_adjustments_to_square(
+                db, document.tenant_id, provider_deltas, f"receipt-{document.id}"
+            )
         except NotConnected:
-            log.warning("tenant %s is not connected; counts not pushed", document.tenant_id)
+            log.warning("tenant %s is not connected; delivery not pushed", document.tenant_id)
         except Exception:
-            log.exception("failed to push counts to square for tenant %s", document.tenant_id)
+            log.exception("failed to adjust square stock for tenant %s", document.tenant_id)
 
     return {
         "applied": applied,

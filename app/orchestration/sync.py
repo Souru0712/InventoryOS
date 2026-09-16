@@ -156,7 +156,13 @@ def run_sync(db: Session, tenant_id: int, days_back: int = SALES_LOOKBACK_DAYS) 
 
 
 def push_counts_to_square(db: Session, tenant_id: int, stock_item_ids: list[int]) -> int:
-    """Write corrected quantities back so the online store stops overselling."""
+    """Send a physical count: someone looked at the shelf, and this is what was on it.
+
+    Only ever call this with an observed quantity. A number the app worked out - a previous
+    count plus a delivery, or a derived weight or volume - must go through
+    push_adjustments_to_square instead. Sent as a count it would overwrite whatever Square
+    holds, including sales Square knows about and we do not.
+    """
     if not stock_item_ids:
         return 0
 
@@ -199,35 +205,73 @@ def push_counts_to_square(db: Session, tenant_id: int, stock_item_ids: list[int]
     log.info("pushed %s corrected counts to square for tenant %s", len(changes), tenant_id)
     return len(changes)
 
+def push_adjustments_to_square(
+    db: Session,
+    tenant_id: int,
+    deltas: dict[int, Decimal],
+    idempotency_key: str | None = None,
+) -> int:
+    """Add what arrived to Square's count, whatever that count happens to be.
+
+    Receiving is an event, not an observation: the delivery says +24, it does not say the shelf
+    now holds 48. An adjustment lands on top of Square's own number, so a sale rung up between
+    the delivery and this call survives instead of being overwritten.
+
+    Every receiving path - barcode scan and invoice photo alike - comes through here.
+    """
+    wanted = {
+        item_id: Decimal(delta)
+        for item_id, delta in deltas.items()
+        if delta is not None and Decimal(delta) > 0
+    }
+    if not wanted:
+        return 0
+
+    locations = {
+        loc.id: loc.provider_location_id
+        for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
+    }
+    occurred_at = datetime.now(timezone.utc)
+    pushing: list[tuple[StockItem, dict]] = []
+    for item in db.scalars(
+        select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.id.in_(list(wanted)))
+    ):
+        if item.track_mode is not TrackMode.PROVIDER or not item.provider_variation_id:
+            continue
+        if item.location_id not in locations:
+            continue
+        pushing.append((
+            item,
+            adjustment_change(
+                item.provider_variation_id,
+                locations[item.location_id],
+                str(from_base(wanted[item.id], item.stock_unit)),
+                occurred_at,
+            ),
+        ))
+    if not pushing:
+        return 0
+
+    connection = active_connection(db, tenant_id)
+    token = _access_token(db, connection)
+    with SquareClient(token) as client:
+        # A repeated push of the same receipt is dropped by Square rather than added twice.
+        client.apply_inventory_changes(
+            [change for _item, change in pushing], idempotency_key or str(uuid.uuid4())
+        )
+
+    for item, _change in pushing:
+        item.last_synced_at = occurred_at
+    db.flush()
+    log.info("adjusted square stock for %s items of tenant %s", len(pushing), tenant_id)
+    return len(pushing)
+
+
 def adjust_stock_in_square(
     db: Session, tenant_id: int, item: StockItem, delta_base: Decimal
 ) -> bool:
-    """Add a delta to Square's count for one item. Returns False when Square does not own it."""
-    if item.track_mode is not TrackMode.PROVIDER or not item.provider_variation_id:
-        return False
-    if delta_base is None or delta_base <= 0:
-        return False
-
-    connection = active_connection(db, tenant_id)
-    location = db.get(Location, item.location_id)
-    if location is None:
-        return False
-
-    occurred_at = datetime.now(timezone.utc)
-    change = adjustment_change(
-        item.provider_variation_id,
-        location.provider_location_id,
-        str(from_base(delta_base, item.stock_unit)),
-        occurred_at,
-    )
-    token = _access_token(db, connection)
-    with SquareClient(token) as client:
-        client.apply_inventory_changes([change], str(uuid.uuid4()))
-
-    item.last_synced_at = occurred_at
-    db.flush()
-    log.info("adjusted square stock for item %s by %s", item.id, delta_base)
-    return True
+    """Add a delta for one item. Returns False when Square does not own that item's count."""
+    return push_adjustments_to_square(db, tenant_id, {item.id: delta_base}) > 0
 
 def refresh_item_from_square(db: Session, tenant_id: int, item: StockItem) -> bool:
     """Re-read one variation's count, so a scan shows what Square holds right now."""

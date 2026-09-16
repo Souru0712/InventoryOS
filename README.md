@@ -60,8 +60,25 @@ The job that actually hurts is re-typing a delivery note into the POS. Instead:
    1500 cups. A weight line against a volume item is **flagged, never guessed**.
 4. You confirm in the review screen. Stock goes up, an `inventory_counts` row is written, and the
    supplier's wording is saved as an alias — the next invoice from them matches on its own.
-5. Where Square owns the count, the corrected number is pushed back via
-   `inventory/changes/batch-create`.
+5. Where Square owns the count, what arrived is pushed back as an adjustment via
+   `inventory/changes/batch-create` - see below.
+
+## What Square is told
+
+Square owns the count for its own SKUs, so every write has to say which kind of fact it is.
+
+| What happened | What Square is told |
+|---|---|
+| A delivery arrived, by barcode scan or invoice photo | `ADJUSTMENT` of what arrived, `+24` |
+| Someone counted the shelf | `PHYSICAL_COUNT` of what they saw, `37` |
+| Our own total, a previous count plus a delivery | nothing |
+| A weight or volume derived from recipes | nothing; Square does not track it |
+
+A physical count replaces whatever Square holds. Sent for a delivery it would erase any sale rung
+up between the invoice being written and the push, so receiving goes through
+`push_adjustments_to_square` and only an observation goes through `push_counts_to_square`.
+Receipts push under an idempotency key of their own document, so a retry cannot add the delivery
+twice. `tests/test_square_writeback.py` holds the rule to it.
 
 ## Layout
 
