@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.entitlements import allows
 from app.models import EmailLog, Tenant, User
 from app.notify.email import render_pair, send_email, wants
 from app.orchestration.alerts import proposals_for
@@ -55,6 +56,10 @@ def send_weekly_report(db: Session, tenant_id: int, today: date | None = None) -
     tenant = db.get(Tenant, tenant_id)
     if tenant is None:
         raise ValueError(f"tenant {tenant_id} not found")
+
+    if not allows(tenant, "notifications"):
+        log.info("tenant %s is not entitled to the weekly report", tenant_id)
+        return False
 
     report = weekly_report(db, tenant_id, today)
     items = {item.id: item for item in stock_views(db, tenant_id)}

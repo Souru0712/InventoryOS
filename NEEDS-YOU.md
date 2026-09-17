@@ -168,7 +168,19 @@ answer "does this beat typing them in".
 - [ ] Customer Portal enabled in the Stripe dashboard, with cancellation allowed
 - [ ] The Stripe CLI installed, for the lifecycle test in step 18
 
-## 10. Business decisions I should not make for you
+## 10. Business decisions (answered 2026-09-17)
+
+These are now in the code, in `app/entitlements.py`:
+
+- [x] **Trial: 30 days**, on **Pro**.
+- [x] **Expired trial or subscription: read-only.** Everything stays visible and Square keeps
+      syncing; receiving, counts and edits stop.
+- [x] **Failed payment: 7-day grace**, then the same read-only state.
+
+Change any of them by changing `TRIAL_DAYS`, `TRIAL_PLAN` or `GRACE_DAYS` - they are constants in
+one file, not decisions scattered through the app.
+
+## Old notes on those decisions
 
 Workstream 7 is built on these, and its first two steps are exactly these questions:
 

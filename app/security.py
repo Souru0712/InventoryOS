@@ -66,6 +66,19 @@ def require_tenant(
     return tenant
 
 
+def require_writable(
+    tenant: Tenant = Depends(require_tenant),
+) -> Tenant:
+    """A tenant that may still change its inventory: the trial is live, or the bill is paid.
+
+    A read-only account keeps every page and every number; this guards only what writes.
+    """
+    from app.entitlements import require
+
+    require(tenant, "inventory_write")
+    return tenant
+
+
 def email_taken(db: Session, email: str) -> bool:
     return db.scalars(select(User).where(User.email == email.lower())).first() is not None
 

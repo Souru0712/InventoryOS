@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.entitlements import require
 from app.models import (
     InventoryCount,
     Location,
@@ -39,7 +40,7 @@ from app.orchestration.views import (
     velocity_map,
 )
 from app.providers.square import oauth
-from app.security import SESSION_STATE_KEY, new_state, require_tenant, require_user
+from app.security import require_writable, SESSION_STATE_KEY, new_state, require_tenant, require_user
 from app.transform.alerts import counts_as_waste_risk
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
@@ -225,7 +226,7 @@ def label_stock(
     quantity: str = Form(...),
     expires_on: str = Form(...),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
 ):
     """Date stock that is already on the shelf. The quantity does not change; it gains a date."""
     item = db.get(StockItem, stock_item_id)
@@ -257,7 +258,7 @@ def set_perishable(
     stock_item_id: int = Form(...),
     perishable: str = Form("no"),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
 ):
     """Say whether an item can expire at all, so the coverage figure counts the right things."""
     item = db.get(StockItem, stock_item_id)
@@ -269,7 +270,7 @@ def set_perishable(
 
 @router.post("/app/expiring/{batch_id}/remove")
 def remove_batch(
-    batch_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    batch_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_writable)
 ):
     """Undo a wrongly entered date. Stock is untouched: a batch is only a date on it."""
     batch = db.get(StockBatch, batch_id)
@@ -313,7 +314,7 @@ def create_item(
     sku: str = Form(""),
     upc: str = Form(""),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
 ):
     from app.load.upsert import slugify
 
@@ -397,7 +398,7 @@ def record_count(
     quantity: str = Form(...),
     note: str = Form(""),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
 ):
     """A physical count re-anchors the item; derived quantities restart from here."""
     item = db.get(StockItem, item_id)
@@ -438,8 +439,9 @@ def update_thresholds(
     par_level: str = Form(""),
     lead_time_days: int = Form(2),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
 ):
+    require(tenant, "custom_thresholds")
     item = db.get(StockItem, item_id)
     if item is None or item.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="stock item not found")

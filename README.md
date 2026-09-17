@@ -111,6 +111,38 @@ up between the invoice being written and the push, so receiving goes through
 Receipts push under an idempotency key of their own document, so a retry cannot add the delivery
 twice. `tests/test_square_writeback.py` holds the rule to it.
 
+## What each plan actually gets
+
+The pricing page is marketing; `app/entitlements.py` is the product. Every feature question is
+answered there, from the subscription state, so no route decides for itself.
+
+```
+account -> subscription status -> plan -> capabilities -> access
+```
+
+| | Starter | Pro |
+|---|---|---|
+| Locations | 1 | as many as they have |
+| Health history | today's score | 30 days, with what moved |
+| Reorder list as CSV | no | yes |
+| Custom reorder points and par levels | no | yes |
+
+A **30-day trial** runs on Pro, so the features worth paying for are the ones they use. Signing up
+starts it; a nightly job ends it on its date, and `access()` recomputes from the dates anyway, so a
+trial that ran out an hour ago is already closed.
+
+| State | What works |
+|---|---|
+| `trialing`, `active` | everything the plan covers |
+| `past_due` | everything, for a 7-day grace period while Stripe retries the card |
+| `expired`, `canceled`, `paused`, `past_due` after grace | **read-only**: every page and number stays, Square keeps syncing, nothing can be changed |
+
+Read-only is deliberate. Hiding a merchant's own inventory makes them leave rather than pay, and a
+frozen sync would make their numbers wrong rather than merely locked. Writing routes hang off the
+`require_writable` dependency, Pro-only ones call `require(tenant, "...")`, and a refusal renders a
+sentence and a link rather than a 500. `tests/test_entitlements.py` walks one account through
+trial, Starter, Pro, downgrade, failed payment, grace and cancellation.
+
 ## Layout
 
 ```

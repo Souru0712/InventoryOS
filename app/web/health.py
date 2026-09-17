@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Tenant
 from app.orchestration.health import current, over_time
+from app.entitlements import history_days, require
 from app.security import require_tenant
 from app.transform.health import reorder_lines
 from app.units import format_approx, format_qty
@@ -37,7 +38,9 @@ def health_page(
             "tenant": tenant,
             "report": health.report,
             "actions": health.actions,
-            "trend": over_time(db, tenant.id, health.report, now.date()),
+            # Starter sees today's score; the history behind it is part of Pro.
+            "trend": over_time(db, tenant.id, health.report, now.date(), days=history_days(tenant)),
+            "history_days": history_days(tenant),
             "by_id": {item.item.id: item for item in health.input.items},
             "currency": health.input.currency,
         },
@@ -75,6 +78,7 @@ def reorder_csv(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
 ):
+    require(tenant, "reorder_csv")
     health = current(db, tenant.id, location)
     buffer = io.StringIO()
     writer = csv.writer(buffer)

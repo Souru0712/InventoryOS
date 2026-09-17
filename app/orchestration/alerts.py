@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.entitlements import allows
 from app.models import Alert, AlertKind, StockItem, Tenant, User
 from app.notify.email import render_pair, send_email, wants
 from app.orchestration.views import expiry_positions, stock_views, tenant_currency, velocity_map
@@ -114,6 +115,9 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
         return False
 
     tenant = db.get(Tenant, tenant_id)
+    if not allows(tenant, "notifications"):
+        log.info("tenant %s is not entitled to alerts; digest held", tenant_id)
+        return False
     users = list(
         db.scalars(select(User).where(User.tenant_id == tenant_id, User.is_active.is_(True)))
     )

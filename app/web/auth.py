@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.entitlements import start_trial
 from app.models import Tenant, User
 from app.security import email_taken, hash_password, login_user, logout_user, verify_password
 from app.web.templating import templates
@@ -55,7 +56,7 @@ def signup(
             status_code=400,
         )
 
-    tenant = Tenant(name=business_name.strip() or "My business")
+    tenant = start_trial(Tenant(name=business_name.strip() or "My business"))
     db.add(tenant)
     db.flush()
     user = User(tenant_id=tenant.id, email=email, password_hash=hash_password(password))

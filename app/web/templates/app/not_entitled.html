@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:560px; margin:40px auto; text-align:center;">
+  <h1 style="margin:0 0 10px;">Not on your plan</h1>
+  <p class="lede" style="margin:0 0 18px;">{{ message }}</p>
+  <p style="margin:0;">
+    <a class="btn" href="/pricing">See the plans</a>
+    <a class="btn secondary" href="/app">Back to inventory</a>
+  </p>
+</div>
+{% endblock %}

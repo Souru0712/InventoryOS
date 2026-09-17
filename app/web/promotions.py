@@ -21,7 +21,7 @@ from app.orchestration.promotions import (
     suggestions_for,
 )
 from app.orchestration.views import tenant_currency
-from app.security import require_tenant, require_user
+from app.security import require_writable, require_tenant, require_user
 from app.units import from_base, to_base
 from app.web.templating import templates
 
@@ -64,7 +64,7 @@ def accept_promotion(
     stock_item_id: int = Form(...),
     price: str = Form(""),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
 ):
     """Start the markdown. An empty price means the suggested one was good enough."""
@@ -93,7 +93,7 @@ def accept_promotion(
 def dismiss_promotion(
     stock_item_id: int = Form(...),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
 ):
     dismiss(db, tenant.id, _suggestion_or_404(db, tenant.id, stock_item_id), user_id=user.id)
@@ -105,7 +105,7 @@ def dismiss_promotion(
 def snooze_promotion(
     stock_item_id: int = Form(...),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
 ):
     snooze(db, tenant.id, _suggestion_or_404(db, tenant.id, stock_item_id), user_id=user.id)
@@ -115,7 +115,7 @@ def snooze_promotion(
 
 @router.post("/app/promotions/{promotion_id}/end")
 def end_promotion(
-    promotion_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    promotion_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_writable)
 ):
     promotion = db.get(Promotion, promotion_id)
     if promotion is None or promotion.tenant_id != tenant.id:

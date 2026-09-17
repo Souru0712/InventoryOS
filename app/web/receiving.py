@@ -22,7 +22,7 @@ from app.orchestration.receiving import (
     parse_document,
     save_upload,
 )
-from app.security import require_tenant, require_user
+from app.security import require_writable, require_tenant, require_user
 from app.storage import StorageError, get_storage
 from app.units import UnitError, to_base
 from app.web.templating import templates
@@ -85,7 +85,7 @@ async def upload_invoice(
     kind: str = Form("invoice"),
     photo: UploadFile = File(...),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
 ):
     location = db.get(Location, location_id)
@@ -166,7 +166,7 @@ def document_image(
 
 @router.post("/app/receiving/{document_id}/reparse")
 def reparse(
-    document_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    document_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_writable)
 ):
     document = _owned(db, tenant.id, document_id)
     if document.status == DocumentStatus.APPLIED:
@@ -184,7 +184,7 @@ async def apply_receipt(
     document_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
 ):
     """Apply the reviewed lines. The form posts one field group per line."""

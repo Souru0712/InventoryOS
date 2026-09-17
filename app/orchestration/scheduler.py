@@ -23,6 +23,7 @@ from app.models import BoxSettings, Plan, ProviderConnection, Tenant
 from app.orchestration.boxes import expire_unpaid, reconcile
 from app.orchestration.health import record_snapshot
 from app.orchestration.reporting import report_sent_recently, send_weekly_report
+from app.orchestration.subscriptions import expire_due_trials
 from app.orchestration.sync import run_sync
 
 log = logging.getLogger(__name__)
@@ -71,6 +72,17 @@ def send_due_reports(now: datetime | None = None) -> None:
             log.exception("weekly report failed for tenant %s", tenant_id)
 
 
+def close_finished_trials() -> None:
+    """A trial ends on its date, not when someone next opens the app."""
+    try:
+        with session_scope() as db:
+            expired = expire_due_trials(db)
+        if expired:
+            log.info("trials ended for tenants %s", expired)
+    except Exception:
+        log.exception("could not close finished trials")
+
+
 def record_health_snapshots() -> None:
     """Keep each tenant's health for the night, so tomorrow can say why it moved."""
     with session_scope() as db:
@@ -114,6 +126,15 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         "cron",
         minute=5,
         id="send_due_reports",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        close_finished_trials,
+        "cron",
+        hour=1,
+        minute=5,
+        id="close_finished_trials",
         max_instances=1,
         coalesce=True,
     )

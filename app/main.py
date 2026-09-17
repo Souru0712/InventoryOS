@@ -14,8 +14,10 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings, require_deployable
 from app.db import init_db
+from app.entitlements import NotEntitled
 from app.monitoring import init_monitoring
 from app.orchestration import scheduler
+from app.web.templating import templates
 from app.web import (
     auth,
     billing,
@@ -79,6 +81,17 @@ app.include_router(scanning.router)
 app.include_router(settings_page.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
+
+
+@app.exception_handler(NotEntitled)
+async def show_what_this_needs(request: Request, exc: NotEntitled):
+    """A feature the plan does not cover is a sentence and a link, not a stack trace."""
+    return templates.TemplateResponse(
+        request,
+        "app/not_entitled.html",
+        {"title": "Not on your plan", "message": str(exc), "capability": exc.capability},
+        status_code=402,
+    )
 
 
 @app.exception_handler(StarletteHTTPException)

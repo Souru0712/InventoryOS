@@ -28,10 +28,29 @@ def utcnow() -> datetime:
 
 
 class Plan(str, enum.Enum):
-    TRIAL = "trial"
+    """What the customer is paying for. TRIAL and CANCELED are states, not plans: they are
+    kept only so the stored enum type does not have to be rewritten, and no new row uses them."""
+
     STARTER = "starter"
     PRO = "pro"
+    TRIAL = "trial"  # legacy
+    CANCELED = "canceled"  # legacy
+
+
+class SubscriptionStatus(str, enum.Enum):
+    """Where the account stands with us, named the way Stripe names it.
+
+    TRIALING and ACTIVE are the paying states. PAST_DUE keeps working through a grace period
+    while the card is retried. EXPIRED, CANCELED and PAUSED are read-only: the inventory stays
+    visible and keeps syncing, but nothing can be changed until someone subscribes.
+    """
+
+    TRIALING = "trialing"
+    ACTIVE = "active"
+    PAST_DUE = "past_due"
+    EXPIRED = "expired"
     CANCELED = "canceled"
+    PAUSED = "paused"
 
 
 class TrackMode(str, enum.Enum):
@@ -75,8 +94,21 @@ class Tenant(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
-    plan: Mapped[Plan] = mapped_column(Enum(Plan), default=Plan.TRIAL)
+    plan: Mapped[Plan] = mapped_column(Enum(Plan), default=Plan.PRO)
+
+    # The subscription, as Stripe sees it and as we enforce it. app/entitlements.py is the only
+    # place that decides what these mean.
+    subscription_status: Mapped[SubscriptionStatus] = mapped_column(
+        Enum(SubscriptionStatus), default=SubscriptionStatus.TRIALING
+    )
+    trial_started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime)
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime)
+    # When a payment first failed, which is where the grace period counts from.
+    past_due_since: Mapped[datetime | None] = mapped_column(DateTime)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(80))
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(80))
     report_day: Mapped[int] = mapped_column(Integer, default=0)  # 0 = Monday
     report_hour: Mapped[int] = mapped_column(Integer, default=7)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")

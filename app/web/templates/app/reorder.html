@@ -7,7 +7,12 @@
     level, or cover the lead time plus two weeks of sales where no par is set.</p>
   </div>
   {% if groups %}
+    {% if entitled(tenant, "reorder_csv") %}
     <a class="btn small secondary" href="/app/reorder.csv" style="flex: none; margin-top: 6px;">Download as CSV</a>
+    {% else %}
+    <a class="btn small secondary" href="/pricing" style="flex: none; margin-top: 6px;"
+       title="The reorder list as a CSV is part of Pro">CSV with Pro</a>
+    {% endif %}
   {% endif %}
 </div>
 

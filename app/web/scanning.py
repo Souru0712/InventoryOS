@@ -27,7 +27,7 @@ from app.orchestration.scanning import (
     suspicious,
 )
 from app.orchestration.views import stock_views, tenant_currency, velocity_map
-from app.security import require_tenant, require_user
+from app.security import require_writable, require_tenant, require_user
 from app.transform.barcodes import canonical
 from app.transform.dates import prefer_for_currency
 from app.transform.inventory import days_of_cover
@@ -135,7 +135,7 @@ def link(
     stock_item_id: int = Form(...),
     symbology: str | None = Form(None),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
 ):
     """Teach the scanner a code it did not know."""
     item = db.get(StockItem, stock_item_id)
@@ -178,7 +178,7 @@ def receive(
     date_type: str = Form("unknown"),
     date_confidence: str = Form(""),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
 ):
     """Scan, then receive: stock rises, the lot is dated, Square gets the delta."""
@@ -223,7 +223,7 @@ def count(
     stock_item_id: int = Form(...),
     quantity: str = Form(...),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
 ):
     """Correct the count from the shelf. Square is told the absolute number, not a delta."""

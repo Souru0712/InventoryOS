@@ -20,8 +20,17 @@ from app.load.upsert import (
     sync_retail_prices,
     upsert_sold_items,
 )
-from app.models import Location, ProviderConnection, StockItem, SyncRun, SyncStatus, TrackMode
+from app.models import (
+    Location,
+    ProviderConnection,
+    StockItem,
+    SyncRun,
+    SyncStatus,
+    Tenant,
+    TrackMode,
+)
 from app.orchestration.alerts import evaluate_and_store, send_alert_digest
+from app.orchestration.subscriptions import apply_location_limit
 from app.orchestration.views import refresh_derived_quantities
 from app.providers.square.client import (
     SquareClient,
@@ -163,6 +172,11 @@ def run_sync(db: Session, tenant_id: int, days_back: int = SALES_LOOKBACK_DAYS) 
                 stats["sales_rows"] = upsert_sales_daily(
                     db, tenant_id, daily_sales_from_orders(orders, timezones)
                 )
+
+        # Square may hand back more locations than the plan covers; the extras stay on record.
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is not None:
+            stats["locations_set_aside"] = apply_location_limit(db, tenant)
 
         stats["derived_updated"] = refresh_derived_quantities(db, tenant_id)
         stats.update(evaluate_and_store(db, tenant_id))

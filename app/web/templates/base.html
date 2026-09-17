@@ -140,6 +140,15 @@
   </div>
 </header>
 <main class="wrap">
+{% if tenant is defined and tenant %}
+  {% set account = subscription(tenant) %}
+  {% if account.message %}
+    <div class="notice {{ 'error' if account.read_only else '' }}" style="margin-bottom:16px;">
+      {{ account.message }}
+      <a href="/pricing" style="margin-left:6px;">{{ "Subscribe" if account.read_only else "See the plans" }}</a>
+    </div>
+  {% endif %}
+{% endif %}
 {% block content %}{% endblock %}
 </main>
 <footer class="site">

@@ -134,8 +134,15 @@ class OverTime:
     history: list[HealthSnapshot]  # oldest first
 
 
-def over_time(db: Session, tenant_id: int, report: HealthReport, today: date) -> OverTime:
-    """Today against the last night on record, and against the last thirty days."""
+def over_time(
+    db: Session, tenant_id: int, report: HealthReport, today: date, days: int = HISTORY_DAYS
+) -> OverTime:
+    """Today against the last night on record, and against the last `days` of them.
+
+    days is what the plan allows: Pro keeps thirty, Starter sees today's score by itself.
+    """
+    if days <= 0:
+        return OverTime(change=None, compared_with=None, benchmark=None, history=[])
     prior = db.scalars(
         select(HealthSnapshot)
         .where(HealthSnapshot.tenant_id == tenant_id, HealthSnapshot.dt < today)
@@ -156,7 +163,7 @@ def over_time(db: Session, tenant_id: int, report: HealthReport, today: date) ->
             select(HealthSnapshot)
             .where(
                 HealthSnapshot.tenant_id == tenant_id,
-                HealthSnapshot.dt >= today - timedelta(days=HISTORY_DAYS),
+                HealthSnapshot.dt >= today - timedelta(days=days),
                 HealthSnapshot.dt < today,
             )
             .order_by(HealthSnapshot.dt)

@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
+from app.entitlements import allows, state as entitlement_state
 from app.units import Dimension, UNITS, UNITS_BY_DIMENSION, format_amount, format_approx, format_qty, from_base
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
@@ -49,6 +50,9 @@ templates.env.filters["amount"] = amount
 templates.env.filters["approx_amount"] = approx_amount
 templates.env.globals.update(
     settings=get_settings(),
+    # Every signed-in page can say where the account stands, without each route passing it.
+    subscription=entitlement_state,
+    entitled=allows,
     Dimension=Dimension,
     UNITS=UNITS,
     UNITS_BY_DIMENSION=UNITS_BY_DIMENSION,

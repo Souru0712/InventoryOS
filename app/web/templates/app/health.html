@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
+{% if history_days is defined and not history_days %}
+  <p class="small muted" style="margin:0 0 12px;">
+    Today's score. <a href="/pricing">Pro</a> keeps the last 30 days and explains what moved.
+  </p>
+{% endif %}
 <h1>Inventory health</h1>
 <p class="lede">How healthy your stock is right now, and exactly why. Every dimension is scored by
 a rule written next to it.</p>
