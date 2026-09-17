@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from app.config import require_deployable
 from app.db import init_db, run_migrations, session_scope, stamp_migrations
+from app.entitlements import allows, state
 from app.models import (
     EmailSuppression,
     InventoryCount,
@@ -147,6 +148,31 @@ def cmd_email(args: argparse.Namespace) -> int:
         for row in rows:
             print(f"{row.email:<40} {row.source:<10} {row.reason or ''}")
         print(f"{len(rows)} suppressed address{'es' if len(rows) != 1 else ''}")
+    return 0
+
+
+def cmd_billing(args: argparse.Namespace) -> int:
+    """What the application thinks this account has paid for. Use it while testing the lifecycle."""
+    with session_scope() as db:
+        tenant = db.get(Tenant, args.tenant)
+        if tenant is None:
+            print(f"no tenant {args.tenant}")
+            return 1
+        account = state(tenant)
+        print(f"tenant {tenant.id}: {tenant.name}")
+        print(f"  plan             {account['plan']}")
+        print(f"  status           {account['status']}")
+        print(f"  access           {account['access']}")
+        if account["trial_days_left"] is not None:
+            print(f"  trial ends       {tenant.trial_ends_at} ({account['trial_days_left']} days left)")
+        if tenant.current_period_end:
+            print(f"  period ends      {tenant.current_period_end}")
+        if account["grace_ends_at"]:
+            print(f"  grace ends       {account['grace_ends_at']}")
+        print(f"  stripe customer  {tenant.stripe_customer_id or '-'}")
+        print(f"  subscription     {tenant.stripe_subscription_id or '-'}")
+        for capability in ("inventory_write", "reorder_csv", "custom_thresholds", "history_30_day"):
+            print(f"  {capability:<17} {'yes' if allows(tenant, capability) else 'no'}")
     return 0
 
 
@@ -415,6 +441,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--allow", help="send to this address again")
     p.add_argument("--reason", help="why, when suppressing")
     p.set_defaults(func=cmd_email)
+
+    p = sub.add_parser("billing", help="what one account has paid for, and what that allows")
+    p.add_argument("--tenant", type=int, required=True)
+    p.set_defaults(func=cmd_billing)
 
     p = sub.add_parser("sync", help="pull Square data for one tenant")
     p.add_argument("--tenant", type=int, required=True)

@@ -109,6 +109,9 @@ class Tenant(Base):
     past_due_since: Mapped[datetime | None] = mapped_column(DateTime)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(80))
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(80))
+    # When the newest Stripe event we applied was created, so an older one arriving late
+    # cannot undo a newer state.
+    stripe_event_at: Mapped[datetime | None] = mapped_column(DateTime)
     report_day: Mapped[int] = mapped_column(Integer, default=0)  # 0 = Monday
     report_hour: Mapped[int] = mapped_column(Integer, default=7)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")

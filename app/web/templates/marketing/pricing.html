@@ -20,7 +20,8 @@
         <button class="btn small" type="submit">Choose {{ plan.name }}</button>
       </form>
     {% else %}
-      <a class="btn small" href="/signup">Start free</a>
+      <a class="btn small" href="/signup?plan={{ plan.id }}">Start {{ plan.name }}</a>
+      <div class="small muted" style="margin-top:6px;">30 days free, then ${{ plan.price }}/mo.</div>
     {% endif %}
   </div>
   {% endfor %}

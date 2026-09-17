@@ -143,6 +143,32 @@ frozen sync would make their numbers wrong rather than merely locked. Writing ro
 sentence and a link rather than a 500. `tests/test_entitlements.py` walks one account through
 trial, Starter, Pro, downgrade, failed payment, grace and cancellation.
 
+## Billing
+
+Stripe holds the money; `app/entitlements.py` holds what it buys. Between them sits
+`app/orchestration/stripe_events.py`, the only code that reads a Stripe payload.
+
+- **Prices are chosen here.** A form posts `starter` or `pro`; this process turns that into a price
+  id. A browser cannot name its own price.
+- **The account comes before the checkout.** Picking a plan on the pricing page signs the visitor
+  up first, then sends them to Stripe, so a subscription always has an account to land on and
+  nobody types their details twice. Skipping payment just starts the 30-day trial.
+- **Webhooks decide state**, not the success page: `checkout.session.completed`,
+  `customer.subscription.created/updated/deleted/paused/resumed`, `invoice.payment_failed` and
+  `invoice.payment_succeeded`. Each handler is safe to run twice, because Stripe retries, and an
+  event older than the last one applied is dropped - otherwise a late `updated` would revive a
+  cancelled subscription. A status Stripe invents is treated as lapsed, never as paid.
+- **Customers manage themselves.** Settings shows the plan, the status and the renewal date, with a
+  button into Stripe's Customer Portal to change card, switch plan or cancel. No email to you.
+
+```bash
+python -m app.cli billing --tenant 1     # what the app thinks this account has paid for
+```
+
+Testing it end to end needs the Stripe CLI; the exact steps are in `NEEDS-YOU.md`.
+`tests/test_billing.py` covers the same lifecycle with recorded payloads, including retries and
+events arriving out of order.
+
 ## Layout
 
 ```

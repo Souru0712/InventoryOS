@@ -34,4 +34,38 @@
 <p class="small muted" style="max-width:620px;">
   Sign-in links and anything else you asked for are always sent, whatever is ticked here.
 </p>
+
+<h2>Billing</h2>
+<div class="card" style="max-width:620px;">
+  <p style="margin:0 0 4px;">
+    <strong>{{ account.plan|capitalize }}</strong>
+    <span class="pill {{ 'ok' if not account.read_only else 'expired' }}" style="margin-left:6px;">
+      {{ account.status.replace("_", " ") }}
+    </span>
+  </p>
+  {% if account.trial_days_left is not none %}
+    <p class="small muted" style="margin:0 0 12px;">
+      {{ account.trial_days_left }} day{{ "s" if account.trial_days_left != 1 else "" }} left of your trial.
+    </p>
+  {% elif tenant.current_period_end %}
+    <p class="small muted" style="margin:0 0 12px;">
+      Renews {{ tenant.current_period_end.strftime("%d %b %Y") }}.
+    </p>
+  {% else %}
+    <p class="small muted" style="margin:0 0 12px;">{{ account.message or "" }}</p>
+  {% endif %}
+
+  {% if tenant.stripe_customer_id and billing_configured %}
+    <form method="post" action="/billing/portal">
+      <button class="btn small" type="submit">Manage or cancel subscription</button>
+    </form>
+    <p class="small muted" style="margin:10px 0 0;">
+      Change your card, switch plan or cancel. Cancelling keeps your data and your Square sync;
+      you just cannot change stock until you subscribe again.
+    </p>
+  {% else %}
+    <a class="btn small" href="/pricing">See the plans</a>
+    <p class="small muted" style="margin:10px 0 0;">Subscribing takes a minute and can be cancelled from here afterwards.</p>
+  {% endif %}
+</div>
 {% endblock %}

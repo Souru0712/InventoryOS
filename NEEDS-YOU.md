@@ -159,14 +159,42 @@ answer "does this beat typing them in".
 
 ## 9. Stripe billing (Workstream 6)
 
-- [ ] Stripe account, test mode first
-- [ ] Starter product and a $29/month price; Pro product and a $59/month price
-- [ ] Price IDs into config: `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`
+The code is finished and tested against recorded Stripe payloads. What is missing is the account
+and the one run against test mode.
+
+- [ ] Stripe account, **test mode** first
+- [ ] Starter product with a $29/month price; Pro product with a $59/month price
+- [ ] Price ids into `.env`: `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`
 - [ ] `STRIPE_SECRET_KEY` (test key first, live key later)
-- [ ] `STRIPE_WEBHOOK_SECRET` from the webhook endpoint pointing at `{APP_BASE_URL}` (or from
-      `stripe listen` while testing locally)
-- [ ] Customer Portal enabled in the Stripe dashboard, with cancellation allowed
-- [ ] The Stripe CLI installed, for the lifecycle test in step 18
+- [ ] Customer Portal enabled in the dashboard, with cancellation allowed
+- [ ] The Stripe CLI installed
+
+Then the lifecycle test, step 18. With the app running and `stripe listen` forwarding:
+
+```bash
+stripe listen --forward-to localhost:8000/billing/webhook
+```
+
+It prints a `whsec_...` - put that in `.env` as `STRIPE_WEBHOOK_SECRET` and restart the app. Then,
+in another terminal:
+
+```bash
+# 1. buy it: pricing -> Start Starter -> signup -> Stripe checkout, card 4242 4242 4242 4242
+python -m app.cli billing --tenant 1          # expect: starter, active
+
+# 2. upgrade and downgrade in the Customer Portal from Settings -> Billing
+python -m app.cli billing --tenant 1          # expect: pro, then starter again
+
+# 3. a failed payment
+stripe trigger invoice.payment_failed
+python -m app.cli billing --tenant 1          # expect: past_due, access still full, grace shown
+
+# 4. cancel in the portal
+python -m app.cli billing --tenant 1          # expect: canceled, access read_only
+```
+
+Tell me what any step prints if it disagrees with the expectation. Only once this passes should
+the live keys go anywhere near it.
 
 ## 10. Business decisions (answered 2026-09-17)
 

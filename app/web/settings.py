@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.models import Tenant, User
+from app.entitlements import state
 from app.notify.email import suppression
 from app.security import require_tenant, require_user
 from app.web.templating import templates
@@ -45,6 +46,8 @@ def settings_page(
             "email_settings": EMAIL_SETTINGS,
             "suppressed": suppression(db, user.email),
             "support_email": get_settings().support_email,
+            "account": state(tenant),
+            "billing_configured": bool(get_settings().stripe_secret_key),
         },
     )
 

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.entitlements import start_trial
+from app.entitlements import PLAN_IDS, start_trial
 from app.models import Tenant, User
 from app.security import email_taken, hash_password, login_user, logout_user, verify_password
 from app.web.templating import templates
@@ -18,8 +18,12 @@ MIN_PASSWORD_LENGTH = 10
 
 
 @router.get("/signup", response_class=HTMLResponse)
-def signup_form(request: Request):
-    return templates.TemplateResponse(request, "auth/signup.html", {"title": "Start free"})
+def signup_form(request: Request, plan: str = ""):
+    return templates.TemplateResponse(
+        request,
+        "auth/signup.html",
+        {"title": "Start free", "plan": plan if plan in PLAN_IDS else ""},
+    )
 
 
 @router.post("/signup")
@@ -28,6 +32,7 @@ def signup(
     business_name: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
+    plan: str = Form(""),
     db: Session = Depends(get_db),
 ):
     email = email.strip().lower()
@@ -40,6 +45,7 @@ def signup(
                 "error": f"Use at least {MIN_PASSWORD_LENGTH} characters for your password.",
                 "business_name": business_name,
                 "email": email,
+                "plan": plan if plan in PLAN_IDS else "",
             },
             status_code=400,
         )
@@ -52,6 +58,7 @@ def signup(
                 "error": "That email already has an account. Log in instead.",
                 "business_name": business_name,
                 "email": email,
+                "plan": plan if plan in PLAN_IDS else "",
             },
             status_code=400,
         )
@@ -64,6 +71,13 @@ def signup(
     db.commit()
 
     login_user(request, user)
+    # Someone who picked a plan on the way in goes straight to paying for it; everyone else
+    # starts their trial in the app. The account exists either way, so nothing is orphaned
+    # in Stripe and nobody types their details twice.
+    if plan in PLAN_IDS:
+        return templates.TemplateResponse(
+            request, "auth/to_checkout.html", {"title": "One more step", "plan": plan}
+        )
     return RedirectResponse("/app", status_code=303)
 
 

@@ -5,6 +5,7 @@
   <p class="lede">Create your workspace, then connect Square.</p>
   {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
   <form class="card" method="post" action="/signup">
+    {% if plan %}<input type="hidden" name="plan" value="{{ plan }}">{% endif %}
     <div class="field">
       <label for="business_name">Business name</label>
       <input id="business_name" name="business_name" value="{{ business_name or '' }}" required autofocus>
