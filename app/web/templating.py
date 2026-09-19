@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
-from app.entitlements import allows, state as entitlement_state
+from app.entitlements import allows, owns_snack_box, state as entitlement_state
 from app.units import Dimension, UNITS, UNITS_BY_DIMENSION, format_amount, format_approx, format_qty, from_base
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
@@ -53,6 +53,7 @@ templates.env.globals.update(
     # Every signed-in page can say where the account stands, without each route passing it.
     subscription=entitlement_state,
     entitled=allows,
+    owns_snack_box=owns_snack_box,
     Dimension=Dimension,
     UNITS=UNITS,
     UNITS_BY_DIMENSION=UNITS_BY_DIMENSION,

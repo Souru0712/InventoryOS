@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.entitlements import owns_snack_box
 from app.models import BoxLineStatus, BoxOrderStatus, BoxSettings, Customer, ProductPreferenceState, Tenant
 from app.orchestration import boxes, customers, referrals
 from app.orchestration.views import tenant_currency
@@ -38,7 +39,7 @@ def _store(db: Session, tenant_id: int) -> Tenant:
     """The store, but only one that has set up snack boxes: other StockPulse workspaces have no shop."""
     tenant = db.get(Tenant, tenant_id)
     has_shop = db.scalars(select(BoxSettings.id).where(BoxSettings.tenant_id == tenant_id)).first()
-    if tenant is None or has_shop is None:
+    if tenant is None or has_shop is None or not owns_snack_box(tenant_id):
         raise HTTPException(status_code=404, detail="no such store")
     return tenant
 

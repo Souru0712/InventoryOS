@@ -213,7 +213,9 @@ def handle_event(db: Session, event: dict) -> dict:
         result["plan"] = tenant.plan.value
 
     elif kind == "invoice.payment_failed":
-        mark_past_due(db, tenant)
+        # The grace period runs from when the payment actually failed, not from when we got
+        # round to processing the event - a retry queue must not shorten anyone's week.
+        mark_past_due(db, tenant, _moment(event.get("created")))
         result["status"] = SubscriptionStatus.PAST_DUE.value
 
     elif kind == "invoice.payment_succeeded":

@@ -359,6 +359,21 @@ stores. `python -m app.cli health --tenant N` prints it; add `--snapshot` to kee
 The dashboard leads with the score and today's actions. `/app/reorder` groups what to order by
 supplier, and downloads as CSV.
 
+## Snack boxes (private, not part of the product)
+
+The snack box shop (`app/orchestration/boxes.py`, `app/web/boxes.py`, `app/web/shop.py` and their
+tables) is the operator's own side project. It lives here so that one Square connection and one
+shelf count serve both, but it is **not a StockPulse feature**: no plan includes it, billing never
+mentions it, and `app/entitlements.py:owns_snack_box` is the only thing that grants it.
+
+Access is by account id from `SNACK_BOX_TENANT_IDS`, empty by default. A customer's deployment
+therefore has no snack box at all: the admin pages and the public shop both answer 404, the
+navigation has no link, and the housekeeping job skips every account but the ones listed.
+
+```bash
+SNACK_BOX_TENANT_IDS=1
+```
+
 ## Deliberately not built
 
 No warehouse, no forecasting model, no multi-provider abstraction, no mobile app, no

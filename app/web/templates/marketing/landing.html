@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title or "StockPulse" }} &mdash; stock that counts itself</title>
 <meta name="description" content="StockPulse connects to Square and keeps inventory current by count, weight and volume. Photograph a delivery invoice and the counts update themselves.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2315140F'/%3E%3Crect x='11' y='11' width='10' height='10' fill='%23C24326'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="StockPulse — stock that counts itself">
+<meta property="og:description" content="Photograph the delivery note. StockPulse reads it, dates every batch, keeps Square in step, and emails you what to sell first.">
+<meta property="og:url" content="{{ settings.app_base_url }}/">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="/static/landing.css">
 </head>
 <body>
@@ -37,7 +43,7 @@
           <a class="pill" href="/signup">See it on your own stock</a>
           <a class="link" href="#receiving">Watch a delivery get received</a>
         </div>
-        <p class="small hero-note">Free to start. No card required.</p>
+        <p class="small hero-note">30 days free, on the full product. No card required.</p>
       </div>
 
       <div class="panel" aria-hidden="true">
@@ -257,7 +263,7 @@
         {% endfor %}
       </div>
       <div class="price-close">
-        <p class="small">Free to start. Connect your Square account when you are ready.</p>
+        <p class="small">30 days free on Pro, then the plan you pick. Connect Square when you are ready.</p>
         <div class="cluster">
           <a class="link" href="/signup">Or start on Starter</a>
           <a class="pill" href="mailto:{{ settings.support_email }}?subject=Setup%20package">Book the $149 setup</a>

@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     alert_cooldown_hours: int = 24
     expiry_horizon_days: int = 30
     customer_login_ttl_minutes: int = 20
+    # Snack boxes are a private module, never part of the product. Empty means nobody can reach it.
+    snack_box_tenant_ids: str = ""
 
     @field_validator("database_url")
     @classmethod

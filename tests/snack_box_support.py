@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.db import Base, engine
 from app.main import app
 from app.models import BoxLine, BoxOrder, SnackProfile, StockBatch, StockItem, TrackMode
@@ -91,9 +92,17 @@ def outbox(monkeypatch) -> list[dict]:
     return sent
 
 
+def allow_snack_shop(tenant_id: int) -> None:
+    """Turn the private snack box module on for one account, the way the environment does in production."""
+    settings = get_settings()
+    allowed = {part for part in (settings.snack_box_tenant_ids or "").split(",") if part}
+    settings.snack_box_tenant_ids = ",".join(sorted(allowed | {str(tenant_id)}))
+
+
 def open_store(db, tenant, location, fake: FakeSquare, n_items: int = 8, qty: int = 10, cost_cents: int = 100,
                days: int = 120) -> list[StockItem]:
     """An open box shop with n boxable, dated, Square-tracked snacks in four categories and flavours."""
+    allow_snack_shop(tenant.id)
     settings = boxes.box_settings(db, tenant.id)
     settings.is_open = True
     settings.location_id = location.id

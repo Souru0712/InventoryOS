@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from app.config import get_settings
 from app.models import Plan, SubscriptionStatus, Tenant
 
 log = logging.getLogger(__name__)
@@ -216,3 +217,21 @@ def start_trial(tenant: Tenant, now: datetime | None = None) -> Tenant:
     tenant.trial_started_at = now
     tenant.trial_ends_at = now + timedelta(days=TRIAL_DAYS)
     return tenant
+
+
+# --- private modules --------------------------------------------------------------------------
+
+def snack_box_tenants() -> frozenset[int]:
+    """Accounts allowed to reach the snack box module, from the environment. Empty means nobody."""
+    raw = get_settings().snack_box_tenant_ids or ""
+    return frozenset(int(part) for part in raw.replace(" ", "").split(",") if part.isdigit())
+
+
+def owns_snack_box(tenant: Tenant | int | None) -> bool:
+    """Whether this account runs the operator's own snack box shop.
+
+    Deliberately not a capability and not in CAPABILITIES: no plan includes it, no subscription can
+    buy it, and an account that is not on the list is never told it exists.
+    """
+    tenant_id = getattr(tenant, "id", tenant)
+    return isinstance(tenant_id, int) and tenant_id in snack_box_tenants()

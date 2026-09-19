@@ -3,111 +3,215 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>{{ title or "StockPulse" }}</title>
+{# The product wears the same face as the marketing site: one brand, one palette, one type scale. #}
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2315140F'/%3E%3Crect x='11' y='11' width='10' height='10' fill='%23C24326'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root {
-    --ink: #14211c; --muted: #5d6f67; --line: #dbe4df; --bg: #f7faf8;
-    --accent: #12855f; --accent-dark: #0d6146; --warn: #b45309; --danger: #b02a1e;
-    --card: #ffffff;
+    /* Same ink, paper and vermilion as the landing page. Forest green stays, but as a
+       signal colour for healthy stock rather than as the brand. */
+    --ink: #15140F; --ink-2: #26241D; --muted: #6C6757; --line: #DCD5C5; --line-soft: #E7E1D3;
+    --bg: #F5F2EB; --card: #FFFDF8; --sunk: #EFEADD;
+    --accent: #C24326; --accent-dark: #A9381F; --accent-wash: #FBF1EC;
+    --green: #3B5D4A; --green-wash: #E8EFE9;
+    --warn: #96601B; --warn-wash: #F6EEDF;
+    --danger: #A33422; --danger-wash: #F9E9E4;
+    /* Shadows carry the paper's warmth instead of neutral black. */
+    --shadow-sm: 0 1px 2px rgba(58, 48, 30, .06);
+    --shadow: 0 6px 18px -8px rgba(58, 48, 30, .28);
+    --shadow-lg: 0 18px 40px -20px rgba(58, 48, 30, .38);
+    --r-sm: 6px; --r: 10px; --r-lg: 14px; --r-pill: 999px;
+    --z-head: 40;
   }
   * { box-sizing: border-box; }
   /* An author display rule otherwise beats the browser's own [hidden] style. */
   [hidden] { display: none !important; }
-  body { margin: 0; font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         color: var(--ink); background: var(--bg); }
-  a { color: var(--accent-dark); }
-  header.site { background: var(--card); border-bottom: 1px solid var(--line); }
-  header.site .inner, main.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
-  header.site .inner { display: flex; align-items: center; gap: 24px; height: 62px; }
-  header.site nav { margin-left: auto; display: flex; gap: 18px; align-items: center; }
-  .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; text-decoration: none; color: var(--ink); }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+  body { margin: 0; color: var(--ink); background: var(--bg);
+         font: 400 16px/1.55 'Inter', 'Segoe UI', system-ui, sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  /* The same grain the marketing site uses, at a fraction of the strength. */
+  body::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .28;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E"); }
+  header.site, main.wrap, footer.site { position: relative; z-index: 1; }
+  a { color: var(--ink); text-underline-offset: 2px; }
+  a:hover { color: var(--accent-dark); }
+  :where(a, button, input, select, textarea, summary):focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+  .skip { position: absolute; left: 12px; top: -48px; z-index: 60; background: var(--ink); color: var(--card);
+    padding: 10px 16px; border-radius: var(--r-sm); font-size: 14px; font-weight: 500; text-decoration: none;
+    transition: top .18s ease; }
+  .skip:focus { top: 12px; color: var(--card); }
+
+  header.site { background: rgba(255,253,248,.86); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: var(--z-head); }
+  header.site .inner, main.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+  header.site .inner { display: flex; align-items: center; gap: 24px; min-height: 64px; }
+  header.site nav { margin-left: auto; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  header.site nav a { font-size: 14px; color: var(--muted); text-decoration: none; padding: 7px 10px;
+    border-radius: var(--r-sm); transition: color .18s ease, background .18s ease; }
+  header.site nav a:hover { color: var(--ink); background: var(--sunk); }
+  /* Ten links in a row need to say which one you are on. */
+  header.site nav a.here { color: var(--ink); background: var(--sunk); font-weight: 500; }
+  header.site nav a.here::after { content: ""; display: block; height: 2px; margin-top: 5px;
+    border-radius: 2px; background: var(--accent); }
+  .brand { display: inline-flex; align-items: center; font-family: 'Inter Tight', sans-serif;
+    font-weight: 600; font-size: 18px; letter-spacing: -0.02em; text-decoration: none; color: var(--ink);
+    white-space: nowrap; }
+  .brand i { width: 17px; height: 17px; border-radius: 2px; background: var(--ink); position: relative;
+    flex: none; margin-right: .5rem; }
+  .brand i::after { content: ""; position: absolute; left: 5px; top: 5px; width: 7px; height: 7px; background: var(--accent); }
   .brand span { color: var(--accent); }
-  main.wrap { padding-top: 28px; padding-bottom: 60px; }
-  h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 6px; }
-  h2 { font-size: 20px; margin: 32px 0 12px; }
-  p.lede { color: var(--muted); margin-top: 0; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
-  .grid { display: grid; gap: 16px; }
+  main.wrap { padding-top: 34px; padding-bottom: 76px; }
+
+  h1, h2, h3 { font-family: 'Inter Tight', 'Inter', sans-serif; font-weight: 500; text-wrap: balance; }
+  h1 { font-size: clamp(28px, 3.4vw, 38px); line-height: 1.06; letter-spacing: -0.03em; margin: 0 0 8px; }
+  h2 { font-size: 22px; line-height: 1.2; letter-spacing: -0.022em; margin: 38px 0 14px; }
+  h3 { font-size: 17px; line-height: 1.25; letter-spacing: -0.018em; margin: 0; }
+  p { max-width: 68ch; }
+  p.lede { color: var(--muted); margin-top: 0; font-size: 17px; }
+
+  .card { background: var(--card); border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+    padding: 22px; box-shadow: var(--shadow-sm); }
+  .grid { display: grid; gap: 18px; }
   .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .grid.cols-4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-  .stat { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
-  .stat-label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+  .stat { font-family: 'Inter Tight', sans-serif; font-size: 28px; font-weight: 500; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums; }
+  .stat-label { font-family: 'IBM Plex Mono', monospace; color: var(--muted); font-size: 11px;
+    text-transform: uppercase; letter-spacing: .16em; }
+
   table { width: 100%; border-collapse: collapse; background: var(--card); }
-  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
-  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
-  th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: #f2f6f4; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+    box-shadow: var(--shadow-sm); }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); font-size: 14px;
+    vertical-align: middle; }
+  /* Quantities read down the column, so they are tabular everywhere by default. */
+  td { font-variant-numeric: tabular-nums; }
+  th { font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .16em; color: var(--muted); background: var(--sunk); font-weight: 500; }
+  tbody tr { transition: background .16s ease; }
+  tbody tr:hover { background: #FBF8F0; }
   tr:last-child td { border-bottom: none; }
-  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .pill.ok { background: #e4f4ec; color: var(--accent-dark); }
-  .pill.low_stock { background: #fdf0dd; color: var(--warn); }
-  .pill.out_of_stock { background: #fbe6e3; color: var(--danger); }
-  .pill.stale_count { background: #eceff1; color: var(--muted); }
-  .pill.expired { background: #fbe6e3; color: var(--danger); }
-  .pill.at_risk, .pill.waste_risk { background: #fdf0dd; color: var(--warn); }
-  .pill.sell_first { background: #e4f4ec; color: var(--accent-dark); }
-  .pill.on_track, .pill.no_signal { background: #eceff1; color: var(--muted); }
-  .pill.count { background: #e8eefb; color: #274b9c; }
-  .pill.weight { background: #f3ecfb; color: #6b3fa0; }
-  .pill.volume { background: #e2f3f6; color: #1c6b7a; }
-  .pill.band-excellent, .pill.band-healthy { background: #e4f4ec; color: var(--accent-dark); }
-  .pill.band-needs_attention { background: #fdf0dd; color: var(--warn); }
-  .pill.band-at_risk, .pill.band-critical { background: #fbe6e3; color: var(--danger); }
-  .pill.band-unscored { background: #eceff1; color: var(--muted); }
-  .pill.pending_payment, .pill.allocated { background: #e8eefb; color: #274b9c; }
-  .pill.paid { background: #fdf0dd; color: var(--warn); }
-  .pill.packed, .pill.picked_up { background: #e4f4ec; color: var(--accent-dark); }
-  .pill.cancelled, .pill.released { background: #eceff1; color: var(--muted); }
-  .pill.refunded, .pill.short { background: #fbe6e3; color: var(--danger); }
+
+  .pill { display: inline-block; padding: 3px 10px; border-radius: var(--r-pill); font-size: 12px;
+    font-weight: 500; letter-spacing: -.005em; white-space: nowrap; }
+  .pill.ok { background: var(--green-wash); color: var(--green); }
+  .pill.low_stock { background: var(--warn-wash); color: var(--warn); }
+  .pill.out_of_stock { background: var(--danger-wash); color: var(--danger); }
+  .pill.stale_count { background: var(--sunk); color: var(--muted); }
+  .pill.expired { background: var(--danger-wash); color: var(--danger); }
+  .pill.at_risk, .pill.waste_risk { background: var(--warn-wash); color: var(--warn); }
+  .pill.sell_first { background: var(--green-wash); color: var(--green); }
+  .pill.on_track, .pill.no_signal { background: var(--sunk); color: var(--muted); }
+  /* The three ways stock is held keep their own quiet tints, in the warm family. */
+  .pill.count { background: #E8E6F0; color: #4A4570; }
+  .pill.weight { background: #EFE7E2; color: #7A5240; }
+  .pill.volume { background: #E2ECEE; color: #3B5F68; }
+  .pill.band-excellent, .pill.band-healthy { background: var(--green-wash); color: var(--green); }
+  .pill.band-needs_attention { background: var(--warn-wash); color: var(--warn); }
+  .pill.band-at_risk, .pill.band-critical { background: var(--danger-wash); color: var(--danger); }
+  .pill.band-unscored { background: var(--sunk); color: var(--muted); }
+  .pill.pending_payment, .pill.allocated { background: #E8E6F0; color: #4A4570; }
+  .pill.paid { background: var(--warn-wash); color: var(--warn); }
+  .pill.packed, .pill.picked_up { background: var(--green-wash); color: var(--green); }
+  .pill.cancelled, .pill.released { background: var(--sunk); color: var(--muted); }
+  .pill.refunded, .pill.short { background: var(--danger-wash); color: var(--danger); }
   .tone-bad { color: var(--danger); } .tone-warn { color: var(--warn); }
-  .tone-good { color: var(--accent-dark); } .tone-info { color: var(--muted); }
+  .tone-good { color: var(--green); } .tone-info { color: var(--muted); }
+
   .findings { list-style: none; margin: 10px 0 0; padding: 0; }
-  .findings li { position: relative; padding: 4px 0 4px 16px; font-size: 14px; }
-  .findings li::before { content: ""; position: absolute; left: 0; top: 11px; width: 8px; height: 8px;
+  .findings li { position: relative; padding: 5px 0 5px 18px; font-size: 14px; }
+  .findings li::before { content: ""; position: absolute; left: 0; top: 12px; width: 7px; height: 7px;
                          border-radius: 50%; background: currentColor; }
   .findings a { color: inherit; }
-  .health-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin: 18px 0 16px; }
+  .health-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; margin: 20px 0 18px; }
   .health-score { text-decoration: none; color: inherit; display: block; }
-  .health-number { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; margin: 4px 0 6px; }
-  .health-number span { font-size: 18px; color: var(--muted); font-weight: 600; margin-left: 2px; }
-  .health-number.big { font-size: 64px; }
-  .actions ul { margin: 4px 0 8px; padding-left: 18px; font-size: 14px; }
-  .action-tier { font-size: 13px; font-weight: 700; margin-top: 10px; }
-  .health-hero { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .health-number { font-family: 'Inter Tight', sans-serif; font-size: 52px; font-weight: 500;
+    letter-spacing: -0.04em; line-height: 1.02; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
+  .health-number span { font-size: 18px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+  .health-number.big { font-size: 72px; }
+  .actions ul { margin: 6px 0 10px; padding-left: 18px; font-size: 14px; }
+  .action-tier { font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .16em; color: var(--muted); font-weight: 500; margin-top: 14px; }
+  .health-hero { display: flex; gap: 34px; align-items: flex-start; flex-wrap: wrap; }
   .health-context { flex: 1 1 320px; }
   .change-lines { margin: 4px 0 0; padding-left: 0; list-style: none; }
-  .change-lines .num { display: inline-block; min-width: 34px; font-variant-numeric: tabular-nums; font-weight: 700; }
-  .dimensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-  .dimension .rule { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+  .change-lines .num { display: inline-block; min-width: 36px; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .dimensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .dimension .rule { margin: 14px 0 0; border-top: 1px solid var(--line-soft); padding-top: 12px; }
   .item-list { padding-top: 2px; }
   .num { font-variant-numeric: tabular-nums; }
   @media (max-width: 760px) { .health-top { grid-template-columns: 1fr; } }
-  .btn { display: inline-block; border: 0; border-radius: 9px; padding: 10px 16px; font-size: 15px;
-         font-weight: 600; cursor: pointer; text-decoration: none; background: var(--accent); color: #fff; }
-  .btn:hover { background: var(--accent-dark); }
-  .btn.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
-  .btn.small { padding: 6px 11px; font-size: 13px; }
-  input, select, textarea { font: inherit; padding: 9px 11px; border: 1px solid var(--line);
-                            border-radius: 8px; background: #fff; width: 100%; }
-  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
-  .field { margin-bottom: 14px; }
-  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+
+  /* One CTA family, shared with the marketing site: filled, outline, and a plain text link. */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: .45em; border: 1px solid var(--accent);
+    border-radius: var(--r-pill); padding: 10px 20px; font-size: 15px; font-weight: 500; line-height: 1.2;
+    cursor: pointer; text-decoration: none; background: var(--accent); color: #FFF6F2;
+    transition: background .18s ease, border-color .18s ease, transform .12s ease, box-shadow .18s ease; }
+  .btn:hover { background: var(--accent-dark); border-color: var(--accent-dark); color: #FFF6F2;
+    box-shadow: var(--shadow); }
+  .btn:active { transform: translateY(1px); box-shadow: none; }
+  .btn.secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn.secondary:hover { background: var(--card); border-color: var(--ink); color: var(--ink); box-shadow: var(--shadow-sm); }
+  .btn.small { padding: 6px 13px; font-size: 13px; }
+  header.site .btn { padding: 7px 15px; font-size: 14px; }
+  .btn[disabled], .btn.is-disabled { opacity: .5; pointer-events: none; }
+
+  input, select, textarea { font: inherit; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: var(--r-sm); background: var(--card); color: var(--ink); width: 100%;
+    transition: border-color .16s ease, box-shadow .16s ease; }
+  input:hover, select:hover, textarea:hover { border-color: #CEC5B0; }
+  input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(194,67,38,.12);
+    outline: none; }
+  input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--accent); }
+  input[inputmode="decimal"], input[type="number"] { font-variant-numeric: tabular-nums; }
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--ink-2); }
+  .field { margin-bottom: 16px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
   .row > * { flex: 1 1 160px; }
-  .notice { border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; font-size: 14px; }
-  .notice.error { background: #fbe6e3; color: var(--danger); }
-  .notice.ok { background: #e4f4ec; color: var(--accent-dark); }
+
+  .notice { border-radius: var(--r); padding: 13px 16px; margin-bottom: 20px; font-size: 14px;
+    border: 1px solid transparent; }
+  .notice.error { background: var(--danger-wash); color: var(--danger); border-color: rgba(163,52,34,.18); }
+  .notice.ok { background: var(--green-wash); color: var(--green); border-color: rgba(59,93,74,.18); }
+  .notice a { color: inherit; font-weight: 500; }
   .muted { color: var(--muted); }
   .small { font-size: 13px; }
-  footer.site { border-top: 1px solid var(--line); padding: 26px 20px; color: var(--muted); font-size: 13px; }
-  footer.site .inner { max-width: 1080px; margin: 0 auto; display: flex; gap: 18px; flex-wrap: wrap; }
+
+  footer.site { border-top: 1px solid var(--line); padding: 30px 24px; color: var(--muted); font-size: 13px; }
+  footer.site .inner { max-width: 1180px; margin: 0 auto; display: flex; gap: 20px; flex-wrap: wrap; }
+  footer.site a { color: var(--muted); text-decoration: none; }
+  footer.site a:hover { color: var(--ink); }
+
+  @media (max-width: 720px) {
+    header.site { position: static; }
+    header.site .inner { flex-wrap: wrap; padding-block: 12px; gap: 10px; }
+    header.site nav { margin-left: 0; width: 100%; overflow-x: auto; flex-wrap: nowrap;
+      scrollbar-width: none; -ms-overflow-style: none; }
+    header.site nav::-webkit-scrollbar { display: none; }
+    header.site nav a { white-space: nowrap; }
+    main.wrap { padding-top: 24px; }
+  }
 </style>
 </head>
 <body>
+<a class="skip" href="#content">Skip to content</a>
 <header class="site">
   <div class="inner">
     {% if shop %}
     <a class="brand" href="/shop/{{ shop.id }}">{{ shop.name }}</a>
     {% else %}
-    <a class="brand" href="/">Stock<span>Pulse</span></a>
+    <a class="brand" href="/"><i></i>Stock<span>Pulse</span></a>
     {% endif %}
     <nav>
       {% if shop %}
@@ -121,15 +225,20 @@
         <a class="btn small" href="/shop/{{ shop.id }}/login">Sign in</a>
         {% endif %}
       {% elif tenant %}
-        <a href="/app">Inventory</a>
-        <a href="/app/scan">Scan</a>
-        <a href="/app/receiving">Receiving</a>
-        <a href="/app/expiring">Expiring</a>
-        <a href="/app/promotions">Promotions</a>
-        <a href="/app/boxes">Boxes</a>
-        <a href="/app/reorder">Reorder</a>
-        <a href="/app/report">Report</a>
-        <a href="/app/settings">Settings</a>
+        {% set path = request.url.path %}
+        {% macro nav(href, label) %}
+          {% set on = path == href or (href != "/app" and path.startswith(href ~ "/")) %}
+          <a href="{{ href }}"{% if on %} class="here" aria-current="page"{% endif %}>{{ label }}</a>
+        {% endmacro %}
+        {{ nav("/app", "Inventory") }}
+        {{ nav("/app/scan", "Scan") }}
+        {{ nav("/app/receiving", "Receiving") }}
+        {{ nav("/app/expiring", "Expiring") }}
+        {{ nav("/app/promotions", "Promotions") }}
+        {% if owns_snack_box(tenant) %}{{ nav("/app/boxes", "Boxes") }}{% endif %}
+        {{ nav("/app/reorder", "Reorder") }}
+        {{ nav("/app/report", "Report") }}
+        {{ nav("/app/settings", "Settings") }}
         <a href="/logout">Log out</a>
       {% else %}
         <a href="/pricing">Pricing</a>
@@ -139,7 +248,7 @@
     </nav>
   </div>
 </header>
-<main class="wrap">
+<main class="wrap" id="content">
 {% if tenant is defined and tenant %}
   {% set account = subscription(tenant) %}
   {% if account.message %}

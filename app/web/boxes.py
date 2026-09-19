@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.entitlements import owns_snack_box
 from app.models import BoxLine, BoxLineStatus, BoxOrder, BoxOrderStatus, Customer, Location, Tenant
 from app.orchestration import boxes as box_orders
 from app.orchestration import customers, referrals
@@ -25,6 +26,13 @@ DOLLAR_FIELDS = (
     "payment_fee_fixed_cents", "min_contribution_cents", "referral_reward_cents", "referral_discount_cents",
 )
 COUNT_FIELDS = ("min_items", "max_items", "min_days_after_pickup", "pickup_after_days", "payment_window_minutes")
+
+
+def require_snack_shop(tenant: Tenant = Depends(require_tenant)) -> Tenant:
+    """The snack shop belongs to the operator, not to the product: for anyone else it does not exist."""
+    if not owns_snack_box(tenant):
+        raise HTTPException(status_code=404, detail="not found")
+    return tenant
 
 
 def _cents(text: str) -> int:
@@ -54,7 +62,7 @@ def _done(request: Request, order: BoxOrder, problems: list[str], ok: str) -> Re
 
 
 @router.get("/app/boxes", response_class=HTMLResponse)
-def boxes_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def boxes_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     settings = box_orders.box_settings(db, tenant.id)
     db.commit()
     rows = db.execute(
@@ -75,13 +83,13 @@ def boxes_page(request: Request, db: Session = Depends(get_db), tenant: Tenant =
 
 
 @router.get("/app/boxes/stock", response_class=HTMLResponse)
-def stock_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def stock_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     return _render(request, db, tenant, "app/boxes/stock.html", title="Stock check",
                    rows=box_orders.stock_report(db, tenant.id))
 
 
 @router.post("/app/boxes/reconcile")
-def reconcile_now(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def reconcile_now(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     rows = box_orders.reconcile(db, tenant.id)
     db.commit()
     open_issues = sum(1 for row in rows if row.issues)
@@ -92,7 +100,7 @@ def reconcile_now(request: Request, db: Session = Depends(get_db), tenant: Tenan
 
 @router.get("/app/boxes/{order_id:int}", response_class=HTMLResponse)
 def order_page(request: Request, order_id: int, swap: int | None = None, db: Session = Depends(get_db),
-               tenant: Tenant = Depends(require_tenant)):
+               tenant: Tenant = Depends(require_snack_shop)):
     order = _order_or_404(db, tenant, order_id)
     settings = box_orders.box_settings(db, tenant.id)
     lines = customers.order_lines(db, order)
@@ -112,7 +120,7 @@ def order_page(request: Request, order_id: int, swap: int | None = None, db: Ses
 
 @router.post("/app/boxes/{order_id:int}/paid")
 def paid_at_counter(request: Request, order_id: int, db: Session = Depends(get_db),
-                    tenant: Tenant = Depends(require_tenant)):
+                    tenant: Tenant = Depends(require_snack_shop)):
     order = _order_or_404(db, tenant, order_id)
     if order.status is not BoxOrderStatus.PENDING_PAYMENT:
         return _done(request, order, ["Only an unpaid order can be marked paid."], "")
@@ -123,7 +131,7 @@ def paid_at_counter(request: Request, order_id: int, db: Session = Depends(get_d
 
 @router.post("/app/boxes/{order_id:int}/pack")
 async def pack(request: Request, order_id: int, db: Session = Depends(get_db),
-               tenant: Tenant = Depends(require_tenant)):
+               tenant: Tenant = Depends(require_snack_shop)):
     order = _order_or_404(db, tenant, order_id)
     form = await request.form()
     ticked = {int(v) for v in form.getlist("line") if str(v).isdigit()}
@@ -134,7 +142,7 @@ async def pack(request: Request, order_id: int, db: Session = Depends(get_db),
 
 
 @router.post("/app/boxes/{order_id:int}/picked-up")
-def picked_up(request: Request, order_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def picked_up(request: Request, order_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     order = _order_or_404(db, tenant, order_id)
     problems = box_orders.pick_up(db, order)
     db.commit()
@@ -142,7 +150,7 @@ def picked_up(request: Request, order_id: int, db: Session = Depends(get_db), te
 
 
 @router.post("/app/boxes/{order_id:int}/cancel")
-def cancel(request: Request, order_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def cancel(request: Request, order_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     order = _order_or_404(db, tenant, order_id)
     problems = box_orders.cancel(db, order)
     db.commit()
@@ -151,7 +159,7 @@ def cancel(request: Request, order_id: int, db: Session = Depends(get_db), tenan
 
 @router.post("/app/boxes/{order_id:int}/refund")
 def refund(request: Request, order_id: int, restock: str = Form(""), db: Session = Depends(get_db),
-           tenant: Tenant = Depends(require_tenant)):
+           tenant: Tenant = Depends(require_snack_shop)):
     order = _order_or_404(db, tenant, order_id)
     problems = box_orders.refund(db, order, restock == "on")
     db.commit()
@@ -159,7 +167,7 @@ def refund(request: Request, order_id: int, restock: str = Form(""), db: Session
 
 
 @router.post("/app/boxes/{order_id:int}/restock")
-def restock(request: Request, order_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def restock(request: Request, order_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     order = _order_or_404(db, tenant, order_id)
     problems = box_orders.restock(db, order)
     db.commit()
@@ -168,7 +176,7 @@ def restock(request: Request, order_id: int, db: Session = Depends(get_db), tena
 
 @router.post("/app/boxes/{order_id:int}/lines/{line_id:int}/replace")
 def replace(request: Request, order_id: int, line_id: int, stock_item_id: int = Form(...),
-            db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+            db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     order = _order_or_404(db, tenant, order_id)
     line = db.get(BoxLine, line_id)
     if line is None or line.box_order_id != order.id:
@@ -179,14 +187,14 @@ def replace(request: Request, order_id: int, line_id: int, stock_item_id: int = 
 
 
 @router.get("/app/boxes/snacks", response_class=HTMLResponse)
-def snacks_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def snacks_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     return _render(request, db, tenant, "app/boxes/snacks.html", title="Snacks",
                    rows=box_orders.snack_rows(db, tenant.id), flavors=FLAVORS, allergens=customers.ALLERGENS)
 
 
 @router.post("/app/boxes/snacks/{stock_item_id:int}")
 async def save_snack(request: Request, stock_item_id: int, db: Session = Depends(get_db),
-                     tenant: Tenant = Depends(require_tenant)):
+                     tenant: Tenant = Depends(require_snack_shop)):
     form = await request.form()
     label = str(form.get("allergens_state") or "unknown")
     allergens = None if label == "unknown" else set() if label == "none" else {
@@ -204,7 +212,7 @@ async def save_snack(request: Request, stock_item_id: int, db: Session = Depends
 
 
 @router.get("/app/boxes/settings", response_class=HTMLResponse)
-def settings_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def settings_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     settings = box_orders.box_settings(db, tenant.id)
     locations = list(db.scalars(select(Location).where(Location.tenant_id == tenant.id)))
     response = _render(request, db, tenant, "app/boxes/settings.html", title="Box settings", box=settings,
@@ -214,7 +222,7 @@ def settings_page(request: Request, db: Session = Depends(get_db), tenant: Tenan
 
 
 @router.post("/app/boxes/settings")
-async def save_settings(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+async def save_settings(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     form = await request.form()
     settings = box_orders.box_settings(db, tenant.id)
     try:
@@ -233,7 +241,7 @@ async def save_settings(request: Request, db: Session = Depends(get_db), tenant:
 
 
 @router.get("/app/boxes/referrals", response_class=HTMLResponse)
-def referrals_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def referrals_page(request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     people = list(db.scalars(select(Customer).where(Customer.tenant_id == tenant.id).order_by(Customer.email)))
     return _render(request, db, tenant, "app/boxes/referrals.html", title="Referrals",
                    ledger=referrals.ledger(db, tenant.id), credits=referrals.credit_rows(db, tenant.id),
@@ -242,7 +250,7 @@ def referrals_page(request: Request, db: Session = Depends(get_db), tenant: Tena
 
 @router.post("/app/boxes/customers/{customer_id:int}/credit")
 def adjust_credit(request: Request, customer_id: int, amount: str = Form(...), note: str = Form(""),
-                  db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+                  db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)):
     customer = db.get(Customer, customer_id)
     if customer is None or customer.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="customer not found")

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.entitlements import owns_snack_box
 from app.load.upsert import apply_provider_counts
 from app.models import Location, ProviderConnection, StockItem, SyncRun, TrackMode
 from app.orchestration import boxes as box_orders
@@ -130,6 +131,8 @@ async def square_webhook(request: Request, db: Session = Depends(get_db)):
         if tenant_id is None:
             log.info("square webhook for unknown merchant %s", merchant_id(event))
             return {"ignored": "unknown merchant"}
+        if not owns_snack_box(tenant_id):
+            return {"ignored": "not a snack box merchant"}
         handle = (
             box_orders.handle_square_payment
             if event["type"] == PAYMENT_UPDATED

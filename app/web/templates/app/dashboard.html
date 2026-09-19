@@ -58,7 +58,7 @@
   {% if expiry %}
   <a class="card" href="/app/expiring" style="text-decoration:none; color:inherit;">
     <div class="stat-label">May expire unsold</div>
-    <div class="stat" style="color: var(--warn);">{{ expiry.at_risk_cents|money(currency) }}</div>
+    <div class="stat"{% if expiry.at_risk_cents %} style="color: var(--warn);"{% endif %}>{{ expiry.at_risk_cents|money(currency) }}</div>
     <div class="small muted">
       {{ expiry.at_risk_products }} product{{ "s" if expiry.at_risk_products != 1 else "" }}
       {% if expiry.expired_cents %}&middot; {{ expiry.expired_cents|money(currency) }} past date{% endif %}

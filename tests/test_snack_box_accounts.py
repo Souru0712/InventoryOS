@@ -19,6 +19,7 @@ from app.models import (
 from app.orchestration import boxes, customers
 from tests.snack_box_support import (  # noqa: F401  (fixtures)
     NOW,
+    allow_snack_shop,
     lines_of,
     open_store,
     outbox,
@@ -37,6 +38,7 @@ def make_store(name: str = "Snack Shop") -> int:
         db.add(tenant)
         db.flush()
         db.add(Location(tenant_id=tenant.id, provider="demo", provider_location_id=f"L-{name}", name="Main"))
+        allow_snack_shop(tenant.id)
         boxes.box_settings(db, tenant.id).is_open = True
         db.commit()
         return tenant.id
@@ -119,6 +121,7 @@ def test_a_store_login_is_not_a_shopper_login_and_back(web, outbox):
     web.get("/logout")
     with SessionLocal() as db:
         db.add(Location(tenant_id=store, provider="demo", provider_location_id="L1", name="Main"))
+        allow_snack_shop(store)
         boxes.box_settings(db, store).is_open = True
         db.commit()
     sign_in(web, outbox, store, "maya@shop.test")

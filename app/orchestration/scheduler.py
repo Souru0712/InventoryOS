@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import SCHEDULER_LOCK, LeaderLock, session_scope
+from app.entitlements import owns_snack_box
 from app.models import BoxSettings, Plan, ProviderConnection, Tenant
 from app.orchestration.boxes import expire_unpaid, reconcile
 from app.orchestration.health import record_snapshot
@@ -99,7 +100,8 @@ def record_health_snapshots() -> None:
 def box_housekeeping() -> None:
     """Cancel unpaid box orders, then bring box allocations back into step with Square."""
     with session_scope() as db:
-        tenant_ids = [row.tenant_id for row in db.scalars(select(BoxSettings))]
+        tenant_ids = [row.tenant_id for row in db.scalars(select(BoxSettings))
+                      if owns_snack_box(row.tenant_id)]
     for tenant_id in tenant_ids:
         try:
             with session_scope() as db:
