@@ -227,6 +227,15 @@ environment goes through migrations.
 
 ## Square setup
 
+A sandbox seller starts with an empty catalog. `scripts/seed_square_sandbox.py` stocks one with
+four inventory-tracked items and their counts, using the sandbox access token from the Developer
+Dashboard. It matches on SKU, so running it twice creates nothing twice:
+
+```bash
+python scripts/seed_square_sandbox.py --dry-run   # what it would do
+python scripts/seed_square_sandbox.py             # do it
+```
+
 1. Create an application at https://developer.squareup.com/apps.
 2. Redirect URL: `{APP_BASE_URL}/connect/square/callback`.
 3. Copy the app ID and secret into `.env`; keep `SQUARE_ENV=sandbox` until you have a real merchant.
