@@ -3,7 +3,7 @@
 Everything left in the build that I cannot do, in the order that unblocks the most. Phase A is
 finished — all of it, verified — so everything below is Phase B onwards.
 
-Last updated: 2026-09-17, after all seven workstreams.
+Last updated: 2026-09-20, after the landing-page comps and the app redesign.
 
 ---
 
@@ -191,14 +191,34 @@ python -m app.cli billing --tenant 1          # expect: canceled, access read_on
 
 Tell me what any step prints if it disagrees. Live keys go nowhere near it until this passes.
 
-## 7. The first customer
+## 7. Two design calls
+
+**a. Photography for the landing page.** The v3 comps are in `var/design/comps/v3`. Two frames are
+photography slots, composed in CSS for now so the layout renders and reviews:
+
+- [ ] **The hero** — a back-of-house shelf, shot dark, one carton in focus with its printed date.
+- [ ] **The dates frame** — a macro crop of a dot-matrix best-before print on a carton.
+
+Real photographs at the same crop and grade would lift both. Shooting them on a phone against a
+dark wall is enough; nothing here needs a studio. Tell me to ship the composed versions instead and
+I will — they hold up, they are just not photography.
+
+- [ ] Also decide whether v3 replaces the live landing page, or stays a reference. The live page is
+      already on the same design system, so applying v3 is copy and layout work, not a rebuild.
+
+**b. One commit needs splitting, or not.** Commit `22ee0b5` carries my redesign *and* your
+uncommitted snack-box work (`app/web/boxes.py`, `app/web/shop.py`, `app/config.py`,
+`tests/test_snack_box_private.py` and four others) under a message that only describes the
+redesign. Nothing is lost and the suite is green. Say the word and I will split it into two.
+
+## 8. The first customer
 
 - [ ] One real business to run the $149 setup with, from the six types you listed
 - [ ] Their Square account connected, their non-POS stock entered, recipes set
 
 ---
 
-## Your decisions, already answered (2026-09-17)
+## Your decisions, already answered
 
 In the code, in `app/entitlements.py`, as three constants:
 
