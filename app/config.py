@@ -1,7 +1,7 @@
 """Runtime settings, env-driven."""
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEPLOYED_ENVS = {"staging", "production"}
@@ -66,6 +66,22 @@ class Settings(BaseSettings):
     customer_login_ttl_minutes: int = 20
     # Snack boxes are a private module, never part of the product. Empty means nobody can reach it.
     snack_box_tenant_ids: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_means_unset(cls, values):
+        """An env var that exists but is empty is not a value.
+
+        Hosts hand out empty strings for variables nobody filled in, and a blank `PORT` or
+        `RUN_SCHEDULER_IN_WEB` should fall back to the default rather than refuse to boot.
+        """
+        if not isinstance(values, dict):
+            return values
+        return {
+            key: value
+            for key, value in values.items()
+            if not (isinstance(value, str) and value.strip() == "")
+        }
 
     @field_validator("database_url")
     @classmethod
