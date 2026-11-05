@@ -30,8 +30,10 @@ issues · decisions · next task.
 - Full suite on the locked versions (fresh venv from the export): 546 passed, 6 skipped (the
   Postgres-only tests; the CI Postgres job runs them).
 - Workflow and Dependabot YAML parse; docs checker 0 problems.
-- **Not verified yet:** the four CI jobs on GitHub, including the Docker build (Docker is not
-  running on this machine).
+- **CI on PR #4 (commit `7202e41`), all four jobs green:** SQLite 546 passed, 6 skipped, docs
+  0 problems; PostgreSQL 16 552 passed, 0 skipped; audit "No known vulnerabilities found"; Docker
+  image built, "checked 58 installed packages against 68 locked" with no mismatch (58 = the 60
+  runtime pins minus `tzdata`, Windows only, and `httpx2-jsfetch`, browser only).
 
 **Files changed**
 - `uv.lock`, `.python-version`, `scripts/check_lock_matches.py`, `.github/dependabot.yml` (new);
