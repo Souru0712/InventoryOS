@@ -269,5 +269,12 @@
     <a href="mailto:{{ settings.support_email }}">{{ settings.support_email }}</a>
   </div>
 </footer>
+<script nonce="{{ request.state.csp_nonce }}">
+  // Forms that ask before submitting carry data-confirm; inline onsubmit would be blocked by CSP.
+  document.addEventListener("submit", function (event) {
+    const message = event.target.dataset && event.target.dataset.confirm;
+    if (message && !window.confirm(message)) event.preventDefault();
+  });
+</script>
 </body>
 </html>

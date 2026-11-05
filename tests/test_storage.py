@@ -12,6 +12,7 @@ from app.main import app
 from app.models import Document, DocumentStatus, Location, Tenant
 from app.orchestration.receiving import parse_document, save_upload
 from app.storage import LocalStorage, S3Storage, StorageError, get_storage
+from tests.sample_files import jpeg
 
 
 def test_local_storage_round_trips_and_passes_its_check(tmp_path):
@@ -70,7 +71,7 @@ def test_s3_failures_surface_as_storage_errors():
 
 
 def test_an_upload_is_saved_under_its_key_not_a_filesystem_path(db, tenant, location):
-    content = b"a-delivery-note"
+    content = jpeg("a-delivery-note")
     document = save_upload(db, tenant.id, location.id, "Note.JPG", content, "image/jpeg")
     db.commit()
     assert document.storage_key == f"{tenant.id}/{hashlib.sha256(content).hexdigest()}.jpg"
@@ -78,7 +79,9 @@ def test_an_upload_is_saved_under_its_key_not_a_filesystem_path(db, tenant, loca
 
 
 def test_a_photo_missing_from_storage_fails_the_document_with_a_reason(db, tenant, location):
-    document = save_upload(db, tenant.id, location.id, "note.jpg", b"gone-missing", "image/jpeg")
+    document = save_upload(
+        db, tenant.id, location.id, "note.jpg", jpeg("gone-missing"), "image/jpeg"
+    )
     db.commit()
     (get_storage().root / document.storage_key).unlink()
 
@@ -114,7 +117,7 @@ def test_an_invoice_photo_uploaded_through_the_app_is_served_back_from_storage(c
         db.commit()
         location_id = location.id
 
-    photo = b"\xff\xd8\xff a delivery note"
+    photo = jpeg("a delivery note")
     response = client.post(
         "/app/receiving",
         data={"location_id": location_id},

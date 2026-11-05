@@ -14,6 +14,7 @@ from app.models import ProviderConnection, StockItem, TrackMode
 from app.orchestration import sync
 from app.orchestration.receiving import LineDecision, apply_document, parse_document, save_upload
 from app.units import Dimension
+from tests.sample_files import jpeg
 
 INVOICE = {
     "supplier": "Northside Supply",
@@ -109,7 +110,7 @@ def receive_by_invoice(db, tenant, location, item, quantity: str) -> dict:
         tenant.id,
         location.id,
         f"note-{quantity}.jpg",
-        f"delivery of {quantity}".encode(),
+        jpeg(f"delivery of {quantity}"),
         "image/jpeg",
     )
     db.commit()

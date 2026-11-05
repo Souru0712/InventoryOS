@@ -11,5 +11,5 @@
     <a href="/app">Skip for now</a> and start your trial.
   </p>
 </div>
-<script>document.getElementById("to-checkout").submit();</script>
+<script nonce="{{ request.state.csp_nonce }}">document.getElementById("to-checkout").submit();</script>
 {% endblock %}

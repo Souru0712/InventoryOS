@@ -17,6 +17,7 @@ from app.models import (
 )
 from app.orchestration.receiving import LineDecision, apply_document, parse_document, save_upload
 from app.units import Dimension, to_base
+from tests.sample_files import jpeg
 
 INVOICE = {
     "supplier": "Northside Supply",
@@ -115,7 +116,7 @@ def stock(db, tenant, location):
 
 def upload(db, tenant, location) -> Document:
     document = save_upload(
-        db, tenant.id, location.id, "delivery.jpg", b"not-a-real-photo", "image/jpeg"
+        db, tenant.id, location.id, "delivery.jpg", jpeg("delivery"), "image/jpeg"
     )
     db.commit()
     return document
@@ -194,7 +195,7 @@ def test_supplier_wording_is_learned_so_the_next_invoice_is_automatic(db, tenant
     assert alias.stock_item_id == stock["whole-milk"].id
     assert alias.supplier == "Northside Supply"
 
-    second = save_upload(db, tenant.id, location.id, "next.jpg", b"another-photo", "image/jpeg")
+    second = save_upload(db, tenant.id, location.id, "next.jpg", jpeg("another"), "image/jpeg")
     db.commit()
     parse_document(db, second.id, StubExtractor(INVOICE))
     db.commit()

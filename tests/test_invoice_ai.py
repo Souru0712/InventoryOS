@@ -27,6 +27,7 @@ from app.orchestration.receiving import (
     save_upload,
 )
 from app.units import Dimension, to_base
+from tests.sample_files import jpeg
 
 INVOICE = {
     "supplier": "Northside Supply",
@@ -211,7 +212,9 @@ def flour(db, tenant, location) -> StockItem:
 
 @pytest.fixture
 def parsed(db, tenant, location, flour):
-    document = save_upload(db, tenant.id, location.id, "note.jpg", b"a delivery note", "image/jpeg")
+    document = save_upload(
+        db, tenant.id, location.id, "note.jpg", jpeg("a delivery note"), "image/jpeg"
+    )
     db.commit()
     parse_document(db, document.id, StubExtractor(INVOICE))
     db.commit()

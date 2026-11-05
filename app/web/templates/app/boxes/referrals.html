@@ -29,14 +29,18 @@ Rows are never edited: corrections are new rows.</p>
 
 <h2>Adjust a balance</h2>
 {% if people %}
-<form class="card row" method="post" id="adjust" action="/app/boxes/customers/{{ people[0].id }}/credit"
-      onsubmit="this.action='/app/boxes/customers/' + this.querySelector('#who').value + '/credit'">
+<form class="card row" method="post" id="adjust" action="/app/boxes/customers/{{ people[0].id }}/credit">
   <div class="field"><label for="who">Customer</label>
     <select id="who">{% for c in people %}<option value="{{ c.id }}">{{ c.email }} ({{ balances[c.id]|money(currency) }})</option>{% endfor %}</select></div>
   <div class="field"><label for="amount">Amount (negative to remove)</label><input id="amount" name="amount" placeholder="5.00" required></div>
   <div class="field"><label for="note">Why</label><input id="note" name="note" required></div>
   <div class="field"><button class="btn" type="submit">Adjust</button></div>
 </form>
+<script nonce="{{ request.state.csp_nonce }}">
+  document.getElementById("adjust").addEventListener("submit", function () {
+    this.action = "/app/boxes/customers/" + this.querySelector("#who").value + "/credit";
+  });
+</script>
 {% endif %}
 
 <h2>Credit ledger</h2>

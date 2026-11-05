@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
@@ -21,6 +22,27 @@ from app.units import (
 )
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+
+
+@dataclass(frozen=True)
+class PublicSettings:
+    """The only settings a template can reach. The full Settings object carries the Stripe,
+    Square and storage secrets; a template must never be able to print them (S11)."""
+
+    app_base_url: str
+    support_email: str
+    customer_login_ttl_minutes: int
+
+
+def public_settings() -> PublicSettings:
+    settings = get_settings()
+    return PublicSettings(
+        app_base_url=settings.app_base_url,
+        support_email=settings.support_email,
+        customer_login_ttl_minutes=settings.customer_login_ttl_minutes,
+    )
+
+
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 
@@ -59,7 +81,7 @@ templates.env.filters["approx"] = approx
 templates.env.filters["amount"] = amount
 templates.env.filters["approx_amount"] = approx_amount
 templates.env.globals.update(
-    settings=get_settings(),
+    settings=public_settings(),
     # Every signed-in page can say where the account stands, without each route passing it.
     subscription=entitlement_state,
     entitled=allows,

@@ -38,7 +38,7 @@ def test_a_hosts_postgres_url_gets_the_installed_driver(given):
 def test_an_env_var_that_exists_but_is_empty_means_unset(blank):
     """Hosts hand out empty strings for variables nobody filled in; that must not refuse to boot."""
     assert settings(run_scheduler_in_web=blank, app_env="dev").embedded_scheduler is True
-    assert settings(max_upload_mb=blank).max_upload_mb == 20
+    assert settings(max_upload_mb=blank).max_upload_mb == 15
     assert settings(storage_backend=blank).storage_backend == "local"
 
 

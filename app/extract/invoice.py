@@ -29,6 +29,16 @@ SUPPORTED_MEDIA = {
     ".pdf": "application/pdf",
 }
 
+# The one suffix an upload is stored under, chosen by what its bytes are. The stored suffix is
+# what the image is later served as and what the extractor reads it as.
+STORED_SUFFIX = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "application/pdf": ".pdf",
+}
+
 EXTRACT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
