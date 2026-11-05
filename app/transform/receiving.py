@@ -65,6 +65,23 @@ NOISE_WORDS = {
 
 PACK_WORDS = {"case", "box", "carton", "pack", "tray", "crate", "bag", "sack", "bundle", "dozen"}
 
+# How suppliers abbreviate the same packs on printed invoices (JFC, Hadson, Central Boeki,
+# USA Seafood: "cs", "BX", "BUNDL", "PK").
+PACK_ABBREVIATIONS = {
+    "cs": "case",
+    "cse": "case",
+    "bx": "box",
+    "bdl": "bundle",
+    "bndl": "bundle",
+    "bundl": "bundle",
+    "pk": "pack",
+    "pkg": "pack",
+    "ctn": "carton",
+}
+
+# Words inside a pack notation that count pieces rather than measure them ("10/5PK/2.70 FZ").
+PIECE_WORDS = {"pk", "pack", "pc", "pcs", "piece", "pieces", "p", "ea", "each", "ct", "count"}
+
 # Supplier unit spellings -> our unit codes.
 UNIT_SYNONYMS = {
     "kg": "kg",
@@ -99,6 +116,7 @@ UNIT_SYNONYMS = {
     "milliliter": "ml",
     "floz": "floz",
     "fl": "floz",
+    "fz": "floz",
     "cup": "cup",
     "cups": "cup",
     "pt": "pt",
@@ -120,10 +138,13 @@ UNIT_SYNONYMS = {
     "dz": "dozen",
 }
 
-_PACK_PATTERN = re.compile(
-    r"(?P<count>\d+(?:\.\d+)?)\s*(?:x|\*|/)\s*(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>[a-z#]+)",
-    re.IGNORECASE,
-)
+_NUMBER = r"\d+(?:\.\d+)?"
+# One term of a pack notation: a number and, optionally, its unit ("2.82 OZ", "5PK", "1.1#").
+# A lone x is the separator ("12x500g"), never a unit.
+_UNIT = r"#|(?!x(?:\b|\d))[a-z]+"
+_TERM = rf"{_NUMBER}(?:\s*(?:{_UNIT}))?"
+_PACK_CHAIN = re.compile(rf"{_TERM}(?:\s*[x*/]\s*{_TERM})+", re.IGNORECASE)
+_TERM_PARTS = re.compile(rf"(?P<number>{_NUMBER})\s*(?P<unit>{_UNIT})?", re.IGNORECASE)
 _SIZE_PATTERN = re.compile(r"(?P<size>\d+(?:\.\d+)?)\s*(?P<unit>[a-z#]+)\b", re.IGNORECASE)
 
 
@@ -182,7 +203,7 @@ def normalize_name(text: str) -> str:
     """Lowercase, strip accents, drop packaging noise and sizes."""
     folded = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
     folded = folded.lower()
-    folded = _PACK_PATTERN.sub(" ", folded)
+    folded = _PACK_CHAIN.sub(" ", folded)
     folded = _SIZE_PATTERN.sub(" ", folded)
     folded = re.sub(r"[^a-z0-9\s]", " ", folded)
     tokens = [t for t in folded.split() if t and t not in NOISE_WORDS and not t.isdigit()]
@@ -205,14 +226,59 @@ def similarity(left: str, right: str) -> Decimal:
 
 
 def parse_pack(text: str) -> tuple[Decimal, Decimal, str] | None:
-    """Read '6 x 1L' or '12x500g' as (count, size, unit_code)."""
-    match = _PACK_PATTERN.search(text or "")
-    if not match:
+    """Read a pack notation as (pieces per pack, size of one piece, unit_code).
+
+    '6 x 1L', '24/2.82 OZ', '10/5PK/2.70 FZ' (packs within a case: 50 pieces) and the size-first
+    '3.9OZ x 14 x 2 #' (28 pieces of 3.9 oz) all read. A date such as 3/31/2027 has no measure
+    and is skipped.
+    """
+    for chain in _PACK_CHAIN.finditer(text or ""):
+        if pack := _read_chain(chain.group(0)):
+            return pack
+    return None
+
+
+def _read_chain(chain: str) -> tuple[Decimal, Decimal, str] | None:
+    terms = [
+        (Decimal(m.group("number")), (m.group("unit") or "").lower())
+        for m in _TERM_PARTS.finditer(chain)
+    ]
+    measured = [i for i, (_, unit) in enumerate(terms) if _is_measure(unit)]
+    if not measured and [unit for _, unit in terms].count("#") == 1:
+        # '#' is pounds when it is the notation's only measure ("10/1.1#"); next to a real
+        # measure it marks pieces ("2.4 oz x 10 #").
+        measured = [next(i for i, (_, unit) in enumerate(terms) if unit == "#")]
+    if len(measured) != 1:
         return None
-    unit = UNIT_SYNONYMS.get(match.group("unit").lower())
-    if not unit:
+
+    size, size_word = terms[measured[0]]
+    count = Decimal("1")
+    for i, (number, unit) in enumerate(terms):
+        if i == measured[0]:
+            continue
+        if unit and unit != "#" and unit not in PIECE_WORDS:
+            return None
+        count *= number
+    return count, size, "lb" if size_word == "#" else UNIT_SYNONYMS[size_word]
+
+
+def _is_measure(word: str) -> bool:
+    """A weight or volume unit; counts and '#' are not measures on their own."""
+    code = UNIT_SYNONYMS.get(word) if word and word != "#" else None
+    return code is not None and dimension_of(code) is not Dimension.COUNT
+
+
+def pack_word(raw_unit: str | None) -> str | None:
+    """The pack a unit names ('cs', 'BX', 'cases' -> 'case', 'box'), or None for a measure."""
+    if not raw_unit:
         return None
-    return Decimal(match.group("count")), Decimal(match.group("size")), unit
+    word = raw_unit.strip().lower().rstrip(".")
+    for form in (word, word.removesuffix("es"), word.removesuffix("s")):
+        if form in PACK_WORDS:
+            return form
+        if form in PACK_ABBREVIATIONS:
+            return PACK_ABBREVIATIONS[form]
+    return None
 
 
 def parse_size(text: str) -> tuple[Decimal, str] | None:
@@ -239,22 +305,27 @@ def resolve_received_base(line: ParsedLine, item: Candidate) -> tuple[Decimal | 
         return None, "quantity on the invoice is zero or missing"
 
     unit = canonical_unit(line.unit)
-    is_pack_word = bool(line.unit and line.unit.strip().lower().rstrip("s.") in PACK_WORDS)
+    is_pack_word = pack_word(line.unit) is not None
 
     # 1. Explicit pack notation anywhere on the line: "2 cases of 6 x 1L".
     pack = parse_pack(line.raw_text) or parse_pack(line.name)
     if pack and (is_pack_word or unit is None or unit == "each"):
         count, size, pack_unit = pack
-        try:
-            per_pack = to_base(count * size, pack_unit)
-        except UnitError as exc:
-            return None, str(exc)
+        # A quantity in pieces ("30 each" of a '3/30/1.93 OZ' case) counts pieces: the notation
+        # describes the case, and one piece is `size`.
+        pieces = line.qty if unit == "each" else line.qty * count
+        if item.dimension is Dimension.COUNT:
+            # A counted item is received as its pieces; the size only describes one piece.
+            return to_base(pieces, "each"), None
         if dimension_of(pack_unit) is not item.dimension:
             return None, (
                 f"invoice is in {dimension_of(pack_unit).value} but {item.name} is tracked by "
                 f"{item.dimension.value}"
             )
-        return (line.qty * per_pack).quantize(Decimal("0.0001")), None
+        try:
+            return to_base(pieces * size, pack_unit).quantize(Decimal("0.0001")), None
+        except UnitError as exc:
+            return None, str(exc)
 
     # 2. A real measurement unit on the line.
     if unit and unit not in PACK_WORDS:
