@@ -5,6 +5,44 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.02 CI on GitHub Actions
+
+**Implemented**
+- `.github/workflows/ci.yml`: runs on push to `main`, pull requests and manual dispatch; read-only
+  permissions; superseded runs cancelled. Job **Tests (SQLite)**: install, `scripts/check_docs.py`,
+  full suite. Job **Tests (PostgreSQL 16)**: `postgres:16-alpine` service, `TEST_DATABASE_URL` set
+  (the existing conftest switch), full suite, and the step fails if any test is skipped so the
+  Postgres-only tests must run. Python 3.12 (as the Dockerfile). Actions pinned to commit SHAs:
+  `actions/checkout` v7.0.1 `3d3c42e…`, `actions/setup-python` v7.1.0 `6d4fd22…` (resolved with
+  `git ls-remote`; both are lightweight tags, so the SHAs are commits).
+- Audit probes stay out of CI: pytest collects only `tests/` (`pyproject.toml` testpaths).
+- `CLAUDE.md`: CI line added.
+
+**Verified**
+- Workflow parses (PyYAML): two jobs, three triggers, steps as listed; Postgres URL matches the
+  `postgresql` prefix the migration tests require.
+- Locally: docs checker 0 problems; suite on SQLite passed in T0.01 (545 + the docs contract test).
+- **Not verified yet:** an actual GitHub run (needs the push) and the PostgreSQL job (Docker is not
+  running on this machine; the earlier audit run on Postgres 16 was 548/548). Editable install
+  assumed safe: an earlier `pip install -e .` on this layout produced `top_level.txt` = `app` only.
+
+**Files changed**
+- `.github/workflows/ci.yml` (new), `CLAUDE.md`, `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md`
+  (status), this log.
+
+**Open issues**
+- Acceptance still needs: both jobs green on `main`; Postgres job with 0 skips; the owner enabling
+  "require status checks" on `main` (OD-04) and one failing-test branch to prove a merge is blocked.
+- T0.01 moves to Completed after the first green run.
+
+**Decisions made**
+- None (pinned versions are the latest releases of the two official actions).
+
+**Next task**
+- Owner: approve commit + push to trigger the first run. Then T0.03 (lockfile, audit, Dependabot).
+
+---
+
 ## 2026-11-05 — Documentation contract and checker
 
 **Implemented**

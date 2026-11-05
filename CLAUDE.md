@@ -33,6 +33,8 @@ implementation sessions; the detail lives in `docs/`.
   (Windows: `.venv/Scripts/python.exe -m pytest -q`). The suite is hermetic: under
   `APP_ENV=test` settings ignore `.env`, and `tests/conftest.py` clears inherited settings variables.
 - Postgres run: set `TEST_DATABASE_URL` to an empty Postgres 16 database.
+- CI: `.github/workflows/ci.yml` runs the docs checker and the suite on SQLite, and the suite on
+  PostgreSQL 16 (no skips allowed), on every push to `main` and every pull request.
 - Audit probes in `docs/audit/probes/` assert known defects; never add them to CI.
 
 ## Documentation contract
