@@ -117,7 +117,9 @@ def box_settings(db: Session, tenant_id: int) -> BoxSettings:
 def rules_hash(settings: BoxSettings) -> str:
     """Short fingerprint of the terms a box was built under, so a later change is traceable."""
     terms = {field: getattr(settings, field) for field in SETTING_FIELDS}
-    return hashlib.sha1(json.dumps(terms, sort_keys=True).encode()).hexdigest()[:8]
+    return hashlib.sha1(
+        json.dumps(terms, sort_keys=True).encode(), usedforsecurity=False
+    ).hexdigest()[:8]
 
 
 def update_settings(
@@ -820,16 +822,16 @@ def replacement_options(
     customer = db.get(Customer, order.customer_id)
     lines = list(db.scalars(select(BoxLine).where(BoxLine.box_order_id == order.id)))
     # Something already taken out of this box was taken out for a reason; it is not offered back.
-    released = {l.stock_item_id for l in lines if l.status is BoxLineStatus.RELEASED}
+    released = {bl.stock_item_id for bl in lines if bl.status is BoxLineStatus.RELEASED}
     pool = [
         c
         for c in candidates(db, order.tenant_id, order.location_id, now.date())
         if c.stock_item_id not in released
     ]
     current = [
-        _pick_for_line(db, l)
-        for l in lines
-        if l.status in (BoxLineStatus.ALLOCATED, BoxLineStatus.SHORT)
+        _pick_for_line(db, bl)
+        for bl in lines
+        if bl.status in (BoxLineStatus.ALLOCATED, BoxLineStatus.SHORT)
     ]
     return suggest_replacements(
         pool,
@@ -944,14 +946,14 @@ def reconcile(db: Session, tenant_id: int, now: datetime | None = None) -> list[
             BoxOrder.status != BoxOrderStatus.CANCELLED,
         )
     ).all()
-    pending_take = [(l, o) for l, o in rows if l.status in LIVE_LINES and not l.count_applied]
+    pending_take = [(bl, o) for bl, o in rows if bl.status in LIVE_LINES and not bl.count_applied]
     pending_return = [
-        (l, o)
-        for l, o in rows
-        if l.status in (BoxLineStatus.RELEASED, BoxLineStatus.SHORT) and l.count_applied
+        (bl, o)
+        for bl, o in rows
+        if bl.status in (BoxLineStatus.RELEASED, BoxLineStatus.SHORT) and bl.count_applied
     ]
-    live = [(l, o) for l, o in rows if l.status in LIVE_LINES and o.status in HOLDING]
-    item_ids = {l.stock_item_id for l, _ in pending_take + pending_return + live}
+    live = [(bl, o) for bl, o in rows if bl.status in LIVE_LINES and o.status in HOLDING]
+    item_ids = {bl.stock_item_id for bl, _ in pending_take + pending_return + live}
     items = {i: db.get(StockItem, i) for i in item_ids}
 
     fresh = square_refresh(db, tenant_id, list(items.values()))

@@ -80,7 +80,8 @@ def downgrade() -> None:
     # The previous code cannot load these kinds. Postgres cannot drop enum values, so the type
     # keeps them; that is harmless once no row uses them.
     kinds = ", ".join(f"'{kind}'" for kind in NEW_ALERT_KINDS)
-    op.execute(f"DELETE FROM alerts WHERE kind IN ({kinds})")
+    # The kinds are this migration's own constants, not input.
+    op.execute(f"DELETE FROM alerts WHERE kind IN ({kinds})")  # noqa: S608
 
     with op.batch_alter_table("stock_items", schema=None) as batch_op:
         batch_op.drop_column("upc")

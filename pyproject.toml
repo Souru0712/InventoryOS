@@ -55,6 +55,8 @@ extend-exclude = ["docs"]
 # pycodestyle, pyflakes, isort, bugbear, pyupgrade, and bandit's security rules (ID-04).
 select = ["E", "W", "F", "I", "B", "UP", "S"]
 ignore = [
+    # The formatter holds code to 100 columns; the long lines left are strings and comments.
+    "E501",
     # str + Enum -> StrEnum changes what str() and format() return; not a mechanical change.
     "UP042",
 ]

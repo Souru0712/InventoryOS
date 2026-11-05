@@ -1,6 +1,6 @@
 """End to end: photo of an invoice raises the right stock in the right units."""
 
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -164,9 +164,7 @@ def test_applying_a_delivery_raises_stock_and_files_the_record(db, tenant, locat
         else:
             decisions.append(LineDecision(line.id, None, None, apply=False))
 
-    result = apply_document(
-        db, document.id, decisions, now=datetime(2026, 9, 4, tzinfo=timezone.utc)
-    )
+    result = apply_document(db, document.id, decisions, now=datetime(2026, 9, 4, tzinfo=UTC))
     db.commit()
 
     assert result["applied"] == 3

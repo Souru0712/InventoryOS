@@ -15,7 +15,8 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"
     app_base_url: str = "http://localhost:8000"
-    secret_key: str = "dev-insecure-secret-change-me"
+    # Development placeholder; production refuses it (see the validator below).
+    secret_key: str = "dev-insecure-secret-change-me"  # noqa: S105
     encryption_key: str = ""
     # Attached to error reports, so a crash can be traced to the build that shipped it.
     release: str = ""

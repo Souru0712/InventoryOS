@@ -213,9 +213,9 @@ def test_every_migration_survives_a_database_that_already_has_rows(fresh_url):
                         continue
                     columns = ", ".join(values)
                     binds = ", ".join(f":{name}" for name in values)
-                    connection.execute(
-                        text(f"INSERT INTO {table} ({columns}) VALUES ({binds})"), values
-                    )
+                    # Table and column names come from this test's own seed data.
+                    sql = f"INSERT INTO {table} ({columns}) VALUES ({binds})"  # noqa: S608
+                    connection.execute(text(sql), values)
                     planted.add(table)
 
         assert planted == set(seeds), f"never planted: {set(seeds) - planted}"

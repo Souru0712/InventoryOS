@@ -483,7 +483,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
     print(f"seeded tenant {tenant_id} ({args.name})")
     print(f"  log in: {args.email} / {args.password}")
     print(f"  alerts: {stats}")
-    print("  run: python -m app.cli report --tenant %s" % tenant_id)
+    print(f"  run: python -m app.cli report --tenant {tenant_id}")
     return 0
 
 

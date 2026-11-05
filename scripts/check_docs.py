@@ -5,6 +5,7 @@ from __future__ import annotations
 import collections
 import re
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -216,7 +217,7 @@ def check_alignment(
     critical = master.split("## 4. Critical path")[1].split("## 5")[0]
     for line in critical.splitlines():
         chain = re.findall(TASK, line)
-        for a, b in zip(chain, chain[1:]):
+        for a, b in pairwise(chain):
             if a not in ancestors(b, deps):
                 problems.append(f"critical path: {a} -> {b} is not a dependency")
     for row in re.finditer(
