@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.datastructures import FormData
 
 from app.db import get_db
 from app.entitlements import owns_snack_box
@@ -19,6 +20,7 @@ from app.orchestration.views import tenant_currency
 from app.security import require_tenant
 from app.transform.boxes import FLAVORS
 from app.web.flash import flash, pop_flash
+from app.web.inputs import posted_form
 from app.web.templating import templates
 
 router = APIRouter()
@@ -202,14 +204,14 @@ def paid_at_counter(
 
 
 @router.post("/app/boxes/{order_id:int}/pack")
-async def pack(
+def pack(
     request: Request,
     order_id: int,
+    form: FormData = Depends(posted_form),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_snack_shop),
 ):
     order = _order_or_404(db, tenant, order_id)
-    form = await request.form()
     ticked = {int(v) for v in form.getlist("line") if str(v).isdigit()}
     problems = box_orders.pack(db, order, ticked)
     # Commit either way: a pack that stopped may still have found and settled a shortage.
@@ -310,13 +312,13 @@ def snacks_page(
 
 
 @router.post("/app/boxes/snacks/{stock_item_id:int}")
-async def save_snack(
+def save_snack(
     request: Request,
     stock_item_id: int,
+    form: FormData = Depends(posted_form),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_snack_shop),
 ):
-    form = await request.form()
     label = str(form.get("allergens_state") or "unknown")
     allergens = (
         None
@@ -362,10 +364,12 @@ def settings_page(
 
 
 @router.post("/app/boxes/settings")
-async def save_settings(
-    request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_snack_shop)
+def save_settings(
+    request: Request,
+    form: FormData = Depends(posted_form),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_snack_shop),
 ):
-    form = await request.form()
     settings = box_orders.box_settings(db, tenant.id)
     try:
         values = {field: _cents(str(form.get(field) or "0")) for field in DOLLAR_FIELDS}

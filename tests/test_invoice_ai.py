@@ -1,6 +1,7 @@
 """The invoice reader judged the way a store owner judges it: how much is left to fix."""
 
 import base64
+import contextlib
 import io
 import json
 from datetime import date
@@ -129,28 +130,43 @@ def test_a_malformed_extraction_is_refused_rather_than_applied(payload, expected
 
 
 class FakeAnthropic:
-    """Captures the request, so a test can see what was actually sent."""
+    """Captures how the client was built and what was sent, so a test can check both."""
 
     def __init__(self, payload: dict):
         self.payload = payload
+        self.built_with: dict = {}
         self.sent: dict = {}
         self.messages = self
 
-    def create(self, **kwargs):
+    def stream(self, **kwargs):
         self.sent = kwargs
         content = [type("Block", (), {"type": "text", "text": json.dumps(self.payload)})()]
-        return type("Response", (), {"content": content, "stop_reason": "end_turn"})()
+        response = type("Response", (), {"content": content, "stop_reason": "end_turn"})()
+        stream = type("Stream", (), {"get_final_message": lambda _self: response})()
+        return contextlib.nullcontext(stream)
 
 
 @pytest.fixture
 def anthropic_client(monkeypatch):
     def build(payload: dict) -> FakeAnthropic:
         client = FakeAnthropic(payload)
+
+        def construct(**kwargs):
+            client.built_with = kwargs
+            return client
+
         monkeypatch.setattr(get_settings(), "anthropic_api_key", "test-key", raising=False)
-        monkeypatch.setattr("anthropic.Anthropic", lambda api_key: client)
+        monkeypatch.setattr("anthropic.Anthropic", construct)
         return client
 
     return build
+
+
+def test_the_client_gives_up_after_a_minute_of_silence(anthropic_client):
+    """The SDK default of 600 s held a worker for ten minutes on a stalled call (C8)."""
+    client = anthropic_client(INVOICE)
+    ClaudeInvoiceExtractor().extract(photo(400, 300), "1/abc.jpg")
+    assert client.built_with["timeout"] <= 60
 
 
 def test_the_resized_image_is_what_is_sent_and_the_reply_is_checked(anthropic_client):

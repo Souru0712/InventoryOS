@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.datastructures import FormData
 
 from app.db import get_db
 from app.entitlements import owns_snack_box
@@ -25,6 +26,7 @@ from app.security import current_customer, login_customer, logout_customer, requ
 from app.transform.boxes import BOX_TYPES
 from app.transform.taste import NOVELTY_LEVELS, RATINGS, SPICE_LEVELS
 from app.web.flash import flash, pop_flash
+from app.web.inputs import posted_form
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -373,15 +375,15 @@ def review_form(
 
 
 @router.post("/shop/{tenant_id}/me/orders/{order_id}/review")
-async def save_review(
+def save_review(
     request: Request,
     tenant_id: int,
     order_id: int,
+    form: FormData = Depends(posted_form),
     db: Session = Depends(get_db),
     customer: Customer = Depends(require_customer),
 ):
     order = _own_order_or_404(db, customer, order_id)
-    form = await request.form()
     answers = {
         line.stock_item_id: (
             str(form.get(f"rating_{line.stock_item_id}") or ""),
@@ -457,13 +459,13 @@ def preferences(
 
 
 @router.post("/shop/{tenant_id}/me/preferences")
-async def save_preferences(
+def save_preferences(
     request: Request,
     tenant_id: int,
+    form: FormData = Depends(posted_form),
     db: Session = Depends(get_db),
     customer: Customer = Depends(require_customer),
 ):
-    form = await request.form()
     chosen = frozenset(a for a in customers.ALLERGENS if form.get(f"allergen_{a}") == "on")
     none = form.get("allergen_none") == "on"
     if not chosen and not none:

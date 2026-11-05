@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from starlette.datastructures import FormData
 
 from app.config import get_settings
 from app.db import get_db
@@ -14,6 +15,7 @@ from app.entitlements import state
 from app.models import Tenant, User
 from app.notify.email import suppression
 from app.security import require_tenant, require_user
+from app.web.inputs import posted_form
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -66,14 +68,14 @@ def settings_page(
 
 
 @router.post("/app/settings/email")
-async def save_email_settings(
+def save_email_settings(
     request: Request,
+    form: FormData = Depends(posted_form),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(require_user),
 ):
     """Checkboxes only post when ticked, so an absent field means the person turned it off."""
-    form = await request.form()
     for field, attribute, _label, _description in EMAIL_SETTINGS:
         setattr(user, attribute, form.get(field) is not None)
     db.commit()

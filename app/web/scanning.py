@@ -320,14 +320,14 @@ def _photo_limit() -> int:
 
 
 @router.post("/app/scan/expiry")
-async def scan_expiry(
+def scan_expiry(
     photo: UploadFile = File(...),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
 ):
     """Read the date off a photo of the packaging. The product is already known, so this
     only has to answer 'which date', which is a far smaller question than 'which product'."""
-    image = await photo.read()
+    image = photo.file.read()
     if not image:
         raise HTTPException(status_code=400, detail="the photo was empty")
     if len(image) > _photo_limit():
