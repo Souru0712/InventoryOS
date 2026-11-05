@@ -5,6 +5,71 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.04 Coding standards: ruff + mypy
+
+**Implemented** (ID-04; one commit per kind of change)
+- `af1ec6b` config: ruff 0.17.4 and mypy 2.4.1 in the dev group (`uv.lock` gains only them and
+  their 4 helper packages). ruff: line length 100; rules pycodestyle, pyflakes, isort, bugbear,
+  pyupgrade and bandit (`S`). Ignored, each with its reason in `pyproject.toml`: E501 (the
+  formatter owns code width; 85 long strings/comments remain) and UP042 (StrEnum changes `str()`
+  output). Tests may assert, import fixtures across modules and use throwaway passwords;
+  FastAPI's `Depends`/`Form`/... are allowed as defaults; `docs/` (frozen audit probes) excluded.
+  mypy: gradual by default; strict flags for `app.transform.*` and for `app.access.*` and
+  `app.ledger.*` before they exist; the five snack-box modules leaving in T0.05 skipped;
+  `apscheduler`, `boto3`, `botocore` have no type information and are not checked.
+- `7f3cb61` `ruff format .` only (118 files); `f47bbb8` ruff's safe autofixes only (sorted and
+  unused imports, `datetime.UTC`). Both listed in the new `.git-blame-ignore-revs`.
+- `4c5d47a` remaining lint by hand: sha1 box-rules fingerprint marked `usedforsecurity=False`
+  (same digest), `l` → `bl`, `itertools.pairwise`, an f-string; four bandit false positives get
+  `noqa` with the reason on the line above (dev secret placeholder that production refuses, a
+  migration's constant SQL, the docs test's fixed subprocess, the migration test's seed SQL).
+- `9c432bb` the 61 mypy errors left after scoping. Typing only, apart from two paths that
+  crashed:
+  - **Bug found by mypy:** receiving apply called `.strip()`/`.isdigit()` on form values; a file
+    part posted under a text field's name raised AttributeError (500). New `_field()` treats it
+    as empty; `tests/test_receiving_web.py` covers it and fails without the fix.
+  - The alert digest now raises `LookupError` naming the tenant when alerts exist without a
+    tenant row (was an AttributeError inside `allows`).
+  - The two Anthropic calls use the SDK's request types; the media type is known only at runtime,
+    so the content block is `cast` with that reason in a comment. Sentry's `Event`/`Hint` types
+    for the scrubber.
+- CI job **Lint and types**: `ruff check`, `ruff format --check`, `mypy`, on the locked tools.
+- `CLAUDE.md` (commands, CI, "required CI checks"), `README.md` (lint/type commands; the stale
+  "60 tests" note dropped).
+
+**Verified (locally)**
+- `ruff check .` all passed; `ruff format --check .` 131 files formatted; `mypy` no issues in 76
+  files; strict flags pass on all 15 `app/transform` modules.
+- Full suite after all changes: 546 passed, 6 skipped (unchanged); the new test passes, and fails
+  with `AttributeError: 'UploadFile' object has no attribute 'strip'` when the fix is stashed.
+- Workflow YAML parses (five jobs); docs checker 0 problems.
+- **Not verified yet:** the CI run.
+
+**Files changed**
+- `pyproject.toml`, `uv.lock`, `.git-blame-ignore-revs` (new), `.github/workflows/ci.yml`,
+  `CLAUDE.md`, `README.md`, `tests/test_receiving_web.py` (new); 119 Python files changed in all
+  (118 by the formatter, typing fixes in 19); `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md`
+  (T0.04 → In review), this log.
+
+**Open issues**
+- "Lint and types" is not a required check until the owner adds it to "Protect main".
+- `.git-blame-ignore-revs` lists the two mechanical commits by SHA: merge this PR with a merge
+  commit (as before), not squash or rebase, or the SHAs change.
+- The expiry reader forces `tool_choice` to its tool. That works on the configured
+  `claude-opus-5`; Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 reject forced tool choice, so a
+  future model change there must move it to `auto` or structured output.
+- 85 lines over 100 columns remain (strings and comments); not enforced.
+
+**Decisions made**
+- None new (ID-04). Scoping choices recorded above with their reasons.
+
+**Next task**
+- Stage 0 tasks now Ready: T0.06 security quick fixes, T0.07 async correctness, T0.08 disable
+  Square write-back, T0.10 structured logs, T0.11 governance scaffolding. T0.05 still waits for
+  the owner's snack-box repository.
+
+---
+
 ## 2026-11-05 — T0.03 completed; Dependabot set to lockfile-only
 
 **Implemented**

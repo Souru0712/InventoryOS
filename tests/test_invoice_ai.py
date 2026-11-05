@@ -1,4 +1,5 @@
 """The invoice reader judged the way a store owner judges it: how much is left to fix."""
+
 import base64
 import io
 import json
@@ -34,9 +35,16 @@ INVOICE = {
     "currency": "USD",
     "total_cents": 6750,
     "lines": [
-        {"raw_text": "PASTRY FLOUR 25KG SACK", "product_name": "Pastry Flour", "quantity": 2,
-         "unit": "sack", "pack_size": None, "unit_price_cents": 3375, "line_total_cents": 6750,
-         "expiry_date": None},
+        {
+            "raw_text": "PASTRY FLOUR 25KG SACK",
+            "product_name": "Pastry Flour",
+            "quantity": 2,
+            "unit": "sack",
+            "pack_size": None,
+            "unit_price_cents": 3375,
+            "line_total_cents": 6750,
+            "expiry_date": None,
+        },
     ],
 }
 
@@ -54,6 +62,7 @@ def photo(width: int, height: int, colour=(210, 180, 140)) -> bytes:
 
 
 # --- what actually goes over the wire ----------------------------------------------------------
+
 
 def test_a_phone_photo_is_shrunk_to_what_the_model_reads():
     original = photo(4000, 3000)
@@ -99,16 +108,20 @@ def test_something_that_is_not_an_image_passes_through_rather_than_failing():
 
 # --- what comes back -----------------------------------------------------------------------
 
+
 def test_a_well_formed_extraction_passes_validation():
     validate_payload(INVOICE)
 
 
-@pytest.mark.parametrize("payload, expected", [
-    ({**INVOICE, "lines": [{**INVOICE["lines"][0], "quantity": "two"}]}, "quantity"),
-    ({key: value for key, value in INVOICE.items() if key != "total_cents"}, "total_cents"),
-    ({**INVOICE, "lines": [{**INVOICE["lines"][0], "vat_rate": 20}]}, "vat_rate"),
-    ({**INVOICE, "lines": "none"}, "lines"),
-])
+@pytest.mark.parametrize(
+    "payload, expected",
+    [
+        ({**INVOICE, "lines": [{**INVOICE["lines"][0], "quantity": "two"}]}, "quantity"),
+        ({key: value for key, value in INVOICE.items() if key != "total_cents"}, "total_cents"),
+        ({**INVOICE, "lines": [{**INVOICE["lines"][0], "vat_rate": 20}]}, "vat_rate"),
+        ({**INVOICE, "lines": "none"}, "lines"),
+    ],
+)
 def test_a_malformed_extraction_is_refused_rather_than_applied(payload, expected):
     with pytest.raises(ExtractionError, match=expected):
         validate_payload(payload)
@@ -160,9 +173,12 @@ def test_a_reply_that_does_not_match_the_schema_fails_the_document(anthropic_cli
 
 # --- the door ---------------------------------------------------------------------------------
 
+
 def test_a_file_type_we_cannot_read_is_refused_at_upload(db, tenant, location):
     with pytest.raises(UploadRejected, match="cannot be read"):
-        save_upload(db, tenant.id, location.id, "invoice.docx", b"not a photo", "application/msword")
+        save_upload(
+            db, tenant.id, location.id, "invoice.docx", b"not a photo", "application/msword"
+        )
 
 
 def test_a_file_over_the_size_limit_is_refused(db, tenant, location, monkeypatch):
@@ -173,12 +189,21 @@ def test_a_file_over_the_size_limit_is_refused(db, tenant, location, monkeypatch
 
 # --- what the reviewer changed -----------------------------------------------------------------
 
+
 @pytest.fixture
 def flour(db, tenant, location) -> StockItem:
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="pastry-flour",
-                     name="Pastry flour", dimension=Dimension.WEIGHT, stock_unit="kg",
-                     track_mode=TrackMode.DERIVED, qty_base=to_base(5, "kg"),
-                     receive_unit="kg", pack_size_base=to_base(25, "kg"))
+    item = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="pastry-flour",
+        name="Pastry flour",
+        dimension=Dimension.WEIGHT,
+        stock_unit="kg",
+        track_mode=TrackMode.DERIVED,
+        qty_base=to_base(5, "kg"),
+        receive_unit="kg",
+        pack_size_base=to_base(25, "kg"),
+    )
     db.add(item)
     db.commit()
     return item
@@ -203,16 +228,34 @@ def test_accepting_what_the_reader_proposed_records_no_corrections(db, tenant, p
 
 def test_every_change_the_reviewer_makes_is_recorded_with_both_values(db, tenant, parsed, flour):
     line = parsed.lines[0]
-    other = StockItem(tenant_id=tenant.id, location_id=parsed.location_id, slug="bread-flour",
-                      name="Bread flour", dimension=Dimension.WEIGHT, stock_unit="kg",
-                      track_mode=TrackMode.DERIVED, qty_base=Decimal("0"), receive_unit="kg")
+    other = StockItem(
+        tenant_id=tenant.id,
+        location_id=parsed.location_id,
+        slug="bread-flour",
+        name="Bread flour",
+        dimension=Dimension.WEIGHT,
+        stock_unit="kg",
+        track_mode=TrackMode.DERIVED,
+        qty_base=Decimal("0"),
+        receive_unit="kg",
+    )
     db.add(other)
     db.commit()
 
-    apply_document(db, parsed.id, [
-        LineDecision(line.id, other.id, to_base(45, "kg"), expires_on=date(2026, 12, 1),
-                     line_total_cents=7000)
-    ], user_id=1)
+    apply_document(
+        db,
+        parsed.id,
+        [
+            LineDecision(
+                line.id,
+                other.id,
+                to_base(45, "kg"),
+                expires_on=date(2026, 12, 1),
+                line_total_cents=7000,
+            )
+        ],
+        user_id=1,
+    )
     db.commit()
 
     corrections = {row.field: row for row in db.query(ExtractionCorrection)}
@@ -230,9 +273,9 @@ def test_every_change_the_reviewer_makes_is_recorded_with_both_values(db, tenant
 
 def test_a_corrected_line_total_is_what_the_stock_is_costed_at(db, tenant, parsed, flour):
     line = parsed.lines[0]
-    apply_document(db, parsed.id, [
-        LineDecision(line.id, flour.id, to_base(50, "kg"), line_total_cents=10000)
-    ])
+    apply_document(
+        db, parsed.id, [LineDecision(line.id, flour.id, to_base(50, "kg"), line_total_cents=10000)]
+    )
     db.commit()
 
     # 100.00 for 50 kg is 2.00 per kg, in cents per gram.

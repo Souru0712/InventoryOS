@@ -1,5 +1,6 @@
 """Email as a channel people actually receive: real text parts, their choices, and no repeats."""
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -56,33 +57,52 @@ def html_of(message) -> str:
 
 @pytest.fixture
 def milk(db, tenant, location) -> StockItem:
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="whole-milk",
-                     name="Whole milk", dimension=Dimension.VOLUME, stock_unit="l",
-                     track_mode=TrackMode.MANUAL, qty_base=Decimal("4000"),
-                     reorder_point_base=Decimal("20000"),
-                     cost_per_base_cents=Decimal("0.095"))
+    item = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="whole-milk",
+        name="Whole milk",
+        dimension=Dimension.VOLUME,
+        stock_unit="l",
+        track_mode=TrackMode.MANUAL,
+        qty_base=Decimal("4000"),
+        reorder_point_base=Decimal("20000"),
+        cost_per_base_cents=Decimal("0.095"),
+    )
     db.add(item)
     db.commit()
     return item
 
 
 def alert(db, tenant, item, kind: AlertKind, message: str, value_cents: int | None = None) -> Alert:
-    row = Alert(tenant_id=tenant.id, stock_item_id=item.id, kind=kind, message=message,
-                qty_base=Decimal("4000"), threshold_base=Decimal("20000"), value_cents=value_cents)
+    row = Alert(
+        tenant_id=tenant.id,
+        stock_item_id=item.id,
+        kind=kind,
+        message=message,
+        qty_base=Decimal("4000"),
+        threshold_base=Decimal("20000"),
+        value_cents=value_cents,
+    )
     db.add(row)
     db.commit()
     return row
 
 
 def second_user(db, tenant, email: str, **preferences) -> User:
-    user = User(tenant_id=tenant.id, email=email, password_hash=hash_password("a-good-password"),
-                **preferences)
+    user = User(
+        tenant_id=tenant.id,
+        email=email,
+        password_hash=hash_password("a-good-password"),
+        **preferences,
+    )
     db.add(user)
     db.commit()
     return user
 
 
 # --- real text parts ------------------------------------------------------------------------
+
 
 def test_the_alert_digest_is_readable_without_html(db, tenant, milk, mail):
     alert(db, tenant, milk, AlertKind.LOW_STOCK, "Whole milk is at 4 l, below its reorder point")
@@ -104,9 +124,7 @@ def test_the_weekly_report_is_readable_without_html(db, tenant, milk, mail):
 
 
 def test_a_sign_in_link_is_readable_without_html(db, tenant, mail):
-    from app.orchestration.customers import issue_login_link
-
-    from app.orchestration.customers import find_or_create
+    from app.orchestration.customers import find_or_create, issue_login_link
 
     customer = find_or_create(db, tenant.id, "shopper@rosewood.test")
     db.commit()
@@ -118,6 +136,7 @@ def test_a_sign_in_link_is_readable_without_html(db, tenant, mail):
 
 
 # --- what each person asked for ---------------------------------------------------------------
+
 
 def test_someone_who_turned_the_weekly_report_off_is_not_sent_it(db, tenant, milk, mail):
     owner = db.query(User).one()
@@ -135,7 +154,14 @@ def test_each_person_gets_only_the_alert_categories_they_want(db, tenant, milk, 
     second_user(db, tenant, "chef@rosewood.test", wants_stock_alerts=False)
 
     alert(db, tenant, milk, AlertKind.LOW_STOCK, "Whole milk is at 4 l, below its reorder point")
-    alert(db, tenant, milk, AlertKind.WASTE_RISK, "6 l of Whole milk will not sell before 20 Sep", 2400)
+    alert(
+        db,
+        tenant,
+        milk,
+        AlertKind.WASTE_RISK,
+        "6 l of Whole milk will not sell before 20 Sep",
+        2400,
+    )
     assert send_alert_digest(db, tenant.id) is True
 
     by_recipient = {message["To"]: plain(message) for message in mail}
@@ -157,6 +183,7 @@ def test_nobody_wanting_a_category_means_nothing_is_sent(db, tenant, milk, mail)
 
 
 # --- addresses we must stop writing to ---------------------------------------------------------
+
 
 def test_a_bounced_address_is_never_written_to_again(db, tenant, milk, mail):
     suppress(db, "OWNER@rosewood.test", "550 mailbox does not exist")
@@ -184,6 +211,7 @@ def test_clearing_a_suppression_lets_mail_flow_again(db, tenant, milk, mail):
 
 # --- repeats -----------------------------------------------------------------------------------
 
+
 def test_a_retried_digest_does_not_email_the_same_alerts_twice(db, tenant, milk, mail):
     """The scheduler retrying, or two syncs in an hour, must not mean two digests."""
     alert(db, tenant, milk, AlertKind.LOW_STOCK, "Whole milk is at 4 l, below its reorder point")
@@ -200,9 +228,7 @@ def test_new_alerts_still_wait_for_the_cooldown_to_pass(db, tenant, milk, mail):
 
     assert send_alert_digest(db, tenant.id) is False, "inside the cooldown window"
 
-    first.notified_at = datetime.now(timezone.utc) - timedelta(
-        hours=get_settings().alert_cooldown_hours + 1
-    )
+    first.notified_at = datetime.now(UTC) - timedelta(hours=get_settings().alert_cooldown_hours + 1)
     db.commit()
     assert send_alert_digest(db, tenant.id) is True
     assert len(mail) == 2

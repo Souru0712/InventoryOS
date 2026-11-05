@@ -1,4 +1,5 @@
 """What to mark down, by how much, and why it can be argued with."""
+
 from decimal import Decimal
 
 import pytest
@@ -32,10 +33,15 @@ def lot(**overrides) -> PromotionInput:
 
 # --- when to say nothing at all ---------------------------------------------------------------
 
+
 def test_stock_that_clears_itself_gets_no_recommendation():
     # 24 units, 4 a day, 10 days: 40 projected sales. Nothing to do.
-    assert suggest(lot(projected_leftover_base=Decimal("0"), velocity_per_day=Decimal("4"),
-                       days_left=10)) is None
+    assert (
+        suggest(
+            lot(projected_leftover_base=Decimal("0"), velocity_per_day=Decimal("4"), days_left=10)
+        )
+        is None
+    )
 
 
 def test_a_date_too_far_out_is_left_alone():
@@ -53,10 +59,21 @@ def test_an_item_with_no_selling_price_cannot_be_discounted():
 
 # --- the tiers --------------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "days, tier",
-    [(0, "critical"), (3, "critical"), (4, "high"), (7, "high"),
-     (8, "medium"), (14, "medium"), (15, "low"), (30, "low"), (31, "none"), (-1, "expired")],
+    [
+        (0, "critical"),
+        (3, "critical"),
+        (4, "high"),
+        (7, "high"),
+        (8, "medium"),
+        (14, "medium"),
+        (15, "low"),
+        (30, "low"),
+        (31, "none"),
+        (-1, "expired"),
+    ],
 )
 def test_urgency_follows_the_days_left(days, tier):
     assert urgency_for(days) == tier
@@ -70,6 +87,7 @@ def test_a_deeper_cut_the_closer_the_date():
 
 # --- how fast it has to move ------------------------------------------------------------------
 
+
 def test_required_velocity_is_what_clears_the_shelf_in_time():
     assert required_velocity(Decimal("24"), 10) == Decimal("2.40")
 
@@ -80,8 +98,9 @@ def test_the_last_day_still_asks_for_the_whole_lot():
 
 
 def test_acceleration_says_how_much_faster_it_must_sell():
-    suggestion = suggest(lot(remaining_base=Decimal("24"), days_left=10,
-                             velocity_per_day=Decimal("1.2")))
+    suggestion = suggest(
+        lot(remaining_base=Decimal("24"), days_left=10, velocity_per_day=Decimal("1.2"))
+    )
     assert suggestion.required_velocity == Decimal("2.40")
     assert suggestion.acceleration == Decimal("2.0")
 
@@ -110,6 +129,7 @@ def test_a_lot_needing_a_nudge_gets_the_shallow_end_of_its_band():
 
 # --- money ------------------------------------------------------------------------------------
 
+
 def test_the_numbers_at_stake_are_the_leftover_not_the_whole_lot():
     suggestion = suggest(lot(projected_leftover_base=Decimal("13")))
     assert suggestion.units_at_risk_base == Decimal("13")
@@ -118,8 +138,9 @@ def test_the_numbers_at_stake_are_the_leftover_not_the_whole_lot():
 
 
 def test_the_suggested_price_is_the_discount_applied_and_rounded_down():
-    suggestion = suggest(lot(days_left=9, velocity_per_day=Decimal("1.2"),
-                             remaining_base=Decimal("24")))
+    suggestion = suggest(
+        lot(days_left=9, velocity_per_day=Decimal("1.2"), remaining_base=Decimal("24"))
+    )
     # High tier on $1.99; the price lands on a 5 cent step, never rounded up.
     assert suggestion.suggested_price_cents % 5 == 0
     assert suggestion.suggested_price_cents < suggestion.normal_price_cents
@@ -132,18 +153,26 @@ def test_expected_revenue_is_what_the_leftover_would_bring_in():
 
 # --- the margin floor -------------------------------------------------------------------------
 
+
 def test_a_markdown_never_goes_below_the_margin_floor():
     # Costs 80c, so a 50% cut off $1.20 would sell at a loss.
-    suggestion = suggest(lot(retail_per_base_cents=Decimal("120"), days_left=1,
-                             velocity_per_day=Decimal("0")))
+    suggestion = suggest(
+        lot(retail_per_base_cents=Decimal("120"), days_left=1, velocity_per_day=Decimal("0"))
+    )
     assert suggestion.suggested_price_cents >= 80
     assert suggestion.held_at_floor is True
     assert any("margin floor" in reason for reason in suggestion.reasons)
 
 
 def test_the_floor_can_be_relaxed_for_a_loss_leader():
-    cheap = suggest(lot(retail_per_base_cents=Decimal("120"), days_left=1,
-                        velocity_per_day=Decimal("0"), min_margin=Decimal("0")))
+    cheap = suggest(
+        lot(
+            retail_per_base_cents=Decimal("120"),
+            days_left=1,
+            velocity_per_day=Decimal("0"),
+            min_margin=Decimal("0"),
+        )
+    )
     assert cheap.suggested_price_cents < 80 + 1  # down to cost, which is the point
 
 
@@ -153,6 +182,7 @@ def test_a_healthy_margin_leaves_the_discount_alone():
 
 
 # --- the explanation --------------------------------------------------------------------------
+
 
 def test_every_recommendation_explains_itself():
     suggestion = suggest(lot())
@@ -169,10 +199,15 @@ def test_the_explanation_names_the_real_tier():
 
 # --- ordering ---------------------------------------------------------------------------------
 
+
 def test_the_biggest_loss_is_recommended_first():
     small = lot(stock_item_id=1, name="Small", projected_leftover_base=Decimal("2"))
-    large = lot(stock_item_id=2, name="Large", projected_leftover_base=Decimal("40"),
-                remaining_base=Decimal("60"))
+    large = lot(
+        stock_item_id=2,
+        name="Large",
+        projected_leftover_base=Decimal("40"),
+        remaining_base=Decimal("60"),
+    )
     assert [s.item.name for s in suggest_all([small, large])] == ["Large", "Small"]
 
 
@@ -181,6 +216,7 @@ def test_nothing_worth_doing_gives_an_empty_list():
 
 
 # --- afterwards -------------------------------------------------------------------------------
+
 
 def test_effectiveness_compares_before_with_during():
     assert effectiveness(Decimal("1.2"), Decimal("4.8")) == Decimal("4.0")

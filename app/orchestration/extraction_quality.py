@@ -4,10 +4,12 @@
 a store owner still has to do after photographing an invoice, and that is exactly what the
 corrections recorded during review add up to.
 """
+
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,7 +31,7 @@ def correction_stats(
     db: Session, tenant_id: int, days: int = 90, now: datetime | None = None
 ) -> dict:
     """Corrections per field, per supplier, and the lines that keep coming back wrong."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     since = now - timedelta(days=days)
 
     documents = list(
@@ -43,17 +45,22 @@ def correction_stats(
     )
     document_ids = [document.id for document in documents]
     if not document_ids:
-        return {"days": days, "documents": 0, "lines": 0, "corrections": 0, "lines_touched": 0,
-                "clean_rate": None, "by_field": {}, "suppliers": [], "products": []}
+        return {
+            "days": days,
+            "documents": 0,
+            "lines": 0,
+            "corrections": 0,
+            "lines_touched": 0,
+            "clean_rate": None,
+            "by_field": {},
+            "suppliers": [],
+            "products": [],
+        }
 
-    lines = list(
-        db.scalars(select(DocumentLine).where(DocumentLine.document_id.in_(document_ids)))
-    )
+    lines = list(db.scalars(select(DocumentLine).where(DocumentLine.document_id.in_(document_ids))))
     corrections = list(
         db.scalars(
-            select(ExtractionCorrection).where(
-                ExtractionCorrection.document_id.in_(document_ids)
-            )
+            select(ExtractionCorrection).where(ExtractionCorrection.document_id.in_(document_ids))
         )
     )
 
@@ -75,7 +82,7 @@ def correction_stats(
 
     per_supplier = Counter(supplier_of[row.document_id] for row in corrections)
     documents_per_supplier = Counter(supplier_of[document.id] for document in documents)
-    suppliers = [
+    suppliers: list[dict[str, Any]] = [
         {
             "supplier": supplier,
             "documents": documents_per_supplier[supplier],

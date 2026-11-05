@@ -3,11 +3,12 @@
 The scan never invents a Square number. It resolves the code locally, raises stock the same
 way receiving a delivery does, and sends Square a delta.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -131,11 +132,7 @@ class DateReading:
     @property
     def needs_confirmation(self) -> bool:
         """A packing date always gets asked about: it is not a date to sell against."""
-        return (
-            self.value is None
-            or self.confidence < CONFIDENT_ENOUGH
-            or not self.is_expiry
-        )
+        return self.value is None or self.confidence < CONFIDENT_ENOUGH or not self.is_expiry
 
 
 def read_expiry_photo(
@@ -162,11 +159,17 @@ def read_expiry_photo(
 
     if parsed is None:
         if theirs is None:
-            return DateReading(None, "unknown", ZERO, printed, "no date found in the photo", read.legible)
+            return DateReading(
+                None, "unknown", ZERO, printed, "no date found in the photo", read.legible
+            )
         # The reader saw a date in a shape the parser does not know; trust it less for that.
         return DateReading(
-            theirs, "unknown", (Decimal(str(read.confidence)) * Decimal("0.7")).quantize(Decimal("0.01")),
-            printed, "read from the photo but not in a familiar format", read.legible,
+            theirs,
+            "unknown",
+            (Decimal(str(read.confidence)) * Decimal("0.7")).quantize(Decimal("0.01")),
+            printed,
+            "read from the photo but not in a familiar format",
+            read.legible,
         )
 
     confidence = parsed.confidence
@@ -229,7 +232,7 @@ def receive_scanned(
     """Raise stock for a scanned receipt, date the lot, and push the delta to Square."""
     if qty_base is None or qty_base <= ZERO:
         raise ValueError("received quantity must be above zero")
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
 
     item.qty_base = Decimal(item.qty_base or 0) + Decimal(qty_base)
     db.add(

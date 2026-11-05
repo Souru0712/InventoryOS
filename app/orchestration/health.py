@@ -1,10 +1,11 @@
 """Inventory health from live stock: the score, today's actions, and the nightly history."""
+
 from __future__ import annotations
 
 import json
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -102,14 +103,14 @@ class Health:
 def current(
     db: Session, tenant_id: int, location_id: int | None = None, now: datetime | None = None
 ) -> Health:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     inputs = health_input(db, tenant_id, now.date(), location_id)
     return Health(score_inventory(inputs, now), build_actions(inputs), inputs)
 
 
 def record_snapshot(db: Session, tenant_id: int, now: datetime | None = None) -> HealthSnapshot:
     """Keep today's health. Running it twice in a night replaces the row rather than adding one."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     report = current(db, tenant_id, now=now).report
     row = db.scalars(
         select(HealthSnapshot).where(

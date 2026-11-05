@@ -1,4 +1,5 @@
 """Check that every package installed in an image has exactly the version pinned in uv.lock."""
+
 from __future__ import annotations
 
 import re

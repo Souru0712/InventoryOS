@@ -1,4 +1,5 @@
 """Reading the date printed on a package, including the ones that read two ways."""
+
 from datetime import date
 from decimal import Decimal
 
@@ -19,6 +20,7 @@ def parse(text, **kwargs):
 
 
 # --- formats --------------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "printed",
@@ -54,6 +56,7 @@ def test_text_with_no_date_in_it_reads_as_nothing():
 
 # --- which kind of date ---------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "printed, kind",
     [
@@ -83,6 +86,7 @@ def test_bb_inside_a_word_is_not_a_label():
 
 
 # --- the ambiguous ones ---------------------------------------------------------------------
+
 
 def test_a_number_above_twelve_settles_the_order_on_its_own():
     assert parse("EXP 24/10/26", prefer="mdy").value == date(2026, 10, 24)
@@ -117,6 +121,7 @@ def test_currency_decides_how_a_country_writes_dates():
 
 
 # --- confidence -----------------------------------------------------------------------------
+
 
 def test_a_blurry_photo_drags_the_confidence_down_with_it():
     sharp = parse("EXP 24 OCT 2026", ocr_confidence=1)
@@ -155,6 +160,7 @@ def test_confidence_never_exceeds_certainty():
 
 # --- real packaging strings -----------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "printed, expected",
     [
@@ -186,8 +192,15 @@ def read(payload, **kwargs):
 
 
 def test_a_clear_photo_is_applied_without_asking():
-    result = read({"text": "24 OCT 2026", "label": "BEST BEFORE", "date_iso": "2026-10-24",
-                   "legible": True, "confidence": 1.0})
+    result = read(
+        {
+            "text": "24 OCT 2026",
+            "label": "BEST BEFORE",
+            "date_iso": "2026-10-24",
+            "legible": True,
+            "confidence": 1.0,
+        }
+    )
     assert result.value == date(2026, 10, 24)
     assert result.date_type == "best_before"
     assert result.needs_confirmation is False
@@ -195,23 +208,44 @@ def test_a_clear_photo_is_applied_without_asking():
 
 def test_the_two_readings_disagreeing_forces_a_question():
     # The parser reads the characters; the model read something else from the same photo.
-    result = read({"text": "24 OCT 2026", "label": "BB", "date_iso": "2026-11-24",
-                   "legible": True, "confidence": 1.0})
+    result = read(
+        {
+            "text": "24 OCT 2026",
+            "label": "BB",
+            "date_iso": "2026-11-24",
+            "legible": True,
+            "confidence": 1.0,
+        }
+    )
     assert result.value == date(2026, 10, 24)  # the deterministic reading wins
     assert result.needs_confirmation is True
     assert result.note == "the photo could be read two ways"
 
 
 def test_an_ambiguous_date_is_never_applied_silently():
-    result = read({"text": "10/11/26", "label": "EXP", "date_iso": "2026-11-10",
-                   "legible": True, "confidence": 1.0})
+    result = read(
+        {
+            "text": "10/11/26",
+            "label": "EXP",
+            "date_iso": "2026-11-10",
+            "legible": True,
+            "confidence": 1.0,
+        }
+    )
     assert result.value == date(2026, 11, 10)  # dmy, as a GBP merchant would print it
     assert result.needs_confirmation is True
 
 
 def test_a_packing_date_is_always_questioned():
-    result = read({"text": "24 OCT 2026", "label": "PKD", "date_iso": "2026-10-24",
-                   "legible": True, "confidence": 1.0})
+    result = read(
+        {
+            "text": "24 OCT 2026",
+            "label": "PKD",
+            "date_iso": "2026-10-24",
+            "legible": True,
+            "confidence": 1.0,
+        }
+    )
     assert result.date_type == "packed"
     assert result.is_expiry is False
     # High confidence in the characters, but it is still the wrong kind of date to apply.
@@ -220,14 +254,22 @@ def test_a_packing_date_is_always_questioned():
 
 
 def test_a_blurred_photo_asks_rather_than_guesses():
-    result = read({"text": "24 0CT 2026", "label": "BB", "date_iso": "2026-10-24",
-                   "legible": False, "confidence": 0.55})
+    result = read(
+        {
+            "text": "24 0CT 2026",
+            "label": "BB",
+            "date_iso": "2026-10-24",
+            "legible": False,
+            "confidence": 0.55,
+        }
+    )
     assert result.needs_confirmation is True
 
 
 def test_an_unreadable_photo_comes_back_empty_so_the_user_can_type_it():
-    result = read({"text": None, "label": None, "date_iso": None,
-                   "legible": False, "confidence": 0.0})
+    result = read(
+        {"text": None, "label": None, "date_iso": None, "legible": False, "confidence": 0.0}
+    )
     assert result.value is None
     assert result.needs_confirmation is True
     assert result.note
@@ -235,8 +277,15 @@ def test_an_unreadable_photo_comes_back_empty_so_the_user_can_type_it():
 
 def test_a_format_the_parser_does_not_know_still_uses_the_readers_answer():
     # Nothing here parses as a date, but the reader saw one.
-    result = read({"text": "L2847 BATCH", "label": None, "date_iso": "2026-10-24",
-                   "legible": True, "confidence": 0.9})
+    result = read(
+        {
+            "text": "L2847 BATCH",
+            "label": None,
+            "date_iso": "2026-10-24",
+            "legible": True,
+            "confidence": 0.9,
+        }
+    )
     assert result.value == date(2026, 10, 24)
     assert result.needs_confirmation is True  # trusted less, so confirmed
     assert "familiar format" in result.note
@@ -244,7 +293,14 @@ def test_a_format_the_parser_does_not_know_still_uses_the_readers_answer():
 
 def test_a_vaguer_reading_than_the_readers_one_is_questioned():
     # "October 2026" is the whole month; the reader claims a specific day. Ask.
-    result = read({"text": "expires October, 2026", "label": None, "date_iso": "2026-10-24",
-                   "legible": True, "confidence": 0.9})
+    result = read(
+        {
+            "text": "expires October, 2026",
+            "label": None,
+            "date_iso": "2026-10-24",
+            "legible": True,
+            "confidence": 0.9,
+        }
+    )
     assert result.value == date(2026, 10, 31)
     assert result.needs_confirmation is True

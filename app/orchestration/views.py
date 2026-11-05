@@ -1,8 +1,9 @@
 """Read models: turn ORM rows into the flat inputs the pure layer expects."""
+
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -18,7 +19,14 @@ from app.models import (
     StockItem,
     TrackMode,
 )
-from app.transform.expiry import Batch, Coverage, ItemExpiry, allocate_fefo, coverage, project_batches
+from app.transform.expiry import (
+    Batch,
+    Coverage,
+    ItemExpiry,
+    allocate_fefo,
+    coverage,
+    project_batches,
+)
 from app.transform.inventory import (
     ZERO,
     Component,
@@ -37,9 +45,7 @@ def stock_views(db: Session, tenant_id: int, location_id: int | None = None) -> 
         loc.id: loc.name
         for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
     }
-    query = select(StockItem).where(
-        StockItem.tenant_id == tenant_id, StockItem.is_active.is_(True)
-    )
+    query = select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.is_active.is_(True))
     if location_id is not None:
         query = query.where(StockItem.location_id == location_id)
 
@@ -60,7 +66,9 @@ def stock_views(db: Session, tenant_id: int, location_id: int | None = None) -> 
                 else None
             ),
             lead_time_days=item.lead_time_days,
-            par_level_base=Decimal(item.par_level_base) if item.par_level_base is not None else None,
+            par_level_base=Decimal(item.par_level_base)
+            if item.par_level_base is not None
+            else None,
             category=item.category,
             supplier=item.supplier,
             location_id=item.location_id,
@@ -75,7 +83,9 @@ def stock_views(db: Session, tenant_id: int, location_id: int | None = None) -> 
 def tenant_currency(db: Session, tenant_id: int) -> str:
     """The currency money is shown in; a tenant's locations share one."""
     location = db.scalars(
-        select(Location).where(Location.tenant_id == tenant_id, Location.is_active.is_(True)).limit(1)
+        select(Location)
+        .where(Location.tenant_id == tenant_id, Location.is_active.is_(True))
+        .limit(1)
     ).first()
     return location.currency if location else "USD"
 
@@ -100,9 +110,7 @@ def sold_item_names(db: Session, tenant_id: int) -> dict[int, str]:
 def components(db: Session, tenant_id: int) -> list[Component]:
     return [
         Component(row.sold_item_id, row.stock_item_id, Decimal(row.qty_base_per_sale))
-        for row in db.scalars(
-            select(RecipeComponent).where(RecipeComponent.tenant_id == tenant_id)
-        )
+        for row in db.scalars(select(RecipeComponent).where(RecipeComponent.tenant_id == tenant_id))
     ]
 
 
@@ -144,7 +152,9 @@ def provider_consumption(
     return {item_id: dict(days) for item_id, days in result.items()}
 
 
-def consumption(db: Session, tenant_id: int, since: date | None = None) -> dict[int, dict[date, Decimal]]:
+def consumption(
+    db: Session, tenant_id: int, since: date | None = None
+) -> dict[int, dict[date, Decimal]]:
     """Base units consumed per stock item per day: via recipes, plus direct sales of POS SKUs."""
     daily = consumption_by_day(sale_rows(db, tenant_id, since), components(db, tenant_id))
     for item_id, days in provider_consumption(db, tenant_id, since).items():
@@ -175,7 +185,9 @@ def batches_by_item(db: Session, tenant_id: int) -> dict[int, list[Batch]]:
                 received_qty_base=Decimal(row.received_qty_base),
                 expires_on=row.expires_on,
                 cost_per_base_cents=(
-                    Decimal(row.cost_per_base_cents) if row.cost_per_base_cents is not None else None
+                    Decimal(row.cost_per_base_cents)
+                    if row.cost_per_base_cents is not None
+                    else None
                 ),
                 received_at=row.received_at,
             )
@@ -191,7 +203,7 @@ def expiry_positions(
     velocity: dict[int, Decimal] | None = None,
 ) -> list[ItemExpiry]:
     """Every item that holds dated stock, with each lot positioned and projected for today."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     batches = batches_by_item(db, tenant_id)
     if not batches:
         return []
@@ -218,7 +230,7 @@ def velocity_map(
     window_days: int = VELOCITY_WINDOW_DAYS,
 ) -> dict[int, Decimal]:
     """Base units per day per stock item over the trailing window."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     window_start = today - timedelta(days=window_days - 1)
     daily = consumption(db, tenant_id, window_start)
     return {item_id: daily_velocity(days, window_days, today) for item_id, days in daily.items()}
@@ -226,7 +238,7 @@ def velocity_map(
 
 def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None = None) -> int:
     """Recompute weight/volume quantities: last physical count minus consumption since."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     items = list(
         db.scalars(
             select(StockItem).where(
@@ -264,11 +276,10 @@ def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None =
 def _aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
-def expiry_coverage(
-    db: Session, tenant_id: int, location_id: int | None = None
-) -> Coverage:
+
+def expiry_coverage(db: Session, tenant_id: int, location_id: int | None = None) -> Coverage:
     """Coverage across stock that can expire: everything not dismissed as never expiring."""
     batches = batches_by_item(db, tenant_id)
     entries = []

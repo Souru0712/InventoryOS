@@ -1,8 +1,9 @@
 """Markdowns: what the numbers suggest, and what the owner decides to do about it."""
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -21,8 +22,8 @@ from app.orchestration.promotions import (
     suggestions_for,
 )
 from app.orchestration.views import tenant_currency
-from app.security import require_writable, require_tenant, require_user
-from app.units import from_base, to_base
+from app.security import require_tenant, require_user, require_writable
+from app.units import to_base
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ def promotions_page(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
 ):
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     suggestions = suggestions_for(db, tenant.id, today, location)
     return templates.TemplateResponse(
         request,

@@ -1,6 +1,7 @@
 """Square tells us when stock moves at the till. Only if it can prove it is Square."""
+
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -36,18 +37,38 @@ def connected():
         tenant = Tenant(name="Rosewood")
         db.add(tenant)
         db.flush()
-        db.add(User(tenant_id=tenant.id, email="o@rosewood.test",
-                    password_hash=hash_password("a-good-password")))
-        db.add(ProviderConnection(tenant_id=tenant.id, provider="square", merchant_id=MERCHANT,
-                                  access_token_enc="x", status="active"))
-        location = Location(tenant_id=tenant.id, provider="square",
-                            provider_location_id="LOC-1", name="Main")
+        db.add(
+            User(
+                tenant_id=tenant.id,
+                email="o@rosewood.test",
+                password_hash=hash_password("a-good-password"),
+            )
+        )
+        db.add(
+            ProviderConnection(
+                tenant_id=tenant.id,
+                provider="square",
+                merchant_id=MERCHANT,
+                access_token_enc="x",
+                status="active",
+            )
+        )
+        location = Location(
+            tenant_id=tenant.id, provider="square", provider_location_id="LOC-1", name="Main"
+        )
         db.add(location)
         db.flush()
-        item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="coke",
-                         name="Coca-Cola 12oz", dimension=Dimension.COUNT, stock_unit="each",
-                         track_mode=TrackMode.PROVIDER, provider_variation_id="VAR-COKE",
-                         qty_base=Decimal("34"))
+        item = StockItem(
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug="coke",
+            name="Coca-Cola 12oz",
+            dimension=Dimension.COUNT,
+            stock_unit="each",
+            track_mode=TrackMode.PROVIDER,
+            provider_variation_id="VAR-COKE",
+            qty_base=Decimal("34"),
+        )
         db.add(item)
         db.commit()
         return item.id
@@ -78,7 +99,8 @@ def post(client, payload: dict, signature: str | None = None):
     url = "https://stockpulse.test/webhooks/square"
     header = signature if signature is not None else signature_for(url, body, KEY)
     return client.post(
-        "/webhooks/square", content=body,
+        "/webhooks/square",
+        content=body,
         headers={"x-square-hmacsha256-signature": header, "content-type": "application/json"},
     )
 
@@ -89,6 +111,7 @@ def quantity_now(item_id: int) -> Decimal:
 
 
 # --- signature ------------------------------------------------------------------------------
+
 
 def test_the_signature_covers_the_url_as_well_as_the_body():
     # Square signs url + body, so the same body at a different URL is a different signature.
@@ -112,15 +135,16 @@ def test_an_empty_signature_or_key_is_never_valid():
 
 
 def test_an_unsigned_call_is_refused(client, connected):
-    response = post(client, event("99", datetime.now(timezone.utc)), signature="not-the-signature")
+    response = post(client, event("99", datetime.now(UTC)), signature="not-the-signature")
     assert response.status_code == 400
     assert quantity_now(connected) == Decimal("34")
 
 
 # --- applying -------------------------------------------------------------------------------
 
+
 def test_a_sale_at_the_till_updates_our_count(client, connected):
-    response = post(client, event("30", datetime.now(timezone.utc)))
+    response = post(client, event("30", datetime.now(UTC)))
     assert response.status_code == 200
     assert response.json()["updated"] == 1
     assert quantity_now(connected) == Decimal("30")
@@ -128,15 +152,15 @@ def test_a_sale_at_the_till_updates_our_count(client, connected):
 
 def test_a_count_calculated_before_our_last_read_is_ignored(client, connected):
     # An offline till can deliver yesterday's number today; older news never wins.
-    post(client, event("30", datetime.now(timezone.utc)))
-    stale = datetime.now(timezone.utc) - timedelta(days=1)
+    post(client, event("30", datetime.now(UTC)))
+    stale = datetime.now(UTC) - timedelta(days=1)
     response = post(client, event("99", stale))
     assert response.json()["updated"] == 0
     assert quantity_now(connected) == Decimal("30")
 
 
 def test_another_event_type_is_acknowledged_and_ignored(client, connected):
-    payload = event("1", datetime.now(timezone.utc))
+    payload = event("1", datetime.now(UTC))
     payload["type"] = "order.created"
     body = post(client, payload).json()
     assert body["ignored"] == "order.created"
@@ -144,7 +168,7 @@ def test_another_event_type_is_acknowledged_and_ignored(client, connected):
 
 
 def test_a_merchant_we_do_not_know_is_ignored_not_retried(client, connected):
-    payload = event("5", datetime.now(timezone.utc))
+    payload = event("5", datetime.now(UTC))
     payload["merchant_id"] = "SOMEONE-ELSE"
     response = post(client, payload)
     assert response.status_code == 200

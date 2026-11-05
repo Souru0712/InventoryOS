@@ -1,13 +1,14 @@
 """Operator CLI. This is what you use to onboard the first customers by hand."""
+
 from __future__ import annotations
 
 import argparse
 import logging
 import random
 import sys
-from pathlib import Path
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -16,9 +17,9 @@ from app.db import init_db, run_migrations, session_scope, stamp_migrations
 from app.entitlements import allows, state
 from app.models import (
     EmailSuppression,
+    IdentifierType,
     InventoryCount,
     Location,
-    IdentifierType,
     ProductIdentifier,
     RecipeComponent,
     SalesDaily,
@@ -37,18 +38,21 @@ from app.orchestration.expiry_corpus import (
     MANIFEST,
     add_to_corpus,
     as_regression_cases,
-    report as corpus_report,
     run_corpus,
 )
+from app.orchestration.expiry_corpus import (
+    report as corpus_report,
+)
 from app.orchestration.extraction_quality import correction_stats, correction_summary
-from app.orchestration.health import current as current_health, record_snapshot
-from app.orchestration.reporting import send_weekly_report, weekly_report
+from app.orchestration.health import current as current_health
+from app.orchestration.health import record_snapshot
 from app.orchestration.receiving import parse_document
+from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
 from app.orchestration.views import refresh_derived_quantities
 from app.security import hash_password
-from app.transform.reports import money
 from app.transform.barcodes import check_digit
+from app.transform.reports import money
 from app.units import Dimension, to_base
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -56,12 +60,47 @@ log = logging.getLogger("stockpulse")
 
 # One café: things you count, things you weigh, things you pour.
 # Quantities are yesterday morning's physical count, so today's sales draw them down.
-DEMO_STOCK = [
+DEMO_STOCK: list[
+    tuple[str, str, Dimension, str, int | str, int | str, int | str, str, str, str]
+] = [
     # (name, category, dimension, unit, counted, reorder, par, cost per unit, receive unit, pack)
-    ("House Blend beans 1kg bag", "Coffee", Dimension.COUNT, "each", 14, 6, 24, "12.50", "each", "12"),
+    (
+        "House Blend beans 1kg bag",
+        "Coffee",
+        Dimension.COUNT,
+        "each",
+        14,
+        6,
+        24,
+        "12.50",
+        "each",
+        "12",
+    ),
     ("Oat milk 1L carton", "Dairy", Dimension.COUNT, "each", 9, 12, 36, "2.10", "each", "12"),
-    ("Takeaway cups 12oz", "Packaging", Dimension.COUNT, "each", 420, 300, 1000, "0.11", "each", "500"),
-    ("Espresso beans (hopper stock)", "Coffee", Dimension.WEIGHT, "kg", "8", "6", "30", "18.00", "kg", "6"),
+    (
+        "Takeaway cups 12oz",
+        "Packaging",
+        Dimension.COUNT,
+        "each",
+        420,
+        300,
+        1000,
+        "0.11",
+        "each",
+        "500",
+    ),
+    (
+        "Espresso beans (hopper stock)",
+        "Coffee",
+        Dimension.WEIGHT,
+        "kg",
+        "8",
+        "6",
+        "30",
+        "18.00",
+        "kg",
+        "6",
+    ),
     ("Pastry flour", "Bakery", Dimension.WEIGHT, "kg", "45", "10", "50", "1.35", "kg", "25"),
     ("Sliced ham", "Deli", Dimension.WEIGHT, "kg", "3.2", "2.5", "8", "9.80", "kg", "2"),
     ("Whole milk", "Dairy", Dimension.VOLUME, "l", "60", "20", "80", "0.95", "l", "6"),
@@ -69,14 +108,48 @@ DEMO_STOCK = [
     ("Cold brew concentrate", "Coffee", Dimension.VOLUME, "l", "18", "4", "20", "6.20", "l", "5"),
 ]
 
-DEMO_MENU = [
+DEMO_MENU: list[tuple[str, str, int, list[tuple[str, str, str]], int]] = [
     # (name, category, price cents, recipe: [(stock name, qty, unit)], daily units)
-    ("Latte", "Drinks", 425, [("Whole milk", "220", "ml"), ("Espresso beans (hopper stock)", "18", "g")], 95),
-    ("Flat white", "Drinks", 415, [("Whole milk", "150", "ml"), ("Espresso beans (hopper stock)", "18", "g")], 60),
-    ("Vanilla latte", "Drinks", 470, [("Whole milk", "220", "ml"), ("Espresso beans (hopper stock)", "18", "g"), ("Vanilla syrup", "20", "ml")], 22),
-    ("Iced cold brew", "Drinks", 450, [("Cold brew concentrate", "120", "ml"), ("Whole milk", "60", "ml")], 34),
+    (
+        "Latte",
+        "Drinks",
+        425,
+        [("Whole milk", "220", "ml"), ("Espresso beans (hopper stock)", "18", "g")],
+        95,
+    ),
+    (
+        "Flat white",
+        "Drinks",
+        415,
+        [("Whole milk", "150", "ml"), ("Espresso beans (hopper stock)", "18", "g")],
+        60,
+    ),
+    (
+        "Vanilla latte",
+        "Drinks",
+        470,
+        [
+            ("Whole milk", "220", "ml"),
+            ("Espresso beans (hopper stock)", "18", "g"),
+            ("Vanilla syrup", "20", "ml"),
+        ],
+        22,
+    ),
+    (
+        "Iced cold brew",
+        "Drinks",
+        450,
+        [("Cold brew concentrate", "120", "ml"), ("Whole milk", "60", "ml")],
+        34,
+    ),
     ("Filter coffee", "Drinks", 300, [("Espresso beans (hopper stock)", "16", "g")], 40),
-    ("Ham and cheese croissant", "Food", 550, [("Sliced ham", "45", "g"), ("Pastry flour", "70", "g")], 26),
+    (
+        "Ham and cheese croissant",
+        "Food",
+        550,
+        [("Sliced ham", "45", "g"), ("Pastry flour", "70", "g")],
+        26,
+    ),
     ("Butter croissant", "Food", 380, [("Pastry flour", "65", "g")], 38),
     ("Retail beans 1kg", "Retail", 1800, [("House Blend beans 1kg bag", "1", "each")], 3),
     ("Oat milk to go", "Retail", 320, [("Oat milk 1L carton", "1", "each")], 4),
@@ -108,6 +181,7 @@ DEMO_LOTS = [
     ("Sliced ham", "0.6", 4),
 ]
 
+
 def cmd_init_db(_: argparse.Namespace) -> int:
     init_db()
     print("schema is at head")
@@ -137,12 +211,17 @@ def cmd_email(args: argparse.Namespace) -> int:
     """Stop or resume sending to an address, and see what is currently suppressed."""
     with session_scope() as db:
         if args.suppress:
-            entry = suppress(db, args.suppress, args.reason or "suppressed by hand", source="manual")
+            entry = suppress(
+                db, args.suppress, args.reason or "suppressed by hand", source="manual"
+            )
             print(f"suppressed {entry.email}: {entry.reason}")
             return 0
         if args.allow:
-            print(f"sending to {args.allow} again" if unsuppress(db, args.allow)
-                  else f"{args.allow} was not suppressed")
+            print(
+                f"sending to {args.allow} again"
+                if unsuppress(db, args.allow)
+                else f"{args.allow} was not suppressed"
+            )
             return 0
         rows = list(db.scalars(select(EmailSuppression).order_by(EmailSuppression.created_at)))
         for row in rows:
@@ -164,7 +243,9 @@ def cmd_billing(args: argparse.Namespace) -> int:
         print(f"  status           {account['status']}")
         print(f"  access           {account['access']}")
         if account["trial_days_left"] is not None:
-            print(f"  trial ends       {tenant.trial_ends_at} ({account['trial_days_left']} days left)")
+            print(
+                f"  trial ends       {tenant.trial_ends_at} ({account['trial_days_left']} days left)"
+            )
         if tenant.current_period_end:
             print(f"  period ends      {tenant.current_period_end}")
         if account["grace_ends_at"]:
@@ -205,7 +286,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     print(f"  inventory value  {money(report.inventory_value_cents)}")
     print(f"  alerts           {len(report.alerts)}")
     for roll in report.by_dimension:
-        print(f"  {roll.dimension:<7} {roll.item_count:>3} items  {money(roll.value_cents):>10}  {roll.at_risk} at risk")
+        print(
+            f"  {roll.dimension:<7} {roll.item_count:>3} items  {money(roll.value_cents):>10}  {roll.at_risk} at risk"
+        )
     for alert in report.alerts[:10]:
         print(f"  ! {alert.message}")
     return 0
@@ -235,7 +318,9 @@ def cmd_expiry_corpus(args: argparse.Namespace) -> int:
     results = run_corpus(folder, prefer=args.prefer)
     print(corpus_report(results))
     if args.write_failures:
-        corpus_path = Path(__file__).resolve().parent.parent / "tests" / "corpus" / "printed_dates.json"
+        corpus_path = (
+            Path(__file__).resolve().parent.parent / "tests" / "corpus" / "printed_dates.json"
+        )
         added = add_to_corpus(as_regression_cases(results), corpus_path)
         print(f"added {added} case{'s' if added != 1 else ''} to {corpus_path.name}")
     return 1 if any(result.verdict == "WRONG" for result in results) else 0
@@ -257,7 +342,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
     """Seed a realistic café so you can demo before anyone connects Square."""
     init_db()
     random.seed(7)
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
 
     with session_scope() as db:
         if db.scalars(select(User).where(User.email == args.email.lower())).first():
@@ -285,7 +370,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
         db.flush()
 
         stock: dict[str, StockItem] = {}
-        anchor = datetime.combine(today - timedelta(days=1), datetime.min.time(), timezone.utc)
+        anchor = datetime.combine(today - timedelta(days=1), datetime.min.time(), UTC)
         for name, category, dimension, unit, on_hand, reorder, par, cost, recv, pack in DEMO_STOCK:
             qty_base = to_base(on_hand, unit)
             item = StockItem(
@@ -320,8 +405,8 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 )
             )
             stock[name] = item
-            if price := DEMO_RETAIL.get(name):
-                item.retail_per_base_cents = (Decimal(price) * 100) / to_base("1", unit)
+            if retail := DEMO_RETAIL.get(name):
+                item.retail_per_base_cents = (Decimal(retail) * 100) / to_base("1", unit)
             if body := DEMO_CODES.get(name):
                 db.add(
                     ProductIdentifier(
@@ -335,7 +420,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
         sold: dict[str, SoldItem] = {}
         for name, category, price, recipe, _daily in DEMO_MENU:
-            item = SoldItem(
+            sold_item = SoldItem(
                 tenant_id=tenant.id,
                 provider="demo",
                 provider_item_id=f"demo-{name.lower().replace(' ', '-')}",
@@ -343,14 +428,14 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 category=category,
                 price_cents=price,
             )
-            db.add(item)
+            db.add(sold_item)
             db.flush()
-            sold[name] = item
+            sold[name] = sold_item
             for stock_name, quantity, unit in recipe:
                 db.add(
                     RecipeComponent(
                         tenant_id=tenant.id,
-                        sold_item_id=item.id,
+                        sold_item_id=sold_item.id,
                         stock_item_id=stock[stock_name].id,
                         qty_base_per_sale=to_base(quantity, unit),
                     )
@@ -400,7 +485,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
     print(f"seeded tenant {tenant_id} ({args.name})")
     print(f"  log in: {args.email} / {args.password}")
     print(f"  alerts: {stats}")
-    print("  run: python -m app.cli report --tenant %s" % tenant_id)
+    print(f"  run: python -m app.cli report --tenant {tenant_id}")
     return 0
 
 
@@ -412,7 +497,9 @@ def cmd_health(args: argparse.Namespace) -> int:
             print(f"snapshot kept for {row.dt}: {row.score}")
         health = current_health(db, args.tenant)
     report, actions = health.report, health.actions
-    print(f"inventory health: {report.score if report.score is not None else '-'} ({report.band_label})")
+    print(
+        f"inventory health: {report.score if report.score is not None else '-'} ({report.band_label})"
+    )
     for finding in report.headline:
         print(f"  [{finding.tone}] {finding.text}")
     for action in actions.urgent + actions.recommended:
@@ -468,10 +555,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("expiry-corpus", help="score the date reader against real photographs")
     p.add_argument("folder", help=f"folder holding the photos and their {MANIFEST}")
-    p.add_argument("--prefer", choices=("mdy", "dmy"), default="mdy",
-                   help="how the merchant's country writes dates")
-    p.add_argument("--write-failures", action="store_true",
-                   help="add what went wrong to the offline regression corpus")
+    p.add_argument(
+        "--prefer",
+        choices=("mdy", "dmy"),
+        default="mdy",
+        help="how the merchant's country writes dates",
+    )
+    p.add_argument(
+        "--write-failures",
+        action="store_true",
+        help="add what went wrong to the offline regression corpus",
+    )
     p.set_defaults(func=cmd_expiry_corpus)
 
     p = sub.add_parser("parse-doc", help="re-read an uploaded invoice")

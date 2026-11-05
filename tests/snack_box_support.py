@@ -1,8 +1,9 @@
 """Shared setup for the snack box tests: a store with boxable, dated stock, shoppers, and a fake Square."""
+
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -16,7 +17,7 @@ from app.models import BoxLine, BoxOrder, SnackProfile, StockBatch, StockItem, T
 from app.orchestration import boxes, customers
 from app.units import Dimension
 
-NOW = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 14, 12, 0, tzinfo=UTC)
 FLAVOR_CYCLE = ("sweet", "salty", "spicy", "weird")
 ORIGINS = ("US", "JP", "KR", "MX")
 
@@ -39,7 +40,9 @@ class FakeSquare:
         if key in self.keys:
             return True
         self.keys.add(key)
-        self.moves.append((item.provider_variation_id, from_state, to_state, Decimal(qty_base), key))
+        self.moves.append(
+            (item.provider_variation_id, from_state, to_state, Decimal(qty_base), key)
+        )
         if from_state == "IN_STOCK":
             self.counts[item.provider_variation_id] -= Decimal(qty_base)
         if to_state == "IN_STOCK":
@@ -99,8 +102,16 @@ def allow_snack_shop(tenant_id: int) -> None:
     settings.snack_box_tenant_ids = ",".join(sorted(allowed | {str(tenant_id)}))
 
 
-def open_store(db, tenant, location, fake: FakeSquare, n_items: int = 8, qty: int = 10, cost_cents: int = 100,
-               days: int = 120) -> list[StockItem]:
+def open_store(
+    db,
+    tenant,
+    location,
+    fake: FakeSquare,
+    n_items: int = 8,
+    qty: int = 10,
+    cost_cents: int = 100,
+    days: int = 120,
+) -> list[StockItem]:
     """An open box shop with n boxable, dated, Square-tracked snacks in four categories and flavours."""
     allow_snack_shop(tenant.id)
     settings = boxes.box_settings(db, tenant.id)
@@ -109,36 +120,65 @@ def open_store(db, tenant, location, fake: FakeSquare, n_items: int = 8, qty: in
     items = []
     for i in range(n_items):
         item = StockItem(
-            tenant_id=tenant.id, location_id=location.id, slug=f"snack-{i}", name=f"Snack {i}",
-            category=f"Cat{i % 4}", dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.PROVIDER,
-            provider_variation_id=f"VAR-{tenant.id}-{i}", qty_base=Decimal(qty), cost_per_base_cents=Decimal(cost_cents),
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug=f"snack-{i}",
+            name=f"Snack {i}",
+            category=f"Cat{i % 4}",
+            dimension=Dimension.COUNT,
+            stock_unit="each",
+            track_mode=TrackMode.PROVIDER,
+            provider_variation_id=f"VAR-{tenant.id}-{i}",
+            qty_base=Decimal(qty),
+            cost_per_base_cents=Decimal(cost_cents),
         )
         db.add(item)
         db.flush()
-        db.add(StockBatch(tenant_id=tenant.id, stock_item_id=item.id, received_qty_base=Decimal(qty),
-                          expires_on=NOW.date() + timedelta(days=days), source="label"))
-        db.add(SnackProfile(tenant_id=tenant.id, stock_item_id=item.id, boxable=True, flavors=FLAVOR_CYCLE[i % 4],
-                            origin=ORIGINS[i % 4], allergens=""))
+        db.add(
+            StockBatch(
+                tenant_id=tenant.id,
+                stock_item_id=item.id,
+                received_qty_base=Decimal(qty),
+                expires_on=NOW.date() + timedelta(days=days),
+                source="label",
+            )
+        )
+        db.add(
+            SnackProfile(
+                tenant_id=tenant.id,
+                stock_item_id=item.id,
+                boxable=True,
+                flavors=FLAVOR_CYCLE[i % 4],
+                origin=ORIGINS[i % 4],
+                allergens="",
+            )
+        )
         fake.counts[item.provider_variation_id] = Decimal(qty)
         items.append(item)
     db.flush()
     return items
 
 
-def shopper(db, tenant, email: str = "maya@shop.test", allergens: frozenset[str] = frozenset(), now=NOW):
+def shopper(
+    db, tenant, email: str = "maya@shop.test", allergens: frozenset[str] = frozenset(), now=NOW
+):
     customer = customers.find_or_create(db, tenant.id, email, now)
     customers.update_preferences(db, customer, allergens=allergens, now=now)
     return customer
 
 
-def paid_box(db, tenant, customer, box_type: str = "chaos", now=NOW, code: str = "", use_credit: bool = False) -> BoxOrder:
+def paid_box(
+    db, tenant, customer, box_type: str = "chaos", now=NOW, code: str = "", use_credit: bool = False
+) -> BoxOrder:
     order = boxes.place_order(db, tenant.id, customer, box_type, code, use_credit, now)
     boxes.confirm_payment(db, order, "counter", now=now)
     return order
 
 
 def lines_of(db, order: BoxOrder) -> list[BoxLine]:
-    return list(db.scalars(select(BoxLine).where(BoxLine.box_order_id == order.id).order_by(BoxLine.id)))
+    return list(
+        db.scalars(select(BoxLine).where(BoxLine.box_order_id == order.id).order_by(BoxLine.id))
+    )
 
 
 def pack_all(db, order: BoxOrder, now=NOW) -> list[str]:
@@ -150,4 +190,6 @@ def sign_in(client, outbox: list[dict], tenant_id: int, email: str):
     client.post(f"/shop/{tenant_id}/login", data={"email": email})
     url = re.search(r"https?://\S+", outbox[-1]["text"]).group(0)
     token = url.split("token=", 1)[1]
-    return client.post(f"/shop/{tenant_id}/auth", data={"token": token}, follow_redirects=False), token
+    return client.post(
+        f"/shop/{tenant_id}/auth", data={"token": token}, follow_redirects=False
+    ), token

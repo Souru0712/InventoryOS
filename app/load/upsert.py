@@ -1,9 +1,10 @@
 """Tenant-scoped writes. Idempotent: a re-run of a sync changes nothing."""
+
 from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -29,7 +30,9 @@ def slugify(text: str) -> str:
     return slug[:160] or "item"
 
 
-def upsert_locations(db: Session, tenant_id: int, rows: list[dict], provider: str = "square") -> int:
+def upsert_locations(
+    db: Session, tenant_id: int, rows: list[dict], provider: str = "square"
+) -> int:
     existing = {
         loc.provider_location_id: loc
         for loc in db.scalars(
@@ -53,12 +56,20 @@ def upsert_locations(db: Session, tenant_id: int, rows: list[dict], provider: st
 
 
 SOLD_ITEM_FIELDS = (
-    "provider_item_id", "name", "category", "sku", "price_cents", "currency", "sell_unit",
+    "provider_item_id",
+    "name",
+    "category",
+    "sku",
+    "price_cents",
+    "currency",
+    "sell_unit",
     "is_active",
 )
 
 
-def upsert_sold_items(db: Session, tenant_id: int, rows: list[dict], provider: str = "square") -> int:
+def upsert_sold_items(
+    db: Session, tenant_id: int, rows: list[dict], provider: str = "square"
+) -> int:
     existing = {
         item.provider_item_id: item
         for item in db.scalars(
@@ -183,7 +194,7 @@ def apply_provider_counts(db: Session, tenant_id: int, rows: list[dict]) -> int:
         if item.provider_variation_id
     }
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     updated = 0
     for row in rows:
         location_id = location_ids.get(row["provider_location_id"])
@@ -247,6 +258,7 @@ def upsert_sales_daily(db: Session, tenant_id: int, rows: list[dict]) -> int:
     db.flush()
     return written
 
+
 def sync_identifiers_from_catalog(db: Session, tenant_id: int, catalog_rows: list[dict]) -> int:
     """Record the SKU and barcode Square already holds, so a scan resolves on the first try."""
     items = {
@@ -285,6 +297,7 @@ def sync_identifiers_from_catalog(db: Session, tenant_id: int, catalog_rows: lis
             created += 1
     db.flush()
     return created
+
 
 def sync_retail_prices(db: Session, tenant_id: int, catalog_rows: list[dict]) -> int:
     """Copy Square's selling price onto the stock item, so a markdown has something to cut."""

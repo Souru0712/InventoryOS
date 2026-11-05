@@ -1,5 +1,7 @@
 """Migrations must build exactly the schema the models describe, on SQLite and on Postgres."""
+
 import os
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -133,33 +135,71 @@ def test_every_migration_survives_a_database_that_already_has_rows(fresh_url):
     A column added NOT NULL with no default builds fine on an empty table and fails on a
     populated one, which is the only kind a customer has.
     """
-    from datetime import date, datetime, timezone
+    from datetime import date, datetime
 
     config = alembic_config(fresh_url)
     scripts = ScriptDirectory.from_config(config)
     revisions = list(reversed(list(scripts.walk_revisions())))
     engine = create_engine(fresh_url, poolclass=NullPool)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     photo = "ab" * 32
 
     # Rows to plant as soon as the table they belong to exists, so later revisions
     # have to migrate real data rather than an empty schema.
     seeds = {
-        "tenants": {"name": "Rosewood", "plan": "TRIAL", "report_day": 0,
-                    "report_hour": 7, "timezone": "UTC", "created_at": now},
-        "locations": {"tenant_id": 1, "provider": "square", "provider_location_id": "L1",
-                      "name": "Main", "timezone": "UTC", "currency": "USD", "is_active": True},
-        "stock_items": {"tenant_id": 1, "location_id": 1, "slug": "milk", "name": "Milk",
-                        "dimension": "VOLUME", "stock_unit": "l", "track_mode": "MANUAL",
-                        "qty_base": "10.0000", "reorder_point_base": "0.0000",
-                        "cost_per_base_cents": "0.0950", "lead_time_days": 2,
-                        "receive_unit": "l", "is_active": True},
+        "tenants": {
+            "name": "Rosewood",
+            "plan": "TRIAL",
+            "report_day": 0,
+            "report_hour": 7,
+            "timezone": "UTC",
+            "created_at": now,
+        },
+        "locations": {
+            "tenant_id": 1,
+            "provider": "square",
+            "provider_location_id": "L1",
+            "name": "Main",
+            "timezone": "UTC",
+            "currency": "USD",
+            "is_active": True,
+        },
+        "stock_items": {
+            "tenant_id": 1,
+            "location_id": 1,
+            "slug": "milk",
+            "name": "Milk",
+            "dimension": "VOLUME",
+            "stock_unit": "l",
+            "track_mode": "MANUAL",
+            "qty_base": "10.0000",
+            "reorder_point_base": "0.0000",
+            "cost_per_base_cents": "0.0950",
+            "lead_time_days": 2,
+            "receive_unit": "l",
+            "is_active": True,
+        },
         # Saved the way uploads were before storage keys: a path under the upload directory.
-        "documents": {"tenant_id": 1, "location_id": 1, "kind": "invoice", "currency": "USD",
-                      "file_path": f"var/uploads/1/{photo}.jpg", "content_type": "image/jpeg",
-                      "sha256": photo, "byte_size": 12, "status": "APPLIED", "uploaded_at": now},
-        "stock_batches": {"tenant_id": 1, "stock_item_id": 1, "received_qty_base": "10.0000",
-                          "expires_on": date(2026, 12, 1), "source": "label", "received_at": now},
+        "documents": {
+            "tenant_id": 1,
+            "location_id": 1,
+            "kind": "invoice",
+            "currency": "USD",
+            "file_path": f"var/uploads/1/{photo}.jpg",
+            "content_type": "image/jpeg",
+            "sha256": photo,
+            "byte_size": 12,
+            "status": "APPLIED",
+            "uploaded_at": now,
+        },
+        "stock_batches": {
+            "tenant_id": 1,
+            "stock_item_id": 1,
+            "received_qty_base": "10.0000",
+            "expires_on": date(2026, 12, 1),
+            "source": "label",
+            "received_at": now,
+        },
     }
     planted: set[str] = set()
 
@@ -173,9 +213,9 @@ def test_every_migration_survives_a_database_that_already_has_rows(fresh_url):
                         continue
                     columns = ", ".join(values)
                     binds = ", ".join(f":{name}" for name in values)
-                    connection.execute(
-                        text(f"INSERT INTO {table} ({columns}) VALUES ({binds})"), values
-                    )
+                    # Table and column names come from this test's own seed data.
+                    sql = f"INSERT INTO {table} ({columns}) VALUES ({binds})"  # noqa: S608
+                    connection.execute(text(sql), values)
                     planted.add(table)
 
         assert planted == set(seeds), f"never planted: {set(seeds) - planted}"

@@ -1,9 +1,11 @@
 """The signed-in product: stock, alerts, counts, reports and the Square connection."""
+
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -40,7 +42,13 @@ from app.orchestration.views import (
     velocity_map,
 )
 from app.providers.square import oauth
-from app.security import require_writable, SESSION_STATE_KEY, new_state, require_tenant, require_user
+from app.security import (
+    SESSION_STATE_KEY,
+    new_state,
+    require_tenant,
+    require_user,
+    require_writable,
+)
 from app.transform.alerts import counts_as_waste_risk
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
@@ -82,7 +90,7 @@ STATUS_ORDER = {"expired": 0, "at_risk": 1, "sell_first": 2, "no_signal": 3, "on
 
 def _expiry_summary(expiries: list[ItemExpiry], horizon_days: int) -> dict:
     """Page rows plus the totals the email leads with, from the same rule the alerts use."""
-    rows = []
+    rows: list[dict[str, Any]] = []
     for expiry in expiries:
         for position in expiry.positions:
             if position.remaining_base <= 0:
@@ -184,12 +192,12 @@ def _sync_status(
         .order_by(SyncRun.started_at.desc())
         .limit(1)
     ).first()
-    failing = last_run is not None and last_run.status is SyncStatus.FAILED
+    failed = last_run if last_run is not None and last_run.status is SyncStatus.FAILED else None
     return {
         "connected": connection is not None,
         "last_success_at": last_success.finished_at if last_success else None,
-        "error": (last_run.error or "")[:200] if failing else None,
-        "failed_at": last_run.finished_at if failing else None,
+        "error": (failed.error or "")[:200] if failed else None,
+        "failed_at": failed.finished_at if failed else None,
     }
 
 
@@ -213,7 +221,7 @@ def expiring(
             "currency": tenant_currency(db, tenant.id),
             "locations": _locations(db, tenant.id),
             "selected_location": location,
-            "today": datetime.now(timezone.utc).date(),
+            "today": datetime.now(UTC).date(),
             "coverage": expiry_coverage(db, tenant.id, location),
             **summary,
         },
@@ -268,6 +276,7 @@ def set_perishable(
     db.commit()
     return RedirectResponse("/app/expiring?coverage=1", status_code=303)
 
+
 @router.post("/app/expiring/{batch_id}/remove")
 def remove_batch(
     batch_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_writable)
@@ -277,7 +286,9 @@ def remove_batch(
     if batch is None or batch.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="batch not found")
     # A markdown decided against this lot stays on record; it keeps its own end date.
-    db.execute(update(Promotion).where(Promotion.stock_batch_id == batch.id).values(stock_batch_id=None))
+    db.execute(
+        update(Promotion).where(Promotion.stock_batch_id == batch.id).values(stock_batch_id=None)
+    )
     db.delete(batch)
     db.commit()
     return RedirectResponse("/app/expiring?removed=1", status_code=303)
@@ -290,7 +301,12 @@ def new_item_form(
     return templates.TemplateResponse(
         request,
         "app/item_form.html",
-        {"title": "Add stock item", "tenant": tenant, "locations": _locations(db, tenant.id), "item": None},
+        {
+            "title": "Add stock item",
+            "tenant": tenant,
+            "locations": _locations(db, tenant.id),
+            "item": None,
+        },
     )
 
 
@@ -349,7 +365,7 @@ def create_item(
             status_code=400,
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item = StockItem(
         tenant_id=tenant.id,
         location_id=location.id,
@@ -406,7 +422,7 @@ def record_count(
         raise HTTPException(status_code=404, detail="stock item not found")
 
     qty_base = to_base(quantity, item.stock_unit)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item.qty_base = qty_base
     item.last_counted_at = now
     db.add(

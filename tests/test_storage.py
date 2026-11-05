@@ -1,4 +1,5 @@
 """Invoice photos live behind a storage key, so a redeploy or a bucket never loses the link."""
+
 import hashlib
 import io
 
@@ -96,18 +97,30 @@ def client():
 
 
 def test_an_invoice_photo_uploaded_through_the_app_is_served_back_from_storage(client):
-    client.post("/signup", data={"business_name": "Rosewood", "email": "o@rosewood.test",
-                                 "password": "a-good-password"})
+    client.post(
+        "/signup",
+        data={
+            "business_name": "Rosewood",
+            "email": "o@rosewood.test",
+            "password": "a-good-password",
+        },
+    )
     with SessionLocal() as db:
         tenant = db.query(Tenant).one()
-        location = Location(tenant_id=tenant.id, provider="demo", provider_location_id="loc-1", name="Main")
+        location = Location(
+            tenant_id=tenant.id, provider="demo", provider_location_id="loc-1", name="Main"
+        )
         db.add(location)
         db.commit()
         location_id = location.id
 
     photo = b"\xff\xd8\xff a delivery note"
-    response = client.post("/app/receiving", data={"location_id": location_id},
-                           files={"photo": ("note.jpg", photo, "image/jpeg")}, follow_redirects=False)
+    response = client.post(
+        "/app/receiving",
+        data={"location_id": location_id},
+        files={"photo": ("note.jpg", photo, "image/jpeg")},
+        follow_redirects=False,
+    )
     assert response.status_code == 303
 
     with SessionLocal() as db:

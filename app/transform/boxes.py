@@ -3,9 +3,10 @@
 Ported from the Snack Box CLI. Shelf pressure is capped below the bonus for something new, so a
 box can never be filled with stock the customer has no reason to want just because it is ageing.
 """
+
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -25,7 +26,13 @@ class BoxType:
 
 
 BOX_TYPES: dict[str, BoxType] = {
-    "sweet": BoxType(frozenset({"candy", "chocolate", "cookie", "gummy"}), frozenset({"spicy", "salty"}), (), 3, 12),
+    "sweet": BoxType(
+        frozenset({"candy", "chocolate", "cookie", "gummy"}),
+        frozenset({"spicy", "salty"}),
+        (),
+        3,
+        12,
+    ),
     "chaos": BoxType(frozenset(), frozenset(), ("sweet", "salty", "spicy", "weird"), 2, 12),
     "world": BoxType(frozenset(), frozenset(), (), 2, 2),
 }
@@ -93,7 +100,11 @@ def payment_fee_cents(price_cents: int, fee_bps: int, fee_fixed_cents: int) -> D
 
 
 def cogs_ceiling_cents(
-    price_cents: int, packaging_cents: int, fee_bps: int, fee_fixed_cents: int, min_contribution_cents: int
+    price_cents: int,
+    packaging_cents: int,
+    fee_bps: int,
+    fee_fixed_cents: int,
+    min_contribution_cents: int,
 ) -> Decimal:
     """Most the snacks in a box may cost and still leave the minimum contribution."""
     return (
@@ -146,7 +157,9 @@ def cooled_down(candidate: Candidate, taste: Taste, w: Weights = WEIGHTS) -> boo
     since = taste.boxes_since.get(candidate.stock_item_id)
     if since is None or candidate.stock_item_id in taste.repeat:
         return True
-    return since >= (w.loved_repeat_boxes if candidate.stock_item_id in taste.loved else w.novelty_boxes)
+    return since >= (
+        w.loved_repeat_boxes if candidate.stock_item_id in taste.loved else w.novelty_boxes
+    )
 
 
 def score(candidate: Candidate, taste: Taste, w: Weights = WEIGHTS) -> Pick:
@@ -159,8 +172,15 @@ def score(candidate: Candidate, taste: Taste, w: Weights = WEIGHTS) -> Pick:
     if item_id in taste.affinity:
         points = taste.affinity[item_id]
         fit += points
-        why.append("loved it before" if item_id in taste.loved else "liked it before" if points > 0 else
-                   "rated it neutral" if points == 0 else "rated it low before")
+        why.append(
+            "loved it before"
+            if item_id in taste.loved
+            else "liked it before"
+            if points > 0
+            else "rated it neutral"
+            if points == 0
+            else "rated it low before"
+        )
     elif taste.boxes_received and not taste.received(item_id):
         fit += w.never_received
         why.append("new to them")
@@ -168,13 +188,19 @@ def score(candidate: Candidate, taste: Taste, w: Weights = WEIGHTS) -> Pick:
     lean = taste.category.get(category, 0.0)
     if lean:
         fit += lean * w.category
-        why.append(f"{'likes' if lean > 0 else 'avoids'} {category} ({taste.category_source.get(category, '')})")
+        why.append(
+            f"{'likes' if lean > 0 else 'avoids'} {category} ({taste.category_source.get(category, '')})"
+        )
     if "spicy" in candidate.flavors and taste.spice in ("mild", "hot"):
         fit += w.spice if taste.spice == "hot" else -w.spice
         why.append("likes it hot" if taste.spice == "hot" else "prefers mild")
     if candidate.quality:
         fit += candidate.quality * w.quality
-        why.append("other customers rate it well" if candidate.quality > 0 else "other customers rate it poorly")
+        why.append(
+            "other customers rate it well"
+            if candidate.quality > 0
+            else "other customers rate it poorly"
+        )
     if candidate.days_left is not None:
         urgency = w.expiry_urgency * max(0, w.green_days - candidate.days_left) / w.green_days
         if urgency:
@@ -188,8 +214,12 @@ def score(candidate: Candidate, taste: Taste, w: Weights = WEIGHTS) -> Pick:
 
 
 def _pool(
-    candidates: Iterable[Candidate], taste: Taste, box_type: BoxType, rules: Rules,
-    skip: set[int], w: Weights,
+    candidates: Iterable[Candidate],
+    taste: Taste,
+    box_type: BoxType,
+    rules: Rules,
+    skip: set[int],
+    w: Weights,
 ) -> list[Pick]:
     pool = [
         score(c, taste, w)
@@ -216,7 +246,9 @@ def build_box(
     """Choose min..max_items items; an empty list comes back with the reason."""
     bt = BOX_TYPES[box_type]
     chosen: list[Pick] = list(keep)
-    pool = _pool(candidates, taste, bt, rules, {p.candidate.stock_item_id for p in keep} | set(exclude), w)
+    pool = _pool(
+        candidates, taste, bt, rules, {p.candidate.stock_item_id for p in keep} | set(exclude), w
+    )
 
     def spent() -> Decimal:
         return sum((p.candidate.unit_cost_cents for p in chosen), ZERO)
@@ -226,11 +258,12 @@ def build_box(
         return (
             all(q.candidate.stock_item_id != c.stock_item_id for q in chosen)
             and spent() + c.unit_cost_cents <= rules.cogs_ceiling_cents
-            and sum(q.candidate.category.lower() == c.category.lower() for q in chosen) < bt.max_per_category
+            and sum(q.candidate.category.lower() == c.category.lower() for q in chosen)
+            < bt.max_per_category
             and sum(q.candidate.origin == c.origin for q in chosen) < bt.max_per_origin
         )
 
-    def take(limit: int, want) -> None:
+    def take(limit: int, want: Callable[[Pick], bool]) -> None:
         for p in pool:
             if sum(1 for q in chosen if want(q)) >= limit or len(chosen) >= rules.max_items:
                 return
@@ -247,13 +280,17 @@ def build_box(
     take(favorites, lambda p: p.candidate.stock_item_id in taste.loved | taste.repeat)
     take(new, lambda p: not taste.received(p.candidate.stock_item_id))
     for p in pool:
-        if len(chosen) >= rules.max_items or (len(chosen) >= rules.min_items and spent() >= rules.target_cogs_cents):
+        if len(chosen) >= rules.max_items or (
+            len(chosen) >= rules.min_items and spent() >= rules.target_cogs_cents
+        ):
             break
         if fits(p):
             chosen.append(p)
     if len(chosen) < rules.min_items:
-        return [], (f"only {len(chosen)} items fit (need {rules.min_items}) within a "
-                    f"${rules.cogs_ceiling_cents / 100:.2f} snack budget")
+        return [], (
+            f"only {len(chosen)} items fit (need {rules.min_items}) within a "
+            f"${rules.cogs_ceiling_cents / 100:.2f} snack budget"
+        )
     return chosen, ""
 
 
@@ -282,7 +319,10 @@ def suggest_replacements(
             continue
         if spent + c.unit_cost_cents > rules.cogs_ceiling_cents:
             continue
-        if sum(p.candidate.category.lower() == c.category.lower() for p in rest) >= bt.max_per_category:
+        if (
+            sum(p.candidate.category.lower() == c.category.lower() for p in rest)
+            >= bt.max_per_category
+        ):
             continue
         if sum(p.candidate.origin == c.origin for p in rest) >= bt.max_per_origin:
             continue
@@ -291,6 +331,12 @@ def suggest_replacements(
             continue
         offers.append(pick)
     # A flavour the box type requires comes first; something they had recently is offered, but last.
-    offers.sort(key=lambda p: (not (missing & p.candidate.flavors), not cooled_down(p.candidate, taste, w),
-                               -p.score, p.candidate.stock_item_id))
+    offers.sort(
+        key=lambda p: (
+            not (missing & p.candidate.flavors),
+            not cooled_down(p.candidate, taste, w),
+            -p.score,
+            p.candidate.stock_item_id,
+        )
+    )
     return offers[:limit]

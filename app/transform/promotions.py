@@ -4,6 +4,7 @@ Every number here can be shown to the owner with the sentence that produced it. 
 learned or fitted: the tiers and discount bands are plain rules, so a recommendation can be
 argued with rather than believed. Prices are cents per base unit throughout.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -15,7 +16,12 @@ ZERO = Decimal("0")
 CENT = Decimal("1")
 
 # Days left -> how urgent, most pressing first.
-URGENCY_TIERS: tuple[tuple[int, str], ...] = ((3, "critical"), (7, "high"), (14, "medium"), (30, "low"))
+URGENCY_TIERS: tuple[tuple[int, str], ...] = (
+    (3, "critical"),
+    (7, "high"),
+    (14, "medium"),
+    (30, "low"),
+)
 
 # How deep a cut each tier allows: (floor, ceiling) as a fraction off the normal price.
 DISCOUNT_BANDS: dict[str, tuple[Decimal, Decimal]] = {

@@ -1,4 +1,5 @@
 """Pure stock and expiry alerting. Works identically for count, weight and volume."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

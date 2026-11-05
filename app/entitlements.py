@@ -6,12 +6,13 @@ is answered here, from the subscription state, so no route ever asks `if plan ==
 
 The shape is: account -> subscription status -> plan -> capabilities -> access.
 """
+
 from __future__ import annotations
 
 import enum
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.config import get_settings
 from app.models import Plan, SubscriptionStatus, Tenant
@@ -75,7 +76,7 @@ class NotEntitled(PermissionError):
 def _aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def effective_plan(tenant: Tenant) -> str:
@@ -97,7 +98,7 @@ def trial_days_left(tenant: Tenant, now: datetime | None = None) -> int | None:
     ends = _aware(tenant.trial_ends_at)
     if ends is None:
         return None
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     return max(0, (ends - now).days + (1 if (ends - now).seconds else 0))
 
 
@@ -113,7 +114,7 @@ def access(tenant: Tenant, now: datetime | None = None) -> Access:
     The status column is kept current by Stripe and by the nightly job, but a trial that ran out
     an hour ago must close on its own, without waiting for either.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     status = tenant.subscription_status
 
     if status is SubscriptionStatus.ACTIVE:
@@ -166,7 +167,7 @@ def history_days(tenant: Tenant) -> int:
 
 def state(tenant: Tenant, now: datetime | None = None) -> dict:
     """Everything a page needs to say where the account stands, in one call."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     current = access(tenant, now)
     days_left = trial_days_left(tenant, now)
     status = tenant.subscription_status
@@ -182,7 +183,11 @@ def state(tenant: Tenant, now: datetime | None = None) -> dict:
 
 
 def _message(
-    status: SubscriptionStatus, current: Access, days_left: int | None, tenant: Tenant, now: datetime
+    status: SubscriptionStatus,
+    current: Access,
+    days_left: int | None,
+    tenant: Tenant,
+    now: datetime,
 ) -> str | None:
     """What to say at the top of the page, or nothing when everything is in order."""
     if status is SubscriptionStatus.TRIALING and current is Access.FULL:
@@ -202,7 +207,9 @@ def _message(
         if status is SubscriptionStatus.TRIALING:
             return "Your trial has ended. Your inventory is still here and still syncing; subscribe to change it again."
         if status is SubscriptionStatus.PAST_DUE:
-            return "We could not take payment. Update your card to start receiving and counting again."
+            return (
+                "We could not take payment. Update your card to start receiving and counting again."
+            )
         if status is SubscriptionStatus.PAUSED:
             return "Your subscription is paused. Your inventory is still here and still syncing."
         return "Your subscription has ended. Your inventory is still here and still syncing; subscribe to change it again."
@@ -211,7 +218,7 @@ def _message(
 
 def start_trial(tenant: Tenant, now: datetime | None = None) -> Tenant:
     """Every new account starts on the full product, for TRIAL_DAYS."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     tenant.subscription_status = SubscriptionStatus.TRIALING
     tenant.plan = Plan(TRIAL_PLAN)
     tenant.trial_started_at = now
@@ -220,6 +227,7 @@ def start_trial(tenant: Tenant, now: datetime | None = None) -> Tenant:
 
 
 # --- private modules --------------------------------------------------------------------------
+
 
 def snack_box_tenants() -> frozenset[int]:
     """Accounts allowed to reach the snack box module, from the environment. Empty means nobody."""

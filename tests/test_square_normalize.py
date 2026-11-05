@@ -44,15 +44,27 @@ CATALOG = [
             ],
         },
     },
-    {"type": "ITEM", "id": "gone", "is_deleted": True, "item_data": {"name": "Old", "variations": []}},
+    {
+        "type": "ITEM",
+        "id": "gone",
+        "is_deleted": True,
+        "item_data": {"name": "Old", "variations": []},
+    },
 ]
 
 
 def test_locations_normalize_with_defaults():
-    rows = normalize_locations([{"id": "L1", "name": "Main", "timezone": "Europe/London", "currency": "GBP"}])
+    rows = normalize_locations(
+        [{"id": "L1", "name": "Main", "timezone": "Europe/London", "currency": "GBP"}]
+    )
     assert rows == [
-        {"provider_location_id": "L1", "name": "Main", "timezone": "Europe/London",
-         "currency": "GBP", "is_active": True}
+        {
+            "provider_location_id": "L1",
+            "name": "Main",
+            "timezone": "Europe/London",
+            "currency": "GBP",
+            "is_active": True,
+        }
     ]
 
 
@@ -76,17 +88,36 @@ def test_catalog_flattens_variations_and_keeps_the_category():
 def test_counts_keep_only_the_latest_in_stock_reading():
     counts = normalize_counts(
         [
-            {"catalog_object_id": "var1", "location_id": "L1", "state": "IN_STOCK",
-             "quantity": "5", "calculated_at": "2026-09-01T10:00:00Z"},
-            {"catalog_object_id": "var1", "location_id": "L1", "state": "IN_STOCK",
-             "quantity": "9", "calculated_at": "2026-09-02T10:00:00Z"},
-            {"catalog_object_id": "var1", "location_id": "L1", "state": "WASTE",
-             "quantity": "2", "calculated_at": "2026-09-03T10:00:00Z"},
+            {
+                "catalog_object_id": "var1",
+                "location_id": "L1",
+                "state": "IN_STOCK",
+                "quantity": "5",
+                "calculated_at": "2026-09-01T10:00:00Z",
+            },
+            {
+                "catalog_object_id": "var1",
+                "location_id": "L1",
+                "state": "IN_STOCK",
+                "quantity": "9",
+                "calculated_at": "2026-09-02T10:00:00Z",
+            },
+            {
+                "catalog_object_id": "var1",
+                "location_id": "L1",
+                "state": "WASTE",
+                "quantity": "2",
+                "calculated_at": "2026-09-03T10:00:00Z",
+            },
         ]
     )
     assert counts == [
-        {"provider_item_id": "var1", "provider_location_id": "L1",
-         "quantity": Decimal("9"), "calculated_at": "2026-09-02T10:00:00Z"}
+        {
+            "provider_item_id": "var1",
+            "provider_location_id": "L1",
+            "quantity": Decimal("9"),
+            "calculated_at": "2026-09-02T10:00:00Z",
+        }
     ]
 
 
@@ -96,12 +127,21 @@ def test_orders_aggregate_per_item_location_and_local_day():
             "location_id": "L1",
             "closed_at": "2026-09-02T23:30:00Z",
             "line_items": [
-                {"catalog_object_id": "var1", "quantity": "2",
-                 "gross_sales_money": {"amount": 3600},
-                 "total_discount_money": {"amount": 200}},
-                {"catalog_object_id": "var1", "quantity": "1",
-                 "gross_sales_money": {"amount": 1800}},
-                {"quantity": "1", "gross_sales_money": {"amount": 500}},  # custom amount, no catalog id
+                {
+                    "catalog_object_id": "var1",
+                    "quantity": "2",
+                    "gross_sales_money": {"amount": 3600},
+                    "total_discount_money": {"amount": 200},
+                },
+                {
+                    "catalog_object_id": "var1",
+                    "quantity": "1",
+                    "gross_sales_money": {"amount": 1800},
+                },
+                {
+                    "quantity": "1",
+                    "gross_sales_money": {"amount": 500},
+                },  # custom amount, no catalog id
             ],
         }
     ]
@@ -118,8 +158,9 @@ def test_local_timezone_moves_a_late_sale_to_the_right_day():
         {
             "location_id": "L1",
             "closed_at": "2026-09-03T02:30:00Z",
-            "line_items": [{"catalog_object_id": "var1", "quantity": "1",
-                            "gross_sales_money": {"amount": 400}}],
+            "line_items": [
+                {"catalog_object_id": "var1", "quantity": "1", "gross_sales_money": {"amount": 400}}
+            ],
         }
     ]
     rows = daily_sales_from_orders(orders, {"L1": "America/New_York"})
@@ -131,8 +172,9 @@ def test_unknown_timezone_does_not_lose_the_sale():
         {
             "location_id": "L1",
             "closed_at": "2026-09-03T02:30:00Z",
-            "line_items": [{"catalog_object_id": "var1", "quantity": "1",
-                            "gross_sales_money": {"amount": 400}}],
+            "line_items": [
+                {"catalog_object_id": "var1", "quantity": "1", "gross_sales_money": {"amount": 400}}
+            ],
         }
     ]
     rows = daily_sales_from_orders(orders, {"L1": "Mars/Olympus"})

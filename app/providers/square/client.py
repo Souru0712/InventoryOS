@@ -1,10 +1,12 @@
 """Square REST client. Ingestion and write-back only, no transform logic."""
+
 from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterator
 from datetime import datetime
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
 
@@ -107,7 +109,9 @@ class SquareClient:
         for start in range(0, len(catalog_object_ids), BATCH_SIZE):
             chunk = catalog_object_ids[start : start + BATCH_SIZE]
             body = {"catalog_object_ids": chunk, "location_ids": location_ids}
-            counts.extend(self._paginate("POST", "/v2/inventory/counts/batch-retrieve", body, "counts"))
+            counts.extend(
+                self._paginate("POST", "/v2/inventory/counts/batch-retrieve", body, "counts")
+            )
         return counts
 
     def orders(self, location_ids: list[str], start_at: datetime, end_at: datetime) -> list[dict]:
@@ -166,7 +170,12 @@ class SquareClient:
         }
         if buyer_email:
             body["pre_populated_data"] = {"buyer_email": buyer_email}
-        return self._request("POST", "/v2/online-checkout/payment-links", json=body).get("payment_link") or {}
+        return (
+            self._request("POST", "/v2/online-checkout/payment-links", json=body).get(
+                "payment_link"
+            )
+            or {}
+        )
 
 
 def physical_count_change(
@@ -208,6 +217,7 @@ def adjustment_change(
             "occurred_at": _rfc3339(occurred_at),
         },
     }
+
 
 def state_change(
     catalog_object_id: str,

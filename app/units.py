@@ -1,4 +1,5 @@
 """Unit system: count / weight / volume with lossless base-unit storage."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -97,7 +98,6 @@ def format_qty(qty_base: Decimal | float | str, unit_code: str) -> str:
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return f"{text or '0'} {unit.label}"
-
 
 
 def format_approx(qty_base: Decimal | float | str, unit_code: str) -> str:

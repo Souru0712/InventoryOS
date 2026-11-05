@@ -5,11 +5,12 @@ Covers the three ways a small business holds stock:
   weight  - bulk held on scales, sold or consumed by mass (deli, flour)
   volume  - liquids depleted by recipe (milk, syrup, draught)
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_CEILING, Decimal
 
 from app.units import Dimension, format_qty, from_base
@@ -134,9 +135,7 @@ def valuation_cents(qty_base: Decimal, cost_per_base_cents: Decimal) -> int:
     return int((Decimal(qty_base) * Decimal(cost_per_base_cents)).quantize(Decimal("1")))
 
 
-def suggest_order_base(
-    item: StockView, velocity_per_day: Decimal, cover_days: int = 14
-) -> Decimal:
+def suggest_order_base(item: StockView, velocity_per_day: Decimal, cover_days: int = 14) -> Decimal:
     """Base units to order: up to par level, else enough to cover lead time plus window."""
     if item.par_level_base is not None:
         target = Decimal(item.par_level_base)
@@ -159,5 +158,5 @@ def stale_after(last_counted_at: datetime | None, max_age_days: int, now: dateti
         return True
     reference = last_counted_at
     if reference.tzinfo is None:
-        reference = reference.replace(tzinfo=timezone.utc)
+        reference = reference.replace(tzinfo=UTC)
     return (now - reference) > timedelta(days=max_age_days)

@@ -4,6 +4,7 @@ Prices and plans are decided here, never taken from the browser: a form can say 
 this process knows which Stripe price that is. Everything after payment arrives as a webhook and
 is applied by app/orchestration/stripe_events.py.
 """
+
 from __future__ import annotations
 
 import logging

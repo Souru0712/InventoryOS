@@ -1,0 +1,7 @@
+# Mechanical, behaviour-free commits that `git blame` should skip. GitHub reads this file; locally:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# T0.04: ruff format across the codebase
+7f3cb612f4f766598ffbcd1b3ff12713c55b324e
+# T0.04: ruff's safe autofixes (imports, datetime.UTC)
+f47bbb8f5b722281af1c714f3e775cc6157b2d46

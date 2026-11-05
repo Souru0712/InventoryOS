@@ -25,7 +25,9 @@ The demo seeds a café with all three kinds of stock, six weeks of sales, recipe
 mix of healthy and low items — enough to run a sales call without a Square account.
 
 ```bash
-pytest                                  # 60 tests, no network
+pytest                                  # full suite, no network
+ruff check . && ruff format --check .  # lint and formatting, as CI runs them
+mypy                                    # type check (settings in pyproject.toml)
 python -m app.cli report --tenant 1     # what the weekly email contains
 python -m app.cli alerts --tenant 1 --send
 ```

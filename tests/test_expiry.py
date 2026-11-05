@@ -1,4 +1,5 @@
 """Dated lots, FEFO, and projecting what will not sell before it expires."""
+
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -107,7 +108,11 @@ def test_without_a_sales_signal_nothing_is_projected():
 
 def test_cost_falls_back_to_the_item_when_the_invoice_had_no_price():
     positions, _ = project_batches(
-        Decimal("10"), [lot(1, 10, 3)], Decimal("0"), TODAY, fallback_cost_per_base_cents=Decimal("25")
+        Decimal("10"),
+        [lot(1, 10, 3)],
+        Decimal("0"),
+        TODAY,
+        fallback_cost_per_base_cents=Decimal("25"),
     )
     assert positions[0].at_risk_cents == 250
 
@@ -121,21 +126,25 @@ def test_sell_first_marks_the_soonest_live_lot_only():
 
 
 def test_a_lot_that_has_sold_through_is_reported_as_such():
-    positions, _ = project_batches(Decimal("10"), [lot(1, 10, 3), lot(2, 10, 30)], Decimal("1"), TODAY)
+    positions, _ = project_batches(
+        Decimal("10"), [lot(1, 10, 3), lot(2, 10, 30)], Decimal("1"), TODAY
+    )
     assert by_id(positions)[1].status == "sold_through"
 
 
 def test_volume_works_in_base_units_like_everything_else():
     # 4 cases of 6 x 1L oat milk, 1.5 L a day, best before in 10 days.
     received = to_base(24, "l")
-    positions, _ = project_batches(received, [lot(1, received, 10, cost="0.185")], to_base("1.5", "l"), TODAY)
+    positions, _ = project_batches(
+        received, [lot(1, received, 10, cost="0.185")], to_base("1.5", "l"), TODAY
+    )
     assert positions[0].projected_leftover_base == to_base(9, "l")
     assert positions[0].at_risk_cents == 1665
 
 
 # --- through the database: Square-tracked stock, alerts, the digest -------------------------
 
-from datetime import datetime, timezone  # noqa: E402
+from datetime import UTC, datetime  # noqa: E402
 
 import pytest  # noqa: E402
 
@@ -154,24 +163,48 @@ from app.orchestration.alerts import evaluate_and_store, send_alert_digest  # no
 from app.orchestration.views import expiry_positions, velocity_map  # noqa: E402
 from app.units import Dimension  # noqa: E402
 
-NOW = datetime(2026, 9, 10, 8, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 10, 8, 0, tzinfo=UTC)
 
 
 @pytest.fixture
 def red_bull(db, tenant, location):
     """A Square-tracked SKU with no recipe: the convenience-store case."""
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="red-bull", name="Red Bull 8.4oz",
-                     dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.PROVIDER,
-                     provider_variation_id="VAR-RB", qty_base=Decimal("72"),
-                     cost_per_base_cents=Decimal("110"))
-    sold = SoldItem(tenant_id=tenant.id, provider_item_id="VAR-RB", name="Red Bull 8.4oz", price_cents=299)
+    item = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="red-bull",
+        name="Red Bull 8.4oz",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode=TrackMode.PROVIDER,
+        provider_variation_id="VAR-RB",
+        qty_base=Decimal("72"),
+        cost_per_base_cents=Decimal("110"),
+    )
+    sold = SoldItem(
+        tenant_id=tenant.id, provider_item_id="VAR-RB", name="Red Bull 8.4oz", price_cents=299
+    )
     db.add_all([item, sold])
     db.flush()
     for back in range(28):
-        db.add(SalesDaily(tenant_id=tenant.id, sold_item_id=sold.id, location_id=location.id,
-                          dt=TODAY - timedelta(days=back), units=Decimal("4")))
-    db.add(StockBatch(tenant_id=tenant.id, stock_item_id=item.id, received_qty_base=Decimal("72"),
-                      expires_on=TODAY + timedelta(days=12), cost_per_base_cents=Decimal("110")))
+        db.add(
+            SalesDaily(
+                tenant_id=tenant.id,
+                sold_item_id=sold.id,
+                location_id=location.id,
+                dt=TODAY - timedelta(days=back),
+                units=Decimal("4"),
+            )
+        )
+    db.add(
+        StockBatch(
+            tenant_id=tenant.id,
+            stock_item_id=item.id,
+            received_qty_base=Decimal("72"),
+            expires_on=TODAY + timedelta(days=12),
+            cost_per_base_cents=Decimal("110"),
+        )
+    )
     db.commit()
     return item
 
@@ -181,12 +214,21 @@ def test_square_tracked_stock_gets_its_velocity_from_direct_sales(db, tenant, re
 
 
 def test_sales_at_another_location_do_not_count(db, tenant, location, red_bull):
-    other = Location(tenant_id=tenant.id, provider="demo", provider_location_id="loc-2", name="Harbour")
+    other = Location(
+        tenant_id=tenant.id, provider="demo", provider_location_id="loc-2", name="Harbour"
+    )
     db.add(other)
     db.flush()
     sold = db.query(SoldItem).one()
-    db.add(SalesDaily(tenant_id=tenant.id, sold_item_id=sold.id, location_id=other.id,
-                      dt=TODAY, units=Decimal("280")))
+    db.add(
+        SalesDaily(
+            tenant_id=tenant.id,
+            sold_item_id=sold.id,
+            location_id=other.id,
+            dt=TODAY,
+            units=Decimal("280"),
+        )
+    )
     db.commit()
     assert velocity_map(db, tenant.id, TODAY)[red_bull.id] == Decimal("4")
 
@@ -197,13 +239,26 @@ def test_the_projection_runs_end_to_end(db, tenant, red_bull):
 
 
 def test_an_item_with_no_sales_signal_is_not_projected(db, tenant, location):
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="yoghurt", name="Yoghurt",
-                     dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.MANUAL,
-                     qty_base=Decimal("10"))
+    item = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="yoghurt",
+        name="Yoghurt",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode=TrackMode.MANUAL,
+        qty_base=Decimal("10"),
+    )
     db.add(item)
     db.flush()
-    db.add(StockBatch(tenant_id=tenant.id, stock_item_id=item.id, received_qty_base=Decimal("10"),
-                      expires_on=TODAY + timedelta(days=20)))
+    db.add(
+        StockBatch(
+            tenant_id=tenant.id,
+            stock_item_id=item.id,
+            received_qty_base=Decimal("10"),
+            expires_on=TODAY + timedelta(days=20),
+        )
+    )
     db.commit()
     [expiry] = expiry_positions(db, tenant.id, TODAY)
     # No recipe, not POS-tracked: zero velocity would be a guess, so nothing is projected.
@@ -240,13 +295,27 @@ def test_the_alert_resolves_once_the_stock_can_sell_in_time(db, tenant, red_bull
 
 
 def test_expired_stock_raises_its_own_alert(db, tenant, location):
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="milk", name="Semi-skimmed 2L",
-                     dimension=Dimension.VOLUME, stock_unit="l", track_mode=TrackMode.MANUAL,
-                     qty_base=to_base(8, "l"))
+    item = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="milk",
+        name="Semi-skimmed 2L",
+        dimension=Dimension.VOLUME,
+        stock_unit="l",
+        track_mode=TrackMode.MANUAL,
+        qty_base=to_base(8, "l"),
+    )
     db.add(item)
     db.flush()
-    db.add(StockBatch(tenant_id=tenant.id, stock_item_id=item.id, received_qty_base=to_base(8, "l"),
-                      expires_on=TODAY - timedelta(days=2), cost_per_base_cents=Decimal("0.07")))
+    db.add(
+        StockBatch(
+            tenant_id=tenant.id,
+            stock_item_id=item.id,
+            received_qty_base=to_base(8, "l"),
+            expires_on=TODAY - timedelta(days=2),
+            cost_per_base_cents=Decimal("0.07"),
+        )
+    )
     db.commit()
     evaluate_and_store(db, tenant.id, NOW)
     db.commit()
@@ -265,18 +334,27 @@ from app.transform.inventory import StockView  # noqa: E402
 
 def view(item_id, qty, cost, tracks=None, name="Item"):
     return StockView(
-        id=item_id, slug=f"i{item_id}", name=name, dimension=Dimension.COUNT, stock_unit="each",
-        track_mode="manual", qty_base=Decimal(str(qty)), reorder_point_base=Decimal("0"),
-        cost_per_base_cents=Decimal(str(cost)), tracks_expiry=tracks,
+        id=item_id,
+        slug=f"i{item_id}",
+        name=name,
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode="manual",
+        qty_base=Decimal(str(qty)),
+        reorder_point_base=Decimal("0"),
+        cost_per_base_cents=Decimal(str(cost)),
+        tracks_expiry=tracks,
     )
 
 
 def test_coverage_is_measured_by_value_not_by_item_count():
     # A cheap fully-dated item should not hide an expensive undated one.
-    result = coverage([
-        (view(1, 100, 1), Decimal("0")),      # $1.00 of stock, all dated
-        (view(2, 100, 99), Decimal("100")),   # $99.00 of stock, none dated
-    ])
+    result = coverage(
+        [
+            (view(1, 100, 1), Decimal("0")),  # $1.00 of stock, all dated
+            (view(2, 100, 99), Decimal("100")),  # $99.00 of stock, none dated
+        ]
+    )
     assert result.percent == 1
     assert result.dated_items == 1
     assert result.eligible_items == 2
@@ -291,10 +369,12 @@ def test_nothing_dated_is_zero():
 
 
 def test_items_needing_dates_are_ranked_by_what_is_at_stake():
-    result = coverage([
-        (view(1, 10, 10, name="Cheap"), Decimal("10")),
-        (view(2, 10, 500, name="Dear"), Decimal("10")),
-    ])
+    result = coverage(
+        [
+            (view(1, 10, 10, name="Cheap"), Decimal("10")),
+            (view(2, 10, 500, name="Dear"), Decimal("10")),
+        ]
+    )
     assert [row.item.name for row in result.needs_dates] == ["Dear", "Cheap"]
     assert result.needs_dates[0].undated_cents == 5000
 
@@ -312,12 +392,27 @@ def test_a_partly_dated_item_counts_only_the_dated_part():
 
 
 def test_dismissed_items_leave_the_figure_entirely(db, tenant, location):
-    perishable = StockItem(tenant_id=tenant.id, location_id=location.id, slug="milk", name="Milk",
-                           dimension=Dimension.COUNT, stock_unit="each", qty_base=Decimal("10"),
-                           cost_per_base_cents=Decimal("100"))
-    cups = StockItem(tenant_id=tenant.id, location_id=location.id, slug="cups", name="Cups",
-                     dimension=Dimension.COUNT, stock_unit="each", qty_base=Decimal("500"),
-                     cost_per_base_cents=Decimal("10"), tracks_expiry=False)
+    perishable = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="milk",
+        name="Milk",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        qty_base=Decimal("10"),
+        cost_per_base_cents=Decimal("100"),
+    )
+    cups = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="cups",
+        name="Cups",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        qty_base=Decimal("500"),
+        cost_per_base_cents=Decimal("10"),
+        tracks_expiry=False,
+    )
     db.add_all([perishable, cups])
     db.commit()
 
@@ -325,7 +420,13 @@ def test_dismissed_items_leave_the_figure_entirely(db, tenant, location):
     assert [row.item.name for row in result.rows] == ["Milk"]
     assert result.percent == 0
 
-    db.add(StockBatch(tenant_id=tenant.id, stock_item_id=perishable.id,
-                      received_qty_base=Decimal("10"), expires_on=TODAY + timedelta(days=10)))
+    db.add(
+        StockBatch(
+            tenant_id=tenant.id,
+            stock_item_id=perishable.id,
+            received_qty_base=Decimal("10"),
+            expires_on=TODAY + timedelta(days=10),
+        )
+    )
     db.commit()
     assert expiry_coverage(db, tenant.id).percent == 100

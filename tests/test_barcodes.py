@@ -1,4 +1,5 @@
 """Barcodes are strings with leading zeros, several spellings, and a check digit."""
+
 import pytest
 
 from app.transform.barcodes import (

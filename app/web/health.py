@@ -1,18 +1,19 @@
 """Inventory health, the reasons behind it, and the reorder list it points to."""
+
 from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.entitlements import history_days, require
 from app.models import Tenant
 from app.orchestration.health import current, over_time
-from app.entitlements import history_days, require
 from app.security import require_tenant
 from app.transform.health import reorder_lines
 from app.units import format_approx, format_qty
@@ -28,7 +29,7 @@ def health_page(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
 ):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     health = current(db, tenant.id, location, now)
     return templates.TemplateResponse(
         request,
@@ -82,21 +83,25 @@ def reorder_csv(
     health = current(db, tenant.id, location)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["Supplier", "Item", "Location", "Reason", "On hand", "Days to stockout", "Order"])
+    writer.writerow(
+        ["Supplier", "Item", "Location", "Reason", "On hand", "Days to stockout", "Order"]
+    )
     for supplier, lines in reorder_lines(health.input.items):
         for line in lines:
             item = line.health.item
             days = line.days_to_stockout
-            writer.writerow([
-                _cell(supplier or "No supplier set"),
-                _cell(item.name),
-                _cell(item.location_name),
-                line.reason_label,
-                format_qty(item.qty_base, item.stock_unit),
-                "" if days is None else f"{days:.1f}",
-                format_approx(line.order_base, item.stock_unit) if line.order_base > 0 else "",
-            ])
-    stamp = datetime.now(timezone.utc).date().isoformat()
+            writer.writerow(
+                [
+                    _cell(supplier or "No supplier set"),
+                    _cell(item.name),
+                    _cell(item.location_name),
+                    line.reason_label,
+                    format_qty(item.qty_base, item.stock_unit),
+                    "" if days is None else f"{days:.1f}",
+                    format_approx(line.order_base, item.stock_unit) if line.order_base > 0 else "",
+                ]
+            )
+    stamp = datetime.now(UTC).date().isoformat()
     return Response(
         buffer.getvalue(),
         media_type="text/csv",

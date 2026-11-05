@@ -1,4 +1,5 @@
 """Read a photographed supplier invoice into structured lines."""
+
 from __future__ import annotations
 
 import base64
@@ -8,11 +9,14 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from app.config import get_settings
 from app.extract.images import prepare_for_model
 from app.transform.receiving import ParsedLine
+
+if TYPE_CHECKING:
+    from anthropic.types import DocumentBlockParam, ImageBlockParam
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +29,7 @@ SUPPORTED_MEDIA = {
     ".pdf": "application/pdf",
 }
 
-EXTRACT_SCHEMA = {
+EXTRACT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "supplier": {"type": ["string", "null"]},
@@ -87,7 +91,9 @@ Transcribe only what is printed. Never invent a product, quantity or price.
 - If the image is unreadable or is not an invoice, return an empty lines array."""
 
 
-def validate_payload(payload: object, schema: dict = EXTRACT_SCHEMA, path: str = "response") -> None:
+def validate_payload(
+    payload: object, schema: dict = EXTRACT_SCHEMA, path: str = "response"
+) -> None:
     """Check the model's JSON against EXTRACT_SCHEMA before anything downstream trusts it.
 
     Structured output makes this rare, not impossible: a refusal, a truncation, or a future model
@@ -96,7 +102,9 @@ def validate_payload(payload: object, schema: dict = EXTRACT_SCHEMA, path: str =
     types = schema.get("type")
     allowed = [types] if isinstance(types, str) else list(types or [])
     if not _is_type(payload, allowed):
-        raise ExtractionError(f"{path}: expected {' or '.join(allowed)}, got {type(payload).__name__}")
+        raise ExtractionError(
+            f"{path}: expected {' or '.join(allowed)}, got {type(payload).__name__}"
+        )
     if payload is None:
         return
 
@@ -245,6 +253,14 @@ class ClaudeInvoiceExtractor:
         data = base64.standard_b64encode(payload_bytes).decode()
 
         block_type = "document" if media_type == "application/pdf" else "image"
+        # Type and media type come from SUPPORTED_MEDIA; the type checker only sees str.
+        original = cast(
+            "DocumentBlockParam | ImageBlockParam",
+            {
+                "type": block_type,
+                "source": {"type": "base64", "media_type": media_type, "data": data},
+            },
+        )
         response = self._client.messages.create(
             model=self._model,
             max_tokens=16000,
@@ -254,14 +270,7 @@ class ClaudeInvoiceExtractor:
                 {
                     "role": "user",
                     "content": [
-                        {
-                            "type": block_type,
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": data,
-                            },
-                        },
+                        original,
                         {
                             "type": "text",
                             "text": "Extract every delivered line item from this document.",

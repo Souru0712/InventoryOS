@@ -7,6 +7,7 @@ it reports what was read, whether the app would have applied it unasked, and wha
 A wrong date applied without asking is the only true failure: a wrong date the app asks about
 costs the owner a correction, which is the manual work they were doing anyway.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from app.orchestration.scanning import CONFIDENT_ENOUGH, DateReading, read_expiry_photo
+from app.orchestration.scanning import DateReading, read_expiry_photo
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +77,10 @@ def run_corpus(
         path = folder / case["file"]
         media_type = mimetypes.guess_type(path.name)[0] or "image/jpeg"
         reading = read_expiry_photo(
-            path.read_bytes(), media_type, prefer=case.get("prefer", prefer), today=today,
+            path.read_bytes(),
+            media_type,
+            prefer=case.get("prefer", prefer),
+            today=today,
             reader=reader,
         )
         expected = date.fromisoformat(case["expected"]) if case.get("expected") else None
@@ -114,7 +118,9 @@ def report(results: list[CaseResult]) -> str:
         f"{counts['WRONG']} wrong and applied unasked"
     )
     if counts["WRONG"]:
-        lines.append("A wrong date applied unasked is a bug. Add each one to the corpus and fix it.")
+        lines.append(
+            "A wrong date applied unasked is a bug. Add each one to the corpus and fix it."
+        )
     elif counts["pass"] / total >= 0.7:
         lines.append("This is faster than typing them in.")
     else:
@@ -132,17 +138,19 @@ def as_regression_cases(results: list[CaseResult], today: date | None = None) ->
     for result in results:
         if result.verdict == "pass" or not result.read.raw_text:
             continue
-        cases.append({
-            "id": Path(result.file).stem.lower().replace(" ", "-"),
-            "text": result.read.raw_text,
-            "prefer": "mdy",
-            "expect": {
-                "date": result.expected.isoformat() if result.expected else None,
-                "confident": result.expected is not None,
-            },
-            "from_photo": result.file,
-            "note": result.note or f"read {result.read.value} at {result.read.confidence}",
-        })
+        cases.append(
+            {
+                "id": Path(result.file).stem.lower().replace(" ", "-"),
+                "text": result.read.raw_text,
+                "prefer": "mdy",
+                "expect": {
+                    "date": result.expected.isoformat() if result.expected else None,
+                    "confident": result.expected is not None,
+                },
+                "from_photo": result.file,
+                "note": result.note or f"read {result.read.value} at {result.read.confidence}",
+            }
+        )
     return cases
 
 

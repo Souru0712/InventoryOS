@@ -2,10 +2,11 @@
 
 The page talks JSON to these routes so a scan never reloads the camera.
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import UTC, date
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -27,7 +28,7 @@ from app.orchestration.scanning import (
     suspicious,
 )
 from app.orchestration.views import stock_views, tenant_currency, velocity_map
-from app.security import require_writable, require_tenant, require_user
+from app.security import require_tenant, require_user, require_writable
 from app.transform.barcodes import canonical
 from app.transform.dates import prefer_for_currency
 from app.transform.inventory import days_of_cover
@@ -148,7 +149,9 @@ def link(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
-    return JSONResponse(_item_payload(db, tenant.id, item, identifier.value, identifier.identifier_type.value))
+    return JSONResponse(
+        _item_payload(db, tenant.id, item, identifier.value, identifier.identifier_type.value)
+    )
 
 
 def _quantity(raw: str, item: StockItem, as_packs: bool) -> Decimal:
@@ -199,7 +202,11 @@ def receive(
     except InvalidOperation:
         confidence = None
     result = receive_scanned(
-        db, item, qty_base, user_id=user.id, expires_on=expiry,
+        db,
+        item,
+        qty_base,
+        user_id=user.id,
+        expires_on=expiry,
         date_type=date_type if expiry else "unknown",
         date_confidence=confidence if expiry else None,
     )
@@ -237,9 +244,9 @@ def count(
     qty_base = _quantity(quantity, item, as_packs=False)
     before = Decimal(item.qty_base or 0)
     item.qty_base = qty_base
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item.last_counted_at = now
     db.add(
         InventoryCount(
@@ -298,8 +305,14 @@ def codes_for_item(
         )
     )
     return JSONResponse(
-        {"codes": [{"value": r.value, "type": r.identifier_type.value, "source": r.source} for r in rows]}
+        {
+            "codes": [
+                {"value": r.value, "type": r.identifier_type.value, "source": r.source}
+                for r in rows
+            ]
+        }
     )
+
 
 def _photo_limit() -> int:
     """The same limit as an invoice photo: the image is shrunk before it is sent anywhere."""

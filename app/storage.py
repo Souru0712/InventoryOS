@@ -3,6 +3,7 @@
 The database stores a key such as "3/<sha256>.jpg", never a filesystem path, so the same row
 works wherever the file itself is kept.
 """
+
 from __future__ import annotations
 
 import logging
@@ -78,7 +79,9 @@ class S3Storage:
         if client is None:
             import boto3
 
-            client = boto3.client("s3", **{name: value for name, value in client_options.items() if value})
+            client = boto3.client(
+                "s3", **{name: value for name, value in client_options.items() if value}
+            )
         self.client = client
 
     def _key(self, key: str) -> str:
@@ -86,7 +89,9 @@ class S3Storage:
 
     def put(self, key: str, data: bytes, content_type: str) -> None:
         try:
-            self.client.put_object(Bucket=self.bucket, Key=self._key(key), Body=data, ContentType=content_type)
+            self.client.put_object(
+                Bucket=self.bucket, Key=self._key(key), Body=data, ContentType=content_type
+            )
         except Exception as exc:
             raise StorageError(f"could not upload {self._key(key)}: {exc}") from exc
 

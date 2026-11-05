@@ -1,4 +1,5 @@
 """Engine, session factory, exact-decimal column type, and cross-process locks."""
+
 from __future__ import annotations
 
 import logging
@@ -8,7 +9,16 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Connection, Engine, Numeric, String, TypeDecorator, create_engine, event, text
+from sqlalchemy import (
+    Connection,
+    Engine,
+    Numeric,
+    String,
+    TypeDecorator,
+    create_engine,
+    event,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -41,7 +51,9 @@ def _engine_options(url: str) -> dict:
     }
 
 
-engine = create_engine(settings.database_url, pool_pre_ping=True, **_engine_options(settings.database_url))
+engine = create_engine(
+    settings.database_url, pool_pre_ping=True, **_engine_options(settings.database_url)
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
@@ -104,7 +116,7 @@ def session_scope() -> Iterator[Session]:
         db.close()
 
 
-def alembic_config(url: str | None = None) -> "Config":
+def alembic_config(url: str | None = None) -> Config:
     """Alembic config wired to this app, usable from code and from the CLI."""
     from alembic.config import Config
 
@@ -187,7 +199,9 @@ class LeaderLock:
             return True
         self._engine = self._engine or create_engine(self.url, poolclass=NullPool)
         connection = self._engine.connect().execution_options(isolation_level="AUTOCOMMIT")
-        got = connection.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": self.key}).scalar()
+        got = connection.execute(
+            text("SELECT pg_try_advisory_lock(:key)"), {"key": self.key}
+        ).scalar()
         if not got:
             connection.close()
             return False
@@ -212,7 +226,9 @@ class LeaderLock:
             try:
                 self._connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": self.key})
             except Exception:
-                log.warning("advisory lock %s was not released cleanly; closing its connection", self.key)
+                log.warning(
+                    "advisory lock %s was not released cleanly; closing its connection", self.key
+                )
             finally:
                 self._connection.close()
                 self._connection = None

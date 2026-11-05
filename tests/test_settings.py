@@ -1,4 +1,5 @@
 """Settings ignore a developer's .env under test, and still read it everywhere else."""
+
 from app.config import Settings
 
 

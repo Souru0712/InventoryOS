@@ -4,6 +4,7 @@ Packaging prints dates in every format there is, and the same six digits can be 
 days: 10/11/26 is October 11th in Chicago and November 10th in London. Nothing here guesses
 silently - anything uncertain comes back with a low confidence so a person is asked.
 """
+
 from __future__ import annotations
 
 import calendar
@@ -43,10 +44,30 @@ KEYWORDS: list[tuple[str, str]] = [
 NOT_AN_EXPIRY = {"packed"}
 
 MONTHS = {
-    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
-    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
-    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10, "october": 10,
-    "nov": 11, "november": 11, "dec": 12, "december": 12,
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
 }
 _MONTH_WORDS = "|".join(sorted(MONTHS, key=len, reverse=True))
 
@@ -62,7 +83,9 @@ MONTH_WORD_DAY = re.compile(
     rf"\b(?P<mon>{_MONTH_WORDS})\s*[-/. ]?\s*(?P<d>\d{{1,2}})\s*[-/. ,]+\s*(?P<y>\d{{2,4}})\b",
     re.IGNORECASE,
 )
-MONTH_WORD_YEAR = re.compile(rf"\b(?P<mon>{_MONTH_WORDS})\s*[-/. ,]?\s*(?P<y>\d{{2,4}})\b", re.IGNORECASE)
+MONTH_WORD_YEAR = re.compile(
+    rf"\b(?P<mon>{_MONTH_WORDS})\s*[-/. ,]?\s*(?P<y>\d{{2,4}})\b", re.IGNORECASE
+)
 COMPACT8 = re.compile(r"\b(?P<digits>\d{8})\b")
 COMPACT6 = re.compile(r"\b(?P<digits>\d{6})\b")
 
@@ -185,8 +208,8 @@ def _candidates(text: str, today: date, prefer: str) -> list[tuple[date, Decimal
             if prefer == "mdy"
             else [(digits[2:4], digits[:2], digits[4:]), (digits[:2], digits[2:4], digits[4:])]
         )
-        for month, day, year in pairs:
-            if value := _build(_year(year, today)[0], int(month), int(day)):
+        for mm, dd, yy in pairs:
+            if value := _build(_year(yy, today)[0], int(mm), int(dd)):
                 found.append((value, Decimal("0.6"), "six digits, no separators"))
                 break
 

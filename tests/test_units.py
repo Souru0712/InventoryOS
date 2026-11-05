@@ -2,7 +2,16 @@ from decimal import Decimal
 
 import pytest
 
-from app.units import Dimension, UnitError, convert, dimension_of, format_amount, format_qty, from_base, to_base
+from app.units import (
+    Dimension,
+    UnitError,
+    convert,
+    dimension_of,
+    format_amount,
+    format_qty,
+    from_base,
+    to_base,
+)
 
 
 def test_count_weight_volume_round_trip():

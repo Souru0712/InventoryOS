@@ -11,14 +11,16 @@ reports what is already there rather than creating duplicates.
 
 This is development tooling, not product code - nothing in app/ imports it.
 """
+
 from __future__ import annotations
 
 import argparse
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -40,17 +42,42 @@ def from_env_file(key: str) -> str:
             return value.strip().strip('"').strip("'")
     return ""
 
+
 # A café's opening stock: things you count, in the units a till understands. The weights and
 # volumes the product also tracks are entered in StockPulse, not in Square, which is the point.
-ITEMS = [
-    {"name": "Oat milk 1L carton", "sku": "OATM-1L", "upc": "0123450000029",
-     "price_cents": 320, "category": "Dairy", "count": 24},
-    {"name": "House Blend beans 1kg", "sku": "BEAN-HB-1K", "upc": "0123450000012",
-     "price_cents": 1800, "category": "Coffee", "count": 14},
-    {"name": "Takeaway cups 12oz", "sku": "CUP-12OZ", "upc": "0123450000036",
-     "price_cents": 0, "category": "Packaging", "count": 420},
-    {"name": "Tonic water 200ml", "sku": "TONIC-200", "upc": "0123450000043",
-     "price_cents": 180, "category": "Drinks", "count": 48},
+ITEMS: list[dict[str, Any]] = [
+    {
+        "name": "Oat milk 1L carton",
+        "sku": "OATM-1L",
+        "upc": "0123450000029",
+        "price_cents": 320,
+        "category": "Dairy",
+        "count": 24,
+    },
+    {
+        "name": "House Blend beans 1kg",
+        "sku": "BEAN-HB-1K",
+        "upc": "0123450000012",
+        "price_cents": 1800,
+        "category": "Coffee",
+        "count": 14,
+    },
+    {
+        "name": "Takeaway cups 12oz",
+        "sku": "CUP-12OZ",
+        "upc": "0123450000036",
+        "price_cents": 0,
+        "category": "Packaging",
+        "count": 420,
+    },
+    {
+        "name": "Tonic water 200ml",
+        "sku": "TONIC-200",
+        "upc": "0123450000043",
+        "price_cents": 180,
+        "category": "Drinks",
+        "count": 48,
+    },
 ]
 
 
@@ -71,7 +98,9 @@ class Square:
     def call(self, method: str, path: str, **kwargs) -> dict:
         response = self._client.request(method, path, **kwargs)
         if response.status_code >= 400:
-            raise SystemExit(f"Square said {response.status_code} to {method} {path}:\n{response.text[:800]}")
+            raise SystemExit(
+                f"Square said {response.status_code} to {method} {path}:\n{response.text[:800]}"
+            )
         return response.json() if response.content else {}
 
     def close(self) -> None:
@@ -113,32 +142,43 @@ def build_item(item: dict) -> dict:
         "item_data": {
             "name": item["name"],
             "abbreviation": item["name"][:3].upper(),
-            "variations": [{
-                "type": "ITEM_VARIATION",
-                "id": f"#var-{item['sku']}",
-                "item_variation_data": {
-                    "name": "Regular",
-                    "sku": item["sku"],
-                    "upc": item["upc"],
-                    "pricing_type": "FIXED_PRICING",
-                    "price_money": {"amount": item["price_cents"], "currency": "USD"},
-                    # Without this, Square holds no count for the item and there is nothing to sync.
-                    "track_inventory": True,
-                },
-            }],
+            "variations": [
+                {
+                    "type": "ITEM_VARIATION",
+                    "id": f"#var-{item['sku']}",
+                    "item_variation_data": {
+                        "name": "Regular",
+                        "sku": item["sku"],
+                        "upc": item["upc"],
+                        "pricing_type": "FIXED_PRICING",
+                        "price_money": {"amount": item["price_cents"], "currency": "USD"},
+                        # Without this, Square holds no count for the item and there is nothing to sync.
+                        "track_inventory": True,
+                    },
+                }
+            ],
         },
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--token", help="sandbox access token; defaults to SQUARE_SANDBOX_ACCESS_TOKEN")
-    parser.add_argument("--dry-run", action="store_true", help="report what would happen, change nothing")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--token", help="sandbox access token; defaults to SQUARE_SANDBOX_ACCESS_TOKEN"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="report what would happen, change nothing"
+    )
     args = parser.parse_args()
 
     settings = get_settings()
-    token = (args.token or os.environ.get("SQUARE_SANDBOX_ACCESS_TOKEN")
-             or from_env_file("SQUARE_SANDBOX_ACCESS_TOKEN"))
+    token = (
+        args.token
+        or os.environ.get("SQUARE_SANDBOX_ACCESS_TOKEN")
+        or from_env_file("SQUARE_SANDBOX_ACCESS_TOKEN")
+    )
     if not token:
         raise SystemExit(
             "No sandbox token. Developer Dashboard -> your app -> environment toggle on Sandbox ->\n"
@@ -146,7 +186,9 @@ def main() -> int:
             "or pass --token."
         )
     if settings.square_env != "sandbox":
-        raise SystemExit(f"SQUARE_ENV is {settings.square_env!r}; refusing to seed anything but a sandbox")
+        raise SystemExit(
+            f"SQUARE_ENV is {settings.square_env!r}; refusing to seed anything but a sandbox"
+        )
 
     square = Square(token, settings.square_api_base, settings.square_api_version)
     try:
@@ -159,36 +201,52 @@ def main() -> int:
 
         if args.dry_run:
             for item in wanted:
-                print(f"  would create {item['name']} ({item['sku']}) and set {item['count']} on hand")
+                print(
+                    f"  would create {item['name']} ({item['sku']}) and set {item['count']} on hand"
+                )
             for item in ITEMS:
                 if item["sku"] in known:
                     print(f"  already there: {item['name']} ({item['sku']})")
             return 0
 
         if wanted:
-            created = square.call("POST", "/v2/catalog/batch-upsert", json={
-                "idempotency_key": str(uuid.uuid4()),
-                "batches": [{"objects": [build_item(item) for item in wanted]}],
-            })
+            created = square.call(
+                "POST",
+                "/v2/catalog/batch-upsert",
+                json={
+                    "idempotency_key": str(uuid.uuid4()),
+                    "batches": [{"objects": [build_item(item) for item in wanted]}],
+                },
+            )
             # Square hands back its own ids against the #placeholders we sent.
-            mapping = {row["client_object_id"].removeprefix("#"): row["object_id"]
-                       for row in created.get("id_mappings") or []}
+            mapping = {
+                row["client_object_id"].removeprefix("#"): row["object_id"]
+                for row in created.get("id_mappings") or []
+            }
             for item in wanted:
                 known[item["sku"]] = mapping[f"var-{item['sku']}"]
                 print(f"  created {item['name']} ({item['sku']})")
 
-        changes = [{
-            "type": "PHYSICAL_COUNT",
-            "physical_count": {
-                "catalog_object_id": known[item["sku"]],
-                "location_id": location_id,
-                "state": "IN_STOCK",
-                "quantity": str(item["count"]),
-                "occurred_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
-            },
-        } for item in ITEMS]
-        square.call("POST", "/v2/inventory/changes/batch-create",
-                    json={"idempotency_key": str(uuid.uuid4()), "changes": changes})
+        changes = [
+            {
+                "type": "PHYSICAL_COUNT",
+                "physical_count": {
+                    "catalog_object_id": known[item["sku"]],
+                    "location_id": location_id,
+                    "state": "IN_STOCK",
+                    "quantity": str(item["count"]),
+                    "occurred_at": datetime.now(UTC)
+                    .isoformat(timespec="seconds")
+                    .replace("+00:00", "Z"),
+                },
+            }
+            for item in ITEMS
+        ]
+        square.call(
+            "POST",
+            "/v2/inventory/changes/batch-create",
+            json={"idempotency_key": str(uuid.uuid4()), "changes": changes},
+        )
         for item in ITEMS:
             print(f"  {item['name']}: {item['count']} on hand")
 

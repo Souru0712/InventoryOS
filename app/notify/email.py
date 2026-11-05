@@ -1,4 +1,5 @@
 """Email delivery over SMTP, logged per tenant. Falls back to logging in dev."""
+
 from __future__ import annotations
 
 import logging

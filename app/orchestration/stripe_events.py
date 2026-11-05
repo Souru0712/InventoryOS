@@ -7,10 +7,12 @@ Every handler is safe to run twice, because Stripe retries, and events arrive ou
 enough to matter: an older `updated` landing after a `deleted` would otherwise bring a canceled
 subscription back to life.
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -63,19 +65,22 @@ def plan_for_price(price_id: str | None) -> str | None:
     if not price_id:
         return None
     settings = get_settings()
-    for plan, configured in (("starter", settings.stripe_price_starter), ("pro", settings.stripe_price_pro)):
+    for plan, configured in (
+        ("starter", settings.stripe_price_starter),
+        ("pro", settings.stripe_price_pro),
+    ):
         if configured and configured == price_id:
             return plan
     log.warning("stripe price %s is not one of ours", price_id)
     return None
 
 
-def _moment(value: object) -> datetime | None:
+def _moment(value: Any) -> datetime | None:
     """Stripe sends seconds since the epoch."""
     if not value:
         return None
     try:
-        return datetime.fromtimestamp(int(value), tz=timezone.utc)
+        return datetime.fromtimestamp(int(value), tz=UTC)
     except (TypeError, ValueError, OSError):
         return None
 
@@ -83,7 +88,7 @@ def _moment(value: object) -> datetime | None:
 def _subscription_plan(subscription: dict) -> str | None:
     items = ((subscription.get("items") or {}).get("data")) or []
     for item in items:
-        plan = plan_for_price(((item.get("price") or {}).get("id")))
+        plan = plan_for_price((item.get("price") or {}).get("id"))
         if plan:
             return plan
     return None
@@ -119,7 +124,7 @@ def _is_stale(tenant: Tenant, event: dict) -> bool:
     if created is None or seen is None:
         return False
     if seen.tzinfo is None:
-        seen = seen.replace(tzinfo=timezone.utc)
+        seen = seen.replace(tzinfo=UTC)
     return created < seen
 
 
@@ -140,7 +145,9 @@ def apply_subscription(db: Session, tenant: Tenant, subscription: dict) -> str:
 
     if status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING):
         start_subscription(
-            db, tenant, plan,
+            db,
+            tenant,
+            plan,
             subscription_id=subscription.get("id"),
             customer_id=subscription.get("customer"),
             period_start=period_start,
@@ -194,14 +201,21 @@ def handle_event(db: Session, event: dict) -> dict:
                 tenant.stripe_subscription_id = subscription
             plan = (payload.get("metadata") or {}).get("plan")
             if plan in PLAN_IDS:
-                start_subscription(db, tenant, plan, subscription_id=tenant.stripe_subscription_id,
-                                   customer_id=tenant.stripe_customer_id)
+                start_subscription(
+                    db,
+                    tenant,
+                    plan,
+                    subscription_id=tenant.stripe_subscription_id,
+                    customer_id=tenant.stripe_customer_id,
+                )
                 result["status"] = SubscriptionStatus.ACTIVE.value
         log.info("tenant %s completed checkout", tenant.id)
 
     elif kind.startswith("customer.subscription."):
         if kind.endswith(".deleted"):
-            tenant.current_period_end = _moment(payload.get("current_period_end")) or tenant.current_period_end
+            tenant.current_period_end = (
+                _moment(payload.get("current_period_end")) or tenant.current_period_end
+            )
             end_subscription(db, tenant, SubscriptionStatus.CANCELED)
             result["status"] = SubscriptionStatus.CANCELED.value
         elif kind.endswith(".paused"):
@@ -223,7 +237,9 @@ def handle_event(db: Session, event: dict) -> dict:
         if tenant.subscription_status is SubscriptionStatus.PAST_DUE:
             tenant.subscription_status = SubscriptionStatus.ACTIVE
             tenant.past_due_since = None
-        tenant.current_period_start = _moment((payload.get("period_start"))) or tenant.current_period_start
+        tenant.current_period_start = (
+            _moment(payload.get("period_start")) or tenant.current_period_start
+        )
         tenant.current_period_end = _moment(payload.get("period_end")) or tenant.current_period_end
         result["status"] = tenant.subscription_status.value
 

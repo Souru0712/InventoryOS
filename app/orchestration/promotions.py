@@ -3,11 +3,12 @@
 Suggestions are never stored. They are recomputed from stock every time, so a row can never
 go on recommending something the shelf has already moved past. Only decisions persist.
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -39,9 +40,7 @@ def _open_decisions(db: Session, tenant_id: int, today: date) -> set[int]:
     """Items already spoken for: running, dismissed, or snoozed until later."""
     spoken_for = set()
     for row in db.scalars(
-        select(Promotion).where(
-            Promotion.tenant_id == tenant_id, Promotion.status.in_(DECIDED)
-        )
+        select(Promotion).where(Promotion.tenant_id == tenant_id, Promotion.status.in_(DECIDED))
     ):
         if row.status is PromotionStatus.SNOOZED and row.snooze_until and row.snooze_until <= today:
             continue  # the snooze has run out, so it can be suggested again
@@ -53,7 +52,7 @@ def suggestions_for(
     db: Session, tenant_id: int, today: date | None = None, location_id: int | None = None
 ) -> list[Suggestion]:
     """What is worth marking down right now, biggest loss first."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     velocity = velocity_map(db, tenant_id, today)
     already = _open_decisions(db, tenant_id, today)
 
@@ -99,7 +98,7 @@ def _record(
     snooze_until: date | None = None,
     today: date | None = None,
 ) -> Promotion:
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     item = suggestion.item
     batch = db.get(StockBatch, item.batch_id) if item.batch_id else None
     promotion = Promotion(
@@ -137,8 +136,13 @@ def accept(
 ) -> Promotion:
     """Start a markdown at the price the owner settled on, which may not be the suggested one."""
     return _record(
-        db, tenant_id, suggestion, PromotionStatus.ACTIVE, user_id,
-        accepted_price_cents=price_cents, today=today,
+        db,
+        tenant_id,
+        suggestion,
+        PromotionStatus.ACTIVE,
+        user_id,
+        accepted_price_cents=price_cents,
+        today=today,
     )
 
 
@@ -157,10 +161,15 @@ def snooze(
     today: date | None = None,
 ) -> Promotion:
     """Ask again later. The suggestion is recomputed then, against whatever the shelf holds."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     return _record(
-        db, tenant_id, suggestion, PromotionStatus.SNOOZED, user_id,
-        snooze_until=today + timedelta(days=days), today=today,
+        db,
+        tenant_id,
+        suggestion,
+        PromotionStatus.SNOOZED,
+        user_id,
+        snooze_until=today + timedelta(days=days),
+        today=today,
     )
 
 
@@ -169,7 +178,7 @@ def end(db: Session, promotion: Promotion, today: date | None = None) -> Promoti
     item = db.get(StockItem, promotion.stock_item_id)
     promotion.status = PromotionStatus.ENDED
     promotion.units_after_base = Decimal(item.qty_base or 0) if item else None
-    promotion.ended_at = datetime.now(timezone.utc)
+    promotion.ended_at = datetime.now(UTC)
     db.flush()
     return promotion
 
@@ -185,11 +194,9 @@ def _velocity_since(
     return daily_velocity(daily, days, today)
 
 
-def running(
-    db: Session, tenant_id: int, today: date | None = None
-) -> list[RunningPromotion]:
+def running(db: Session, tenant_id: int, today: date | None = None) -> list[RunningPromotion]:
     """Markdowns in progress, each with what has happened to its sales since."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     rows = db.scalars(
         select(Promotion).where(
             Promotion.tenant_id == tenant_id, Promotion.status == PromotionStatus.ACTIVE
@@ -214,7 +221,5 @@ def running(
     return result
 
 
-def find_suggestion(
-    suggestions: list[Suggestion], stock_item_id: int
-) -> Suggestion | None:
+def find_suggestion(suggestions: list[Suggestion], stock_item_id: int) -> Suggestion | None:
     return next((s for s in suggestions if s.item.stock_item_id == stock_item_id), None)
