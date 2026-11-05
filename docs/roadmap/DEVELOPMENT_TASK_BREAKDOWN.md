@@ -36,7 +36,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 
 | ID | Task | Pri | Size | Milestone | Depends on | Status |
 |---|---|---|---|---|---|---|
-| T0.01 | Hermetic test configuration | P0 | S | M0 | — | In review (verified locally 2026-11-05; CI arrives with T0.02) |
+| T0.01 | Hermetic test configuration | P0 | S | M0 | — | In review (committed 2026-11-05; awaits its first CI run, T0.02) |
 | T0.02 | CI on GitHub Actions (SQLite + Postgres 16) | P0 | S | M0 | T0.01 | Not started |
 | T0.03 | Lock dependencies, audit, Dependabot | P0 | S | M0 | T0.02 | Not started |
 | T0.04 | Coding standards: ruff + mypy | P1 | S | M0 | T0.02 | Not started |

@@ -1,8 +1,9 @@
 """Runtime settings, env-driven."""
+import os
 from functools import lru_cache
 
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 DEPLOYED_ENVS = {"staging", "production"}
 PLACEHOLDER_SECRET_KEYS = {"dev-insecure-secret-change-me", "change-me-openssl-rand-hex-32"}
@@ -66,6 +67,20 @@ class Settings(BaseSettings):
     customer_login_ttl_minutes: int = 20
     # Snack boxes are a private module, never part of the product. Empty means nobody can reach it.
     snack_box_tenant_ids: str = ""
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Under test, whatever .env is on the developer's machine must not change the results.
+        if os.environ.get("APP_ENV") == "test":
+            return init_settings, env_settings, file_secret_settings
+        return init_settings, env_settings, dotenv_settings, file_secret_settings
 
     @model_validator(mode="before")
     @classmethod

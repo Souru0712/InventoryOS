@@ -30,8 +30,8 @@ implementation sessions; the detail lives in `docs/`.
 
 ## Commands
 - Tests: `python -m pytest -q` from the repository root with the project venv
-  (Windows: `.venv/Scripts/python.exe -m pytest -q`). Until T0.01 lands, prefix
-  `APP_BASE_URL=http://localhost:8000` or a developer `.env` breaks ~46 tests.
+  (Windows: `.venv/Scripts/python.exe -m pytest -q`). The suite is hermetic: under
+  `APP_ENV=test` settings ignore `.env`, and `tests/conftest.py` clears inherited settings variables.
 - Postgres run: set `TEST_DATABASE_URL` to an empty Postgres 16 database.
 - Audit probes in `docs/audit/probes/` assert known defects; never add them to CI.
 

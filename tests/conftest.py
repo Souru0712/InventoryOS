@@ -5,6 +5,9 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet
 
+# Importing the Settings class reads nothing; settings are only read on first get_settings().
+from app.config import Settings  # noqa: E402
+
 _TMP = Path(tempfile.mkdtemp(prefix="stockpulse-tests-"))
 # Point TEST_DATABASE_URL at an empty Postgres database to run the whole suite there instead.
 _DATABASE_URL = os.environ.get("TEST_DATABASE_URL") or f"sqlite:///{(_TMP / 'test.db').as_posix()}"
@@ -12,8 +15,14 @@ if _DATABASE_URL.startswith("postgres"):
     # A test that deadlocks against itself should fail in seconds, not hang the run.
     os.environ.setdefault("PGOPTIONS", "-c lock_timeout=10000 -c statement_timeout=120000")
 
+# Hermetic: no setting may come from the shell that launched the tests. Every field is either pinned
+# below or takes its default from code. Settings ignore .env under APP_ENV=test (app/config.py).
+for _field in Settings.model_fields:
+    os.environ.pop(_field.upper(), None)
+
 os.environ.update(
     APP_ENV="test",
+    APP_BASE_URL="http://localhost:8000",
     DATABASE_URL=_DATABASE_URL,
     ENCRYPTION_KEY=Fernet.generate_key().decode(),
     SECRET_KEY="test-secret-key",
