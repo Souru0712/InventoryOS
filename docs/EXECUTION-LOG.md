@@ -43,7 +43,9 @@ issues · decisions · next task.
 - Full suite after all changes: 546 passed, 6 skipped (unchanged); the new test passes, and fails
   with `AttributeError: 'UploadFile' object has no attribute 'strip'` when the fix is stashed.
 - Workflow YAML parses (five jobs); docs checker 0 problems.
-- **Not verified yet:** the CI run.
+- **CI on PR #10 (commit `6fe3edb`), all five jobs green:** Lint and types ("131 files already
+  formatted", mypy "no issues found in 76 source files"); SQLite 547 passed, 6 skipped, docs 0
+  problems; PostgreSQL 16 553 passed, 0 skipped; dependency audit; Docker image.
 
 **Files changed**
 - `pyproject.toml`, `uv.lock`, `.git-blame-ignore-revs` (new), `.github/workflows/ci.yml`,
