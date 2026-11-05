@@ -13,9 +13,9 @@ implementation sessions; the detail lives in `docs/`.
 
 ## How to work
 - One task at a time, only if its dependencies are Completed. Small, reviewable commits.
-- `main` is protected (ruleset "Protect main": both CI checks required, branch up to date, no force
+- `main` is protected (ruleset "Protect main": required CI checks, branch up to date, no force
   push, no deletion, no bypass). Never push to `main` directly: push a branch, open a pull request,
-  and merge only when both checks are green and the owner approves. The repository is public.
+  and merge only when every check is green and the owner approves. The repository is public.
 - Read the requirement before coding; no unrelated refactoring; preserve working behaviour.
 - Add or update tests with every change; run the full suite; CI must be green on SQLite and Postgres.
 - Record completion: task status in the index + an entry in `docs/EXECUTION-LOG.md`.
@@ -38,9 +38,15 @@ implementation sessions; the detail lives in `docs/`.
 - Tests: `uv run pytest -q` from the repository root (or `.venv/Scripts/python.exe -m pytest -q`). The suite is hermetic: under
   `APP_ENV=test` settings ignore `.env`, and `tests/conftest.py` clears inherited settings variables.
 - Postgres run: set `TEST_DATABASE_URL` to an empty Postgres 16 database.
+- Lint and format: `uv run ruff check .` and `uv run ruff format .` (line length 100, bandit
+  security rules on). Types: `uv run mypy`, strict for `app/transform/` and the coming
+  `app/access/` and `app/ledger/`, gradual elsewhere; the snack-box modules are skipped until
+  T0.05 removes them. Settings in `pyproject.toml`. Keep formatting-only changes in their own
+  commit and list it in `.git-blame-ignore-revs`.
 - CI: `.github/workflows/ci.yml` runs the docs checker and the suite on SQLite, and the suite on
-  PostgreSQL 16 (no skips allowed), plus a dependency audit (pip-audit on the lock) and a Docker
-  build whose installed versions must match `uv.lock`, on every push to `main` and every PR.
+  PostgreSQL 16 (no skips allowed), plus lint and types (ruff, mypy), a dependency audit
+  (pip-audit on the lock) and a Docker build whose installed versions must match `uv.lock`, on
+  every push to `main` and every PR.
   Dependabot proposes dependency, action and image updates weekly.
 - Audit probes in `docs/audit/probes/` assert known defects; never add them to CI.
 
