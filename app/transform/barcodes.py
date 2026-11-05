@@ -4,6 +4,7 @@ Barcodes are strings, never numbers. 041000123456 and 41000123456 are different 
 so a leading zero that an integer would drop is the difference between the right item and
 the wrong one.
 """
+
 from __future__ import annotations
 
 import re
@@ -43,7 +44,9 @@ def check_digit(body: str) -> str:
     """
     if not is_numeric(body):
         raise ValueError(f"{body!r} is not numeric")
-    total = sum(int(digit) * (3 if index % 2 == 0 else 1) for index, digit in enumerate(reversed(body)))
+    total = sum(
+        int(digit) * (3 if index % 2 == 0 else 1) for index, digit in enumerate(reversed(body))
+    )
     return str((10 - total % 10) % 10)
 
 

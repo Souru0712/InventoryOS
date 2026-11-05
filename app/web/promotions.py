@@ -1,4 +1,5 @@
 """Markdowns: what the numbers suggest, and what the owner decides to do about it."""
+
 from __future__ import annotations
 
 import logging

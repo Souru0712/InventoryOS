@@ -1,4 +1,5 @@
 """Square webhook signatures, and reading an inventory event off the payload."""
+
 from __future__ import annotations
 
 import base64

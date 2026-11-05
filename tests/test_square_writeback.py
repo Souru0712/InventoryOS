@@ -4,6 +4,7 @@ Square owns the count for its own SKUs. Anything the app worked out - a previous
 delivery, or a derived weight - must never be sent as a physical count, because a count replaces
 whatever Square holds, including the sale it rang up a minute ago.
 """
+
 from decimal import Decimal
 
 import pytest
@@ -20,8 +21,15 @@ INVOICE = {
     "currency": "USD",
     "total_cents": 1200,
     "lines": [
-        {"raw_text": "COCA-COLA 12OZ x24", "product_name": "Coca-Cola 12oz", "quantity": 24,
-         "unit": "each", "pack_size": None, "unit_price_cents": 50, "line_total_cents": 1200},
+        {
+            "raw_text": "COCA-COLA 12OZ x24",
+            "product_name": "Coca-Cola 12oz",
+            "quantity": 24,
+            "unit": "each",
+            "pack_size": None,
+            "unit_price_cents": 50,
+            "line_total_cents": 1200,
+        },
     ],
 }
 
@@ -62,12 +70,27 @@ class FakeSquare:
 @pytest.fixture
 def square(db, tenant, location, monkeypatch):
     """A connected tenant, one Square-tracked item, and a fake Square holding 24 of it."""
-    db.add(ProviderConnection(tenant_id=tenant.id, provider="square", merchant_id="M-1",
-                              access_token_enc="enc", status="active"))
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="coke",
-                     name="Coca-Cola 12oz", dimension=Dimension.COUNT, stock_unit="each",
-                     track_mode=TrackMode.PROVIDER, provider_variation_id="VAR-COKE",
-                     receive_unit="each", qty_base=Decimal("24"))
+    db.add(
+        ProviderConnection(
+            tenant_id=tenant.id,
+            provider="square",
+            merchant_id="M-1",
+            access_token_enc="enc",
+            status="active",
+        )
+    )
+    item = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="coke",
+        name="Coca-Cola 12oz",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode=TrackMode.PROVIDER,
+        provider_variation_id="VAR-COKE",
+        receive_unit="each",
+        qty_base=Decimal("24"),
+    )
     db.add(item)
     db.commit()
     fake = FakeSquare({("VAR-COKE", location.provider_location_id): Decimal("24")})
@@ -81,8 +104,14 @@ def shelf(fake: FakeSquare, location) -> Decimal:
 
 
 def receive_by_invoice(db, tenant, location, item, quantity: str) -> dict:
-    document = save_upload(db, tenant.id, location.id, f"note-{quantity}.jpg",
-                           f"delivery of {quantity}".encode(), "image/jpeg")
+    document = save_upload(
+        db,
+        tenant.id,
+        location.id,
+        f"note-{quantity}.jpg",
+        f"delivery of {quantity}".encode(),
+        "image/jpeg",
+    )
     db.commit()
     parse_document(db, document.id, StubExtractor(INVOICE))
     db.commit()
@@ -141,9 +170,17 @@ def test_the_same_receipt_pushed_twice_is_only_counted_once(db, tenant, location
 def test_a_derived_weight_is_never_pushed_to_square_at_all(db, tenant, location, square):
     """Flour is calculated from recipes; sending it as a count would be inventing an observation."""
     fake, _item = square
-    flour = StockItem(tenant_id=tenant.id, location_id=location.id, slug="flour", name="Pastry flour",
-                      dimension=Dimension.WEIGHT, stock_unit="kg", track_mode=TrackMode.DERIVED,
-                      provider_variation_id="VAR-FLOUR", qty_base=Decimal("45000"))
+    flour = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="flour",
+        name="Pastry flour",
+        dimension=Dimension.WEIGHT,
+        stock_unit="kg",
+        track_mode=TrackMode.DERIVED,
+        provider_variation_id="VAR-FLOUR",
+        qty_base=Decimal("45000"),
+    )
     db.add(flour)
     db.flush()
 

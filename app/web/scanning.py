@@ -2,6 +2,7 @@
 
 The page talks JSON to these routes so a scan never reloads the camera.
 """
+
 from __future__ import annotations
 
 import logging
@@ -148,7 +149,9 @@ def link(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
-    return JSONResponse(_item_payload(db, tenant.id, item, identifier.value, identifier.identifier_type.value))
+    return JSONResponse(
+        _item_payload(db, tenant.id, item, identifier.value, identifier.identifier_type.value)
+    )
 
 
 def _quantity(raw: str, item: StockItem, as_packs: bool) -> Decimal:
@@ -199,7 +202,11 @@ def receive(
     except InvalidOperation:
         confidence = None
     result = receive_scanned(
-        db, item, qty_base, user_id=user.id, expires_on=expiry,
+        db,
+        item,
+        qty_base,
+        user_id=user.id,
+        expires_on=expiry,
         date_type=date_type if expiry else "unknown",
         date_confidence=confidence if expiry else None,
     )
@@ -298,8 +305,14 @@ def codes_for_item(
         )
     )
     return JSONResponse(
-        {"codes": [{"value": r.value, "type": r.identifier_type.value, "source": r.source} for r in rows]}
+        {
+            "codes": [
+                {"value": r.value, "type": r.identifier_type.value, "source": r.source}
+                for r in rows
+            ]
+        }
     )
+
 
 def _photo_limit() -> int:
     """The same limit as an invoice photo: the image is shrunk before it is sent anywhere."""

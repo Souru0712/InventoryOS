@@ -1,4 +1,5 @@
 """Password hashing and session-backed auth. Tenant isolation starts here."""
+
 from __future__ import annotations
 
 import secrets
@@ -57,9 +58,7 @@ def require_user(user: User | None = Depends(current_user)) -> User:
     return user
 
 
-def require_tenant(
-    user: User = Depends(require_user), db: Session = Depends(get_db)
-) -> Tenant:
+def require_tenant(user: User = Depends(require_user), db: Session = Depends(get_db)) -> Tenant:
     tenant = db.get(Tenant, user.tenant_id)
     if tenant is None:
         raise HTTPException(status_code=403, detail="no workspace for this account")
@@ -92,7 +91,9 @@ def logout_customer(request: Request) -> None:
     request.session.pop(SESSION_CUSTOMER_KEY, None)
 
 
-def current_customer(tenant_id: int, request: Request, db: Session = Depends(get_db)) -> Customer | None:
+def current_customer(
+    tenant_id: int, request: Request, db: Session = Depends(get_db)
+) -> Customer | None:
     customer_id = request.session.get(SESSION_CUSTOMER_KEY)
     if not customer_id:
         return None
@@ -103,7 +104,9 @@ def current_customer(tenant_id: int, request: Request, db: Session = Depends(get
     return customer
 
 
-def require_customer(tenant_id: int, customer: Customer | None = Depends(current_customer)) -> Customer:
+def require_customer(
+    tenant_id: int, customer: Customer | None = Depends(current_customer)
+) -> Customer:
     if customer is None:
         raise HTTPException(
             status_code=status.HTTP_303_SEE_OTHER,

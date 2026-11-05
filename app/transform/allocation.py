@@ -4,6 +4,7 @@ Square has no reserved state, so a paid box's units are sold out of IN_STOCK as 
 is allocated. Until that change lands the units are still inside the till's count, so every line
 records whether its units have been taken out of the count yet ("applied").
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable

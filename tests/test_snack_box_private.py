@@ -1,5 +1,6 @@
 """The snack box shop is private: no plan buys it, and an account that is not on the list is never
 told it exists."""
+
 import json
 
 from sqlalchemy import select
@@ -26,7 +27,9 @@ def furnish(square_fake, open_shop: bool = True) -> tuple[int, int]:
     """One signed-up account with a stocked, paid snack box behind it."""
     with SessionLocal() as db:
         tenant = db.scalars(select(Tenant)).one()
-        location = Location(tenant_id=tenant.id, provider="demo", provider_location_id="L1", name="Main")
+        location = Location(
+            tenant_id=tenant.id, provider="demo", provider_location_id="L1", name="Main"
+        )
         db.add(location)
         db.flush()
         open_store(db, tenant, location, square_fake)
@@ -46,8 +49,14 @@ def test_a_customers_deployment_has_no_snack_box_at_all(web, square):
     store, order = furnish(square)
     get_settings().snack_box_tenant_ids = ""  # this account was never on the list
 
-    for path in ["/app/boxes", f"/app/boxes/{order}", "/app/boxes/stock", "/app/boxes/snacks",
-                 "/app/boxes/settings", "/app/boxes/referrals"]:
+    for path in [
+        "/app/boxes",
+        f"/app/boxes/{order}",
+        "/app/boxes/stock",
+        "/app/boxes/snacks",
+        "/app/boxes/settings",
+        "/app/boxes/referrals",
+    ]:
         assert web.get(path).status_code == 404, path
     assert web.post(f"/app/boxes/{order}/pack", data={"line": "1"}).status_code == 404
     assert web.post(f"/app/boxes/{order}/refund").status_code == 404
@@ -65,7 +74,9 @@ def test_the_operators_own_account_keeps_it(web, square):
     assert "/app/boxes" in web.get("/app").text
 
 
-def test_housekeeping_skips_accounts_that_are_not_on_the_list(db, tenant, location, square, monkeypatch):
+def test_housekeeping_skips_accounts_that_are_not_on_the_list(
+    db, tenant, location, square, monkeypatch
+):
     open_store(db, tenant, location, square)
     rival = Tenant(name="Rival Cafe")
     db.add(rival)
@@ -74,7 +85,9 @@ def test_housekeeping_skips_accounts_that_are_not_on_the_list(db, tenant, locati
     db.commit()
 
     seen = []
-    monkeypatch.setattr(scheduler, "expire_unpaid", lambda session, tenant_id: seen.append(tenant_id) or 0)
+    monkeypatch.setattr(
+        scheduler, "expire_unpaid", lambda session, tenant_id: seen.append(tenant_id) or 0
+    )
     monkeypatch.setattr(scheduler, "reconcile", lambda session, tenant_id: [])
     scheduler.box_housekeeping()
     assert seen == [tenant.id]
@@ -88,15 +101,31 @@ def test_the_square_webhook_runs_no_box_logic_for_another_merchant(web, monkeypa
         tenant = Tenant(name="Rival Cafe")
         db.add(tenant)
         db.flush()
-        db.add(ProviderConnection(tenant_id=tenant.id, provider="square", merchant_id="M-RIVAL",
-                                  access_token_enc="x", status="active"))
+        db.add(
+            ProviderConnection(
+                tenant_id=tenant.id,
+                provider="square",
+                merchant_id="M-RIVAL",
+                access_token_enc="x",
+                status="active",
+            )
+        )
         db.commit()
 
-    body = json.dumps({
-        "merchant_id": "M-RIVAL", "type": "payment.updated", "event_id": "E1",
-        "data": {"object": {"payment": {"id": "P1", "status": "COMPLETED", "order_id": "SQ-1"}}},
-    }).encode()
+    body = json.dumps(
+        {
+            "merchant_id": "M-RIVAL",
+            "type": "payment.updated",
+            "event_id": "E1",
+            "data": {
+                "object": {"payment": {"id": "P1", "status": "COMPLETED", "order_id": "SQ-1"}}
+            },
+        }
+    ).encode()
     signature = signature_for("https://stockpulse.test/webhooks/square", body, "test-key")
-    response = web.post("/webhooks/square", content=body,
-                        headers={"x-square-hmacsha256-signature": signature, "content-type": "application/json"})
+    response = web.post(
+        "/webhooks/square",
+        content=body,
+        headers={"x-square-hmacsha256-signature": signature, "content-type": "application/json"},
+    )
     assert response.json() == {"ignored": "not a snack box merchant"}

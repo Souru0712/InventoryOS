@@ -4,6 +4,7 @@ A score on its own is a guess dressed up as a fact. Each dimension here is score
 that fits in a sentence, carries the findings that moved it, and says so plainly when it was
 not scored at all: a store that has dated nothing does not get a perfect expiry score for it.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -95,6 +96,7 @@ def band_for(score: int | None) -> tuple[str, str]:
 
 # --- inputs -------------------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ItemHealth:
     """One stock item, with the sales signal needed to judge it."""
@@ -183,6 +185,7 @@ class HealthInput:
 
 # --- output -------------------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Finding:
     """One line of explanation, and where to go to act on it."""
@@ -255,11 +258,14 @@ class HealthReport:
         return {
             "score": self.score,
             "currency": self.currency,
-            "components": {c.key: {"score": c.score, "figures": c.figures} for c in self.components},
+            "components": {
+                c.key: {"score": c.score, "figures": c.figures} for c in self.components
+            },
         }
 
 
 # --- the five dimensions ------------------------------------------------------------------------
+
 
 def importance(items: list[ItemHealth]) -> dict[int, Decimal]:
     """How much each item matters: the value of it that sells in a day, at cost.
@@ -292,22 +298,33 @@ def score_stock(items: list[ItemHealth], weights: dict[int, Decimal]) -> Compone
 
     findings = []
     if out:
-        findings.append(Finding("bad", f"{_n(len(out), 'product')} out of stock", "/app/reorder", _ids(out)))
+        findings.append(
+            Finding("bad", f"{_n(len(out), 'product')} out of stock", "/app/reorder", _ids(out))
+        )
     if below:
-        findings.append(Finding(
-            "warn", f"{_n(len(below), 'product')} at or below the reorder point", "/app/reorder", _ids(below)
-        ))
+        findings.append(
+            Finding(
+                "warn",
+                f"{_n(len(below), 'product')} at or below the reorder point",
+                "/app/reorder",
+                _ids(below),
+            )
+        )
     if not low:
         findings.append(Finding("good", "Everything is above its reorder point"))
     return ComponentScore(
-        "stock", score, findings,
+        "stock",
+        score,
+        findings,
         {"tracked": len(items), "out_of_stock": len(out), "below_reorder": len(below)},
     )
 
 
 def score_expiry(expiry: ExpiryFigures, total_value_cents: int, currency: str) -> ComponentScore:
     if expiry.dated_items == 0:
-        return _not_scored("expiry", "nothing is dated, so there is nothing to measure", "/app/expiring")
+        return _not_scored(
+            "expiry", "nothing is dated, so there is nothing to measure", "/app/expiring"
+        )
 
     risk = expiry.at_risk_cents + expiry.expired_cents
     if total_value_cents > 0:
@@ -318,27 +335,36 @@ def score_expiry(expiry: ExpiryFigures, total_value_cents: int, currency: str) -
 
     findings = []
     if expiry.expired_cents:
-        findings.append(Finding(
-            "bad",
-            f"{money(expiry.expired_cents, currency)} past its date and still on the shelf, "
-            f"across {_n(expiry.expired_products, 'product')}",
-            "/app/expiring",
-        ))
+        findings.append(
+            Finding(
+                "bad",
+                f"{money(expiry.expired_cents, currency)} past its date and still on the shelf, "
+                f"across {_n(expiry.expired_products, 'product')}",
+                "/app/expiring",
+            )
+        )
     if expiry.at_risk_cents:
-        findings.append(Finding(
-            "bad" if score < 60 else "warn",
-            f"{money(expiry.at_risk_cents, currency)} may expire unsold, "
-            f"across {_n(expiry.at_risk_products, 'product')}",
-            "/app/promotions",
-        ))
+        findings.append(
+            Finding(
+                "bad" if score < 60 else "warn",
+                f"{money(expiry.at_risk_cents, currency)} may expire unsold, "
+                f"across {_n(expiry.at_risk_products, 'product')}",
+                "/app/promotions",
+            )
+        )
     if not risk:
         findings.append(Finding("good", "Nothing dated is at risk of expiring unsold"))
-    return ComponentScore("expiry", score, findings, {
-        "at_risk_cents": expiry.at_risk_cents,
-        "at_risk_products": expiry.at_risk_products,
-        "expired_cents": expiry.expired_cents,
-        "expired_products": expiry.expired_products,
-    })
+    return ComponentScore(
+        "expiry",
+        score,
+        findings,
+        {
+            "at_risk_cents": expiry.at_risk_cents,
+            "at_risk_products": expiry.at_risk_products,
+            "expired_cents": expiry.expired_cents,
+            "expired_products": expiry.expired_products,
+        },
+    )
 
 
 def score_overstock(items: list[ItemHealth], currency: str) -> ComponentScore:
@@ -351,31 +377,46 @@ def score_overstock(items: list[ItemHealth], currency: str) -> ComponentScore:
     slow = [h for h in over if not h.not_selling]
     total = sum(h.value_cents for h in judged)
     over_value = sum(h.value_cents for h in over)
-    share = Decimal(over_value) / Decimal(total) if total > 0 else Decimal(len(over)) / Decimal(len(judged))
+    share = (
+        Decimal(over_value) / Decimal(total)
+        if total > 0
+        else Decimal(len(over)) / Decimal(len(judged))
+    )
     score = _score_from_share(share)
 
     findings = []
     if slow:
-        findings.append(Finding(
-            "warn",
-            f"{_n(len(slow), 'slow-moving product')}, {money(sum(h.value_cents for h in slow), currency)} "
-            f"tied up in over {OVERSTOCK_DAYS} days of supply",
-            "/app/health#overstock",
-            _ids(slow),
-        ))
+        findings.append(
+            Finding(
+                "warn",
+                f"{_n(len(slow), 'slow-moving product')}, {money(sum(h.value_cents for h in slow), currency)} "
+                f"tied up in over {OVERSTOCK_DAYS} days of supply",
+                "/app/health#overstock",
+                _ids(slow),
+            )
+        )
     if dead:
-        findings.append(Finding(
-            "warn",
-            f"{_n(len(dead), 'product')} with no sales in four weeks, "
-            f"{money(sum(h.value_cents for h in dead), currency)} on the shelf",
-            "/app/health#overstock",
-            _ids(dead),
-        ))
+        findings.append(
+            Finding(
+                "warn",
+                f"{_n(len(dead), 'product')} with no sales in four weeks, "
+                f"{money(sum(h.value_cents for h in dead), currency)} on the shelf",
+                "/app/health#overstock",
+                _ids(dead),
+            )
+        )
     if not over:
         findings.append(Finding("good", "Nothing is sitting on the shelf too long"))
-    return ComponentScore("overstock", score, findings, {
-        "overstock_items": len(over), "dead_items": len(dead), "overstock_cents": over_value,
-    })
+    return ComponentScore(
+        "overstock",
+        score,
+        findings,
+        {
+            "overstock_items": len(over),
+            "dead_items": len(dead),
+            "overstock_cents": over_value,
+        },
+    )
 
 
 def score_reorder(items: list[ItemHealth], weights: dict[int, Decimal]) -> ComponentScore:
@@ -385,7 +426,9 @@ def score_reorder(items: list[ItemHealth], weights: dict[int, Decimal]) -> Compo
     judged = [h for h in selling if not h.at_or_below_reorder]
     if not judged:
         # Every selling item is already at its reorder point; stock availability carries that.
-        return _not_scored("reorder", "everything that sells is already at its reorder point", "/app/reorder")
+        return _not_scored(
+            "reorder", "everything that sells is already at its reorder point", "/app/reorder"
+        )
 
     total = sum((weights[h.item.id] for h in judged), ZERO)
     approaching = [h for h in judged if h.approaching_stockout]
@@ -393,14 +436,18 @@ def score_reorder(items: list[ItemHealth], weights: dict[int, Decimal]) -> Compo
 
     findings = []
     if approaching:
-        findings.append(Finding(
-            "warn",
-            f"{_n(len(approaching), 'product')} will run out before a delivery could arrive",
-            "/app/reorder",
-            _ids(approaching),
-        ))
+        findings.append(
+            Finding(
+                "warn",
+                f"{_n(len(approaching), 'product')} will run out before a delivery could arrive",
+                "/app/reorder",
+                _ids(approaching),
+            )
+        )
     else:
-        findings.append(Finding("good", "Nothing above its reorder point will run out before a delivery"))
+        findings.append(
+            Finding("good", "Nothing above its reorder point will run out before a delivery")
+        )
     return ComponentScore("reorder", score, findings, {"approaching": len(approaching)})
 
 
@@ -426,33 +473,54 @@ def score_data(
         checks.append(Decimal(len(derived) - len(stale)) / len(derived) * HUNDRED)
     score = _round(sum(checks, ZERO) / len(checks))
 
-    findings = [Finding(
-        "good" if score >= 90 else "warn", f"{score}% of stock information complete",
-        None if score >= 90 else "/app/health#data",
-    )]
+    findings = [
+        Finding(
+            "good" if score >= 90 else "warn",
+            f"{score}% of stock information complete",
+            None if score >= 90 else "/app/health#data",
+        )
+    ]
     if needs_dates:
-        findings.append(Finding(
-            "warn", f"{_n(needs_dates, 'product')} still {'needs' if needs_dates == 1 else 'need'} dates",
-            "/app/expiring",
-        ))
+        findings.append(
+            Finding(
+                "warn",
+                f"{_n(needs_dates, 'product')} still {'needs' if needs_dates == 1 else 'need'} dates",
+                "/app/expiring",
+            )
+        )
     if no_cost:
-        findings.append(Finding(
-            "warn", f"{_n(len(no_cost), 'product')} with no cost, so its value is not counted", "/app",
-            _ids(no_cost),
-        ))
+        findings.append(
+            Finding(
+                "warn",
+                f"{_n(len(no_cost), 'product')} with no cost, so its value is not counted",
+                "/app",
+                _ids(no_cost),
+            )
+        )
     if no_reorder:
-        findings.append(Finding(
-            "warn", f"{_n(len(no_reorder), 'product')} with no reorder point", "/app", _ids(no_reorder)
-        ))
+        findings.append(
+            Finding(
+                "warn",
+                f"{_n(len(no_reorder), 'product')} with no reorder point",
+                "/app",
+                _ids(no_reorder),
+            )
+        )
     if stale:
-        findings.append(Finding(
-            "warn", f"{_n(len(stale), 'weight or volume item')} not counted in {STALE_COUNT_DAYS} days",
-            "/app", _ids(stale),
-        ))
+        findings.append(
+            Finding(
+                "warn",
+                f"{_n(len(stale), 'weight or volume item')} not counted in {STALE_COUNT_DAYS} days",
+                "/app",
+                _ids(stale),
+            )
+        )
 
     figures = {
-        "needs_dates": needs_dates, "no_cost": len(no_cost),
-        "no_reorder_point": len(no_reorder), "stale": len(stale),
+        "needs_dates": needs_dates,
+        "no_cost": len(no_cost),
+        "no_reorder_point": len(no_reorder),
+        "stale": len(stale),
     }
     if coverage_percent is not None:
         figures["coverage_percent"] = coverage_percent
@@ -487,6 +555,7 @@ def score_inventory(health: HealthInput, now: datetime) -> HealthReport:
 
 # --- the action center --------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Action:
     tier: str  # urgent | recommended
@@ -512,30 +581,74 @@ def build_actions(health: HealthInput) -> ActionCenter:
 
     urgent = []
     if health.expiry.expired_products:
-        urgent.append(Action("urgent", f"Take {_n(health.expiry.expired_products, 'product')} past "
-                             "its date off sale", "/app/expiring", health.expiry.expired_products))
+        urgent.append(
+            Action(
+                "urgent",
+                f"Take {_n(health.expiry.expired_products, 'product')} past its date off sale",
+                "/app/expiring",
+                health.expiry.expired_products,
+            )
+        )
     if out:
-        urgent.append(Action("urgent", f"Reorder {_n(len(out), 'product')} that "
-                             f"{'is' if len(out) == 1 else 'are'} out of stock", "/app/reorder", len(out)))
+        urgent.append(
+            Action(
+                "urgent",
+                f"Reorder {_n(len(out), 'product')} that "
+                f"{'is' if len(out) == 1 else 'are'} out of stock",
+                "/app/reorder",
+                len(out),
+            )
+        )
     if health.promotable_urgent:
-        urgent.append(Action("urgent", f"Mark down {_n(health.promotable_urgent, 'product')} expiring "
-                             "within 3 days", "/app/promotions", health.promotable_urgent))
+        urgent.append(
+            Action(
+                "urgent",
+                f"Mark down {_n(health.promotable_urgent, 'product')} expiring within 3 days",
+                "/app/promotions",
+                health.promotable_urgent,
+            )
+        )
 
     recommended = []
     to_reorder = len(low) + len(approaching)
     if to_reorder:
-        recommended.append(Action("recommended", f"Reorder {_n(to_reorder, 'product')} before "
-                                  f"{'it runs' if to_reorder == 1 else 'they run'} out", "/app/reorder", to_reorder))
+        recommended.append(
+            Action(
+                "recommended",
+                f"Reorder {_n(to_reorder, 'product')} before "
+                f"{'it runs' if to_reorder == 1 else 'they run'} out",
+                "/app/reorder",
+                to_reorder,
+            )
+        )
     other_promotions = max(health.promotable - health.promotable_urgent, 0)
     if other_promotions:
-        recommended.append(Action("recommended", f"Review {_n(other_promotions, 'markdown suggestion')}",
-                                  "/app/promotions", other_promotions))
+        recommended.append(
+            Action(
+                "recommended",
+                f"Review {_n(other_promotions, 'markdown suggestion')}",
+                "/app/promotions",
+                other_promotions,
+            )
+        )
     if slow:
-        recommended.append(Action("recommended", f"Review {_n(len(slow), 'slow-moving product')}",
-                                  "/app/health#overstock", len(slow)))
+        recommended.append(
+            Action(
+                "recommended",
+                f"Review {_n(len(slow), 'slow-moving product')}",
+                "/app/health#overstock",
+                len(slow),
+            )
+        )
     if health.needs_dates:
-        recommended.append(Action("recommended", f"Add dates to {_n(health.needs_dates, 'product')}",
-                                  "/app/scan", health.needs_dates))
+        recommended.append(
+            Action(
+                "recommended",
+                f"Add dates to {_n(health.needs_dates, 'product')}",
+                "/app/scan",
+                health.needs_dates,
+            )
+        )
 
     troubled = {h.item.id for h in (*out, *low, *approaching, *slow)} | set(health.expiry.item_ids)
     healthy = sum(1 for h in items if h.item.id not in troubled)
@@ -543,6 +656,7 @@ def build_actions(health: HealthInput) -> ActionCenter:
 
 
 # --- over time ----------------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class Change:
@@ -554,7 +668,8 @@ class Change:
 def contributions(snapshot: dict) -> dict[str, Decimal]:
     """How many of the overall points each measured dimension supplied."""
     measured = {
-        key: value for key, value in snapshot.get("components", {}).items()
+        key: value
+        for key, value in snapshot.get("components", {}).items()
         if value.get("score") is not None and key in WEIGHTS
     }
     weight = sum((WEIGHTS[key] for key in measured), ZERO)
@@ -565,6 +680,7 @@ def contributions(snapshot: dict) -> dict[str, Decimal]:
 
 def _describe(key: str, before: dict, after: dict, currency: str) -> str | None:
     """The plain-language reason a dimension moved, from its stored figures."""
+
     def delta(name: str) -> int:
         return int(after.get(name, 0)) - int(before.get(name, 0))
 
@@ -589,11 +705,17 @@ def _describe(key: str, before: dict, after: dict, currency: str) -> str | None:
         if change:
             return f"{_n(abs(change), 'product')} {'fewer' if change < 0 else 'more'} heading for a stockout"
     elif key == "data":
-        if "coverage_percent" in before and "coverage_percent" in after and delta("coverage_percent"):
+        if (
+            "coverage_percent" in before
+            and "coverage_percent" in after
+            and delta("coverage_percent")
+        ):
             return f"expiry dates now cover {after['coverage_percent']}% of stock, from {before['coverage_percent']}%"
         gaps = delta("no_cost") + delta("no_reorder_point") + delta("stale") + delta("needs_dates")
         if gaps:
-            return f"{_n(abs(gaps), 'gap')} in stock information {'filled' if gaps < 0 else 'opened'}"
+            return (
+                f"{_n(abs(gaps), 'gap')} in stock information {'filled' if gaps < 0 else 'opened'}"
+            )
     return None
 
 
@@ -627,14 +749,18 @@ class Benchmark:
     days: int
 
 
-def versus_average(today: int | None, history: list[int], minimum_days: int = 3) -> Benchmark | None:
+def versus_average(
+    today: int | None, history: list[int], minimum_days: int = 3
+) -> Benchmark | None:
     """Against this business's own recent past, never against other stores."""
     if today is None or len(history) < minimum_days:
         return None
     average = Decimal(sum(history)) / len(history)
     if average <= ZERO:
         return None
-    return Benchmark(_round(average), _round((Decimal(today) - average) / average * HUNDRED), len(history))
+    return Benchmark(
+        _round(average), _round((Decimal(today) - average) / average * HUNDRED), len(history)
+    )
 
 
 # --- what to order ------------------------------------------------------------------------------
@@ -683,4 +809,3 @@ def reorder_lines(items: list[ItemHealth]) -> list[tuple[str, list[ReorderLine]]
     for lines in groups.values():
         lines.sort(key=lambda line: (_REASON_RANK[line.reason], line.days_to_stockout or ZERO))
     return sorted(groups.items(), key=lambda group: (group[0] == "", group[0].lower()))
-

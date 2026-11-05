@@ -1,4 +1,5 @@
 """Invoice photo pipeline: store -> extract -> match -> review -> apply."""
+
 from __future__ import annotations
 
 import hashlib
@@ -119,8 +120,7 @@ def save_upload(
     suffix = Path(filename).suffix.lower()
     if suffix not in SUPPORTED_MEDIA:
         raise UploadRejected(
-            f"{suffix or 'that file type'} cannot be read; "
-            f"use {', '.join(sorted(SUPPORTED_MEDIA))}"
+            f"{suffix or 'that file type'} cannot be read; use {', '.join(sorted(SUPPORTED_MEDIA))}"
         )
 
     digest = hashlib.sha256(content).hexdigest()
@@ -176,7 +176,9 @@ def candidates_for(db: Session, tenant_id: int, location_id: int) -> list[Candid
             # A scanned barcode is stronger evidence than a merchant's own SKU, so try it first.
             codes=tuple(sorted(codes.get(item.id, ()), key=lambda code: code[0] == "SKU")),
             category=item.category,
-            pack_size_base=Decimal(item.pack_size_base) if item.pack_size_base is not None else None,
+            pack_size_base=Decimal(item.pack_size_base)
+            if item.pack_size_base is not None
+            else None,
             aliases=tuple(aliases.get(item.id, ())),
         )
         for item in db.scalars(
@@ -292,14 +294,17 @@ def apply_document(
     lines = {line.id: line for line in document.lines}
     # What the reader produced, captured before the reviewer's answers overwrite any of it.
     proposed = {
-        line.id: (line.stock_item_id, line.received_qty_base, line.expires_on, line.line_total_cents)
+        line.id: (
+            line.stock_item_id,
+            line.received_qty_base,
+            line.expires_on,
+            line.line_total_cents,
+        )
         for line in document.lines
     }
     items = {
         item.id: item
-        for item in db.scalars(
-            select(StockItem).where(StockItem.tenant_id == document.tenant_id)
-        )
+        for item in db.scalars(select(StockItem).where(StockItem.tenant_id == document.tenant_id))
     }
 
     applied = 0
@@ -323,7 +328,9 @@ def apply_document(
         record_correction(db, document, "product_match", was_item, item.id, line.id, user_id)
         record_correction(db, document, "quantity", was_qty, quantity, line.id, user_id)
         if decision.line_total_cents is not None:
-            record_correction(db, document, "cost", was_total, decision.line_total_cents, line.id, user_id)
+            record_correction(
+                db, document, "cost", was_total, decision.line_total_cents, line.id, user_id
+            )
             line.line_total_cents = decision.line_total_cents
 
         item.qty_base = Decimal(item.qty_base or 0) + Decimal(quantity)

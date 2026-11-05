@@ -1,4 +1,5 @@
 """Weekly inventory and sales report."""
+
 from __future__ import annotations
 
 import logging

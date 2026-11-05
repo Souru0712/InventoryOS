@@ -6,6 +6,7 @@ sync, physical counts and receipts already keep current; a second ledger that ev
 to decrement would drift from that number within a week. Works identically for count,
 weight and volume because everything here is in base units.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -148,7 +149,9 @@ def fefo_order(batches: list[Batch]) -> list[Batch]:
     return sorted(batches, key=lambda batch: (batch.expires_on, batch.id))
 
 
-def allocate_fefo(on_hand_base: Decimal, batches: list[Batch]) -> tuple[list[tuple[Batch, Decimal]], Decimal]:
+def allocate_fefo(
+    on_hand_base: Decimal, batches: list[Batch]
+) -> tuple[list[tuple[Batch, Decimal]], Decimal]:
     """Split the on-hand quantity across dated lots.
 
     Returns (batch, remaining) pairs in FEFO order, plus the undated remainder. Sales take the
@@ -213,7 +216,9 @@ def project_batches(
                 batch=batch,
                 remaining_base=remaining.quantize(QUANTUM),
                 days_left=days_left,
-                projected_leftover_base=leftover.quantize(QUANTUM) if leftover is not None else None,
+                projected_leftover_base=leftover.quantize(QUANTUM)
+                if leftover is not None
+                else None,
                 cost_per_base_cents=cost,
                 sell_first=batch.id == first_live,
             )

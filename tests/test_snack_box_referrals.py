@@ -1,11 +1,19 @@
 """Referral codes and the credit ledger: earned once, only for a first box that is picked up, reversed when
 that box is refunded, and never spendable below zero."""
+
 import pytest
 from sqlalchemy import select
 
 from app.models import BoxOrderStatus, CreditKind, CreditTransaction, Referral, ReferralStatus
 from app.orchestration import boxes, customers, referrals
-from tests.snack_box_support import NOW, install_fake_square, open_store, pack_all, paid_box, shopper
+from tests.snack_box_support import (
+    NOW,
+    install_fake_square,
+    open_store,
+    pack_all,
+    paid_box,
+    shopper,
+)
 
 
 @pytest.fixture
@@ -21,8 +29,14 @@ def deliver(db, order):
 
 
 def ledger_for(db, customer):
-    return [(t.kind, t.amount_cents) for t in db.scalars(
-        select(CreditTransaction).where(CreditTransaction.customer_id == customer.id).order_by(CreditTransaction.id))]
+    return [
+        (t.kind, t.amount_cents)
+        for t in db.scalars(
+            select(CreditTransaction)
+            .where(CreditTransaction.customer_id == customer.id)
+            .order_by(CreditTransaction.id)
+        )
+    ]
 
 
 def test_a_friend_gets_the_discount_and_the_referrer_is_paid_at_pickup(db, store):
@@ -31,9 +45,13 @@ def test_a_friend_gets_the_discount_and_the_referrer_is_paid_at_pickup(db, store
     assert order.discount_cents == 500 and order.status is BoxOrderStatus.PAID
     referral = db.scalars(select(Referral)).one()
     assert referral.status is ReferralStatus.PENDING
-    assert pack_all(db, order) == [] and referrals.balance_cents(db, sarah.id) == 0  # packed is not enough
+    assert (
+        pack_all(db, order) == [] and referrals.balance_cents(db, sarah.id) == 0
+    )  # packed is not enough
     boxes.pick_up(db, order, NOW)
-    assert referral.status is ReferralStatus.REWARDED and referrals.balance_cents(db, sarah.id) == 500
+    assert (
+        referral.status is ReferralStatus.REWARDED and referrals.balance_cents(db, sarah.id) == 500
+    )
 
 
 def test_an_unknown_code_is_refused(db, store):
@@ -67,7 +85,10 @@ def test_a_first_order_that_was_never_paid_lets_the_code_be_used_again(db, store
     boxes.cancel(db, unpaid, NOW)
     assert db.scalars(select(Referral)).one().status is ReferralStatus.CANCELLED
     again = paid_box(db, store, john, code=sarah.referral_code)
-    assert again.discount_cents == 500 and db.scalars(select(Referral)).one().status is ReferralStatus.PENDING
+    assert (
+        again.discount_cents == 500
+        and db.scalars(select(Referral)).one().status is ReferralStatus.PENDING
+    )
 
 
 def test_a_refund_before_the_reward_cancels_it(db, store):
@@ -84,7 +105,10 @@ def test_a_refund_after_the_reward_reverses_it(db, store):
     deliver(db, order)
     boxes.refund(db, order, restock=False, now=NOW)
     assert db.scalars(select(Referral)).one().status is ReferralStatus.REVERSED
-    assert ledger_for(db, sarah) == [(CreditKind.REFERRAL_REWARD, 500), (CreditKind.REFERRAL_REVERSAL, -500)]
+    assert ledger_for(db, sarah) == [
+        (CreditKind.REFERRAL_REWARD, 500),
+        (CreditKind.REFERRAL_REVERSAL, -500),
+    ]
 
 
 def test_a_spent_reward_that_is_reversed_only_ever_comes_off_future_credit(db, store):
@@ -106,7 +130,11 @@ def test_credit_covers_at_most_the_price_and_comes_back_on_a_refund(db, store):
     sarah = shopper(db, store, "sarah@shop.test")
     referrals.adjust(db, sarah, 3000, "goodwill after a damaged box")
     order = boxes.place_order(db, store.id, sarah, "chaos", use_credit=True, now=NOW)
-    assert (order.credit_cents, order.status, order.payment_source) == (2499, BoxOrderStatus.PAID, "credit")
+    assert (order.credit_cents, order.status, order.payment_source) == (
+        2499,
+        BoxOrderStatus.PAID,
+        "credit",
+    )
     assert referrals.balance_cents(db, sarah.id) == 501
     boxes.refund(db, order, restock=False, now=NOW)
     assert referrals.balance_cents(db, sarah.id) == 3000
@@ -128,17 +156,33 @@ def test_a_reward_posts_once_however_often_pickup_is_recorded(db, store):
     referral = db.scalars(select(Referral)).one()
     referrals.qualify_for_order(db, order, NOW)
     assert boxes.pick_up(db, order, NOW) == ["Only a packed box can be picked up."]
-    assert referrals.post_credit(db, store.id, sarah.id, 500, CreditKind.REFERRAL_REWARD,
-                                 f"referral_reward:{referral.id}") is None
+    assert (
+        referrals.post_credit(
+            db,
+            store.id,
+            sarah.id,
+            500,
+            CreditKind.REFERRAL_REWARD,
+            f"referral_reward:{referral.id}",
+        )
+        is None
+    )
     assert ledger_for(db, sarah) == [(CreditKind.REFERRAL_REWARD, 500)]
 
 
 def test_several_friends_several_rewards(db, store):
     sarah = shopper(db, store, "sarah@shop.test")
     for name in ("john", "lisa"):
-        deliver(db, paid_box(db, store, shopper(db, store, f"{name}@shop.test"), code=sarah.referral_code))
+        deliver(
+            db,
+            paid_box(db, store, shopper(db, store, f"{name}@shop.test"), code=sarah.referral_code),
+        )
     summary = referrals.summary(db, sarah)
-    assert (summary["successful"], summary["earned_cents"], summary["balance_cents"]) == (2, 1000, 1000)
+    assert (summary["successful"], summary["earned_cents"], summary["balance_cents"]) == (
+        2,
+        1000,
+        1000,
+    )
 
 
 def test_a_closed_referrer_account_qualifies_but_is_not_paid(db, store):

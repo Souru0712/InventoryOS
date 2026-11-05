@@ -1,4 +1,5 @@
 """Square sync: ingest -> normalize -> load -> derive -> alert."""
+
 from __future__ import annotations
 
 import json
@@ -95,7 +96,9 @@ def _pull_catalog(db: Session, tenant_id: int, client: SquareClient) -> tuple[li
     stats: dict[str, int] = {
         "locations": upsert_locations(db, tenant_id, normalize_locations(client.locations()))
     }
-    catalog_rows = normalize_catalog(client.catalog_objects(("ITEM", "CATEGORY", "MEASUREMENT_UNIT")))
+    catalog_rows = normalize_catalog(
+        client.catalog_objects(("ITEM", "CATEGORY", "MEASUREMENT_UNIT"))
+    )
     stats["sold_items"] = upsert_sold_items(db, tenant_id, catalog_rows)
     stats["stock_items_created"] = ensure_tracked_stock_items(db, tenant_id, catalog_rows)
     stats["identifiers"] = sync_identifiers_from_catalog(db, tenant_id, catalog_rows)
@@ -159,12 +162,16 @@ def run_sync(db: Session, tenant_id: int, days_back: int = SALES_LOOKBACK_DAYS) 
             timezones = {loc.provider_location_id: loc.timezone for loc in locations}
 
             if provider_location_ids:
-                tracked_ids = [row["provider_item_id"] for row in catalog_rows if row["tracks_inventory"]]
+                tracked_ids = [
+                    row["provider_item_id"] for row in catalog_rows if row["tracks_inventory"]
+                ]
                 if tracked_ids:
                     stats["counts"] = apply_provider_counts(
                         db,
                         tenant_id,
-                        normalize_counts(client.inventory_counts(tracked_ids, provider_location_ids)),
+                        normalize_counts(
+                            client.inventory_counts(tracked_ids, provider_location_ids)
+                        ),
                     )
 
                 end = datetime.now(timezone.utc)
@@ -255,6 +262,7 @@ def push_counts_to_square(db: Session, tenant_id: int, stock_item_ids: list[int]
     log.info("pushed %s corrected counts to square for tenant %s", len(changes), tenant_id)
     return len(changes)
 
+
 def push_adjustments_to_square(
     db: Session,
     tenant_id: int,
@@ -290,15 +298,17 @@ def push_adjustments_to_square(
             continue
         if item.location_id not in locations:
             continue
-        pushing.append((
-            item,
-            adjustment_change(
-                item.provider_variation_id,
-                locations[item.location_id],
-                str(from_base(wanted[item.id], item.stock_unit)),
-                occurred_at,
-            ),
-        ))
+        pushing.append(
+            (
+                item,
+                adjustment_change(
+                    item.provider_variation_id,
+                    locations[item.location_id],
+                    str(from_base(wanted[item.id], item.stock_unit)),
+                    occurred_at,
+                ),
+            )
+        )
     if not pushing:
         return 0
 
@@ -322,6 +332,7 @@ def adjust_stock_in_square(
 ) -> bool:
     """Add a delta for one item. Returns False when Square does not own that item's count."""
     return push_adjustments_to_square(db, tenant_id, {item.id: delta_base}) > 0
+
 
 def refresh_item_from_square(db: Session, tenant_id: int, item: StockItem) -> bool:
     """Re-read one variation's count, so a scan shows what Square holds right now."""

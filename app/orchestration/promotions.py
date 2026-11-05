@@ -3,6 +3,7 @@
 Suggestions are never stored. They are recomputed from stock every time, so a row can never
 go on recommending something the shelf has already moved past. Only decisions persist.
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,9 +40,7 @@ def _open_decisions(db: Session, tenant_id: int, today: date) -> set[int]:
     """Items already spoken for: running, dismissed, or snoozed until later."""
     spoken_for = set()
     for row in db.scalars(
-        select(Promotion).where(
-            Promotion.tenant_id == tenant_id, Promotion.status.in_(DECIDED)
-        )
+        select(Promotion).where(Promotion.tenant_id == tenant_id, Promotion.status.in_(DECIDED))
     ):
         if row.status is PromotionStatus.SNOOZED and row.snooze_until and row.snooze_until <= today:
             continue  # the snooze has run out, so it can be suggested again
@@ -137,8 +136,13 @@ def accept(
 ) -> Promotion:
     """Start a markdown at the price the owner settled on, which may not be the suggested one."""
     return _record(
-        db, tenant_id, suggestion, PromotionStatus.ACTIVE, user_id,
-        accepted_price_cents=price_cents, today=today,
+        db,
+        tenant_id,
+        suggestion,
+        PromotionStatus.ACTIVE,
+        user_id,
+        accepted_price_cents=price_cents,
+        today=today,
     )
 
 
@@ -159,8 +163,13 @@ def snooze(
     """Ask again later. The suggestion is recomputed then, against whatever the shelf holds."""
     today = today or datetime.now(timezone.utc).date()
     return _record(
-        db, tenant_id, suggestion, PromotionStatus.SNOOZED, user_id,
-        snooze_until=today + timedelta(days=days), today=today,
+        db,
+        tenant_id,
+        suggestion,
+        PromotionStatus.SNOOZED,
+        user_id,
+        snooze_until=today + timedelta(days=days),
+        today=today,
     )
 
 
@@ -185,9 +194,7 @@ def _velocity_since(
     return daily_velocity(daily, days, today)
 
 
-def running(
-    db: Session, tenant_id: int, today: date | None = None
-) -> list[RunningPromotion]:
+def running(db: Session, tenant_id: int, today: date | None = None) -> list[RunningPromotion]:
     """Markdowns in progress, each with what has happened to its sales since."""
     today = today or datetime.now(timezone.utc).date()
     rows = db.scalars(
@@ -214,7 +221,5 @@ def running(
     return result
 
 
-def find_suggestion(
-    suggestions: list[Suggestion], stock_item_id: int
-) -> Suggestion | None:
+def find_suggestion(suggestions: list[Suggestion], stock_item_id: int) -> Suggestion | None:
     return next((s for s in suggestions if s.item.stock_item_id == stock_item_id), None)

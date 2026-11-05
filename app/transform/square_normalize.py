@@ -1,4 +1,5 @@
 """Pure mapping of raw Square payloads into normalized rows."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -87,7 +88,9 @@ def normalize_catalog(raw_objects: list[dict]) -> list[dict]:
             data = variation.get("item_variation_data") or {}
             price = data.get("price_money") or {}
             variation_name = data.get("name") or ""
-            unit_code, _dimension = units.get(data.get("measurement_unit_id", ""), ("each", Dimension.COUNT))
+            unit_code, _dimension = units.get(
+                data.get("measurement_unit_id", ""), ("each", Dimension.COUNT)
+            )
             rows.append(
                 {
                     "provider_item_id": variation["id"],
@@ -135,7 +138,9 @@ def _order_day(order: dict, tz: str) -> date | None:
         return moment.date()
 
 
-def daily_sales_from_orders(raw_orders: list[dict], location_timezones: dict[str, str]) -> list[dict]:
+def daily_sales_from_orders(
+    raw_orders: list[dict], location_timezones: dict[str, str]
+) -> list[dict]:
     """Aggregate order line items into one row per variation / location / day."""
     buckets: dict[tuple[str, str, date], dict] = defaultdict(
         lambda: {"units": Decimal("0"), "gross_cents": 0, "net_cents": 0}
@@ -150,7 +155,9 @@ def daily_sales_from_orders(raw_orders: list[dict], location_timezones: dict[str
             variation_id = line.get("catalog_object_id")
             if not variation_id:
                 continue  # ad hoc / custom amounts cannot be tied to a catalog item
-            gross = int((line.get("gross_sales_money") or line.get("total_money") or {}).get("amount") or 0)
+            gross = int(
+                (line.get("gross_sales_money") or line.get("total_money") or {}).get("amount") or 0
+            )
             discount = int((line.get("total_discount_money") or {}).get("amount") or 0)
             bucket = buckets[(variation_id, location_id, day)]
             bucket["units"] += _decimal(line.get("quantity"), "1")
@@ -166,5 +173,7 @@ def daily_sales_from_orders(raw_orders: list[dict], location_timezones: dict[str
             "gross_cents": values["gross_cents"],
             "net_cents": values["net_cents"],
         }
-        for (variation_id, location_id, day), values in sorted(buckets.items(), key=lambda kv: kv[0][2])
+        for (variation_id, location_id, day), values in sorted(
+            buckets.items(), key=lambda kv: kv[0][2]
+        )
     ]

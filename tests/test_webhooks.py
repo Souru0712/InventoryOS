@@ -1,4 +1,5 @@
 """Square tells us when stock moves at the till. Only if it can prove it is Square."""
+
 import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -36,18 +37,38 @@ def connected():
         tenant = Tenant(name="Rosewood")
         db.add(tenant)
         db.flush()
-        db.add(User(tenant_id=tenant.id, email="o@rosewood.test",
-                    password_hash=hash_password("a-good-password")))
-        db.add(ProviderConnection(tenant_id=tenant.id, provider="square", merchant_id=MERCHANT,
-                                  access_token_enc="x", status="active"))
-        location = Location(tenant_id=tenant.id, provider="square",
-                            provider_location_id="LOC-1", name="Main")
+        db.add(
+            User(
+                tenant_id=tenant.id,
+                email="o@rosewood.test",
+                password_hash=hash_password("a-good-password"),
+            )
+        )
+        db.add(
+            ProviderConnection(
+                tenant_id=tenant.id,
+                provider="square",
+                merchant_id=MERCHANT,
+                access_token_enc="x",
+                status="active",
+            )
+        )
+        location = Location(
+            tenant_id=tenant.id, provider="square", provider_location_id="LOC-1", name="Main"
+        )
         db.add(location)
         db.flush()
-        item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="coke",
-                         name="Coca-Cola 12oz", dimension=Dimension.COUNT, stock_unit="each",
-                         track_mode=TrackMode.PROVIDER, provider_variation_id="VAR-COKE",
-                         qty_base=Decimal("34"))
+        item = StockItem(
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug="coke",
+            name="Coca-Cola 12oz",
+            dimension=Dimension.COUNT,
+            stock_unit="each",
+            track_mode=TrackMode.PROVIDER,
+            provider_variation_id="VAR-COKE",
+            qty_base=Decimal("34"),
+        )
         db.add(item)
         db.commit()
         return item.id
@@ -78,7 +99,8 @@ def post(client, payload: dict, signature: str | None = None):
     url = "https://stockpulse.test/webhooks/square"
     header = signature if signature is not None else signature_for(url, body, KEY)
     return client.post(
-        "/webhooks/square", content=body,
+        "/webhooks/square",
+        content=body,
         headers={"x-square-hmacsha256-signature": header, "content-type": "application/json"},
     )
 
@@ -89,6 +111,7 @@ def quantity_now(item_id: int) -> Decimal:
 
 
 # --- signature ------------------------------------------------------------------------------
+
 
 def test_the_signature_covers_the_url_as_well_as_the_body():
     # Square signs url + body, so the same body at a different URL is a different signature.
@@ -118,6 +141,7 @@ def test_an_unsigned_call_is_refused(client, connected):
 
 
 # --- applying -------------------------------------------------------------------------------
+
 
 def test_a_sale_at_the_till_updates_our_count(client, connected):
     response = post(client, event("30", datetime.now(timezone.utc)))

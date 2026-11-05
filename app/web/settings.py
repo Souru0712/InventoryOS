@@ -1,4 +1,5 @@
 """Account settings: which emails this person gets, and why one might have stopped."""
+
 from __future__ import annotations
 
 import logging
@@ -20,12 +21,24 @@ router = APIRouter()
 
 # (form field, attribute, what it is, what it means)
 EMAIL_SETTINGS = (
-    ("stock_alerts", "wants_stock_alerts", "Inventory alerts",
-     "Something is low, out, or has not been counted in a while."),
-    ("expiry_alerts", "wants_expiry_alerts", "Expiration alerts",
-     "Stock that will not sell before its date, and stock already past it."),
-    ("weekly_report", "wants_weekly_report", "Weekly report",
-     "Sales, stock value and what to order, once a week."),
+    (
+        "stock_alerts",
+        "wants_stock_alerts",
+        "Inventory alerts",
+        "Something is low, out, or has not been counted in a while.",
+    ),
+    (
+        "expiry_alerts",
+        "wants_expiry_alerts",
+        "Expiration alerts",
+        "Stock that will not sell before its date, and stock already past it.",
+    ),
+    (
+        "weekly_report",
+        "wants_weekly_report",
+        "Weekly report",
+        "Sales, stock value and what to order, once a week.",
+    ),
 )
 
 

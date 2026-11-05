@@ -1,4 +1,5 @@
 """Square calls us when stock moves at the till, so our numbers do not go stale between syncs."""
+
 from __future__ import annotations
 
 import json

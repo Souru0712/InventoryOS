@@ -1,4 +1,5 @@
 """Read a photographed supplier invoice into structured lines."""
+
 from __future__ import annotations
 
 import base64
@@ -87,7 +88,9 @@ Transcribe only what is printed. Never invent a product, quantity or price.
 - If the image is unreadable or is not an invoice, return an empty lines array."""
 
 
-def validate_payload(payload: object, schema: dict = EXTRACT_SCHEMA, path: str = "response") -> None:
+def validate_payload(
+    payload: object, schema: dict = EXTRACT_SCHEMA, path: str = "response"
+) -> None:
     """Check the model's JSON against EXTRACT_SCHEMA before anything downstream trusts it.
 
     Structured output makes this rare, not impossible: a refusal, a truncation, or a future model
@@ -96,7 +99,9 @@ def validate_payload(payload: object, schema: dict = EXTRACT_SCHEMA, path: str =
     types = schema.get("type")
     allowed = [types] if isinstance(types, str) else list(types or [])
     if not _is_type(payload, allowed):
-        raise ExtractionError(f"{path}: expected {' or '.join(allowed)}, got {type(payload).__name__}")
+        raise ExtractionError(
+            f"{path}: expected {' or '.join(allowed)}, got {type(payload).__name__}"
+        )
     if payload is None:
         return
 

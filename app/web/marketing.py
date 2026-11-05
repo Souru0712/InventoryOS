@@ -1,4 +1,5 @@
 """Public pages: the part that has to sell before anything else matters."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Request

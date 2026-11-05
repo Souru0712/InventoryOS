@@ -1,4 +1,5 @@
 """Markdowns against real stock: suggested from the shelf, decided by a person, measured after."""
+
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -28,22 +29,43 @@ TODAY = date(2026, 9, 13)
 def gatorade(db, tenant, location):
     """24 on the shelf, selling a bit over one a day, best before in 9 days."""
     item = StockItem(
-        tenant_id=tenant.id, location_id=location.id, slug="gatorade",
-        name="Gatorade Lemon-Lime 28oz", dimension=Dimension.COUNT, stock_unit="each",
-        track_mode=TrackMode.PROVIDER, provider_variation_id="VAR-GAT",
-        qty_base=Decimal("24"), cost_per_base_cents=Decimal("80"),
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="gatorade",
+        name="Gatorade Lemon-Lime 28oz",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode=TrackMode.PROVIDER,
+        provider_variation_id="VAR-GAT",
+        qty_base=Decimal("24"),
+        cost_per_base_cents=Decimal("80"),
         retail_per_base_cents=Decimal("199"),
     )
-    sold = SoldItem(tenant_id=tenant.id, provider_item_id="VAR-GAT", name="Gatorade", price_cents=199)
+    sold = SoldItem(
+        tenant_id=tenant.id, provider_item_id="VAR-GAT", name="Gatorade", price_cents=199
+    )
     db.add_all([item, sold])
     db.flush()
     for back in range(28):
         if back % 5:
-            db.add(SalesDaily(tenant_id=tenant.id, sold_item_id=sold.id, location_id=location.id,
-                              dt=TODAY - timedelta(days=back), units=Decimal("1.5")))
-    db.add(StockBatch(tenant_id=tenant.id, stock_item_id=item.id,
-                      received_qty_base=Decimal("24"), expires_on=TODAY + timedelta(days=9),
-                      cost_per_base_cents=Decimal("80")))
+            db.add(
+                SalesDaily(
+                    tenant_id=tenant.id,
+                    sold_item_id=sold.id,
+                    location_id=location.id,
+                    dt=TODAY - timedelta(days=back),
+                    units=Decimal("1.5"),
+                )
+            )
+    db.add(
+        StockBatch(
+            tenant_id=tenant.id,
+            stock_item_id=item.id,
+            received_qty_base=Decimal("24"),
+            expires_on=TODAY + timedelta(days=9),
+            cost_per_base_cents=Decimal("80"),
+        )
+    )
     db.commit()
     return item
 
@@ -108,8 +130,9 @@ def test_a_running_markdown_reports_what_sales_did(db, tenant, location, gatorad
         day = TODAY - timedelta(days=back)
         row = db.query(SalesDaily).filter(SalesDaily.dt == day).one_or_none()
         if row is None:
-            row = SalesDaily(tenant_id=tenant.id, sold_item_id=sold.id,
-                             location_id=location.id, dt=day)
+            row = SalesDaily(
+                tenant_id=tenant.id, sold_item_id=sold.id, location_id=location.id, dt=day
+            )
             db.add(row)
         row.units = Decimal("6")  # four times the usual rate since the markdown started
     db.commit()
@@ -134,6 +157,7 @@ def test_ending_a_markdown_records_where_the_stock_finished(db, tenant, gatorade
 
 # --- through the browser ----------------------------------------------------------------------
 
+
 @pytest.fixture
 def client():
     Base.metadata.drop_all(engine)
@@ -143,22 +167,38 @@ def client():
 
 
 def signed_up_with_risk(client, name="Rosewood", email="o@rosewood.test") -> int:
-    client.post("/signup", data={"business_name": name, "email": email, "password": "a-good-password"})
+    client.post(
+        "/signup", data={"business_name": name, "email": email, "password": "a-good-password"}
+    )
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.name == name).one()
-        location = Location(tenant_id=tenant.id, provider="demo",
-                            provider_location_id=f"loc-{name}", name="Main")
+        location = Location(
+            tenant_id=tenant.id, provider="demo", provider_location_id=f"loc-{name}", name="Main"
+        )
         db.add(location)
         db.flush()
-        item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="bars",
-                         name="Protein bars", dimension=Dimension.COUNT, stock_unit="each",
-                         track_mode=TrackMode.MANUAL, qty_base=Decimal("24"),
-                         cost_per_base_cents=Decimal("80"), retail_per_base_cents=Decimal("249"))
+        item = StockItem(
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug="bars",
+            name="Protein bars",
+            dimension=Dimension.COUNT,
+            stock_unit="each",
+            track_mode=TrackMode.MANUAL,
+            qty_base=Decimal("24"),
+            cost_per_base_cents=Decimal("80"),
+            retail_per_base_cents=Decimal("249"),
+        )
         db.add(item)
         db.flush()
-        db.add(StockBatch(tenant_id=tenant.id, stock_item_id=item.id,
-                          received_qty_base=Decimal("24"),
-                          expires_on=date.today() + timedelta(days=9)))
+        db.add(
+            StockBatch(
+                tenant_id=tenant.id,
+                stock_item_id=item.id,
+                received_qty_base=Decimal("24"),
+                expires_on=date.today() + timedelta(days=9),
+            )
+        )
         db.commit()
         return item.id
 
@@ -173,8 +213,11 @@ def test_the_page_shows_the_recommendation_and_its_reasons(client):
 
 def test_starting_a_markdown_at_a_chosen_price(client):
     item_id = signed_up_with_risk(client)
-    response = client.post("/app/promotions/accept",
-                           data={"stock_item_id": item_id, "price": "1.49"}, follow_redirects=True)
+    response = client.post(
+        "/app/promotions/accept",
+        data={"stock_item_id": item_id, "price": "1.49"},
+        follow_redirects=True,
+    )
     assert response.status_code == 200
     with SessionLocal() as db:
         promotion = db.query(Promotion).one()
@@ -192,8 +235,12 @@ def test_starting_one_without_a_price_uses_the_suggestion(client):
 
 def test_a_price_that_is_not_a_number_is_refused(client):
     item_id = signed_up_with_risk(client)
-    assert client.post("/app/promotions/accept",
-                       data={"stock_item_id": item_id, "price": "cheap"}).status_code == 400
+    assert (
+        client.post(
+            "/app/promotions/accept", data={"stock_item_id": item_id, "price": "cheap"}
+        ).status_code
+        == 400
+    )
 
 
 def test_acting_on_a_suggestion_that_no_longer_applies_is_refused(client):
@@ -209,5 +256,7 @@ def test_one_tenant_cannot_mark_down_another_tenants_stock(client):
     client.get("/logout")
     signed_up_with_risk(client, "B", "b@rosewood.test")
     for path in ("accept", "dismiss", "snooze"):
-        assert client.post(f"/app/promotions/{path}",
-                           data={"stock_item_id": item_id}).status_code == 404, path
+        assert (
+            client.post(f"/app/promotions/{path}", data={"stock_item_id": item_id}).status_code
+            == 404
+        ), path

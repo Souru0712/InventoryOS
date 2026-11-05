@@ -1,4 +1,5 @@
 """Smoke tests for the pages a customer actually touches."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -92,17 +93,27 @@ from app.units import Dimension  # noqa: E402
 
 def signed_up_with_stock(client, name="Rosewood Coffee", email="owner@rosewood.test") -> int:
     """Sign up, then give the new workspace a location and one item. Returns the item id."""
-    client.post("/signup", data={"business_name": name, "email": email, "password": "a-good-password"})
+    client.post(
+        "/signup", data={"business_name": name, "email": email, "password": "a-good-password"}
+    )
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.name == name).one()
-        location = Location(tenant_id=tenant.id, provider="demo", provider_location_id=f"loc-{name}",
-                            name="Main")
+        location = Location(
+            tenant_id=tenant.id, provider="demo", provider_location_id=f"loc-{name}", name="Main"
+        )
         db.add(location)
         db.flush()
-        item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="yoghurt",
-                         name="Natural yoghurt 500g", dimension=Dimension.COUNT, stock_unit="each",
-                         track_mode=TrackMode.MANUAL, qty_base=Decimal("10"),
-                         cost_per_base_cents=Decimal("110"))
+        item = StockItem(
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug="yoghurt",
+            name="Natural yoghurt 500g",
+            dimension=Dimension.COUNT,
+            stock_unit="each",
+            track_mode=TrackMode.MANUAL,
+            qty_base=Decimal("10"),
+            cost_per_base_cents=Decimal("110"),
+        )
         db.add(item)
         db.commit()
         return item.id
@@ -118,9 +129,11 @@ def test_the_expiring_page_explains_itself_before_anything_is_dated(client):
 def test_dating_shelf_stock_adds_a_lot_without_changing_the_count(client):
     item_id = signed_up_with_stock(client)
     soon = (date.today() + timedelta(days=3)).isoformat()
-    response = client.post("/app/expiring/label",
-                           data={"stock_item_id": item_id, "quantity": "10", "expires_on": soon},
-                           follow_redirects=True)
+    response = client.post(
+        "/app/expiring/label",
+        data={"stock_item_id": item_id, "quantity": "10", "expires_on": soon},
+        follow_redirects=True,
+    )
     assert response.status_code == 200
     assert "Natural yoghurt 500g" in response.text
     # No sales signal, three days out: worst case stands in, and the money is shown.
@@ -132,9 +145,11 @@ def test_dating_shelf_stock_adds_a_lot_without_changing_the_count(client):
 
 def test_a_bad_quantity_is_refused_with_a_reason(client):
     item_id = signed_up_with_stock(client)
-    response = client.post("/app/expiring/label",
-                           data={"stock_item_id": item_id, "quantity": "0", "expires_on": "2030-01-01"},
-                           follow_redirects=True)
+    response = client.post(
+        "/app/expiring/label",
+        data={"stock_item_id": item_id, "quantity": "0", "expires_on": "2030-01-01"},
+        follow_redirects=True,
+    )
     assert "Enter a quantity above zero" in response.text
     with SessionLocal() as db:
         assert db.query(StockBatch).count() == 0
@@ -142,8 +157,10 @@ def test_a_bad_quantity_is_refused_with_a_reason(client):
 
 def test_a_wrongly_entered_date_can_be_removed(client):
     item_id = signed_up_with_stock(client)
-    client.post("/app/expiring/label",
-                data={"stock_item_id": item_id, "quantity": "4", "expires_on": "2030-01-01"})
+    client.post(
+        "/app/expiring/label",
+        data={"stock_item_id": item_id, "quantity": "4", "expires_on": "2030-01-01"},
+    )
     with SessionLocal() as db:
         batch_id = db.query(StockBatch).one().id
     client.post(f"/app/expiring/{batch_id}/remove")
@@ -157,16 +174,27 @@ def test_a_date_with_a_markdown_decided_on_it_can_still_be_removed(client):
     from app.models import Promotion, PromotionStatus
 
     item_id = signed_up_with_stock(client)
-    client.post("/app/expiring/label",
-                data={"stock_item_id": item_id, "quantity": "4", "expires_on": "2030-01-01"})
+    client.post(
+        "/app/expiring/label",
+        data={"stock_item_id": item_id, "quantity": "4", "expires_on": "2030-01-01"},
+    )
     with SessionLocal() as db:
         batch = db.query(StockBatch).one()
-        db.add(Promotion(tenant_id=batch.tenant_id, stock_item_id=item_id, stock_batch_id=batch.id,
-                         status=PromotionStatus.ACTIVE, ends_on=date(2030, 1, 1)))
+        db.add(
+            Promotion(
+                tenant_id=batch.tenant_id,
+                stock_item_id=item_id,
+                stock_batch_id=batch.id,
+                status=PromotionStatus.ACTIVE,
+                ends_on=date(2030, 1, 1),
+            )
+        )
         db.commit()
         batch_id = batch.id
 
-    assert client.post(f"/app/expiring/{batch_id}/remove", follow_redirects=False).status_code == 303
+    assert (
+        client.post(f"/app/expiring/{batch_id}/remove", follow_redirects=False).status_code == 303
+    )
     with SessionLocal() as db:
         assert db.query(StockBatch).count() == 0
         promotion = db.query(Promotion).one()
@@ -176,15 +204,21 @@ def test_a_date_with_a_markdown_decided_on_it_can_still_be_removed(client):
 
 def test_one_tenant_cannot_date_or_remove_another_tenants_stock(client):
     item_id = signed_up_with_stock(client, "A", "a@rosewood.test")
-    client.post("/app/expiring/label",
-                data={"stock_item_id": item_id, "quantity": "4", "expires_on": "2030-01-01"})
+    client.post(
+        "/app/expiring/label",
+        data={"stock_item_id": item_id, "quantity": "4", "expires_on": "2030-01-01"},
+    )
     with SessionLocal() as db:
         batch_id = db.query(StockBatch).one().id
     client.get("/logout")
     signed_up_with_stock(client, "B", "b@rosewood.test")
-    assert client.post("/app/expiring/label",
-                       data={"stock_item_id": item_id, "quantity": "1",
-                             "expires_on": "2030-01-01"}).status_code == 404
+    assert (
+        client.post(
+            "/app/expiring/label",
+            data={"stock_item_id": item_id, "quantity": "1", "expires_on": "2030-01-01"},
+        ).status_code
+        == 404
+    )
     assert client.post(f"/app/expiring/{batch_id}/remove").status_code == 404
     with SessionLocal() as db:
         assert db.query(StockBatch).count() == 1
@@ -192,8 +226,14 @@ def test_one_tenant_cannot_date_or_remove_another_tenants_stock(client):
 
 def test_the_dashboard_leads_with_money_at_risk_once_stock_is_dated(client):
     item_id = signed_up_with_stock(client)
-    client.post("/app/expiring/label", data={"stock_item_id": item_id, "quantity": "10",
-                                             "expires_on": (date.today() + timedelta(days=2)).isoformat()})
+    client.post(
+        "/app/expiring/label",
+        data={
+            "stock_item_id": item_id,
+            "quantity": "10",
+            "expires_on": (date.today() + timedelta(days=2)).isoformat(),
+        },
+    )
     response = client.get("/app")
     assert response.status_code == 200
     assert "May expire unsold" in response.text

@@ -1,28 +1,53 @@
 """Snack box rules that need no database: allocation, credit, taste, and the box builder."""
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 
-from app.transform.allocation import Allocation, TransitionError, check_transition, position, short_lines
+from app.transform.allocation import (
+    Allocation,
+    TransitionError,
+    check_transition,
+    position,
+    short_lines,
+)
 from app.transform.boxes import Candidate, Rules, build_box, score, suggest_replacements, unsafe
-from app.transform.credits import ReferralTransitionError, check_referral_transition, redeemable, referral_problem
+from app.transform.credits import (
+    ReferralTransitionError,
+    check_referral_transition,
+    redeemable,
+    referral_problem,
+)
 from app.transform.taste import Received, Review, Stated, Taste, build_taste, crowd_quality
 
 T0 = datetime(2026, 9, 1, tzinfo=timezone.utc)
-RULES = Rules(min_items=8, max_items=12, target_cogs_cents=Decimal(800), cogs_ceiling_cents=Decimal(1200),
-              min_days_after_pickup=16)
+RULES = Rules(
+    min_items=8,
+    max_items=12,
+    target_cogs_cents=Decimal(800),
+    cogs_ceiling_cents=Decimal(1200),
+    min_days_after_pickup=16,
+)
 
 
 def alloc(line_id, minutes, applied=True, packed=False, qty=1):
-    return Allocation(line_id, line_id, T0 + timedelta(minutes=minutes), Decimal(qty), applied, packed)
+    return Allocation(
+        line_id, line_id, T0 + timedelta(minutes=minutes), Decimal(qty), applied, packed
+    )
 
 
 def snack(i, **changes):
     values = dict(
-        stock_item_id=i, name=f"s{i}", category=f"cat{i % 4}", origin=("US", "JP", "KR", "MX")[i % 4],
-        flavors=frozenset({("sweet", "salty", "spicy", "weird")[i % 4]}), allergens=frozenset(),
-        unit_cost_cents=Decimal(100), available_base=Decimal(5), days_left=120,
+        stock_item_id=i,
+        name=f"s{i}",
+        category=f"cat{i % 4}",
+        origin=("US", "JP", "KR", "MX")[i % 4],
+        flavors=frozenset({("sweet", "salty", "spicy", "weird")[i % 4]}),
+        allergens=frozenset(),
+        unit_cost_cents=Decimal(100),
+        available_base=Decimal(5),
+        days_left=120,
     )
     values.update(changes)
     return Candidate(**values)
@@ -33,6 +58,7 @@ def shelf(n=12):
 
 
 # --- allocation ----------------------------------------------------------------------------------
+
 
 def test_walk_ins_may_buy_the_count_less_box_units_it_was_never_told_about():
     pos = position(Decimal(6), [alloc(1, 0), alloc(2, 1), alloc(3, 2, applied=False)])
@@ -69,13 +95,24 @@ def test_money_that_has_moved_can_only_leave_by_refund():
 
 # --- credit -------------------------------------------------------------------------------------
 
+
 def test_redemption_is_capped_and_never_spends_a_negative_balance():
-    assert (redeemable(1000, 2499), redeemable(5000, 1999), redeemable(-500, 2499), redeemable(0, 2499)) == (
-        1000, 1999, 0, 0)
+    assert (
+        redeemable(1000, 2499),
+        redeemable(5000, 1999),
+        redeemable(-500, 2499),
+        redeemable(0, 2499),
+    ) == (1000, 1999, 0, 0)
 
 
 def test_referral_problems():
-    ok = dict(code_found=True, self_referral=False, referrer_active=True, already_referred=False, bought_before=False)
+    ok = dict(
+        code_found=True,
+        self_referral=False,
+        referrer_active=True,
+        already_referred=False,
+        bought_before=False,
+    )
     assert referral_problem(**ok) == ""
     assert "does not exist" in referral_problem(**{**ok, "code_found": False})
     assert "your own" in referral_problem(**{**ok, "self_referral": True})
@@ -95,10 +132,13 @@ def test_referral_transitions():
 
 # --- taste --------------------------------------------------------------------------------------
 
+
 def test_one_bad_rating_is_a_hint_and_a_stated_preference_is_a_verdict():
     reviews = [Review(1, "disliked", False, T0)]
     assert build_taste(Stated(), reviews, [], {1: "Chips"}, {}).category["chips"] == -0.25
-    stated = build_taste(Stated(avoided_categories=frozenset({"Chips"})), reviews, [], {1: "Chips"}, {})
+    stated = build_taste(
+        Stated(avoided_categories=frozenset({"Chips"})), reviews, [], {1: "Chips"}, {}
+    )
     assert (stated.category["chips"], stated.category_source["chips"]) == (-1.0, "they said so")
 
 
@@ -109,7 +149,9 @@ def test_undoing_never_again_sticks_even_though_the_survey_said_it():
 
 
 def test_send_again_is_repeat_intent_and_a_rating_is_not():
-    taste = build_taste(Stated(), [Review(1, "loved", False, T0), Review(2, "liked", True, T0)], [], {}, {})
+    taste = build_taste(
+        Stated(), [Review(1, "loved", False, T0), Review(2, "liked", True, T0)], [], {}, {}
+    )
     assert (1 in taste.repeat, 2 in taste.repeat, 1 in taste.loved) == (False, True, True)
 
 
@@ -119,7 +161,11 @@ def test_the_latest_rating_wins():
 
 
 def test_boxes_since_counts_boxes_not_days():
-    received = [Received(10, 1, T0), Received(11, 2, T0 + timedelta(days=30)), Received(12, 3, T0 + timedelta(days=60))]
+    received = [
+        Received(10, 1, T0),
+        Received(11, 2, T0 + timedelta(days=30)),
+        Received(12, 3, T0 + timedelta(days=60)),
+    ]
     taste = build_taste(Stated(), [], received, {3: "Candy"}, {3: "JP"})
     assert (taste.boxes_since, taste.boxes_received) == ({1: 2, 2: 1, 3: 0}, 3)
     assert (taste.last_categories, taste.last_origins) == (frozenset({"candy"}), frozenset({"JP"}))
@@ -132,6 +178,7 @@ def test_crowd_quality_is_shrunk_until_there_are_enough_reviews():
 
 # --- the builder ---------------------------------------------------------------------------------
 
+
 def test_safety_rules_no_score_can_override():
     taste = Taste(allergens=frozenset({"peanut"}), never_again=frozenset({2}), spice="none")
     assert unsafe(snack(0, allergens=None), taste, RULES) == "allergens not recorded"
@@ -139,8 +186,13 @@ def test_safety_rules_no_score_can_override():
     assert unsafe(snack(2), taste, RULES) == "on their never-again list"
     assert unsafe(snack(3, days_left=None), taste, RULES) == "no expiry date on record"
     assert unsafe(snack(4, days_left=10), taste, RULES) == "only 10 days left"
-    assert unsafe(snack(5, available_base=Decimal(0)), taste, RULES) == "not enough left on the shelf"
-    assert unsafe(snack(6, flavors=frozenset({"spicy"})), taste, RULES) == "they asked for nothing spicy"
+    assert (
+        unsafe(snack(5, available_base=Decimal(0)), taste, RULES) == "not enough left on the shelf"
+    )
+    assert (
+        unsafe(snack(6, flavors=frozenset({"spicy"})), taste, RULES)
+        == "they asked for nothing spicy"
+    )
     assert unsafe(snack(7), taste, RULES) == ""
 
 
@@ -150,7 +202,9 @@ def test_a_box_stays_inside_its_snack_budget():
 
 
 def test_a_budget_too_small_for_the_minimum_says_so():
-    picks, reason = build_box(shelf(), Taste(), "world", Rules(8, 12, Decimal(800), Decimal(286), 16))
+    picks, reason = build_box(
+        shelf(), Taste(), "world", Rules(8, 12, Decimal(800), Decimal(286), 16)
+    )
     assert picks == [] and "$2.86 snack budget" in reason
 
 
@@ -174,7 +228,9 @@ def test_every_pick_says_why_and_splits_customer_from_shelf():
 
 
 def test_replacements_prefer_a_required_flavour_the_box_would_lose_and_respect_the_budget():
-    current = [score(snack(i), Taste()) for i in (0, 1, 2, 3, 4, 5, 7, 8)]  # item 2 is the only spicy one
+    current = [
+        score(snack(i), Taste()) for i in (0, 1, 2, 3, 4, 5, 7, 8)
+    ]  # item 2 is the only spicy one
     pricey = snack(14, unit_cost_cents=Decimal(600))
     offers = suggest_replacements(shelf(12) + [pricey], Taste(), "chaos", RULES, current, 2)
     assert offers and "spicy" in offers[0].candidate.flavors

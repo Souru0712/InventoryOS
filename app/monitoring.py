@@ -1,4 +1,5 @@
 """Error reporting. Off unless SENTRY_DSN is set, and never sends sessions, tokens or form bodies."""
+
 from __future__ import annotations
 
 import logging
@@ -32,11 +33,13 @@ def scrub(event: dict, _hint: dict | None = None) -> dict:
     headers = request.get("headers")
     if isinstance(headers, dict):
         request["headers"] = {
-            name: FILTERED if name.lower() in SENSITIVE_HEADERS else value for name, value in headers.items()
+            name: FILTERED if name.lower() in SENSITIVE_HEADERS else value
+            for name, value in headers.items()
         }
     elif isinstance(headers, list):
         request["headers"] = [
-            [name, FILTERED if str(name).lower() in SENSITIVE_HEADERS else value] for name, value in headers
+            [name, FILTERED if str(name).lower() in SENSITIVE_HEADERS else value]
+            for name, value in headers
         ]
     return event
 

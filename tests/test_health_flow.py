@@ -1,4 +1,5 @@
 """Inventory health against a real database: the score, the history, and the pages it drives."""
+
 import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -32,10 +33,18 @@ TODAY = NOW.date()
 
 def stock(db, tenant, location, slug, **overrides) -> StockItem:
     defaults = dict(
-        tenant_id=tenant.id, location_id=location.id, slug=slug, name=slug.replace("-", " ").title(),
-        dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.PROVIDER,
-        provider_variation_id=f"VAR-{slug}", qty_base=Decimal("40"), reorder_point_base=Decimal("10"),
-        cost_per_base_cents=Decimal("100"), lead_time_days=3,
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug=slug,
+        name=slug.replace("-", " ").title(),
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode=TrackMode.PROVIDER,
+        provider_variation_id=f"VAR-{slug}",
+        qty_base=Decimal("40"),
+        reorder_point_base=Decimal("10"),
+        cost_per_base_cents=Decimal("100"),
+        lead_time_days=3,
     )
     item = StockItem(**{**defaults, **overrides})
     db.add(item)
@@ -44,26 +53,56 @@ def stock(db, tenant, location, slug, **overrides) -> StockItem:
 
 
 def sells(db, tenant, location, item, per_day, days=28, today=TODAY):
-    sold = SoldItem(tenant_id=tenant.id, provider_item_id=item.provider_variation_id,
-                    name=item.name, price_cents=199)
+    sold = SoldItem(
+        tenant_id=tenant.id,
+        provider_item_id=item.provider_variation_id,
+        name=item.name,
+        price_cents=199,
+    )
     db.add(sold)
     db.flush()
     for back in range(days):
-        db.add(SalesDaily(tenant_id=tenant.id, sold_item_id=sold.id, location_id=location.id,
-                          dt=today - timedelta(days=back), units=Decimal(per_day)))
+        db.add(
+            SalesDaily(
+                tenant_id=tenant.id,
+                sold_item_id=sold.id,
+                location_id=location.id,
+                dt=today - timedelta(days=back),
+                units=Decimal(per_day),
+            )
+        )
 
 
 # --- the score from live stock ------------------------------------------------------------------
 
+
 def test_health_and_the_expiring_page_agree_on_the_money(db, tenant, location):
-    milk = stock(db, tenant, location, "milk", track_mode=TrackMode.MANUAL, provider_variation_id=None,
-                 qty_base=Decimal("20"), cost_per_base_cents=Decimal("50"))
-    db.add_all([
-        StockBatch(tenant_id=tenant.id, stock_item_id=milk.id, received_qty_base=Decimal("8"),
-                   expires_on=TODAY - timedelta(days=1)),
-        StockBatch(tenant_id=tenant.id, stock_item_id=milk.id, received_qty_base=Decimal("12"),
-                   expires_on=TODAY + timedelta(days=2)),
-    ])
+    milk = stock(
+        db,
+        tenant,
+        location,
+        "milk",
+        track_mode=TrackMode.MANUAL,
+        provider_variation_id=None,
+        qty_base=Decimal("20"),
+        cost_per_base_cents=Decimal("50"),
+    )
+    db.add_all(
+        [
+            StockBatch(
+                tenant_id=tenant.id,
+                stock_item_id=milk.id,
+                received_qty_base=Decimal("8"),
+                expires_on=TODAY - timedelta(days=1),
+            ),
+            StockBatch(
+                tenant_id=tenant.id,
+                stock_item_id=milk.id,
+                received_qty_base=Decimal("12"),
+                expires_on=TODAY + timedelta(days=2),
+            ),
+        ]
+    )
     db.commit()
 
     horizon = get_settings().expiry_horizon_days
@@ -92,6 +131,7 @@ def test_a_real_store_is_scored_with_its_reasons(db, tenant, location):
 
 
 # --- history ------------------------------------------------------------------------------------
+
 
 def test_a_night_is_kept_once_however_often_it_runs(db, tenant, location):
     stock(db, tenant, location, "coke")
@@ -139,8 +179,15 @@ def test_the_comparison_with_the_monthly_average_needs_three_nights(db, tenant, 
 
 def test_a_damaged_snapshot_costs_the_comparison_not_the_page(db, tenant, location):
     stock(db, tenant, location, "coke")
-    db.add(HealthSnapshot(tenant_id=tenant.id, dt=TODAY - timedelta(days=1), score=80,
-                          band="healthy", detail_json="{not json"))
+    db.add(
+        HealthSnapshot(
+            tenant_id=tenant.id,
+            dt=TODAY - timedelta(days=1),
+            score=80,
+            band="healthy",
+            detail_json="{not json",
+        )
+    )
     db.commit()
 
     trend = over_time(db, tenant.id, current(db, tenant.id, now=NOW).report, TODAY)
@@ -176,6 +223,7 @@ def test_the_cli_prints_the_score_and_keeps_a_snapshot(db, tenant, location, cap
 
 # --- the pages ----------------------------------------------------------------------------------
 
+
 @pytest.fixture
 def client():
     Base.metadata.drop_all(engine)
@@ -185,25 +233,40 @@ def client():
 
 
 def workspace(client, name="Rosewood", email="o@rosewood.test", items=()) -> int:
-    client.post("/signup", data={"business_name": name, "email": email, "password": "a-good-password"})
+    client.post(
+        "/signup", data={"business_name": name, "email": email, "password": "a-good-password"}
+    )
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.name == name).one()
-        location = Location(tenant_id=tenant.id, provider="demo", provider_location_id=f"loc-{name}", name="Main")
+        location = Location(
+            tenant_id=tenant.id, provider="demo", provider_location_id=f"loc-{name}", name="Main"
+        )
         db.add(location)
         db.flush()
         for spec in items:
-            db.add(StockItem(
-                tenant_id=tenant.id, location_id=location.id, dimension=Dimension.COUNT,
-                stock_unit="each", track_mode=TrackMode.MANUAL, reorder_point_base=Decimal("10"),
-                cost_per_base_cents=Decimal("100"), **spec,
-            ))
+            db.add(
+                StockItem(
+                    tenant_id=tenant.id,
+                    location_id=location.id,
+                    dimension=Dimension.COUNT,
+                    stock_unit="each",
+                    track_mode=TrackMode.MANUAL,
+                    reorder_point_base=Decimal("10"),
+                    cost_per_base_cents=Decimal("100"),
+                    **spec,
+                )
+            )
         db.commit()
         return tenant.id
 
 
 def item(slug, qty, **extra) -> dict:
-    return {"slug": slug, "name": extra.pop("name", slug.replace("-", " ").title()),
-            "qty_base": Decimal(qty), **extra}
+    return {
+        "slug": slug,
+        "name": extra.pop("name", slug.replace("-", " ").title()),
+        "qty_base": Decimal(qty),
+        **extra,
+    }
 
 
 def test_the_dashboard_leads_with_health_and_todays_actions(client):
@@ -226,18 +289,27 @@ def test_the_health_page_shows_every_dimension_and_the_rule_behind_it(client):
     workspace(client, items=[item("coke", "0"), item("water", "50")])
     response = client.get("/app/health")
     assert response.status_code == 200
-    for label in ("Stock availability", "Expiration risk", "Overstock", "Reorder health", "Data completeness"):
+    for label in (
+        "Stock availability",
+        "Expiration risk",
+        "Overstock",
+        "Reorder health",
+        "Data completeness",
+    ):
         assert label in response.text, label
     assert "Not scored" in response.text  # nothing is dated
     assert "scores zero" in response.text  # the expiry rule is written out
 
 
 def test_the_reorder_list_groups_by_supplier_with_the_unassigned_last(client):
-    workspace(client, items=[
-        item("oat-milk", "0", supplier="Harbour Dairy"),
-        item("mystery-crisps", "0"),
-        item("water", "50"),
-    ])
+    workspace(
+        client,
+        items=[
+            item("oat-milk", "0", supplier="Harbour Dairy"),
+            item("mystery-crisps", "0"),
+            item("water", "50"),
+        ],
+    )
     response = client.get("/app/reorder")
     assert response.status_code == 200
     assert "Harbour Dairy" in response.text and "No supplier set" in response.text

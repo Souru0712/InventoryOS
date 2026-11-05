@@ -1,4 +1,5 @@
 """Multi-tenant schema. Every business row carries tenant_id."""
+
 from __future__ import annotations
 
 import enum
@@ -389,7 +390,9 @@ class Document(Base):
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     byte_size: Mapped[int] = mapped_column(Integer, default=0)
 
-    status: Mapped[DocumentStatus] = mapped_column(Enum(DocumentStatus), default=DocumentStatus.UPLOADED)
+    status: Mapped[DocumentStatus] = mapped_column(
+        Enum(DocumentStatus), default=DocumentStatus.UPLOADED
+    )
     extractor: Mapped[str | None] = mapped_column(String(40))
     raw_extract_json: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)
@@ -497,7 +500,6 @@ class StockBatch(Base):
     source: Mapped[str] = mapped_column(String(32), default="receipt")
     document_line_id: Mapped[int | None] = mapped_column(ForeignKey("document_lines.id"))
     received_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-
 
 
 class Promotion(Base):
@@ -738,7 +740,9 @@ class CustomerProductPreference(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"))
     state: Mapped[ProductPreferenceState] = mapped_column(Enum(ProductPreferenceState))
-    source: Mapped[str] = mapped_column(String(16), default="customer")  # customer | survey | packer
+    source: Mapped[str] = mapped_column(
+        String(16), default="customer"
+    )  # customer | survey | packer
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -769,9 +773,13 @@ class BoxOrder(Base):
     location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"))
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     box_type: Mapped[str] = mapped_column(String(16))
-    status: Mapped[BoxOrderStatus] = mapped_column(Enum(BoxOrderStatus), default=BoxOrderStatus.PENDING_PAYMENT)
+    status: Mapped[BoxOrderStatus] = mapped_column(
+        Enum(BoxOrderStatus), default=BoxOrderStatus.PENDING_PAYMENT
+    )
     price_cents: Mapped[int] = mapped_column(Integer)
-    discount_cents: Mapped[int] = mapped_column(Integer, default=0)  # referral discount on a first box
+    discount_cents: Mapped[int] = mapped_column(
+        Integer, default=0
+    )  # referral discount on a first box
     credit_cents: Mapped[int] = mapped_column(Integer, default=0)  # store credit applied
     payment_source: Mapped[str | None] = mapped_column(String(16))  # square | counter | credit
     square_order_id: Mapped[str | None] = mapped_column(String(120))
@@ -805,7 +813,9 @@ class BoxLine(Base):
     box_order_id: Mapped[int] = mapped_column(ForeignKey("box_orders.id"), index=True)
     stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
     qty_base: Mapped[Decimal] = mapped_column(Qty, default=Decimal("1"))
-    status: Mapped[BoxLineStatus] = mapped_column(Enum(BoxLineStatus), default=BoxLineStatus.ALLOCATED)
+    status: Mapped[BoxLineStatus] = mapped_column(
+        Enum(BoxLineStatus), default=BoxLineStatus.ALLOCATED
+    )
     unit_cost_cents: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
     # True once these units are out of the count the till sells from (Square's, or ours).
     count_applied: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -826,7 +836,9 @@ class BoxReview(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     box_order_id: Mapped[int] = mapped_column(ForeignKey("box_orders.id"), index=True)
     stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"))
-    rating: Mapped[str] = mapped_column(String(16))  # loved | liked | neutral | disliked | never_again
+    rating: Mapped[str] = mapped_column(
+        String(16)
+    )  # loved | liked | neutral | disliked | never_again
     send_again: Mapped[bool] = mapped_column(Boolean, default=False)
     note: Mapped[str | None] = mapped_column(String(500))
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -841,7 +853,9 @@ class Referral(Base):
     referrer_customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     referred_customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
     code: Mapped[str] = mapped_column(String(24))
-    status: Mapped[ReferralStatus] = mapped_column(Enum(ReferralStatus), default=ReferralStatus.PENDING)
+    status: Mapped[ReferralStatus] = mapped_column(
+        Enum(ReferralStatus), default=ReferralStatus.PENDING
+    )
     box_order_id: Mapped[int | None] = mapped_column(ForeignKey("box_orders.id"))
     # Fixed when the code is used, so changing the reward later does not change what was promised.
     reward_cents: Mapped[int] = mapped_column(Integer, default=0)

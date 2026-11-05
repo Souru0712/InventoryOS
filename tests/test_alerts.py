@@ -46,10 +46,22 @@ def test_velocity_catches_stock_that_looks_healthy():
 
 
 def test_weight_and_count_items_use_the_same_rules():
-    ham = view(id=2, name="Sliced ham", dimension=Dimension.WEIGHT, stock_unit="kg",
-               qty_base=to_base("2.1", "kg"), reorder_point_base=to_base("2.5", "kg"))
-    cups = view(id=3, name="Takeaway cups", dimension=Dimension.COUNT, stock_unit="each",
-                qty_base=Decimal("250"), reorder_point_base=Decimal("300"))
+    ham = view(
+        id=2,
+        name="Sliced ham",
+        dimension=Dimension.WEIGHT,
+        stock_unit="kg",
+        qty_base=to_base("2.1", "kg"),
+        reorder_point_base=to_base("2.5", "kg"),
+    )
+    cups = view(
+        id=3,
+        name="Takeaway cups",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        qty_base=Decimal("250"),
+        reorder_point_base=Decimal("300"),
+    )
     assert evaluate_item(ham, Decimal("0"), NOW).kind == "low_stock"
     assert "2.1 kg" in evaluate_item(ham, Decimal("0"), NOW).message
     message = evaluate_item(cups, Decimal("0"), NOW).message

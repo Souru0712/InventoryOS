@@ -1,4 +1,5 @@
 """Square OAuth: authorize URL, code exchange, refresh, token encryption."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -44,7 +45,9 @@ def decrypt(value: str) -> str:
     try:
         return _fernet().decrypt(value.encode()).decode()
     except InvalidToken as exc:
-        raise OAuthError("stored token could not be decrypted; ENCRYPTION_KEY may have changed") from exc
+        raise OAuthError(
+            "stored token could not be decrypted; ENCRYPTION_KEY may have changed"
+        ) from exc
 
 
 def authorize_url(state: str) -> str:
@@ -67,7 +70,8 @@ def _token_request(payload: dict) -> dict:
     settings = get_settings()
     response = httpx.post(
         f"{settings.square_api_base}/oauth2/token",
-        json=payload | {
+        json=payload
+        | {
             "client_id": settings.square_app_id,
             "client_secret": settings.square_app_secret,
         },
@@ -75,7 +79,9 @@ def _token_request(payload: dict) -> dict:
         timeout=30.0,
     )
     if response.status_code >= 400:
-        raise OAuthError(f"square token exchange failed ({response.status_code}): {response.text[:500]}")
+        raise OAuthError(
+            f"square token exchange failed ({response.status_code}): {response.text[:500]}"
+        )
     return response.json()
 
 
@@ -92,7 +98,9 @@ def exchange_code(code: str) -> dict:
 
 
 def refresh(refresh_token: str) -> dict:
-    return _normalize_token(_token_request({"refresh_token": refresh_token, "grant_type": "refresh_token"}))
+    return _normalize_token(
+        _token_request({"refresh_token": refresh_token, "grant_type": "refresh_token"})
+    )
 
 
 def _normalize_token(data: dict) -> dict:

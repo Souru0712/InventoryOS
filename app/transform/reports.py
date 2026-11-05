@@ -1,4 +1,5 @@
 """Pure weekly summary shaping. Feeds both the dashboard and the email report."""
+
 from __future__ import annotations
 
 from collections import defaultdict

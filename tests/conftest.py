@@ -1,4 +1,5 @@
 """Test environment must be configured before any app module reads settings."""
+
 import os
 import tempfile
 from pathlib import Path

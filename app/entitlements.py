@@ -6,6 +6,7 @@ is answered here, from the subscription state, so no route ever asks `if plan ==
 
 The shape is: account -> subscription status -> plan -> capabilities -> access.
 """
+
 from __future__ import annotations
 
 import enum
@@ -182,7 +183,11 @@ def state(tenant: Tenant, now: datetime | None = None) -> dict:
 
 
 def _message(
-    status: SubscriptionStatus, current: Access, days_left: int | None, tenant: Tenant, now: datetime
+    status: SubscriptionStatus,
+    current: Access,
+    days_left: int | None,
+    tenant: Tenant,
+    now: datetime,
 ) -> str | None:
     """What to say at the top of the page, or nothing when everything is in order."""
     if status is SubscriptionStatus.TRIALING and current is Access.FULL:
@@ -202,7 +207,9 @@ def _message(
         if status is SubscriptionStatus.TRIALING:
             return "Your trial has ended. Your inventory is still here and still syncing; subscribe to change it again."
         if status is SubscriptionStatus.PAST_DUE:
-            return "We could not take payment. Update your card to start receiving and counting again."
+            return (
+                "We could not take payment. Update your card to start receiving and counting again."
+            )
         if status is SubscriptionStatus.PAUSED:
             return "Your subscription is paused. Your inventory is still here and still syncing."
         return "Your subscription has ended. Your inventory is still here and still syncing; subscribe to change it again."
@@ -220,6 +227,7 @@ def start_trial(tenant: Tenant, now: datetime | None = None) -> Tenant:
 
 
 # --- private modules --------------------------------------------------------------------------
+
 
 def snack_box_tenants() -> frozenset[int]:
     """Accounts allowed to reach the snack box module, from the environment. Empty means nobody."""

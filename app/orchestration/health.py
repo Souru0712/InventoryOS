@@ -1,4 +1,5 @@
 """Inventory health from live stock: the score, today's actions, and the nightly history."""
+
 from __future__ import annotations
 
 import json

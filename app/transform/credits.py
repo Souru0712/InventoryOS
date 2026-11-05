@@ -1,4 +1,5 @@
 """Pure store-credit and referral rules. Money is integer cents; a balance is only ever a ledger sum."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable

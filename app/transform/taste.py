@@ -1,4 +1,5 @@
 """Pure shopper model: what a customer told us, took home and rated, as the box builder may use it."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -99,7 +100,9 @@ def build_taste(
         name: sum(v) / len(v) / TOP_POINTS * len(v) / (len(v) + CATEGORY_PRIOR)
         for name, v in by_category.items()
     }
-    source = {name: f"{len(v)} rating{'s' if len(v) != 1 else ''}" for name, v in by_category.items()}
+    source = {
+        name: f"{len(v)} rating{'s' if len(v) != 1 else ''}" for name, v in by_category.items()
+    }
     for name in stated.liked_categories:
         category[name.lower()], source[name.lower()] = 1.0, "they said so"
     for name in stated.avoided_categories:
@@ -130,7 +133,9 @@ def build_taste(
     )
 
 
-def crowd_quality(ratings: Iterable[tuple[int, str]], prior: int = QUALITY_PRIOR) -> dict[int, float]:
+def crowd_quality(
+    ratings: Iterable[tuple[int, str]], prior: int = QUALITY_PRIOR
+) -> dict[int, float]:
     """Stock item -> how every customer rated it, -1..1, shrunk toward 0 until there are enough reviews."""
     points: dict[int, list[int]] = {}
     for item_id, rating in ratings:

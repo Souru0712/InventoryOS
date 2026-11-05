@@ -1,4 +1,5 @@
 """Signup, login, logout. One workspace per signup."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request

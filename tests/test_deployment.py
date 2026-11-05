@@ -1,4 +1,5 @@
 """Deployed settings, readiness, error reporting and scheduler uniqueness."""
+
 from datetime import datetime, timezone
 
 import pytest
@@ -27,6 +28,7 @@ def settings(**overrides) -> Settings:
 
 # --- settings ------------------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("given", ["postgres://u:p@h:5432/db", "postgresql://u:p@h:5432/db"])
 def test_a_hosts_postgres_url_gets_the_installed_driver(given):
     assert settings(database_url=given).database_url == "postgresql+psycopg://u:p@h:5432/db"
@@ -41,7 +43,10 @@ def test_an_env_var_that_exists_but_is_empty_means_unset(blank):
 
 
 def test_a_sqlite_url_is_left_alone():
-    assert settings(database_url="sqlite:///./stockpulse.db").database_url == "sqlite:///./stockpulse.db"
+    assert (
+        settings(database_url="sqlite:///./stockpulse.db").database_url
+        == "sqlite:///./stockpulse.db"
+    )
 
 
 def test_development_is_never_refused():
@@ -53,20 +58,26 @@ def test_a_properly_configured_production_starts():
 
 
 def test_production_refuses_sqlite_placeholder_secrets_missing_keys_and_plain_http():
-    problems = " ".join(settings(
-        app_env="production",
-        database_url="sqlite:///./stockpulse.db",
-        secret_key="change-me-openssl-rand-hex-32",
-        encryption_key="",
-        app_base_url="http://app.stockpulse.test",
-    ).deployment_problems())
+    problems = " ".join(
+        settings(
+            app_env="production",
+            database_url="sqlite:///./stockpulse.db",
+            secret_key="change-me-openssl-rand-hex-32",
+            encryption_key="",
+            app_base_url="http://app.stockpulse.test",
+        ).deployment_problems()
+    )
     for expected in ("SQLite", "SECRET_KEY", "ENCRYPTION_KEY", "https"):
         assert expected in problems
 
 
 def test_staging_may_run_over_plain_http_for_a_local_replica():
-    assert settings(**{**GOOD_PRODUCTION, "app_env": "staging", "app_base_url": "http://localhost:8080"}
-                    ).deployment_problems() == []
+    assert (
+        settings(
+            **{**GOOD_PRODUCTION, "app_env": "staging", "app_base_url": "http://localhost:8080"}
+        ).deployment_problems()
+        == []
+    )
 
 
 def test_s3_storage_needs_a_bucket():
@@ -76,10 +87,14 @@ def test_s3_storage_needs_a_bucket():
 
 def test_refusing_to_start_names_every_problem():
     with pytest.raises(RuntimeError, match="SQLite.*ENCRYPTION_KEY"):
-        require_deployable(settings(**{**GOOD_PRODUCTION, "database_url": "sqlite:///x.db", "encryption_key": ""}))
+        require_deployable(
+            settings(**{**GOOD_PRODUCTION, "database_url": "sqlite:///x.db", "encryption_key": ""})
+        )
 
 
-@pytest.mark.parametrize("env, embedded", [("dev", True), ("test", False), ("staging", False), ("production", False)])
+@pytest.mark.parametrize(
+    "env, embedded", [("dev", True), ("test", False), ("staging", False), ("production", False)]
+)
 def test_the_web_process_runs_the_scheduler_only_in_development(env, embedded):
     assert settings(app_env=env).embedded_scheduler is embedded
 
@@ -91,14 +106,21 @@ def test_the_embedded_scheduler_can_be_forced_either_way():
 
 # --- error reporting -----------------------------------------------------------------------------
 
+
 def test_error_reports_never_carry_cookies_auth_tokens_or_form_bodies():
-    event = {"request": {
-        "cookies": {"session": "abc"},
-        "data": {"password": "a-good-password"},
-        "query_string": "token=customer-login-secret",
-        "headers": {"Authorization": "Bearer x", "Cookie": "session=abc",
-                    "Stripe-Signature": "t=1,v1=x", "User-Agent": "Safari"},
-    }}
+    event = {
+        "request": {
+            "cookies": {"session": "abc"},
+            "data": {"password": "a-good-password"},
+            "query_string": "token=customer-login-secret",
+            "headers": {
+                "Authorization": "Bearer x",
+                "Cookie": "session=abc",
+                "Stripe-Signature": "t=1,v1=x",
+                "User-Agent": "Safari",
+            },
+        }
+    }
     request = scrub(event)["request"]
     assert "cookies" not in request and "data" not in request
     assert request["query_string"] == FILTERED
@@ -113,6 +135,7 @@ def test_error_reporting_stays_off_without_a_dsn():
 
 
 # --- health checks -------------------------------------------------------------------------------
+
 
 @pytest.fixture
 def client():
@@ -131,8 +154,10 @@ def test_liveness_checks_nothing_but_the_process(client):
 def test_readiness_checks_the_database_and_storage(client):
     response = client.get("/readyz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready",
-                               "checks": {"database": "ok", "schema": "skipped", "storage": "ok"}}
+    assert response.json() == {
+        "status": "ready",
+        "checks": {"database": "ok", "schema": "skipped", "storage": "ok"},
+    }
 
 
 def test_readiness_fails_without_leaking_why(client, monkeypatch):
@@ -149,6 +174,7 @@ def test_readiness_fails_without_leaking_why(client, monkeypatch):
 
 # --- scheduled jobs ------------------------------------------------------------------------------
 
+
 def test_a_rerun_report_job_does_not_send_the_weekly_report_twice(db, tenant, monkeypatch):
     now = datetime.now(timezone.utc)
     tenant.report_day, tenant.report_hour = now.weekday(), now.hour
@@ -158,8 +184,15 @@ def test_a_rerun_report_job_does_not_send_the_weekly_report_twice(db, tenant, mo
 
     def fake_send(session, tenant_id):
         sent.append(tenant_id)
-        session.add(EmailLog(tenant_id=tenant_id, to_email="owner@rosewood.test",
-                             subject="Your week", kind="weekly_report", status="sent"))
+        session.add(
+            EmailLog(
+                tenant_id=tenant_id,
+                to_email="owner@rosewood.test",
+                subject="Your week",
+                kind="weekly_report",
+                status="sent",
+            )
+        )
 
     monkeypatch.setattr(scheduler, "send_weekly_report", fake_send)
     scheduler.send_due_reports(now)

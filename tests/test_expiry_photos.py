@@ -1,4 +1,5 @@
 """Scoring real photographs, and what happens to the date once a person confirms it."""
+
 import io
 import json
 from datetime import date
@@ -34,9 +35,13 @@ class ScriptedReader:
     def read(self, image: bytes, media_type: str) -> ExpiryRead:
         payload = self.by_size[len(image)]
         return ExpiryRead(
-            text=payload["text"], label=payload.get("label"), date_iso=payload.get("date_iso"),
-            legible=payload.get("legible", True), confidence=payload.get("confidence", 0.95),
-            raw=payload, reader=self.name,
+            text=payload["text"],
+            label=payload.get("label"),
+            date_iso=payload.get("date_iso"),
+            legible=payload.get("legible", True),
+            confidence=payload.get("confidence", 0.95),
+            raw=payload,
+            reader=self.name,
         )
 
 
@@ -57,18 +62,42 @@ def corpus_folder(tmp_path):
     sizes["ambiguous.jpg"] = write_photo(tmp_path, "ambiguous.jpg", 320)
     sizes["misread.jpg"] = write_photo(tmp_path, "misread.jpg", 340)
 
-    (tmp_path / "cases.json").write_text(json.dumps([
-        {"file": "clear.jpg", "expected": "2026-10-24", "note": "large, obvious"},
-        {"file": "ambiguous.jpg", "expected": "2026-11-10", "prefer": "dmy", "note": "10/11/26"},
-        {"file": "misread.jpg", "expected": "2026-10-24", "note": "low contrast"},
-    ]), encoding="utf-8")
+    (tmp_path / "cases.json").write_text(
+        json.dumps(
+            [
+                {"file": "clear.jpg", "expected": "2026-10-24", "note": "large, obvious"},
+                {
+                    "file": "ambiguous.jpg",
+                    "expected": "2026-11-10",
+                    "prefer": "dmy",
+                    "note": "10/11/26",
+                },
+                {"file": "misread.jpg", "expected": "2026-10-24", "note": "low contrast"},
+            ]
+        ),
+        encoding="utf-8",
+    )
 
-    reader = ScriptedReader({
-        sizes["clear.jpg"]: {"label": "BEST BY", "text": "BEST BY 10/24/26", "date_iso": "2026-10-24"},
-        sizes["ambiguous.jpg"]: {"label": "EXP", "text": "EXP 10/11/26", "date_iso": "2026-11-10"},
-        # Reads 2028 where the packaging says 2026: legible, confident, and wrong.
-        sizes["misread.jpg"]: {"label": "BEST BY", "text": "BEST BY 10/24/28", "date_iso": "2028-10-24"},
-    })
+    reader = ScriptedReader(
+        {
+            sizes["clear.jpg"]: {
+                "label": "BEST BY",
+                "text": "BEST BY 10/24/26",
+                "date_iso": "2026-10-24",
+            },
+            sizes["ambiguous.jpg"]: {
+                "label": "EXP",
+                "text": "EXP 10/11/26",
+                "date_iso": "2026-11-10",
+            },
+            # Reads 2028 where the packaging says 2026: legible, confident, and wrong.
+            sizes["misread.jpg"]: {
+                "label": "BEST BY",
+                "text": "BEST BY 10/24/28",
+                "date_iso": "2028-10-24",
+            },
+        }
+    )
     return tmp_path, reader
 
 
@@ -97,7 +126,9 @@ def test_what_went_wrong_becomes_a_regression_case(corpus_folder, tmp_path):
     results = run_corpus(folder, today=TODAY, reader=reader)
 
     cases = as_regression_cases(results)
-    assert {case["id"] for case in cases} == {"ambiguous", "misread"}, "passes are not worth keeping"
+    assert {case["id"] for case in cases} == {"ambiguous", "misread"}, (
+        "passes are not worth keeping"
+    )
     assert cases[0]["text"], "the transcription is what the parser needs to reproduce it"
 
     corpus_path = tmp_path / "corpus.json"
@@ -112,23 +143,39 @@ def test_a_corpus_without_its_answers_says_so(tmp_path):
 
 
 def test_a_photo_listed_but_missing_is_named(tmp_path):
-    (tmp_path / "cases.json").write_text(json.dumps([{"file": "gone.jpg", "expected": None}]), "utf-8")
+    (tmp_path / "cases.json").write_text(
+        json.dumps([{"file": "gone.jpg", "expected": None}]), "utf-8"
+    )
     with pytest.raises(FileNotFoundError, match="gone.jpg"):
         load_cases(tmp_path)
 
 
 # --- the date that ends up on the shelf ---------------------------------------------------------
 
+
 def test_the_confidence_is_kept_with_the_batch_not_just_the_date(db, tenant, location):
     """Months later, "why is this lot dated 24 Oct" is answerable only if the read is on record."""
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="yoghurt",
-                     name="Natural yoghurt", dimension=Dimension.COUNT, stock_unit="each",
-                     track_mode=TrackMode.MANUAL, qty_base=Decimal("10"))
+    item = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="yoghurt",
+        name="Natural yoghurt",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode=TrackMode.MANUAL,
+        qty_base=Decimal("10"),
+    )
     db.add(item)
     db.commit()
 
-    receive_scanned(db, item, to_base(6, "each"), expires_on=date(2026, 10, 24),
-                    date_type="best_before", date_confidence=Decimal("0.97"))
+    receive_scanned(
+        db,
+        item,
+        to_base(6, "each"),
+        expires_on=date(2026, 10, 24),
+        date_type="best_before",
+        date_confidence=Decimal("0.97"),
+    )
     db.commit()
 
     batch = db.query(StockBatch).one()
@@ -139,8 +186,15 @@ def test_the_confidence_is_kept_with_the_batch_not_just_the_date(db, tenant, loc
 
 def test_a_reading_the_app_is_unsure_of_is_handed_to_a_person(db):
     """An ambiguous print must arrive at the screen marked for confirmation, not applied."""
-    reader = StubExpiryReader({"text": "EXP 10/11/26", "label": "EXP", "date_iso": "2026-10-11",
-                               "legible": True, "confidence": 0.98})
+    reader = StubExpiryReader(
+        {
+            "text": "EXP 10/11/26",
+            "label": "EXP",
+            "date_iso": "2026-10-11",
+            "legible": True,
+            "confidence": 0.98,
+        }
+    )
     reading = read_expiry_photo(b"photo", "image/jpeg", prefer="mdy", today=TODAY, reader=reader)
 
     assert reading.value == date(2026, 10, 11)

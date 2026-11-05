@@ -3,6 +3,7 @@
 The matrix at the bottom walks one account through its whole life: trial, Starter, Pro, downgrade,
 a failed payment, the grace period, cancellation.
 """
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -46,16 +47,28 @@ def account(status: SubscriptionStatus, plan: str = "pro", **fields) -> Tenant:
 
 # --- status to access ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("status, fields, expected", [
-    (SubscriptionStatus.ACTIVE, {}, Access.FULL),
-    (SubscriptionStatus.TRIALING, {"trial_ends_at": NOW + timedelta(days=3)}, Access.FULL),
-    (SubscriptionStatus.TRIALING, {"trial_ends_at": NOW - timedelta(minutes=1)}, Access.READ_ONLY),
-    (SubscriptionStatus.PAST_DUE, {"past_due_since": NOW - timedelta(days=2)}, Access.FULL),
-    (SubscriptionStatus.PAST_DUE, {"past_due_since": NOW - timedelta(days=GRACE_DAYS + 1)}, Access.READ_ONLY),
-    (SubscriptionStatus.EXPIRED, {}, Access.READ_ONLY),
-    (SubscriptionStatus.CANCELED, {}, Access.READ_ONLY),
-    (SubscriptionStatus.PAUSED, {}, Access.READ_ONLY),
-])
+
+@pytest.mark.parametrize(
+    "status, fields, expected",
+    [
+        (SubscriptionStatus.ACTIVE, {}, Access.FULL),
+        (SubscriptionStatus.TRIALING, {"trial_ends_at": NOW + timedelta(days=3)}, Access.FULL),
+        (
+            SubscriptionStatus.TRIALING,
+            {"trial_ends_at": NOW - timedelta(minutes=1)},
+            Access.READ_ONLY,
+        ),
+        (SubscriptionStatus.PAST_DUE, {"past_due_since": NOW - timedelta(days=2)}, Access.FULL),
+        (
+            SubscriptionStatus.PAST_DUE,
+            {"past_due_since": NOW - timedelta(days=GRACE_DAYS + 1)},
+            Access.READ_ONLY,
+        ),
+        (SubscriptionStatus.EXPIRED, {}, Access.READ_ONLY),
+        (SubscriptionStatus.CANCELED, {}, Access.READ_ONLY),
+        (SubscriptionStatus.PAUSED, {}, Access.READ_ONLY),
+    ],
+)
 def test_every_subscription_state_resolves_to_full_or_read_only(status, fields, expected):
     assert access(account(status, **fields), NOW) is expected
 
@@ -64,10 +77,13 @@ def test_a_trial_that_ran_out_an_hour_ago_closes_without_waiting_for_a_job():
     """Access is computed from the dates, so nothing is open just because a job has not run."""
     tenant = account(SubscriptionStatus.TRIALING, trial_ends_at=NOW - timedelta(hours=1))
     assert access(tenant, NOW) is Access.READ_ONLY
-    assert tenant.subscription_status is SubscriptionStatus.TRIALING, "the job still owns the column"
+    assert tenant.subscription_status is SubscriptionStatus.TRIALING, (
+        "the job still owns the column"
+    )
 
 
 # --- plan to capabilities -----------------------------------------------------------------------
+
 
 def test_a_trial_is_given_the_full_product():
     tenant = start_trial(Tenant(name="Rosewood"), NOW)
@@ -95,7 +111,9 @@ def test_starter_sees_todays_score_and_pro_sees_the_month_behind_it():
 def test_a_lapsed_pro_account_cannot_write_but_keeps_reading():
     lapsed = account(SubscriptionStatus.EXPIRED, "pro")
     assert allows(lapsed, "inventory_write", NOW) is False
-    assert allows(lapsed, "custom_thresholds", NOW) is False, "writing is writing, whatever the plan"
+    assert allows(lapsed, "custom_thresholds", NOW) is False, (
+        "writing is writing, whatever the plan"
+    )
     # Nothing here hides a page: reading is never gated.
     assert access(lapsed, NOW) is Access.READ_ONLY
 
@@ -106,6 +124,7 @@ def test_requiring_something_the_plan_lacks_says_what_to_do():
 
 
 # --- what the page says --------------------------------------------------------------------------
+
 
 def test_the_banner_stays_quiet_early_in_a_trial_and_speaks_near_the_end():
     early = account(SubscriptionStatus.TRIALING, trial_ends_at=NOW + timedelta(days=20))
@@ -128,11 +147,18 @@ def test_a_lapsed_account_is_told_its_data_is_still_there():
 
 # --- locations ------------------------------------------------------------------------------------
 
+
 @pytest.fixture
 def three_locations(db, tenant):
     for index in range(1, 4):
-        db.add(Location(tenant_id=tenant.id, provider="square",
-                        provider_location_id=f"LOC-{index}", name=f"Shop {index}"))
+        db.add(
+            Location(
+                tenant_id=tenant.id,
+                provider="square",
+                provider_location_id=f"LOC-{index}",
+                name=f"Shop {index}",
+            )
+        )
     db.commit()
     return tenant
 
@@ -165,6 +191,7 @@ def test_upgrading_turns_the_other_locations_back_on(db, three_locations):
 
 # --- time passing ---------------------------------------------------------------------------------
 
+
 def test_the_nightly_job_ends_trials_that_are_over(db, tenant):
     start_trial(tenant, NOW - timedelta(days=TRIAL_DAYS + 1))
     db.commit()
@@ -185,6 +212,7 @@ def test_the_job_leaves_a_running_trial_alone(db, tenant):
 
 
 # --- the whole life of an account -----------------------------------------------------------------
+
 
 def test_the_complete_lifecycle(db, tenant):
     """Trial, Starter, Pro, downgrade, failed payment, grace, cancellation, read-only."""
@@ -228,6 +256,7 @@ def test_the_complete_lifecycle(db, tenant):
 
 # --- enforced where it counts: on the server ------------------------------------------------------
 
+
 @pytest.fixture
 def client():
     Base.metadata.drop_all(engine)
@@ -237,28 +266,50 @@ def client():
 
 
 def signed_up(client, status: SubscriptionStatus, plan: str = "pro") -> int:
-    client.post("/signup", data={"business_name": "Rosewood", "email": "owner@rosewood.test",
-                                 "password": "a-good-password"})
+    client.post(
+        "/signup",
+        data={
+            "business_name": "Rosewood",
+            "email": "owner@rosewood.test",
+            "password": "a-good-password",
+        },
+    )
     with SessionLocal() as db:
         tenant = db.query(Tenant).one()
         tenant.subscription_status = status
         tenant.plan = Plan(plan)
         if status is SubscriptionStatus.TRIALING:
             tenant.trial_ends_at = datetime.now(timezone.utc) - timedelta(days=1)
-        location = Location(tenant_id=tenant.id, provider="demo", provider_location_id="l1",
-                            name="Main")
+        location = Location(
+            tenant_id=tenant.id, provider="demo", provider_location_id="l1", name="Main"
+        )
         db.add(location)
         db.flush()
-        db.add(StockItem(tenant_id=tenant.id, location_id=location.id, slug="milk", name="Milk",
-                         dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.MANUAL,
-                         qty_base=Decimal("10")))
+        db.add(
+            StockItem(
+                tenant_id=tenant.id,
+                location_id=location.id,
+                slug="milk",
+                name="Milk",
+                dimension=Dimension.COUNT,
+                stock_unit="each",
+                track_mode=TrackMode.MANUAL,
+                qty_base=Decimal("10"),
+            )
+        )
         db.commit()
         return tenant.id
 
 
 def test_signing_up_starts_a_trial_on_the_full_product(client):
-    client.post("/signup", data={"business_name": "Rosewood", "email": "owner@rosewood.test",
-                                 "password": "a-good-password"})
+    client.post(
+        "/signup",
+        data={
+            "business_name": "Rosewood",
+            "email": "owner@rosewood.test",
+            "password": "a-good-password",
+        },
+    )
     with SessionLocal() as db:
         tenant = db.query(Tenant).one()
     assert tenant.subscription_status is SubscriptionStatus.TRIALING
@@ -274,12 +325,15 @@ def test_a_lapsed_account_can_still_read_every_page(client):
 
 def test_a_lapsed_account_is_refused_when_it_tries_to_change_stock(client):
     signed_up(client, SubscriptionStatus.EXPIRED, "starter")
-    response = client.post("/app/expiring/label",
-                           data={"stock_item_id": 1, "quantity": "4", "expires_on": "2030-01-01"})
+    response = client.post(
+        "/app/expiring/label",
+        data={"stock_item_id": 1, "quantity": "4", "expires_on": "2030-01-01"},
+    )
     assert response.status_code == 402
     assert "lapsed" in response.text
     with SessionLocal() as db:
         from app.models import StockBatch
+
         assert db.query(StockBatch).count() == 0, "the refusal has to be real, not cosmetic"
 
 
@@ -301,8 +355,12 @@ def test_pro_gets_them(client):
     signed_up(client, SubscriptionStatus.ACTIVE, "pro")
 
     assert client.get("/app/reorder.csv").status_code == 200
-    assert client.post("/app/items/1/thresholds", data={"reorder_point": "5"},
-                       follow_redirects=False).status_code == 303
+    assert (
+        client.post(
+            "/app/items/1/thresholds", data={"reorder_point": "5"}, follow_redirects=False
+        ).status_code
+        == 303
+    )
 
 
 def test_a_paying_account_is_never_shown_the_banner(client):

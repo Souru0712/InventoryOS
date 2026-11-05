@@ -1,4 +1,5 @@
 """The signed-in product: stock, alerts, counts, reports and the Square connection."""
+
 from __future__ import annotations
 
 import logging
@@ -40,7 +41,13 @@ from app.orchestration.views import (
     velocity_map,
 )
 from app.providers.square import oauth
-from app.security import require_writable, SESSION_STATE_KEY, new_state, require_tenant, require_user
+from app.security import (
+    require_writable,
+    SESSION_STATE_KEY,
+    new_state,
+    require_tenant,
+    require_user,
+)
 from app.transform.alerts import counts_as_waste_risk
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
@@ -268,6 +275,7 @@ def set_perishable(
     db.commit()
     return RedirectResponse("/app/expiring?coverage=1", status_code=303)
 
+
 @router.post("/app/expiring/{batch_id}/remove")
 def remove_batch(
     batch_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_writable)
@@ -277,7 +285,9 @@ def remove_batch(
     if batch is None or batch.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="batch not found")
     # A markdown decided against this lot stays on record; it keeps its own end date.
-    db.execute(update(Promotion).where(Promotion.stock_batch_id == batch.id).values(stock_batch_id=None))
+    db.execute(
+        update(Promotion).where(Promotion.stock_batch_id == batch.id).values(stock_batch_id=None)
+    )
     db.delete(batch)
     db.commit()
     return RedirectResponse("/app/expiring?removed=1", status_code=303)
@@ -290,7 +300,12 @@ def new_item_form(
     return templates.TemplateResponse(
         request,
         "app/item_form.html",
-        {"title": "Add stock item", "tenant": tenant, "locations": _locations(db, tenant.id), "item": None},
+        {
+            "title": "Add stock item",
+            "tenant": tenant,
+            "locations": _locations(db, tenant.id),
+            "item": None,
+        },
     )
 
 

@@ -4,6 +4,7 @@
 a store owner still has to do after photographing an invoice, and that is exactly what the
 corrections recorded during review add up to.
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -43,17 +44,22 @@ def correction_stats(
     )
     document_ids = [document.id for document in documents]
     if not document_ids:
-        return {"days": days, "documents": 0, "lines": 0, "corrections": 0, "lines_touched": 0,
-                "clean_rate": None, "by_field": {}, "suppliers": [], "products": []}
+        return {
+            "days": days,
+            "documents": 0,
+            "lines": 0,
+            "corrections": 0,
+            "lines_touched": 0,
+            "clean_rate": None,
+            "by_field": {},
+            "suppliers": [],
+            "products": [],
+        }
 
-    lines = list(
-        db.scalars(select(DocumentLine).where(DocumentLine.document_id.in_(document_ids)))
-    )
+    lines = list(db.scalars(select(DocumentLine).where(DocumentLine.document_id.in_(document_ids))))
     corrections = list(
         db.scalars(
-            select(ExtractionCorrection).where(
-                ExtractionCorrection.document_id.in_(document_ids)
-            )
+            select(ExtractionCorrection).where(ExtractionCorrection.document_id.in_(document_ids))
         )
     )
 

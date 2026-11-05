@@ -1,4 +1,5 @@
 """Persist stock and expiry alerts, and send the digest owners actually act on."""
+
 from __future__ import annotations
 
 import logging
@@ -125,7 +126,10 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
         log.warning("tenant %s has no active users to alert", tenant_id)
         return False
 
-    items = {item.id: item for item in db.scalars(select(StockItem).where(StockItem.tenant_id == tenant_id))}
+    items = {
+        item.id: item
+        for item in db.scalars(select(StockItem).where(StockItem.tenant_id == tenant_id))
+    }
     # Money first: "$286 may expire" gets the owner to open the app; "7 alerts" does not.
     pending.sort(key=lambda a: (a.kind not in EXPIRY_KINDS, -(a.value_cents or 0)))
     currency = tenant_currency(db, tenant_id)
@@ -153,7 +157,9 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
             }
             for alert in theirs
         ]
-        at_risk_cents = sum(alert.value_cents or 0 for alert in theirs if alert.kind in EXPIRY_KINDS)
+        at_risk_cents = sum(
+            alert.value_cents or 0 for alert in theirs if alert.kind in EXPIRY_KINDS
+        )
         count = f"{len(rows)} alert{'s' if len(rows) != 1 else ''}"
         if at_risk_cents:
             subject = f"{money(at_risk_cents, currency)} of stock at risk, {count} - {tenant.name}"

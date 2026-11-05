@@ -47,7 +47,11 @@ def test_sales_explode_into_base_units_per_stock_item():
 
 
 def test_consumption_only_counts_days_after_the_count():
-    daily = {TODAY - timedelta(days=2): Decimal("5"), TODAY - timedelta(days=1): Decimal("7"), TODAY: Decimal("3")}
+    daily = {
+        TODAY - timedelta(days=2): Decimal("5"),
+        TODAY - timedelta(days=1): Decimal("7"),
+        TODAY: Decimal("3"),
+    }
     anchor = datetime(2026, 9, 5, tzinfo=timezone.utc)  # yesterday
     assert consumed_since(daily, anchor, TODAY) == Decimal("3")
 

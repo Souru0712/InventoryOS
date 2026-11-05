@@ -1,4 +1,5 @@
 """Scan a code, know the product, receive against it. Square still owns the quantity."""
+
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -33,17 +34,27 @@ COKE = "049000028911"  # a real-looking 12 digit UPC-A
 @pytest.fixture
 def coke(db, tenant, location):
     item = StockItem(
-        tenant_id=tenant.id, location_id=location.id, slug="coke-12oz", name="Coca-Cola 12oz",
-        dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.PROVIDER,
-        provider_variation_id="VAR-COKE", qty_base=Decimal("34"),
-        cost_per_base_cents=Decimal("58"), pack_size_base=Decimal("24"),
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="coke-12oz",
+        name="Coca-Cola 12oz",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode=TrackMode.PROVIDER,
+        provider_variation_id="VAR-COKE",
+        qty_base=Decimal("34"),
+        cost_per_base_cents=Decimal("58"),
+        pack_size_base=Decimal("24"),
     )
     db.add(item)
     db.flush()
     db.add(
         ProductIdentifier(
-            tenant_id=tenant.id, stock_item_id=item.id,
-            identifier_type=IdentifierType.UPC, value=COKE, source="square",
+            tenant_id=tenant.id,
+            stock_item_id=item.id,
+            identifier_type=IdentifierType.UPC,
+            value=COKE,
+            source="square",
         )
     )
     db.commit()
@@ -51,6 +62,7 @@ def coke(db, tenant, location):
 
 
 # --- resolving ------------------------------------------------------------------------------
+
 
 def test_a_scanned_code_finds_its_item(db, tenant, coke):
     assert find_by_code(db, tenant.id, COKE).stock_item_id == coke.id
@@ -84,10 +96,16 @@ def test_a_misread_code_is_flagged_before_it_is_linked():
 
 # --- linking --------------------------------------------------------------------------------
 
+
 def test_linking_teaches_the_scanner(db, tenant, location, coke):
     water = StockItem(
-        tenant_id=tenant.id, location_id=location.id, slug="water", name="Still water 500ml",
-        dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.MANUAL,
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="water",
+        name="Still water 500ml",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        track_mode=TrackMode.MANUAL,
         qty_base=Decimal("12"),
     )
     db.add(water)
@@ -107,8 +125,13 @@ def test_linking_the_same_code_to_the_same_item_twice_is_harmless(db, tenant, co
 
 def test_one_code_cannot_point_at_two_products(db, tenant, location, coke):
     other = StockItem(
-        tenant_id=tenant.id, location_id=location.id, slug="other", name="Something else",
-        dimension=Dimension.COUNT, stock_unit="each", qty_base=Decimal("1"),
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="other",
+        name="Something else",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        qty_base=Decimal("1"),
     )
     db.add(other)
     db.flush()
@@ -117,6 +140,7 @@ def test_one_code_cannot_point_at_two_products(db, tenant, location, coke):
 
 
 # --- receiving ------------------------------------------------------------------------------
+
 
 def test_receiving_raises_stock_and_leaves_a_trail(db, tenant, coke):
     result = receive_scanned(db, coke, Decimal("24"), user_id=None)
@@ -142,7 +166,9 @@ def test_a_dated_scan_creates_the_batch_the_expiring_page_reads(db, tenant, coke
     batch = db.query(StockBatch).one()
     assert result["dated"] is True
     assert (batch.received_qty_base, batch.expires_on, batch.source) == (
-        Decimal("24"), best_before, "scan",
+        Decimal("24"),
+        best_before,
+        "scan",
     )
     assert batch.cost_per_base_cents == Decimal("58")
 
@@ -161,6 +187,7 @@ def test_receiving_nothing_is_refused(db, tenant, coke):
 
 # --- through the browser --------------------------------------------------------------------
 
+
 @pytest.fixture
 def client():
     Base.metadata.drop_all(engine)
@@ -170,17 +197,27 @@ def client():
 
 
 def signed_up(client, name="Rosewood", email="owner@rosewood.test") -> int:
-    client.post("/signup", data={"business_name": name, "email": email, "password": "a-good-password"})
+    client.post(
+        "/signup", data={"business_name": name, "email": email, "password": "a-good-password"}
+    )
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.name == name).one()
-        location = Location(tenant_id=tenant.id, provider="demo",
-                            provider_location_id=f"loc-{name}", name="Main")
+        location = Location(
+            tenant_id=tenant.id, provider="demo", provider_location_id=f"loc-{name}", name="Main"
+        )
         db.add(location)
         db.flush()
-        item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="beans",
-                         name="House beans 1kg", dimension=Dimension.COUNT, stock_unit="each",
-                         track_mode=TrackMode.MANUAL, qty_base=Decimal("10"),
-                         pack_size_base=Decimal("12"))
+        item = StockItem(
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug="beans",
+            name="House beans 1kg",
+            dimension=Dimension.COUNT,
+            stock_unit="each",
+            track_mode=TrackMode.MANUAL,
+            qty_base=Decimal("10"),
+            pack_size_base=Decimal("12"),
+        )
         db.add(item)
         db.commit()
         return item.id
@@ -271,17 +308,28 @@ def test_one_tenant_cannot_scan_into_another_tenants_stock(client):
 
 # --- reading a date from a photo, through the browser ----------------------------------------
 
+
 def test_the_expiry_route_reads_a_photo(client, monkeypatch):
     import app.orchestration.scanning as scanning_mod
     from app.extract.expiry import StubExpiryReader
 
     signed_up(client)
     monkeypatch.setattr(
-        scanning_mod, "get_reader",
-        lambda: StubExpiryReader({"text": "24 OCT 2026", "label": "BEST BEFORE",
-                                  "date_iso": "2026-10-24", "legible": True, "confidence": 1.0}),
+        scanning_mod,
+        "get_reader",
+        lambda: StubExpiryReader(
+            {
+                "text": "24 OCT 2026",
+                "label": "BEST BEFORE",
+                "date_iso": "2026-10-24",
+                "legible": True,
+                "confidence": 1.0,
+            }
+        ),
     )
-    response = client.post("/app/scan/expiry", files={"photo": ("date.jpg", b"bytes", "image/jpeg")})
+    response = client.post(
+        "/app/scan/expiry", files={"photo": ("date.jpg", b"bytes", "image/jpeg")}
+    )
     body = response.json()
     assert response.status_code == 200
     assert body["found"] is True
@@ -295,10 +343,12 @@ def test_an_unreadable_photo_asks_for_manual_entry(client, monkeypatch):
     from app.extract.expiry import StubExpiryReader
 
     signed_up(client)
-    monkeypatch.setattr(scanning_mod, "get_reader",
-                        lambda: StubExpiryReader({"legible": False, "confidence": 0.0}))
-    body = client.post("/app/scan/expiry",
-                       files={"photo": ("date.jpg", b"bytes", "image/jpeg")}).json()
+    monkeypatch.setattr(
+        scanning_mod, "get_reader", lambda: StubExpiryReader({"legible": False, "confidence": 0.0})
+    )
+    body = client.post(
+        "/app/scan/expiry", files={"photo": ("date.jpg", b"bytes", "image/jpeg")}
+    ).json()
     assert body["found"] is False
     assert body["needs_confirmation"] is True
 
@@ -311,10 +361,16 @@ def test_an_empty_photo_is_refused(client):
 
 def test_a_scanned_date_reaches_the_batch_with_its_confidence(client):
     item_id = signed_up(client)
-    client.post("/app/scan/receive", data={
-        "stock_item_id": item_id, "quantity": "6", "expires_on": "2026-10-24",
-        "date_type": "use_by", "date_confidence": "0.97",
-    })
+    client.post(
+        "/app/scan/receive",
+        data={
+            "stock_item_id": item_id,
+            "quantity": "6",
+            "expires_on": "2026-10-24",
+            "date_type": "use_by",
+            "date_confidence": "0.97",
+        },
+    )
     with SessionLocal() as db:
         batch = db.query(StockBatch).one()
         assert batch.date_type == "use_by"
@@ -323,8 +379,14 @@ def test_a_scanned_date_reaches_the_batch_with_its_confidence(client):
 
 def test_a_receipt_with_no_date_records_no_date_metadata(client):
     item_id = signed_up(client)
-    client.post("/app/scan/receive", data={
-        "stock_item_id": item_id, "quantity": "6", "date_type": "use_by", "date_confidence": "0.9",
-    })
+    client.post(
+        "/app/scan/receive",
+        data={
+            "stock_item_id": item_id,
+            "quantity": "6",
+            "date_type": "use_by",
+            "date_confidence": "0.9",
+        },
+    )
     with SessionLocal() as db:
         assert db.query(StockBatch).count() == 0

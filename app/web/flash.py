@@ -1,4 +1,5 @@
 """One-shot messages carried across a redirect in the signed session, never in the URL."""
+
 from __future__ import annotations
 
 from fastapi import Request

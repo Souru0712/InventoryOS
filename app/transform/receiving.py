@@ -3,6 +3,7 @@
 Receiving is the job that hurts: a delivery arrives and someone re-types every
 count. Getting it wrong is what makes an online store sell what is not there.
 """
+
 from __future__ import annotations
 
 import re
@@ -66,18 +67,57 @@ PACK_WORDS = {"case", "box", "carton", "pack", "tray", "crate", "bag", "sack", "
 
 # Supplier unit spellings -> our unit codes.
 UNIT_SYNONYMS = {
-    "kg": "kg", "kgs": "kg", "kilo": "kg", "kilos": "kg", "kilogram": "kg", "kilograms": "kg",
-    "g": "g", "gr": "g", "gm": "g", "gram": "g", "grams": "g",
-    "lb": "lb", "lbs": "lb", "pound": "lb", "pounds": "lb", "#": "lb",
-    "oz": "oz", "ounce": "oz", "ounces": "oz",
-    "l": "l", "lt": "l", "ltr": "l", "litre": "l", "litres": "l", "liter": "l", "liters": "l",
-    "ml": "ml", "mls": "ml", "millilitre": "ml", "milliliter": "ml",
-    "floz": "floz", "fl": "floz", "cup": "cup", "cups": "cup",
-    "pt": "pt", "pint": "pt", "pints": "pt",
-    "qt": "qt", "quart": "qt", "quarts": "qt",
-    "gal": "gal", "gallon": "gal", "gallons": "gal",
-    "each": "each", "ea": "each", "unit": "each", "units": "each", "pc": "each", "pcs": "each",
-    "dozen": "dozen", "dz": "dozen",
+    "kg": "kg",
+    "kgs": "kg",
+    "kilo": "kg",
+    "kilos": "kg",
+    "kilogram": "kg",
+    "kilograms": "kg",
+    "g": "g",
+    "gr": "g",
+    "gm": "g",
+    "gram": "g",
+    "grams": "g",
+    "lb": "lb",
+    "lbs": "lb",
+    "pound": "lb",
+    "pounds": "lb",
+    "#": "lb",
+    "oz": "oz",
+    "ounce": "oz",
+    "ounces": "oz",
+    "l": "l",
+    "lt": "l",
+    "ltr": "l",
+    "litre": "l",
+    "litres": "l",
+    "liter": "l",
+    "liters": "l",
+    "ml": "ml",
+    "mls": "ml",
+    "millilitre": "ml",
+    "milliliter": "ml",
+    "floz": "floz",
+    "fl": "floz",
+    "cup": "cup",
+    "cups": "cup",
+    "pt": "pt",
+    "pint": "pt",
+    "pints": "pt",
+    "qt": "qt",
+    "quart": "qt",
+    "quarts": "qt",
+    "gal": "gal",
+    "gallon": "gal",
+    "gallons": "gal",
+    "each": "each",
+    "ea": "each",
+    "unit": "each",
+    "units": "each",
+    "pc": "each",
+    "pcs": "each",
+    "dozen": "dozen",
+    "dz": "dozen",
 }
 
 _PACK_PATTERN = re.compile(
@@ -269,7 +309,9 @@ def prints_code(text: str, code: str | None) -> bool:
     code = (code or "").strip().lower()
     if len(code) < 3:
         return False
-    return re.search(rf"(?<![a-z0-9]){re.escape(code)}(?![a-z0-9])", (text or "").lower()) is not None
+    return (
+        re.search(rf"(?<![a-z0-9]){re.escape(code)}(?![a-z0-9])", (text or "").lower()) is not None
+    )
 
 
 def match_line(
@@ -302,7 +344,9 @@ def match_line(
         reverse=True,
     )
     if not scored or scored[0][0] < SUGGEST_THRESHOLD:
-        return MatchResult(line, None, ZERO, "no match", problem="no stock item looks like this line")
+        return MatchResult(
+            line, None, ZERO, "no match", problem="no stock item looks like this line"
+        )
 
     score, best = scored[0]
     runners = [(c.stock_item_id, s) for s, c in scored[1:4] if s >= SUGGEST_THRESHOLD]

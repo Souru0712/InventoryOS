@@ -1,4 +1,5 @@
 """Check that the product, audit and roadmap documents stay mutually consistent; exit 1 on any problem."""
+
 from __future__ import annotations
 
 import collections
@@ -40,8 +41,10 @@ def check_links(folders: list[Path]) -> list[str]:
     return problems
 
 
-PRODUCT_ID = (r"\b(?:PD|DR|AC-[A-Z]+|A|C|E|WF|SEC|REL|PERF|SCL|UX|MNT|OBS|SAAS-[A-Z]+|[A-Z]{3}-FR)"
-              r"-\d+[a-z]?\b")
+PRODUCT_ID = (
+    r"\b(?:PD|DR|AC-[A-Z]+|A|C|E|WF|SEC|REL|PERF|SCL|UX|MNT|OBS|SAAS-[A-Z]+|[A-Z]{3}-FR)"
+    r"-\d+[a-z]?\b"
+)
 
 
 def check_product_ids() -> list[str]:
@@ -49,13 +52,18 @@ def check_product_ids() -> list[str]:
     for doc in sorted(PRODUCT.glob("*.md")):
         text = read(doc)
         for line in text.splitlines():
-            m = (re.match(r"^\|\s*\**(" + PRODUCT_ID + r")\**\s*\|", line)
-                 or re.match(r"^#+\s+(" + PRODUCT_ID + r")\b", line))
+            m = re.match(r"^\|\s*\**(" + PRODUCT_ID + r")\**\s*\|", line) or re.match(
+                r"^#+\s+(" + PRODUCT_ID + r")\b", line
+            )
             if m:
                 defined.add(m.group(1))
         for ref in re.findall(PRODUCT_ID, text):
             referenced.setdefault(ref, doc.name)
-    return [f"product: undefined id {r} (first in {d})" for r, d in sorted(referenced.items()) if r not in defined]
+    return [
+        f"product: undefined id {r} (first in {d})"
+        for r, d in sorted(referenced.items())
+        if r not in defined
+    ]
 
 
 def spec_releases() -> dict[str, str]:
@@ -82,7 +90,9 @@ def check_traceability() -> list[str]:
 
 def task_index(breakdown: str) -> tuple[list[str], dict[str, list[str]], dict[str, str]]:
     lines = breakdown.split("## Index")[1].split("\n---\n")[0].splitlines()
-    header = [c.strip() for c in next(line for line in lines if line.startswith("| ID |")).split("|")]
+    header = [
+        c.strip() for c in next(line for line in lines if line.startswith("| ID |")).split("|")
+    ]
     dcol, mcol = header.index("Depends on"), header.index("Milestone")
     order, deps, milestones = [], {}, {}
     for line in lines:
@@ -108,25 +118,40 @@ def task_section(breakdown: str, task: str) -> str:
     start = breakdown.find(f"### {task} ")
     if start < 0:
         return ""
-    ends = [i for i in (breakdown.find("\n### ", start + 4), breakdown.find("\n---\n", start)) if i > 0]
-    return breakdown[start:min(ends) if ends else len(breakdown)]
+    ends = [
+        i for i in (breakdown.find("\n### ", start + 4), breakdown.find("\n---\n", start)) if i > 0
+    ]
+    return breakdown[start : min(ends) if ends else len(breakdown)]
 
 
-def check_roadmap_references(breakdown: str, order: list[str], deps: dict[str, list[str]]) -> list[str]:
+def check_roadmap_references(
+    breakdown: str, order: list[str], deps: dict[str, list[str]]
+) -> list[str]:
     docs = {p.name: read(p) for p in sorted(ROADMAP.glob("*.md"))}
     docs["CLAUDE.md"] = read(ROOT / "CLAUDE.md")
     defined_tasks = set(re.findall(r"^### (T\d[B]?\.\d+)", breakdown, re.M))
     defined_tasks |= set(re.findall(r"^\| (T\d[B]?\.\d+) \|", breakdown, re.M))
     decisions = set(re.findall(r"^\| (ID-\d+) \|", docs["IMPLEMENTATION_DECISIONS.md"], re.M))
     product_text = "\n".join(read(p) for p in PRODUCT.glob("*.md"))
-    req = (r"\b(?:AC-[A-Z]+-\d+|DR-\d+|" + FR + r"|WF-\d+|PD-\d+|C-\d+|SAAS-[A-Z]-\d+|SEC-\d+|REL-\d+|"
-           r"PERF-\d+|SCL-\d+|OBS-\d+|MNT-\d+|UX-\d+)\b")
+    req = (
+        r"\b(?:AC-[A-Z]+-\d+|DR-\d+|" + FR + r"|WF-\d+|PD-\d+|C-\d+|SAAS-[A-Z]-\d+|SEC-\d+|REL-\d+|"
+        r"PERF-\d+|SCL-\d+|OBS-\d+|MNT-\d+|UX-\d+)\b"
+    )
     product_ids = set(re.findall(req, product_text))
     problems = []
     for name, text in docs.items():
-        problems += [f"{name}: undefined task {t}" for t in sorted(set(re.findall(TASK, text)) - defined_tasks)]
-        problems += [f"{name}: undefined decision {d}" for d in sorted(set(re.findall(r"\bID-\d+\b", text)) - decisions)]
-        problems += [f"{name}: requirement {r} not in docs/product" for r in sorted(set(re.findall(req, text)) - product_ids)]
+        problems += [
+            f"{name}: undefined task {t}"
+            for t in sorted(set(re.findall(TASK, text)) - defined_tasks)
+        ]
+        problems += [
+            f"{name}: undefined decision {d}"
+            for d in sorted(set(re.findall(r"\bID-\d+\b", text)) - decisions)
+        ]
+        problems += [
+            f"{name}: requirement {r} not in docs/product"
+            for r in sorted(set(re.findall(req, text)) - product_ids)
+        ]
     pos = {t: i for i, t in enumerate(order)}
     for task, ds in deps.items():
         for d in ds:
@@ -152,8 +177,10 @@ def expand(spec: str) -> list[str]:
 
 
 def milestone_ranges(master: str) -> dict[str, list[str]]:
-    ranges = {m.group(1): expand(m.group(2).split(":")[0])
-              for m in re.finditer(r'Milestone (M\d) "[^"]+" \| ([^|]+)\|', master)}
+    ranges = {
+        m.group(1): expand(m.group(2).split(":")[0])
+        for m in re.finditer(r'Milestone (M\d) "[^"]+" \| ([^|]+)\|', master)
+    }
     for ms, stage in (("M0", r"### Stage 0"), ("M5", r"### Stage 3"), ("M6", r"### Stage 4 ")):
         m = re.search(stage + r".*?\| Tasks \| (T\d\.\d+[–-]T\d\.\d+) \|", master, re.S)
         if m:
@@ -161,7 +188,9 @@ def milestone_ranges(master: str) -> dict[str, list[str]]:
     return ranges
 
 
-def check_alignment(breakdown: str, deps: dict[str, list[str]], milestones: dict[str, str]) -> list[str]:
+def check_alignment(
+    breakdown: str, deps: dict[str, list[str]], milestones: dict[str, str]
+) -> list[str]:
     master = read(ROADMAP / "MASTER_DEVELOPMENT_ROADMAP.md")
     migration = read(ROADMAP / "DATA_MIGRATION_ROADMAP.md")
     problems = []
@@ -172,22 +201,32 @@ def check_alignment(breakdown: str, deps: dict[str, list[str]], milestones: dict
         if task not in where:
             problems.append(f"master: {task} is in no milestone range")
         elif milestones.get(task) != where[task]:
-            problems.append(f"index: {task} milestone {milestones.get(task)} but master says {where[task]}")
+            problems.append(
+                f"index: {task} milestone {milestones.get(task)} but master says {where[task]}"
+            )
     for task in where:
         if task not in deps:
             problems.append(f"master: milestone range names unknown task {task}")
     for task, ds in deps.items():
         for d in ds:
             if task in where and d in where and order.index(where[d]) > order.index(where[task]):
-                problems.append(f"{task} ({where[task]}) depends on {d} in later milestone {where[d]}")
+                problems.append(
+                    f"{task} ({where[task]}) depends on {d} in later milestone {where[d]}"
+                )
     critical = master.split("## 4. Critical path")[1].split("## 5")[0]
     for line in critical.splitlines():
         chain = re.findall(TASK, line)
         for a, b in zip(chain, chain[1:]):
             if a not in ancestors(b, deps):
                 problems.append(f"critical path: {a} -> {b} is not a dependency")
-    for row in re.finditer(r"^\| (DM-\d+) \| [^|]+ \| ([^|]+) \| [^|]+ \| ([^|]+) \|", migration, re.M):
-        step, owners, precede = row.group(1), re.findall(TASK, row.group(2)), re.findall(TASK, row.group(3))
+    for row in re.finditer(
+        r"^\| (DM-\d+) \| [^|]+ \| ([^|]+) \| [^|]+ \| ([^|]+) \|", migration, re.M
+    ):
+        step, owners, precede = (
+            row.group(1),
+            re.findall(TASK, row.group(2)),
+            re.findall(TASK, row.group(3)),
+        )
         if not owners:
             problems.append(f"{step}: no owning task")
         for owner in owners:
@@ -205,8 +244,13 @@ def check_alignment(breakdown: str, deps: dict[str, list[str]], milestones: dict
 def main() -> int:
     breakdown = read(ROADMAP / "DEVELOPMENT_TASK_BREAKDOWN.md")
     order, deps, milestones = task_index(breakdown)
-    problems = (check_links([PRODUCT, AUDIT, ROADMAP]) + check_product_ids() + check_traceability()
-                + check_roadmap_references(breakdown, order, deps) + check_alignment(breakdown, deps, milestones))
+    problems = (
+        check_links([PRODUCT, AUDIT, ROADMAP])
+        + check_product_ids()
+        + check_traceability()
+        + check_roadmap_references(breakdown, order, deps)
+        + check_alignment(breakdown, deps, milestones)
+    )
     print(f"checked: {len(order)} indexed tasks, {len(spec_releases())} spec requirements")
     for p in problems:
         print(p.encode("ascii", "replace").decode())

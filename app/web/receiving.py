@@ -1,4 +1,5 @@
 """Receiving: photograph the invoice, confirm the matches, stock goes up."""
+
 from __future__ import annotations
 
 import logging
@@ -161,7 +162,11 @@ def document_image(
     except StorageError:
         log.exception("photo for document %s is missing from storage", document.id)
         raise HTTPException(status_code=404, detail="photo not found") from None
-    return Response(content, media_type=document.content_type, headers={"Cache-Control": "private, max-age=3600"})
+    return Response(
+        content,
+        media_type=document.content_type,
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @router.post("/app/receiving/{document_id}/reparse")
@@ -170,7 +175,9 @@ def reparse(
 ):
     document = _owned(db, tenant.id, document_id)
     if document.status == DocumentStatus.APPLIED:
-        return RedirectResponse(f"/app/receiving/{document.id}?error=already_applied", status_code=303)
+        return RedirectResponse(
+            f"/app/receiving/{document.id}?error=already_applied", status_code=303
+        )
     try:
         parse_document(db, document.id)
         db.commit()
@@ -190,7 +197,9 @@ async def apply_receipt(
     """Apply the reviewed lines. The form posts one field group per line."""
     document = _owned(db, tenant.id, document_id)
     if document.status == DocumentStatus.APPLIED:
-        return RedirectResponse(f"/app/receiving/{document.id}?error=already_applied", status_code=303)
+        return RedirectResponse(
+            f"/app/receiving/{document.id}?error=already_applied", status_code=303
+        )
 
     form = await request.form()
     items = {

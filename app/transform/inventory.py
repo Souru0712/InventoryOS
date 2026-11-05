@@ -5,6 +5,7 @@ Covers the three ways a small business holds stock:
   weight  - bulk held on scales, sold or consumed by mass (deli, flour)
   volume  - liquids depleted by recipe (milk, syrup, draught)
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -134,9 +135,7 @@ def valuation_cents(qty_base: Decimal, cost_per_base_cents: Decimal) -> int:
     return int((Decimal(qty_base) * Decimal(cost_per_base_cents)).quantize(Decimal("1")))
 
 
-def suggest_order_base(
-    item: StockView, velocity_per_day: Decimal, cover_days: int = 14
-) -> Decimal:
+def suggest_order_base(item: StockView, velocity_per_day: Decimal, cover_days: int = 14) -> Decimal:
     """Base units to order: up to par level, else enough to cover lead time plus window."""
     if item.par_level_base is not None:
         target = Decimal(item.par_level_base)

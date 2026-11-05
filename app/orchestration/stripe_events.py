@@ -7,6 +7,7 @@ Every handler is safe to run twice, because Stripe retries, and events arrive ou
 enough to matter: an older `updated` landing after a `deleted` would otherwise bring a canceled
 subscription back to life.
 """
+
 from __future__ import annotations
 
 import logging
@@ -63,7 +64,10 @@ def plan_for_price(price_id: str | None) -> str | None:
     if not price_id:
         return None
     settings = get_settings()
-    for plan, configured in (("starter", settings.stripe_price_starter), ("pro", settings.stripe_price_pro)):
+    for plan, configured in (
+        ("starter", settings.stripe_price_starter),
+        ("pro", settings.stripe_price_pro),
+    ):
         if configured and configured == price_id:
             return plan
     log.warning("stripe price %s is not one of ours", price_id)
@@ -140,7 +144,9 @@ def apply_subscription(db: Session, tenant: Tenant, subscription: dict) -> str:
 
     if status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING):
         start_subscription(
-            db, tenant, plan,
+            db,
+            tenant,
+            plan,
             subscription_id=subscription.get("id"),
             customer_id=subscription.get("customer"),
             period_start=period_start,
@@ -194,14 +200,21 @@ def handle_event(db: Session, event: dict) -> dict:
                 tenant.stripe_subscription_id = subscription
             plan = (payload.get("metadata") or {}).get("plan")
             if plan in PLAN_IDS:
-                start_subscription(db, tenant, plan, subscription_id=tenant.stripe_subscription_id,
-                                   customer_id=tenant.stripe_customer_id)
+                start_subscription(
+                    db,
+                    tenant,
+                    plan,
+                    subscription_id=tenant.stripe_subscription_id,
+                    customer_id=tenant.stripe_customer_id,
+                )
                 result["status"] = SubscriptionStatus.ACTIVE.value
         log.info("tenant %s completed checkout", tenant.id)
 
     elif kind.startswith("customer.subscription."):
         if kind.endswith(".deleted"):
-            tenant.current_period_end = _moment(payload.get("current_period_end")) or tenant.current_period_end
+            tenant.current_period_end = (
+                _moment(payload.get("current_period_end")) or tenant.current_period_end
+            )
             end_subscription(db, tenant, SubscriptionStatus.CANCELED)
             result["status"] = SubscriptionStatus.CANCELED.value
         elif kind.endswith(".paused"):
@@ -223,7 +236,9 @@ def handle_event(db: Session, event: dict) -> dict:
         if tenant.subscription_status is SubscriptionStatus.PAST_DUE:
             tenant.subscription_status = SubscriptionStatus.ACTIVE
             tenant.past_due_since = None
-        tenant.current_period_start = _moment((payload.get("period_start"))) or tenant.current_period_start
+        tenant.current_period_start = (
+            _moment((payload.get("period_start"))) or tenant.current_period_start
+        )
         tenant.current_period_end = _moment(payload.get("period_end")) or tenant.current_period_end
         result["status"] = tenant.subscription_status.value
 

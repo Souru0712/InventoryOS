@@ -4,6 +4,7 @@ Policy, as the checkout page states it: a referrer earns credit when the friend'
 picked up. If that box is refunded later the credit is reversed, even if it was already spent;
 the balance then goes below zero and is only ever offset against future credit, never billed.
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,7 +40,9 @@ def new_referral_code(db: Session, tenant_id: int) -> str:
     while True:
         code = "SNACK-" + "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
         taken = db.scalars(
-            select(Customer.id).where(Customer.tenant_id == tenant_id, Customer.referral_code == code)
+            select(Customer.id).where(
+                Customer.tenant_id == tenant_id, Customer.referral_code == code
+            )
         ).first()
         if taken is None:
             return code
@@ -96,7 +99,9 @@ def apply_code(
     """Attach a referral to a first order and take the discount off it. Raises ReferralProblem."""
     code = code.strip().upper()
     referrer = db.scalars(
-        select(Customer).where(Customer.tenant_id == order.tenant_id, Customer.referral_code == code)
+        select(Customer).where(
+            Customer.tenant_id == order.tenant_id, Customer.referral_code == code
+        )
     ).first()
     existing = db.scalars(
         select(Referral).where(
@@ -104,9 +109,13 @@ def apply_code(
         )
     ).first()
     # An earlier attempt whose order was never paid gave nothing away, so the customer may try again.
-    retry = existing is not None and existing.status is ReferralStatus.CANCELLED and (
-        existing.box_order_id is None
-        or db.get(BoxOrder, existing.box_order_id).status is BoxOrderStatus.CANCELLED
+    retry = (
+        existing is not None
+        and existing.status is ReferralStatus.CANCELLED
+        and (
+            existing.box_order_id is None
+            or db.get(BoxOrder, existing.box_order_id).status is BoxOrderStatus.CANCELLED
+        )
     )
     bought = db.scalars(
         select(BoxOrder.id).where(
@@ -125,7 +134,9 @@ def apply_code(
     if problem:
         raise ReferralProblem(problem)
 
-    referral = existing if retry else Referral(tenant_id=order.tenant_id, referred_customer_id=customer.id)
+    referral = (
+        existing if retry else Referral(tenant_id=order.tenant_id, referred_customer_id=customer.id)
+    )
     referral.referrer_customer_id = referrer.id
     referral.code = code
     referral.status = ReferralStatus.PENDING
@@ -141,7 +152,9 @@ def apply_code(
 
 def referral_for_order(db: Session, order: BoxOrder) -> Referral | None:
     return db.scalars(
-        select(Referral).where(Referral.tenant_id == order.tenant_id, Referral.box_order_id == order.id)
+        select(Referral).where(
+            Referral.tenant_id == order.tenant_id, Referral.box_order_id == order.id
+        )
     ).first()
 
 
@@ -161,8 +174,14 @@ def qualify_for_order(db: Session, order: BoxOrder, now: datetime | None = None)
         return referral
     check_referral_transition("qualified", "rewarded")
     post_credit(
-        db, order.tenant_id, referrer.id, referral.reward_cents, CreditKind.REFERRAL_REWARD,
-        f"referral_reward:{referral.id}", box_order_id=order.id, referral_id=referral.id,
+        db,
+        order.tenant_id,
+        referrer.id,
+        referral.reward_cents,
+        CreditKind.REFERRAL_REWARD,
+        f"referral_reward:{referral.id}",
+        box_order_id=order.id,
+        referral_id=referral.id,
         note="friend's first box picked up",
     )
     referral.status = ReferralStatus.REWARDED
@@ -184,9 +203,15 @@ def unwind_for_order(db: Session, order: BoxOrder, now: datetime | None = None) 
     elif referral.status is ReferralStatus.REWARDED:
         check_referral_transition("rewarded", "reversed")
         post_credit(
-            db, order.tenant_id, referral.referrer_customer_id, -referral.reward_cents,
-            CreditKind.REFERRAL_REVERSAL, f"referral_reversal:{referral.id}",
-            box_order_id=order.id, referral_id=referral.id, note="friend's first box was refunded",
+            db,
+            order.tenant_id,
+            referral.referrer_customer_id,
+            -referral.reward_cents,
+            CreditKind.REFERRAL_REVERSAL,
+            f"referral_reversal:{referral.id}",
+            box_order_id=order.id,
+            referral_id=referral.id,
+            note="friend's first box was refunded",
         )
         referral.status = ReferralStatus.REVERSED
         referral.reversed_at = now
@@ -199,8 +224,14 @@ def redeem(db: Session, order: BoxOrder, customer: Customer) -> int:
     amount = redeemable(balance_cents(db, customer.id), order.price_cents - order.discount_cents)
     if amount:
         post_credit(
-            db, order.tenant_id, customer.id, -amount, CreditKind.REDEMPTION, f"redeem:{order.id}",
-            box_order_id=order.id, note=f"used on box order {order.id}",
+            db,
+            order.tenant_id,
+            customer.id,
+            -amount,
+            CreditKind.REDEMPTION,
+            f"redeem:{order.id}",
+            box_order_id=order.id,
+            note=f"used on box order {order.id}",
         )
         order.credit_cents = amount
         db.flush()
@@ -211,8 +242,14 @@ def return_redemption(db: Session, order: BoxOrder) -> None:
     """Credit spent on an order that was cancelled or refunded goes back to the customer."""
     if order.credit_cents:
         post_credit(
-            db, order.tenant_id, order.customer_id, order.credit_cents, CreditKind.REDEMPTION_RETURN,
-            f"redeem_return:{order.id}", box_order_id=order.id, note=f"box order {order.id} did not go ahead",
+            db,
+            order.tenant_id,
+            order.customer_id,
+            order.credit_cents,
+            CreditKind.REDEMPTION_RETURN,
+            f"redeem_return:{order.id}",
+            box_order_id=order.id,
+            note=f"box order {order.id} did not go ahead",
         )
 
 
@@ -223,8 +260,13 @@ def adjust(db: Session, customer: Customer, amount_cents: int, note: str) -> Cre
     if amount_cents == 0:
         raise ValueError("an adjustment of zero changes nothing")
     return post_credit(
-        db, customer.tenant_id, customer.id, amount_cents, CreditKind.ADJUSTMENT,
-        f"adjustment:{uuid.uuid4().hex}", note=note.strip(),
+        db,
+        customer.tenant_id,
+        customer.id,
+        amount_cents,
+        CreditKind.ADJUSTMENT,
+        f"adjustment:{uuid.uuid4().hex}",
+        note=note.strip(),
     )
 
 
@@ -233,15 +275,21 @@ def summary(db: Session, customer: Customer) -> dict:
     referrals = list(
         db.scalars(select(Referral).where(Referral.referrer_customer_id == customer.id))
     )
-    rows = list(db.scalars(select(CreditTransaction).where(CreditTransaction.customer_id == customer.id)))
+    rows = list(
+        db.scalars(select(CreditTransaction).where(CreditTransaction.customer_id == customer.id))
+    )
     balance = sum(r.amount_cents for r in rows)
     return {
         "code": customer.referral_code,
         "referred": sum(1 for r in referrals if r.status is not ReferralStatus.CANCELLED),
-        "pending": sum(1 for r in referrals if r.status in (ReferralStatus.PENDING, ReferralStatus.QUALIFIED)),
+        "pending": sum(
+            1 for r in referrals if r.status in (ReferralStatus.PENDING, ReferralStatus.QUALIFIED)
+        ),
         "successful": sum(1 for r in referrals if r.status is ReferralStatus.REWARDED),
         "earned_cents": sum(r.amount_cents for r in rows if r.kind is CreditKind.REFERRAL_REWARD),
-        "reversed_cents": -sum(r.amount_cents for r in rows if r.kind is CreditKind.REFERRAL_REVERSAL),
+        "reversed_cents": -sum(
+            r.amount_cents for r in rows if r.kind is CreditKind.REFERRAL_REVERSAL
+        ),
         "balance_cents": balance,
         "available_cents": max(balance, 0),
         "transactions": sorted(rows, key=lambda r: (r.created_at, r.id), reverse=True),
@@ -256,16 +304,20 @@ def ledger(db: Session, tenant_id: int) -> list[dict]:
         select(Referral).where(Referral.tenant_id == tenant_id).order_by(Referral.created_at.desc())
     ):
         order = db.get(BoxOrder, referral.box_order_id) if referral.box_order_id else None
-        rows.append({
-            "referral": referral,
-            "referrer": people.get(referral.referrer_customer_id),
-            "referred": people.get(referral.referred_customer_id),
-            "order": order,
-        })
+        rows.append(
+            {
+                "referral": referral,
+                "referrer": people.get(referral.referrer_customer_id),
+                "referred": people.get(referral.referred_customer_id),
+                "order": order,
+            }
+        )
     return rows
 
 
-def credit_rows(db: Session, tenant_id: int, limit: int = 200) -> list[tuple[CreditTransaction, Customer]]:
+def credit_rows(
+    db: Session, tenant_id: int, limit: int = 200
+) -> list[tuple[CreditTransaction, Customer]]:
     return list(
         db.execute(
             select(CreditTransaction, Customer)

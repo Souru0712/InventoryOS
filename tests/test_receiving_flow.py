@@ -1,11 +1,20 @@
 """End to end: photo of an invoice raises the right stock in the right units."""
+
 from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
 
 from app.extract.invoice import StubExtractor
-from app.models import Document, DocumentStatus, InventoryCount, LineStatus, StockAlias, StockItem, TrackMode
+from app.models import (
+    Document,
+    DocumentStatus,
+    InventoryCount,
+    LineStatus,
+    StockAlias,
+    StockItem,
+    TrackMode,
+)
 from app.orchestration.receiving import LineDecision, apply_document, parse_document, save_upload
 from app.units import Dimension, to_base
 
@@ -16,14 +25,42 @@ INVOICE = {
     "currency": "USD",
     "total_cents": 18640,
     "lines": [
-        {"raw_text": "NORTHSIDE FULL CREAM MLK 6 x 1L", "product_name": "Northside Full Cream Milk",
-         "quantity": 4, "unit": "case", "pack_size": 1, "unit_price_cents": 570, "line_total_cents": 2280},
-        {"raw_text": "PASTRY FLOUR 25KG SACK", "product_name": "Pastry Flour",
-         "quantity": 2, "unit": "sack", "pack_size": None, "unit_price_cents": 3375, "line_total_cents": 6750},
-        {"raw_text": "TAKEAWAY CUP 12OZ BOX/500", "product_name": "Takeaway cups 12oz",
-         "quantity": 3, "unit": "box", "pack_size": None, "unit_price_cents": 5500, "line_total_cents": 16500},
-        {"raw_text": "DISHWASHER TABLETS 100PK", "product_name": "Dishwasher tablets",
-         "quantity": 1, "unit": "pack", "pack_size": None, "unit_price_cents": 2400, "line_total_cents": 2400},
+        {
+            "raw_text": "NORTHSIDE FULL CREAM MLK 6 x 1L",
+            "product_name": "Northside Full Cream Milk",
+            "quantity": 4,
+            "unit": "case",
+            "pack_size": 1,
+            "unit_price_cents": 570,
+            "line_total_cents": 2280,
+        },
+        {
+            "raw_text": "PASTRY FLOUR 25KG SACK",
+            "product_name": "Pastry Flour",
+            "quantity": 2,
+            "unit": "sack",
+            "pack_size": None,
+            "unit_price_cents": 3375,
+            "line_total_cents": 6750,
+        },
+        {
+            "raw_text": "TAKEAWAY CUP 12OZ BOX/500",
+            "product_name": "Takeaway cups 12oz",
+            "quantity": 3,
+            "unit": "box",
+            "pack_size": None,
+            "unit_price_cents": 5500,
+            "line_total_cents": 16500,
+        },
+        {
+            "raw_text": "DISHWASHER TABLETS 100PK",
+            "product_name": "Dishwasher tablets",
+            "quantity": 1,
+            "unit": "pack",
+            "pack_size": None,
+            "unit_price_cents": 2400,
+            "line_total_cents": 2400,
+        },
     ],
 }
 
@@ -31,18 +68,45 @@ INVOICE = {
 @pytest.fixture
 def stock(db, tenant, location):
     items = [
-        StockItem(tenant_id=tenant.id, location_id=location.id, slug="whole-milk", name="Whole milk",
-                  dimension=Dimension.VOLUME, stock_unit="l", track_mode=TrackMode.DERIVED,
-                  qty_base=to_base(10, "l"), reorder_point_base=to_base(20, "l"),
-                  receive_unit="l", pack_size_base=to_base(6, "l")),
-        StockItem(tenant_id=tenant.id, location_id=location.id, slug="pastry-flour", name="Pastry flour",
-                  dimension=Dimension.WEIGHT, stock_unit="kg", track_mode=TrackMode.DERIVED,
-                  qty_base=to_base(5, "kg"), reorder_point_base=to_base(10, "kg"),
-                  receive_unit="kg", pack_size_base=to_base(25, "kg")),
-        StockItem(tenant_id=tenant.id, location_id=location.id, slug="cups", name="Takeaway cups 12oz",
-                  dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.MANUAL,
-                  qty_base=Decimal("120"), reorder_point_base=Decimal("300"),
-                  receive_unit="each", pack_size_base=Decimal("500")),
+        StockItem(
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug="whole-milk",
+            name="Whole milk",
+            dimension=Dimension.VOLUME,
+            stock_unit="l",
+            track_mode=TrackMode.DERIVED,
+            qty_base=to_base(10, "l"),
+            reorder_point_base=to_base(20, "l"),
+            receive_unit="l",
+            pack_size_base=to_base(6, "l"),
+        ),
+        StockItem(
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug="pastry-flour",
+            name="Pastry flour",
+            dimension=Dimension.WEIGHT,
+            stock_unit="kg",
+            track_mode=TrackMode.DERIVED,
+            qty_base=to_base(5, "kg"),
+            reorder_point_base=to_base(10, "kg"),
+            receive_unit="kg",
+            pack_size_base=to_base(25, "kg"),
+        ),
+        StockItem(
+            tenant_id=tenant.id,
+            location_id=location.id,
+            slug="cups",
+            name="Takeaway cups 12oz",
+            dimension=Dimension.COUNT,
+            stock_unit="each",
+            track_mode=TrackMode.MANUAL,
+            qty_base=Decimal("120"),
+            reorder_point_base=Decimal("300"),
+            receive_unit="each",
+            pack_size_base=Decimal("500"),
+        ),
     ]
     db.add_all(items)
     db.commit()
@@ -100,7 +164,9 @@ def test_applying_a_delivery_raises_stock_and_files_the_record(db, tenant, locat
         else:
             decisions.append(LineDecision(line.id, None, None, apply=False))
 
-    result = apply_document(db, document.id, decisions, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+    result = apply_document(
+        db, document.id, decisions, now=datetime(2026, 9, 4, tzinfo=timezone.utc)
+    )
     db.commit()
 
     assert result["applied"] == 3
@@ -120,7 +186,9 @@ def test_supplier_wording_is_learned_so_the_next_invoice_is_automatic(db, tenant
     parse_document(db, first.id, StubExtractor(INVOICE))
     db.commit()
     milk_line = next(line for line in first.lines if "Milk" in line.parsed_name)
-    apply_document(db, first.id, [LineDecision(milk_line.id, stock["whole-milk"].id, to_base(24, "l"))])
+    apply_document(
+        db, first.id, [LineDecision(milk_line.id, stock["whole-milk"].id, to_base(24, "l"))]
+    )
     db.commit()
 
     alias = db.query(StockAlias).one()
@@ -145,7 +213,9 @@ def test_an_applied_delivery_is_never_re_read_over_its_record(db, tenant, locati
     parse_document(db, document.id, StubExtractor(INVOICE))
     db.commit()
     flour = next(line for line in document.lines if line.parsed_name == "Pastry Flour")
-    apply_document(db, document.id, [LineDecision(flour.id, stock["pastry-flour"].id, to_base(50, "kg"))])
+    apply_document(
+        db, document.id, [LineDecision(flour.id, stock["pastry-flour"].id, to_base(50, "kg"))]
+    )
     db.commit()
 
     with pytest.raises(ValueError, match="already applied"):
@@ -189,18 +259,34 @@ DATED = {
     "currency": "GBP",
     "total_cents": 4440,
     "lines": [
-        {"raw_text": "Oat milk 1L (barista) 4 cases of 6 x 1L", "product_name": "Oat milk 1L",
-         "quantity": 4, "unit": "case", "pack_size": 1, "unit_price_cents": 1110,
-         "line_total_cents": 4440, "expiry_date": "2026-09-20"},
+        {
+            "raw_text": "Oat milk 1L (barista) 4 cases of 6 x 1L",
+            "product_name": "Oat milk 1L",
+            "quantity": 4,
+            "unit": "case",
+            "pack_size": 1,
+            "unit_price_cents": 1110,
+            "line_total_cents": 4440,
+            "expiry_date": "2026-09-20",
+        },
     ],
 }
 
 
 @pytest.fixture
 def oat_milk(db, tenant, location):
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="oat-milk", name="Oat milk 1L",
-                     dimension=Dimension.VOLUME, stock_unit="l", track_mode=TrackMode.DERIVED,
-                     qty_base=to_base(6, "l"), receive_unit="l", pack_size_base=to_base(6, "l"))
+    item = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="oat-milk",
+        name="Oat milk 1L",
+        dimension=Dimension.VOLUME,
+        stock_unit="l",
+        track_mode=TrackMode.DERIVED,
+        qty_base=to_base(6, "l"),
+        receive_unit="l",
+        pack_size_base=to_base(6, "l"),
+    )
     db.add(item)
     db.commit()
     return item
@@ -210,7 +296,9 @@ def receive(db, document, decisions=None):
     decisions = decisions or [
         LineDecision(line.id, line.stock_item_id, line.received_qty_base) for line in document.lines
     ]
-    result = apply_document(db, document.id, decisions, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
+    result = apply_document(
+        db, document.id, decisions, now=datetime(2026, 9, 6, tzinfo=timezone.utc)
+    )
     db.commit()
     return result
 
@@ -255,8 +343,11 @@ def test_the_reviewer_can_correct_the_date(db, tenant, location, oat_milk):
     parse_document(db, document.id, StubExtractor(DATED))
     db.commit()
     line = document.lines[0]
-    receive(db, document, [LineDecision(line.id, oat_milk.id, line.received_qty_base,
-                                        expires_on=date(2026, 9, 18))])
+    receive(
+        db,
+        document,
+        [LineDecision(line.id, oat_milk.id, line.received_qty_base, expires_on=date(2026, 9, 18))],
+    )
     assert db.query(StockBatch).one().expires_on == date(2026, 9, 18)
 
 
@@ -264,9 +355,14 @@ def test_an_undated_delivery_creates_no_batch(db, tenant, location, stock):
     document = upload(db, tenant, location)
     parse_document(db, document.id, StubExtractor(INVOICE))
     db.commit()
-    result = receive(db, document, [
-        LineDecision(line.id, line.stock_item_id, line.received_qty_base)
-        for line in document.lines if line.stock_item_id
-    ])
+    result = receive(
+        db,
+        document,
+        [
+            LineDecision(line.id, line.stock_item_id, line.received_qty_base)
+            for line in document.lines
+            if line.stock_item_id
+        ],
+    )
     assert result["batches"] == 0
     assert db.query(StockBatch).count() == 0

@@ -4,6 +4,7 @@ Stripe drives most of this through webhooks; the rest is time passing, which nob
 event for. The nightly job is what makes a trial end when it ends, rather than when someone
 happens to open the app.
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,9 +49,7 @@ def apply_location_limit(db: Session, tenant: Tenant) -> int:
     """
     allowance = location_allowance(tenant)
     locations = list(
-        db.scalars(
-            select(Location).where(Location.tenant_id == tenant.id).order_by(Location.id)
-        )
+        db.scalars(select(Location).where(Location.tenant_id == tenant.id).order_by(Location.id))
     )
     changed = 0
     for index, location in enumerate(locations):
@@ -60,7 +59,9 @@ def apply_location_limit(db: Session, tenant: Tenant) -> int:
             changed += 1
             log.info(
                 "location %s for tenant %s %s by the plan limit",
-                location.id, tenant.id, "enabled" if wanted else "set aside",
+                location.id,
+                tenant.id,
+                "enabled" if wanted else "set aside",
             )
     db.flush()
     return changed

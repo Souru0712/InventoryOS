@@ -4,6 +4,7 @@ Revision ID: b3d91f2a6c47
 Revises: e7b19fdcb1ce
 Create Date: 2026-09-15 10:00:00.000000
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -11,17 +12,17 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = 'b3d91f2a6c47'
-down_revision: str | None = 'e7b19fdcb1ce'
+revision: str = "b3d91f2a6c47"
+down_revision: str | None = "e7b19fdcb1ce"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table('documents', schema=None) as batch_op:
+    with op.batch_alter_table("documents", schema=None) as batch_op:
         batch_op.alter_column(
-            'file_path',
-            new_column_name='storage_key',
+            "file_path",
+            new_column_name="storage_key",
             existing_type=sa.String(length=500),
             existing_nullable=False,
         )
@@ -43,10 +44,10 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Keys are left as they are: the old code expects a full path, so photos uploaded after
     # this revision will not be found by it, but no rows are lost.
-    with op.batch_alter_table('documents', schema=None) as batch_op:
+    with op.batch_alter_table("documents", schema=None) as batch_op:
         batch_op.alter_column(
-            'storage_key',
-            new_column_name='file_path',
+            "storage_key",
+            new_column_name="file_path",
             existing_type=sa.String(length=500),
             existing_nullable=False,
         )

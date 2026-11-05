@@ -5,6 +5,7 @@ A modern phone takes a 12 MB, 4000-pixel-wide photo. The model downsamples anyth
 sometimes fails outright, and buys nothing. The original stays in storage exactly as uploaded;
 this is only what goes over the wire.
 """
+
 from __future__ import annotations
 
 import io

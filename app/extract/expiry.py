@@ -5,6 +5,7 @@ parsed by transform/dates, and the two are compared: agreement is what earns a h
 confidence to apply without asking. Deciding the date here would put that logic somewhere
 untestable.
 """
+
 from __future__ import annotations
 
 import base64

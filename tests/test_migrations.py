@@ -1,4 +1,5 @@
 """Migrations must build exactly the schema the models describe, on SQLite and on Postgres."""
+
 import os
 from pathlib import Path
 
@@ -145,21 +146,59 @@ def test_every_migration_survives_a_database_that_already_has_rows(fresh_url):
     # Rows to plant as soon as the table they belong to exists, so later revisions
     # have to migrate real data rather than an empty schema.
     seeds = {
-        "tenants": {"name": "Rosewood", "plan": "TRIAL", "report_day": 0,
-                    "report_hour": 7, "timezone": "UTC", "created_at": now},
-        "locations": {"tenant_id": 1, "provider": "square", "provider_location_id": "L1",
-                      "name": "Main", "timezone": "UTC", "currency": "USD", "is_active": True},
-        "stock_items": {"tenant_id": 1, "location_id": 1, "slug": "milk", "name": "Milk",
-                        "dimension": "VOLUME", "stock_unit": "l", "track_mode": "MANUAL",
-                        "qty_base": "10.0000", "reorder_point_base": "0.0000",
-                        "cost_per_base_cents": "0.0950", "lead_time_days": 2,
-                        "receive_unit": "l", "is_active": True},
+        "tenants": {
+            "name": "Rosewood",
+            "plan": "TRIAL",
+            "report_day": 0,
+            "report_hour": 7,
+            "timezone": "UTC",
+            "created_at": now,
+        },
+        "locations": {
+            "tenant_id": 1,
+            "provider": "square",
+            "provider_location_id": "L1",
+            "name": "Main",
+            "timezone": "UTC",
+            "currency": "USD",
+            "is_active": True,
+        },
+        "stock_items": {
+            "tenant_id": 1,
+            "location_id": 1,
+            "slug": "milk",
+            "name": "Milk",
+            "dimension": "VOLUME",
+            "stock_unit": "l",
+            "track_mode": "MANUAL",
+            "qty_base": "10.0000",
+            "reorder_point_base": "0.0000",
+            "cost_per_base_cents": "0.0950",
+            "lead_time_days": 2,
+            "receive_unit": "l",
+            "is_active": True,
+        },
         # Saved the way uploads were before storage keys: a path under the upload directory.
-        "documents": {"tenant_id": 1, "location_id": 1, "kind": "invoice", "currency": "USD",
-                      "file_path": f"var/uploads/1/{photo}.jpg", "content_type": "image/jpeg",
-                      "sha256": photo, "byte_size": 12, "status": "APPLIED", "uploaded_at": now},
-        "stock_batches": {"tenant_id": 1, "stock_item_id": 1, "received_qty_base": "10.0000",
-                          "expires_on": date(2026, 12, 1), "source": "label", "received_at": now},
+        "documents": {
+            "tenant_id": 1,
+            "location_id": 1,
+            "kind": "invoice",
+            "currency": "USD",
+            "file_path": f"var/uploads/1/{photo}.jpg",
+            "content_type": "image/jpeg",
+            "sha256": photo,
+            "byte_size": 12,
+            "status": "APPLIED",
+            "uploaded_at": now,
+        },
+        "stock_batches": {
+            "tenant_id": 1,
+            "stock_item_id": 1,
+            "received_qty_base": "10.0000",
+            "expires_on": date(2026, 12, 1),
+            "source": "label",
+            "received_at": now,
+        },
     }
     planted: set[str] = set()
 

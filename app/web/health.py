@@ -1,4 +1,5 @@
 """Inventory health, the reasons behind it, and the reorder list it points to."""
+
 from __future__ import annotations
 
 import csv
@@ -82,20 +83,24 @@ def reorder_csv(
     health = current(db, tenant.id, location)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["Supplier", "Item", "Location", "Reason", "On hand", "Days to stockout", "Order"])
+    writer.writerow(
+        ["Supplier", "Item", "Location", "Reason", "On hand", "Days to stockout", "Order"]
+    )
     for supplier, lines in reorder_lines(health.input.items):
         for line in lines:
             item = line.health.item
             days = line.days_to_stockout
-            writer.writerow([
-                _cell(supplier or "No supplier set"),
-                _cell(item.name),
-                _cell(item.location_name),
-                line.reason_label,
-                format_qty(item.qty_base, item.stock_unit),
-                "" if days is None else f"{days:.1f}",
-                format_approx(line.order_base, item.stock_unit) if line.order_base > 0 else "",
-            ])
+            writer.writerow(
+                [
+                    _cell(supplier or "No supplier set"),
+                    _cell(item.name),
+                    _cell(item.location_name),
+                    line.reason_label,
+                    format_qty(item.qty_base, item.stock_unit),
+                    "" if days is None else f"{days:.1f}",
+                    format_approx(line.order_base, item.stock_unit) if line.order_base > 0 else "",
+                ]
+            )
     stamp = datetime.now(timezone.utc).date().isoformat()
     return Response(
         buffer.getvalue(),

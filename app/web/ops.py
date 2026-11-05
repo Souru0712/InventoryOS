@@ -1,4 +1,5 @@
 """Liveness and readiness: for the platform's health checks, not for people."""
+
 from __future__ import annotations
 
 import logging

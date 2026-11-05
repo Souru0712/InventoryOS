@@ -1,4 +1,5 @@
 """Catalog changes follow Square, without deleting anything of ours."""
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -67,9 +68,13 @@ class FakeSquareCatalog:
 
     def inventory_counts(self, _variation_ids, _location_ids) -> list[dict]:
         return [
-            {"catalog_object_id": variation, "location_id": "LOC-SQ-1", "state": "IN_STOCK",
-             "quantity": str(quantity),
-             "calculated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+            {
+                "catalog_object_id": variation,
+                "location_id": "LOC-SQ-1",
+                "state": "IN_STOCK",
+                "quantity": str(quantity),
+                "calculated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            }
             for variation, quantity in self.counts.items()
         ]
 
@@ -80,8 +85,15 @@ class FakeSquareCatalog:
 @pytest.fixture
 def connected(db, tenant, location, monkeypatch):
     """A connected tenant whose Square catalog holds one tracked variation."""
-    db.add(ProviderConnection(tenant_id=tenant.id, provider="square", merchant_id="M-1",
-                              access_token_enc="enc", status="active"))
+    db.add(
+        ProviderConnection(
+            tenant_id=tenant.id,
+            provider="square",
+            merchant_id="M-1",
+            access_token_enc="enc",
+            status="active",
+        )
+    )
     db.commit()
     fake = FakeSquareCatalog([catalog_object("VAR-COKE", "Coca-Cola")])
     monkeypatch.setattr(sync, "SquareClient", fake)
@@ -110,8 +122,15 @@ def test_a_variation_deleted_in_square_is_hidden_and_its_history_is_kept(db, ten
     sync.sync_catalog(db, tenant.id)
     db.commit()
     item = stock_for(db, "VAR-COKE")
-    db.add(InventoryCount(tenant_id=tenant.id, stock_item_id=item.id, qty_base=Decimal("12"),
-                          source="manual", counted_at=datetime.now(timezone.utc)))
+    db.add(
+        InventoryCount(
+            tenant_id=tenant.id,
+            stock_item_id=item.id,
+            qty_base=Decimal("12"),
+            source="manual",
+            counted_at=datetime.now(timezone.utc),
+        )
+    )
     db.commit()
 
     connected.objects = []  # the merchant deleted it in Square
@@ -139,9 +158,16 @@ def test_restoring_it_in_square_brings_it_back(db, tenant, connected):
 
 def test_stock_the_operator_defined_is_not_touched_by_a_catalog_change(db, tenant, location):
     """Flour is not in Square's catalog and never should be hidden because of it."""
-    flour = StockItem(tenant_id=tenant.id, location_id=location.id, slug="flour",
-                      name="Pastry flour", dimension=Dimension.WEIGHT, stock_unit="kg",
-                      track_mode=TrackMode.DERIVED, qty_base=Decimal("45000"))
+    flour = StockItem(
+        tenant_id=tenant.id,
+        location_id=location.id,
+        slug="flour",
+        name="Pastry flour",
+        dimension=Dimension.WEIGHT,
+        stock_unit="kg",
+        track_mode=TrackMode.DERIVED,
+        qty_base=Decimal("45000"),
+    )
     db.add(flour)
     db.commit()
 

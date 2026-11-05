@@ -1,4 +1,5 @@
 """Shopper accounts: magic-link sign-in, preferences with an audit trail, box history and the survey."""
+
 from __future__ import annotations
 
 import hashlib
@@ -27,7 +28,16 @@ from app.models import (
 )
 from app.notify.email import render_pair, send_email
 from app.orchestration.referrals import new_referral_code
-from app.transform.taste import NOVELTY_LEVELS, RATINGS, SPICE_LEVELS, Received, Review, Stated, Taste, build_taste
+from app.transform.taste import (
+    NOVELTY_LEVELS,
+    RATINGS,
+    SPICE_LEVELS,
+    Received,
+    Review,
+    Stated,
+    Taste,
+    build_taste,
+)
 
 log = logging.getLogger(__name__)
 ALLERGENS = ("milk", "egg", "peanut", "tree_nut", "soy", "wheat", "fish", "shellfish", "sesame")
@@ -57,7 +67,9 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def find_or_create(db: Session, tenant_id: int, email: str, now: datetime | None = None) -> Customer:
+def find_or_create(
+    db: Session, tenant_id: int, email: str, now: datetime | None = None
+) -> Customer:
     email = normalize_email(email)
     customer = db.scalars(
         select(Customer).where(Customer.tenant_id == tenant_id, Customer.email == email)
@@ -109,8 +121,13 @@ def issue_login_link(db: Session, customer: Customer, now: datetime | None = Non
     store = db.get(Tenant, customer.tenant_id).name
     html, text = render_pair("email/customer_login", url=url, store=store, minutes=minutes)
     sent = send_email(
-        db, customer.tenant_id, customer.email, f"Your sign-in link for {store}",
-        html, kind="customer_login", text=text,
+        db,
+        customer.tenant_id,
+        customer.email,
+        f"Your sign-in link for {store}",
+        html,
+        kind="customer_login",
+        text=text,
     )
     if not sent and not settings.smtp_host:
         # Without a mail server the link is otherwise unusable; with one it never reaches a log.
@@ -118,7 +135,9 @@ def issue_login_link(db: Session, customer: Customer, now: datetime | None = Non
     return url
 
 
-def redeem_login_token(db: Session, tenant_id: int, raw: str, now: datetime | None = None) -> Customer | None:
+def redeem_login_token(
+    db: Session, tenant_id: int, raw: str, now: datetime | None = None
+) -> Customer | None:
     """The customer behind a valid, unused, unexpired link for this store; the link is spent."""
     now = now or datetime.now(timezone.utc)
     token = db.scalars(
@@ -141,7 +160,9 @@ def redeem_login_token(db: Session, tenant_id: int, raw: str, now: datetime | No
     return customer
 
 
-def _audit(db: Session, customer: Customer, field: str, old, new, source: str, now: datetime) -> None:
+def _audit(
+    db: Session, customer: Customer, field: str, old, new, source: str, now: datetime
+) -> None:
     db.add(
         PreferenceChange(
             tenant_id=customer.tenant_id,
@@ -237,17 +258,25 @@ def set_product_preference(
     if state is None:
         db.delete(row)
     elif row is None:
-        db.add(CustomerProductPreference(
-            tenant_id=customer.tenant_id, customer_id=customer.id, stock_item_id=stock_item_id,
-            state=state, source=source, created_at=now,
-        ))
+        db.add(
+            CustomerProductPreference(
+                tenant_id=customer.tenant_id,
+                customer_id=customer.id,
+                stock_item_id=stock_item_id,
+                state=state,
+                source=source,
+                created_at=now,
+            )
+        )
     else:
         row.state, row.source = state, source
     _audit(db, customer, f"product:{stock_item_id}", old, new, source, now)
     db.flush()
 
 
-def product_preferences(db: Session, customer: Customer) -> list[tuple[CustomerProductPreference, StockItem]]:
+def product_preferences(
+    db: Session, customer: Customer
+) -> list[tuple[CustomerProductPreference, StockItem]]:
     return list(
         db.execute(
             select(CustomerProductPreference, StockItem)
@@ -280,7 +309,9 @@ def order_lines(db: Session, order: BoxOrder, statuses=None) -> list[tuple[BoxLi
 def history(db: Session, customer: Customer) -> list[BoxOrder]:
     return list(
         db.scalars(
-            select(BoxOrder).where(BoxOrder.customer_id == customer.id).order_by(BoxOrder.created_at.desc())
+            select(BoxOrder)
+            .where(BoxOrder.customer_id == customer.id)
+            .order_by(BoxOrder.created_at.desc())
         )
     )
 
@@ -318,18 +349,26 @@ def submit_review(
             continue
         if rating not in RATINGS:
             raise ReviewProblem("Pick one of the answers for each snack.")
-        send_again = bool(send_again) and rating != "never_again"  # never again wins a contradiction
+        send_again = (
+            bool(send_again) and rating != "never_again"
+        )  # never again wins a contradiction
         row = existing.get(item_id)
         was_never = row is not None and row.rating == "never_again"
         if row is None:
-            row = BoxReview(tenant_id=customer.tenant_id, customer_id=customer.id, box_order_id=order.id,
-                            stock_item_id=item_id)
+            row = BoxReview(
+                tenant_id=customer.tenant_id,
+                customer_id=customer.id,
+                box_order_id=order.id,
+                stock_item_id=item_id,
+            )
             db.add(row)
         row.rating, row.send_again = rating, send_again
         row.note = (note or "").strip()[:500] or None
         row.submitted_at = now
         if rating == "never_again":
-            set_product_preference(db, customer, item_id, ProductPreferenceState.NEVER_AGAIN, "survey", now)
+            set_product_preference(
+                db, customer, item_id, ProductPreferenceState.NEVER_AGAIN, "survey", now
+            )
         elif was_never:
             _clear_survey_never_again(db, customer, item_id, now)
         saved += 1
@@ -352,7 +391,11 @@ def _clear_survey_never_again(db: Session, customer: Customer, item_id: int, now
             CustomerProductPreference.stock_item_id == item_id,
         )
     ).first()
-    if row is not None and row.state is ProductPreferenceState.NEVER_AGAIN and row.source == "survey":
+    if (
+        row is not None
+        and row.state is ProductPreferenceState.NEVER_AGAIN
+        and row.source == "survey"
+    ):
         set_product_preference(db, customer, item_id, None, "survey", now)
 
 
@@ -381,8 +424,12 @@ def taste_for(db: Session, customer: Customer) -> Taste:
         novelty=customer.novelty,
         liked_categories=tags(customer.liked_categories),
         avoided_categories=tags(customer.avoided_categories),
-        favorites=frozenset(p.stock_item_id for p, _ in prefs if p.state is ProductPreferenceState.FAVORITE),
-        never_again=frozenset(p.stock_item_id for p, _ in prefs if p.state is ProductPreferenceState.NEVER_AGAIN),
+        favorites=frozenset(
+            p.stock_item_id for p, _ in prefs if p.state is ProductPreferenceState.FAVORITE
+        ),
+        never_again=frozenset(
+            p.stock_item_id for p, _ in prefs if p.state is ProductPreferenceState.NEVER_AGAIN
+        ),
     )
     reviews = [
         Review(r.stock_item_id, r.rating, r.send_again, aware(r.submitted_at))
@@ -401,11 +448,15 @@ def taste_for(db: Session, customer: Customer) -> Taste:
             )
         ).all()
     ]
-    item_ids = {r.stock_item_id for r in received} | {r.stock_item_id for r in reviews} | stated.favorites
+    item_ids = (
+        {r.stock_item_id for r in received} | {r.stock_item_id for r in reviews} | stated.favorites
+    )
     categories, origins = {}, {}
     if item_ids:
         for item in db.scalars(select(StockItem).where(StockItem.id.in_(item_ids))):
             categories[item.id] = item.category or ""
-        for profile in db.scalars(select(SnackProfile).where(SnackProfile.stock_item_id.in_(item_ids))):
+        for profile in db.scalars(
+            select(SnackProfile).where(SnackProfile.stock_item_id.in_(item_ids))
+        ):
             origins[profile.stock_item_id] = profile.origin
     return build_taste(stated, reviews, received, categories, origins)

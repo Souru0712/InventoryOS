@@ -4,6 +4,7 @@ In development the jobs run inside the web process. Deployed, they run only in a
 `python -m app.cli scheduler` process holding a Postgres advisory lock, so extra web workers, a
 second scheduler, or old and new containers overlapping during a redeploy never run a job twice.
 """
+
 from __future__ import annotations
 
 import logging
@@ -100,15 +101,22 @@ def record_health_snapshots() -> None:
 def box_housekeeping() -> None:
     """Cancel unpaid box orders, then bring box allocations back into step with Square."""
     with session_scope() as db:
-        tenant_ids = [row.tenant_id for row in db.scalars(select(BoxSettings))
-                      if owns_snack_box(row.tenant_id)]
+        tenant_ids = [
+            row.tenant_id
+            for row in db.scalars(select(BoxSettings))
+            if owns_snack_box(row.tenant_id)
+        ]
     for tenant_id in tenant_ids:
         try:
             with session_scope() as db:
                 expired = expire_unpaid(db, tenant_id)
                 open_issues = sum(1 for row in reconcile(db, tenant_id) if row.issues)
-            log.info("box housekeeping for tenant %s: %s expired, %s items need a look",
-                     tenant_id, expired, open_issues)
+            log.info(
+                "box housekeeping for tenant %s: %s expired, %s items need a look",
+                tenant_id,
+                expired,
+                open_issues,
+            )
         except Exception:
             log.exception("box housekeeping failed for tenant %s", tenant_id)
 
@@ -169,7 +177,9 @@ def start() -> BackgroundScheduler:
     _add_jobs(scheduler)
     scheduler.start()
     _scheduler = scheduler
-    log.info("scheduler started in-process: sync every %s minutes", get_settings().sync_interval_minutes)
+    log.info(
+        "scheduler started in-process: sync every %s minutes", get_settings().sync_interval_minutes
+    )
     return scheduler
 
 
@@ -210,7 +220,9 @@ def run_forever() -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
 
-    log.info("scheduler holds the lock: sync every %s minutes", get_settings().sync_interval_minutes)
+    log.info(
+        "scheduler holds the lock: sync every %s minutes", get_settings().sync_interval_minutes
+    )
     try:
         scheduler.start()
     finally:

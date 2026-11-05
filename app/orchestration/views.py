@@ -1,4 +1,5 @@
 """Read models: turn ORM rows into the flat inputs the pure layer expects."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -18,7 +19,14 @@ from app.models import (
     StockItem,
     TrackMode,
 )
-from app.transform.expiry import Batch, Coverage, ItemExpiry, allocate_fefo, coverage, project_batches
+from app.transform.expiry import (
+    Batch,
+    Coverage,
+    ItemExpiry,
+    allocate_fefo,
+    coverage,
+    project_batches,
+)
 from app.transform.inventory import (
     ZERO,
     Component,
@@ -37,9 +45,7 @@ def stock_views(db: Session, tenant_id: int, location_id: int | None = None) -> 
         loc.id: loc.name
         for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
     }
-    query = select(StockItem).where(
-        StockItem.tenant_id == tenant_id, StockItem.is_active.is_(True)
-    )
+    query = select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.is_active.is_(True))
     if location_id is not None:
         query = query.where(StockItem.location_id == location_id)
 
@@ -60,7 +66,9 @@ def stock_views(db: Session, tenant_id: int, location_id: int | None = None) -> 
                 else None
             ),
             lead_time_days=item.lead_time_days,
-            par_level_base=Decimal(item.par_level_base) if item.par_level_base is not None else None,
+            par_level_base=Decimal(item.par_level_base)
+            if item.par_level_base is not None
+            else None,
             category=item.category,
             supplier=item.supplier,
             location_id=item.location_id,
@@ -75,7 +83,9 @@ def stock_views(db: Session, tenant_id: int, location_id: int | None = None) -> 
 def tenant_currency(db: Session, tenant_id: int) -> str:
     """The currency money is shown in; a tenant's locations share one."""
     location = db.scalars(
-        select(Location).where(Location.tenant_id == tenant_id, Location.is_active.is_(True)).limit(1)
+        select(Location)
+        .where(Location.tenant_id == tenant_id, Location.is_active.is_(True))
+        .limit(1)
     ).first()
     return location.currency if location else "USD"
 
@@ -100,9 +110,7 @@ def sold_item_names(db: Session, tenant_id: int) -> dict[int, str]:
 def components(db: Session, tenant_id: int) -> list[Component]:
     return [
         Component(row.sold_item_id, row.stock_item_id, Decimal(row.qty_base_per_sale))
-        for row in db.scalars(
-            select(RecipeComponent).where(RecipeComponent.tenant_id == tenant_id)
-        )
+        for row in db.scalars(select(RecipeComponent).where(RecipeComponent.tenant_id == tenant_id))
     ]
 
 
@@ -144,7 +152,9 @@ def provider_consumption(
     return {item_id: dict(days) for item_id, days in result.items()}
 
 
-def consumption(db: Session, tenant_id: int, since: date | None = None) -> dict[int, dict[date, Decimal]]:
+def consumption(
+    db: Session, tenant_id: int, since: date | None = None
+) -> dict[int, dict[date, Decimal]]:
     """Base units consumed per stock item per day: via recipes, plus direct sales of POS SKUs."""
     daily = consumption_by_day(sale_rows(db, tenant_id, since), components(db, tenant_id))
     for item_id, days in provider_consumption(db, tenant_id, since).items():
@@ -175,7 +185,9 @@ def batches_by_item(db: Session, tenant_id: int) -> dict[int, list[Batch]]:
                 received_qty_base=Decimal(row.received_qty_base),
                 expires_on=row.expires_on,
                 cost_per_base_cents=(
-                    Decimal(row.cost_per_base_cents) if row.cost_per_base_cents is not None else None
+                    Decimal(row.cost_per_base_cents)
+                    if row.cost_per_base_cents is not None
+                    else None
                 ),
                 received_at=row.received_at,
             )
@@ -266,9 +278,8 @@ def _aware(value: datetime | None) -> datetime | None:
         return None
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
-def expiry_coverage(
-    db: Session, tenant_id: int, location_id: int | None = None
-) -> Coverage:
+
+def expiry_coverage(db: Session, tenant_id: int, location_id: int | None = None) -> Coverage:
     """Coverage across stock that can expire: everything not dismissed as never expiring."""
     batches = batches_by_item(db, tenant_id)
     entries = []
