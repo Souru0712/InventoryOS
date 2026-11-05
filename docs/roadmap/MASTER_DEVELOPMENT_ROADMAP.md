@@ -38,6 +38,7 @@ Stage 8  Native POS feasibility ───── M10 go/no-go   (gate: $1,000 MRR
 Track V  Customer validation, in parallel from now (TR-31; CUSTOMER_VALIDATION_PLAN)
 ```
 
+The task index records each task's milestone ([DEVELOPMENT_TASK_BREAKDOWN](DEVELOPMENT_TASK_BREAKDOWN.md#index)).
 Stages 3 and 4 can overlap: T4.01–T4.08 depend only on Stage 1 and parts of Stage 2, so billing,
 export and admin can be built while the Square adapter is under way. The launch gate G-R1 needs
 both.
@@ -51,7 +52,7 @@ both.
 | Why first | The audit found a non-hermetic suite (T1), no CI, unpinned dependencies (O5), a stored-XSS hole (S3), blocking I/O (C8), a write-back that loses deliveries (C4) and tenant-specific snack-box code (C-37). Every later "verified" depends on fixing these |
 | Tasks | T0.01–T0.11 |
 | Reuse | Entire existing suite and probes; Dockerfile and compose; Sentry wiring |
-| Exit criteria (gate G0) | CI green on SQLite and Postgres 16 for every push; tests pass with a developer `.env` present; dependencies locked and audited (no critical CVEs); probes R7 (XSS) and C8 checks fixed; Square write-back disabled with no swallowed failures; snack-box code and scopes gone from InventoryOS; staging deployed from `main` |
+| Exit criteria (gate G0) | CI green on SQLite and Postgres 16 for every push; tests pass with a developer `.env` present; dependencies locked and audited (no critical CVEs); probes R3 and R7 retired and C8 fixed; Square write-back disabled with no swallowed failures; snack-box code and scopes gone from InventoryOS; staging deployed from `main` |
 
 ### Stage 1 — Core foundation (P0/P1) → M1, M2
 
@@ -60,7 +61,7 @@ both.
 | Why | The blueprint's integrity rules (DR-01..09, 19..24, 27, 35) and access model must exist before any operational module, or each module would be built on a balance-overwrite model and then rewritten (C-35) |
 | Milestone M1 "Tenancy & access" | T1.01–T1.12: timestamptz + constraints, scoped data access (C-33), isolation suite, organization/location model, memberships, permissions, sessions + CSRF, verification + reset, throttling, invitations, MFA, audit events |
 | Milestone M2 "Ledger engine" | T1.13–T1.25: item model split (C-38), item UI, units and conversions, ledger + posting service, opening-balance migration, writers routed through the ledger, exceptions, jobs table + scheduled evaluation for every tenant, nightly verification, adjustments + history, count sessions, cost basis, core dashboard |
-| Exit criteria (gates G1, G2) | Isolation suite passes for every route and file; permission matrix tests pass; AC-INV-01..11 pass on Postgres; no code path writes stock outside the posting service (static test); probes R1–R6 replaced by passing tests of the corrected behaviour |
+| Exit criteria (gates G1, G2) | Isolation suite passes for every route and file; permission matrix tests pass; AC-INV-01..11 pass on Postgres; no code path writes stock outside the posting service (static test); probes R1, R2, R4, R5, R6, R8, PA1, PA3 and PA5 replaced by passing tests of the corrected behaviour |
 
 ### Stage 2 — Shared operations + Standalone (P0/P1) → M3, M4
 
@@ -84,8 +85,8 @@ both.
 
 | | |
 |---|---|
-| Why | Paying customers need the approved plan catalogue (C-41), lifecycle, export, deletion, support tooling, production environment, monitoring, legal pages, rebrand, accessibility and load evidence (NFR §8) |
-| Tasks | T4.01–T4.16 |
+| Why | Paying customers need the approved plan catalogue (C-41), lifecycle, export, deletion, support tooling, production environment, monitoring, legal pages, rebrand, accessibility and load evidence (NFR §8), and the contract migration that removes transition structures (DM-16) |
+| Tasks | T4.01–T4.17 |
 | Before any paid customer | All of Stage 4 (gate G-R1 = NFR §8 production readiness standard, every gate) |
 | Exit criteria | NFR §8 gates 1–12 evidenced; AC-SAAS-01..12 pass; restore drill done; onboarding observed for both paths (AC-SAAS-09, -10) |
 
@@ -122,11 +123,13 @@ explicit approval.
 ## 4. Critical path
 
 ```
-T0.01 → T0.02 → T1.01 → T1.02 → T1.05 → T1.13 → T1.16 → T1.18 → T2.01 → T2.02 → T2.04 → T2.05
-      → T2.12 (Standalone) → T2.20 → M4
-      → T3.01 → T3.05 → T3.06 → M5
-T4.01 → T4.02 → T4.04 ─────────────────────────────────────────────────────────────── → G-R1
-T4.09 (production env) needs T0.09 (staging) and ID-02 (host)
+T0.01 → T0.02 → T0.05 → T1.01 → T1.02 → T1.04 → T1.13 → T1.15 → T1.16 → T1.17 → T1.18 → T2.05
+T1.02 → T1.05 → T1.06 → T2.01 → T2.02 → T2.05
+T2.05 → T2.12 → T2.13 → T2.20 → T2.22                          (M4 Standalone end-to-end)
+T2.05 → T3.04 → T3.05 → T3.10 → T3.11 → T3.12 → T4.16          (M5 Square connected, then contract migration)
+T1.06 → T4.01 → T4.02 → T4.03 → T4.04                          (billing, in parallel with Stage 3)
+T0.09 → T4.09 → T4.10                                           (production environment; needs the owner's accounts)
+every P1 task → T4.17 launch gate review → G-R1
 ```
 
 ## 5. What is deliberately deferred

@@ -35,6 +35,11 @@ implementation sessions; the detail lives in `docs/`.
 - Postgres run: set `TEST_DATABASE_URL` to an empty Postgres 16 database.
 - Audit probes in `docs/audit/probes/` assert known defects; never add them to CI.
 
+## Documentation contract
+- The master roadmap, task breakdown and data migration roadmap must agree. Before committing any
+  change under `docs/`, run `python scripts/check_docs.py` (also in the suite as
+  `tests/test_docs_contract.py`). It proves references and ordering, not that code is correct.
+
 ## Requires the owner's explicit approval
 Anything marked OPEN or proposed; new dependencies; destructive migrations; pricing or plan
 changes; security configuration; production deploys; stage-gate sign-off; changing owner

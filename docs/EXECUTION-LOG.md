@@ -5,6 +5,121 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — Documentation contract and checker
+
+**Implemented**
+- `scripts/check_docs.py`: one checker for links/anchors (product, audit, roadmap), product ID
+  definitions, traceability coverage of all spec requirements, roadmap task/decision/requirement
+  references, index dependency order and entry/index agreement, and alignment of the master
+  roadmap, task index and migration roadmap (milestone ranges, critical-path arrows, DM step
+  ownership, naming and ordering). Exit code 1 on any problem.
+- `tests/test_docs_contract.py`: runs the checker inside the test suite, so CI (T0.02) enforces it.
+- Governance: roadmap README §4.4 "The development contract" (master roadmap authoritative;
+  distinct task responsibilities such as T4.16 vs T4.17; explicit migration ownership; the checker
+  proves references and ordering, not correctness; critical-path blockers resolved deliberately);
+  `CLAUDE.md` documentation-contract rule; T0.05 marked as on the critical path (task entry, index,
+  OD-02, handoff).
+
+**Verified**
+- Checker on the working tree: 87 tasks, 231 requirements, 0 problems.
+- Negative test on a scratch copy with six planted errors (broken link, dropped requirement, forward
+  dependency, entry/index mismatch, false critical-path arrow, migration step not named by its
+  owner): all six reported, exit code 1.
+- Checker and contract test run on a clean export of exactly the committed content (see commit).
+
+**Files changed**
+- `scripts/check_docs.py`, `tests/test_docs_contract.py` (new); `CLAUDE.md`; `docs/roadmap/` README,
+  DEVELOPMENT_TASK_BREAKDOWN, RISK_AND_DEPENDENCY_REGISTER; this log.
+
+**Open issues**
+- T0.01 code remains uncommitted at the owner's request; T0.05 blocked on the owner's repository.
+
+**Decisions made**
+- None.
+
+**Next task**
+- First unfinished Stage 0 tasks: T0.06, T0.07, T0.08, T0.10, T0.11 (Ready); T0.02 after T0.01 is
+  committed.
+
+---
+
+## 2026-11-05 — Roadmap, task breakdown and migration roadmap aligned (docs only)
+
+**Implemented**
+- Milestones stay as defined in MASTER_DEVELOPMENT_ROADMAP (M0 safe to build · M1 tenancy & access ·
+  M2 ledger engine · M3 operations engine · M4 Standalone end-to-end · M5 Square connected · M6
+  launch-ready → G-R1 · M7 R1.1 · M8–M10 expansion). The task index gained a **Milestone** column
+  and the breakdown a milestone summary pointing to the master roadmap as authoritative.
+- New **T4.16 Contract migration** owns DM-16, which had no task; the launch gate review is now
+  **T4.17** (references renumbered in the roadmap, task breakdown, migration roadmap and security
+  checklist).
+- Dependencies: T1.01 now follows T0.05 (DM-1 before DM-2); T1.02 follows T1.01 (DM-2 precedes
+  every new table); T4.17 names T4.16.
+- Every task that owns a migration step names it (DM-1..DM-16); T2.01 backfills products from
+  `sold_items` (DM-9); T2.11 creates history receivings for applied documents (DM-12).
+- Master roadmap critical path rewritten so every arrow is a real dependency; Stage 0/1 exit
+  criteria and gates G0, G1, G2, G5, G-R1 now retire each probe in the milestone whose task retires
+  it (R3 in G0; PA1, PA5 in G1; PA4 in G5; PA2 in G-R1).
+
+**Verified**
+- Script: every master-roadmap milestone range matches the index; no task depends on a later
+  milestone; every critical-path arrow is a dependency; every DM step has an owning task that
+  precedes what it must precede and names the step. Task, decision and requirement IDs defined;
+  index dependencies point backwards and match each task entry; all links and anchors resolve.
+
+**Files changed**
+- `docs/roadmap/` MASTER_DEVELOPMENT_ROADMAP, DEVELOPMENT_TASK_BREAKDOWN, DATA_MIGRATION_ROADMAP,
+  TESTING_AND_QUALITY_STRATEGY, SECURITY_AND_RELEASE_CHECKLIST, README; this log.
+
+**Open issues**
+- Uncommitted, together with T0.01.
+
+**Decisions made**
+- None: milestone definitions unchanged; the proposed alternative numbering (launch at M7) was not
+  adopted because six documents already use the existing definitions.
+
+**Next task**
+- Owner: commit when ready. Then T0.02.
+
+---
+
+## 2026-11-05 — T0.01 Hermetic test configuration
+
+**Implemented**
+- `app/config.py`: `Settings.settings_customise_sources` drops the `.env` source when
+  `APP_ENV=test`; development and deployed environments still read `.env` as before.
+- `tests/conftest.py`: before pinning test values, removes every inherited environment variable
+  that names a `Settings` field, so neither a developer's `.env` nor their shell can change results;
+  `APP_BASE_URL` pinned to `http://localhost:8000` (the value the audit's passing runs used — the
+  task text suggested `http://testserver`; the existing default keeps results identical).
+- `tests/test_settings.py`: 3 tests — `.env` ignored under test, still read with `APP_ENV=dev`,
+  base URL not inherited.
+- `CLAUDE.md`: test command note updated (no pin needed any more).
+
+**Verified**
+- Full suite, SQLite, developer `.env` present (with an https `APP_BASE_URL`), no variables pinned:
+  **545 passed, 6 skipped** (the 6 are the Postgres-only tests). Before this change the same run
+  failed 46 tests (audit T1).
+- Same run with a hostile shell environment (`APP_BASE_URL=https://…`, `APP_ENV=production`, Stripe,
+  Square webhook key, SMTP host set): **545 passed, 6 skipped**.
+- Audit probes without the pin: 13 passed (they still confirm defects later tasks fix).
+- Not run: PostgreSQL (needs Docker; T0.02 adds it to CI).
+
+**Files changed**
+- `app/config.py`, `tests/conftest.py`, `tests/test_settings.py` (new), `CLAUDE.md`,
+  `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md` (status), this log.
+
+**Open issues**
+- Status In review until merged and run by CI (T0.02 done-definition).
+
+**Decisions made**
+- None beyond the base-URL value noted above.
+
+**Next task**
+- T0.02 CI on GitHub Actions (depends on T0.01); T0.06, T0.07, T0.08, T0.10, T0.11 are Ready.
+
+---
+
 ## 2026-11-05 — Owner approved implementation decisions ID-01..ID-23 (docs only)
 
 **Implemented**

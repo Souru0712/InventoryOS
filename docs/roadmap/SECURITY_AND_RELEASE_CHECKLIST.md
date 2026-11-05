@@ -3,7 +3,7 @@
 Phase 3, 2026-11-05. Planning only. Every item has a **testable pass condition** and the task that
 delivers it. Baseline: [NON_FUNCTIONAL_REQUIREMENTS](../product/NON_FUNCTIONAL_REQUIREMENTS.md)
 (SEC, REL, OBS, NFR §8) and the [security findings](../audit/05-security.md) S1–S13. Used at G-R1
-(T4.16) and, from then on, for every release.
+(T4.17) and, from then on, for every release.
 
 ## 1. Security controls
 
@@ -32,7 +32,7 @@ delivers it. Baseline: [NON_FUNCTIONAL_REQUIREMENTS](../product/NON_FUNCTIONAL_R
 
 | # | Gate | Pass condition (evidence) | Task |
 |---|---|---|---|
-| R-01 | All R1 acceptance criteria pass | Traceability script lists no R1 AC without a test or manual check; CI green | T4.16 |
+| R-01 | All R1 acceptance criteria pass | Traceability script lists no R1 AC without a test or manual check; CI green | T4.17 |
 | R-02 | Tenant isolation suite passes | CI | T1.03 |
 | R-03 | Ledger integrity | Idempotency, concurrency, reversal and nightly verification tests pass on Postgres | T1.16, T1.21 |
 | R-04 | Square end to end | Recorded sandbox run (connect → catalog → orders → consumption → refund → disconnect); one real merchant pilot before Connected is sold widely | T3.11 |
@@ -41,10 +41,10 @@ delivers it. Baseline: [NON_FUNCTIONAL_REQUIREMENTS](../product/NON_FUNCTIONAL_R
 | R-06 | Email delivery | Verification, reset, invite and digest received in real inboxes; SPF/DKIM/DMARC pass | T4.09 |
 | R-07 | Backups and restore | PITR enabled; restore drill log | T4.09 |
 | R-08 | Monitoring and alerts | Test alert of each type reaches the founder's phone | T4.10 |
-| R-09 | Security checks | §1 items S-01..S-18 evidenced | T4.16 |
+| R-09 | Security checks | §1 items S-01..S-18 evidenced | T4.17 |
 | R-10 | Legal and support | Privacy policy, terms, support contact, sub-processor list live | T4.12 |
 | R-11 | Onboarding | Non-founders complete both onboarding paths in < 45 min (AC-SAAS-09, -10) | T2.20, T3.10 |
-| R-12 | Decisions closed | No R1-blocking decision open in PRODUCT_DECISIONS or IMPLEMENTATION_DECISIONS | T4.16 |
+| R-12 | Decisions closed | No R1-blocking decision open in PRODUCT_DECISIONS or IMPLEMENTATION_DECISIONS | T4.17 |
 | R-13 | Accessibility | No serious axe violations on R1 screens; manual employee-workflow check | T4.13 |
 | R-14 | Performance | PERF-01..07 met at design headroom or deviations accepted by the owner | T4.14 |
 

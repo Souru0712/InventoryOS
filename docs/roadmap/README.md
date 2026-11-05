@@ -32,7 +32,7 @@ Phase 2 (C-34 wording) with no requirement change.
 | 1 | This README | Overview, governance, handoff |
 | 2 | [IMPLEMENTATION_DECISIONS](IMPLEMENTATION_DECISIONS.md) | ID-01..ID-23, approved 2026-11-05 (C-43); open questions |
 | 3 | [MASTER_DEVELOPMENT_ROADMAP](MASTER_DEVELOPMENT_ROADMAP.md) | Stages, milestones, priorities, exit criteria |
-| 4 | [DEVELOPMENT_TASK_BREAKDOWN](DEVELOPMENT_TASK_BREAKDOWN.md) | 86 detailed tasks (Stages 0–4) + outline tasks (4B–8); **status index** |
+| 4 | [DEVELOPMENT_TASK_BREAKDOWN](DEVELOPMENT_TASK_BREAKDOWN.md) | 87 detailed tasks (Stages 0–4) + outline tasks (4B–8); **status index** |
 | 5 | [GAP_ANALYSIS](GAP_ANALYSIS.md) | Requirement groups → class, impact, action, stage |
 | 6 | [TARGET_ARCHITECTURE](TARGET_ARCHITECTURE.md) | Components, data flows, integration architecture, deployment |
 | 7 | [TARGET_DOMAIN_AND_DATA_ARCHITECTURE](TARGET_DOMAIN_AND_DATA_ARCHITECTURE.md) | Tables, ledger strategy, transaction boundaries, retention |
@@ -84,13 +84,32 @@ marked Completed in this phase.
 - **Customer feedback:** goes to the evidence log ([validation plan §8](CUSTOMER_VALIDATION_PLAN.md));
   it changes priorities only through a proposed decision the owner approves.
 
+### 4.4 The development contract
+
+The master roadmap, the task breakdown, the data migration roadmap and `scripts/check_docs.py`
+together form a maintained contract, not planning notes to be rewritten casually.
+
+1. **The master roadmap is authoritative** for stages, milestones (M0–M10) and gates; the task
+   index mirrors it (Milestone column) and must not drift.
+2. **Tasks own distinct responsibilities.** Example: T4.16 (contract migration) owns DM-16; T4.17
+   (launch gate review) only verifies that all required work is complete.
+3. **Migration ownership is explicit.** Every DM step has an owning task that names it, and the
+   task dependencies enforce the step order.
+4. **Run `python scripts/check_docs.py` before committing any change under `docs/`** (it also runs
+   in the test suite as `tests/test_docs_contract.py`). Passing it proves references and
+   sequencing constraints only — it does not prove that the implementation is correct or safe;
+   tests, reviews and gates do that.
+5. **Blockers on the critical path are resolved deliberately.** T0.05 waits for the owner's
+   snack-box repository and T1.01 depends on it; it is not bypassed without a documented and
+   approved alternative.
+
 ## 5. Claude Code implementation handoff
 
 1. **Read first:** repository-root `CLAUDE.md`, then this README, then the task's entry in
    DEVELOPMENT_TASK_BREAKDOWN.
 2. **First task:** **T0.01 Hermetic test configuration** (Ready). In parallel-safe order after it:
    T0.06, T0.07, T0.08, T0.10, T0.11 (Ready); then T0.02 → T0.03/T0.04. T0.05 waits for the owner's
-   snack-box repository; T0.09 waits for the owner's host, storage and Sentry accounts (OD-03).
+   snack-box repository and is on the critical path (§4.4); T0.09 waits for the owner's host, storage and Sentry accounts (OD-03).
 3. **Before changing a domain, read:** its module in PRODUCT_SPECIFICATION, its workflows in
    BUSINESS_WORKFLOWS, DOMAIN_MODEL (entities + DR rules), the matching acceptance criteria, and
    TARGET_DOMAIN_AND_DATA_ARCHITECTURE.

@@ -60,7 +60,7 @@ provider).
 | ID | Dependency | Blocks | Status |
 |---|---|---|---|
 | OD-01 | Approve implementation decisions ID-01..ID-23 ([IMPLEMENTATION_DECISIONS](IMPLEMENTATION_DECISIONS.md)) | T0.09 (ID-02), T0.11, T1.11 (ID-23), T2.13 (ID-23), T2.21 (ID-07), T4.03 (ID-14), Stage 1 tasks touching ID-09/ID-10 | Done 2026-11-05 (C-43, C-44) |
-| OD-02 | Create the snack-box project repository | T0.05 | Open |
+| OD-02 | Create the snack-box project repository | T0.05, and through it T1.01 and all of Stage 1 (critical path) | Open |
 | OD-03 | Host, object storage and Sentry accounts | T0.09 | Open |
 | OD-04 | Enable branch protection (required CI check) on GitHub | T0.02 done-definition | Open |
 | OD-05 | Square developer account with sandbox seller (OA-2) | T3.11 | Open |

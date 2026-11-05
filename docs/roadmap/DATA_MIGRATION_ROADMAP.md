@@ -32,7 +32,7 @@ risks: [DATA_MIGRATION_ASSESSMENT](../audit/DATA_MIGRATION_ASSESSMENT.md).
 | Step | What | Task | Expand / migrate / contract | Must precede |
 |---|---|---|---|---|
 | DM-1 | Remove the 11 snack-box tables (code moved to its own repository) | T0.05 | Contract (destructive, approved C-37) | T1.02 |
-| DM-2 | Timestamps → `timestamptz`; CHECK constraints; delete rules | T1.01 | Migrate | All new tables |
+| DM-2 | Timestamps → `timestamptz`; CHECK constraints; delete rules | T1.01 | Migrate | T1.02, and so every new table |
 | DM-3 | Locations: address, time zone, cutoff, open days; provider ids nullable | T1.04 | Expand | T1.13, T2.04 |
 | DM-4 | Memberships backfilled from `users.tenant_id` (each user → Owner) | T1.05 | Expand + backfill | T1.06 |
 | DM-5 | Item split: `inventory_items` + `item_locations` + `item_packages` from `stock_items` | T1.13, T1.15 | Expand + backfill (compatibility layer kept) | T1.16 |
@@ -46,7 +46,7 @@ risks: [DATA_MIGRATION_ASSESSMENT](../audit/DATA_MIGRATION_ASSESSMENT.md).
 | DM-13 | External products from Square-origin `sold_items` (provider ids) with mappings | T3.03 | Expand + backfill | T3.04 |
 | DM-14 | Provider connections: unique active (provider, merchant, location) | T3.02 | Migrate (constraint) | T3.05 |
 | DM-15 | Plans and entitlements from the `Plan` enum and `CAPABILITIES` | T4.01 | Expand + backfill | T4.02 |
-| DM-16 | Contract: drop `users.tenant_id`, the `stock_items` compatibility layer and `qty_base`, unused legacy writers | before T4.16 | Contract (needs approval) | G-R1 |
+| DM-16 | Contract: drop `users.tenant_id`, the `stock_items` compatibility layer and `qty_base`, unused legacy writers | T4.16 | Contract (needs approval) | T4.17, G-R1 |
 
 ## 4. Entity mapping
 

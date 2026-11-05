@@ -17,103 +17,117 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Tests:** every task adds or updates tests; "Tests" lists the minimum. Every task ends with the
   full suite green in CI on SQLite and Postgres.
 - P2+ tasks are specified to outline level and are fully elaborated when their stage starts.
+- **Milestones** are defined in [MASTER_DEVELOPMENT_ROADMAP §2–3](MASTER_DEVELOPMENT_ROADMAP.md#2-stages-at-a-glance)
+  (authoritative); the index records each task's milestone. Summary:
+
+| Milestone | Means | Stage | Gate |
+|---|---|---|---|
+| M0 Safe to build | Hermetic tests, CI, locked deps, security quick fixes, write-back off, snack-box out, staging | 0 | G0 |
+| M1 Tenancy & access | Scoped data access, isolation suite, locations, memberships, permissions, auth, audit | 1 | G1 |
+| M2 Ledger engine | Item model, units, ledger + posting service, counts, adjustments, exceptions, dashboard | 1 | G2 |
+| M3 Operations engine | Catalog, versioned recipes, sales model, consumption engine, batches, waste, production, suppliers, receiving | 2 | G3 |
+| M4 Standalone end-to-end | Daily sales, imports, reports, onboarding, no-POS end-to-end suite; free Standalone pilots may start | 2 | G4 |
+| M5 Square connected | Adapter, connection, mapping, ingestion, webhooks, refunds, reconciliation, mode switch, sandbox run | 3 | G5 |
+| M6 Launch-ready | Billing catalogue, lifecycle, export, deletion, console, production, monitoring, contract migration, launch review | 4 | **G-R1** (first paying customers) |
+| M7 R1.1 | First post-launch increment | 4B | — |
+| M8 / M9 / M10 | Multi-location / Advanced / native POS go-no-go | 6 / 7 / 8 | stage gates |
 
 ## Index
 
-| ID | Task | Pri | Size | Depends on | Status |
-|---|---|---|---|---|---|
-| T0.01 | Hermetic test configuration | P0 | S | — | Ready |
-| T0.02 | CI on GitHub Actions (SQLite + Postgres 16) | P0 | S | T0.01 | Not started |
-| T0.03 | Lock dependencies, audit, Dependabot | P0 | S | T0.02 | Not started |
-| T0.04 | Coding standards: ruff + mypy | P1 | S | T0.02 | Not started |
-| T0.05 | Extract the snack-box module (C-37) | P0 | M | T0.02, owner repo | Blocked (owner repo) |
-| T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | T0.01 | Ready |
-| T0.07 | Async correctness (C8) | P0 | S | T0.01 | Ready |
-| T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | T0.01 | Ready |
-| T0.09 | Staging environment on the chosen host | P1 | M | T0.02, ID-02 | Blocked (owner accounts, OD-03) |
-| T0.10 | Structured logs and request ids | P1 | S | T0.01 | Ready |
-| T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | — | Ready |
-| T1.01 | Schema hygiene: timestamptz, constraints, delete rules | P0 | M | T0.02 | Not started |
-| T1.02 | Scoped data-access layer (C-33) | P0 | M | T0.05 | Not started |
-| T1.03 | Tenant-isolation test suite | P0 | M | T1.02 | Not started |
-| T1.04 | Organization and location model | P0 | M | T1.02 | Not started |
-| T1.05 | Memberships and org switching | P0 | M | T1.02 | Not started |
-| T1.06 | Permission keys and role presets | P0 | M | T1.05 | Not started |
-| T1.07 | Server-side sessions, CSRF, POST logout | P1 | M | T1.05 | Not started |
-| T1.08 | Email verification, password reset and change | P1 | M | T1.07 | Not started |
-| T1.09 | Login throttling | P1 | S | T1.07 | Not started |
-| T1.10 | Invitations and team management | P1 | M | T1.06, T1.08 | Not started |
-| T1.11 | TOTP MFA | P1 | M | T1.07 | Not started |
-| T1.12 | Audit events | P1 | S | T1.05 | Not started |
-| T1.13 | Item model split (C-38) | P0 | L | T1.04 | Not started |
-| T1.14 | Item management UI | P1 | M | T1.13, T1.06 | Not started |
-| T1.15 | Units, packages and conversions | P0 | M | T1.13 | Not started |
-| T1.16 | Ledger schema and posting service | P0 | L | T1.01, T1.13, T1.15 | Not started |
-| T1.17 | Opening-balance migration | P0 | M | T1.16 | Not started |
-| T1.18 | Route existing writers through the ledger | P0 | M | T1.17 | Not started |
-| T1.19 | Exception model | P1 | M | T1.06, T1.16 | Not started |
-| T1.20 | Jobs table; scheduled evaluation for every tenant | P1 | M | T1.19 | Not started |
-| T1.21 | Nightly ledger verification | P1 | S | T1.20 | Not started |
-| T1.22 | Adjustments and movement history | P1 | M | T1.18, T1.06 | Not started |
-| T1.23 | Count sessions | P1 | L | T1.22, T1.19 | Not started |
-| T1.24 | Cost basis and valuation | P1 | M | T1.16 | Not started |
-| T1.25 | Core dashboard on ledger and exceptions | P1 | M | T1.19, T1.24 | Not started |
-| T2.01 | Owned product catalog (C-36) | P0 | M | T1.06, T1.13 | Not started |
-| T2.02 | Versioned recipes | P0 | L | T2.01, T1.15 | Not started |
-| T2.03 | Recipe costing, margins, completeness | P1 | M | T2.02, T1.24 | Not started |
-| T2.04 | Sales model and sources | P0 | M | T2.01, T1.04 | Not started |
-| T2.05 | Consumption engine | P0 | L | T2.02, T2.04, T1.18 | Not started |
-| T2.06 | Batch allocation refactor | P1 | L | T1.18 | Not started |
-| T2.07 | Waste module | P1 | M | T2.06, T2.02 | Not started |
-| T2.08 | Expiry queue and auto-dispose | P1 | M | T2.07 | Not started |
-| T2.09 | Production runs | P1 | L | T2.02, T2.06 | Not started |
-| T2.10 | Suppliers and supplier items | P1 | M | T1.13 | Not started |
-| T2.11 | Receiving on the ledger | P1 | L | T2.10, T2.06, T1.20 | Not started |
-| T2.12 | Standalone daily sales entry | P1 | M | T2.05 | Not started |
-| T2.13 | Sales file import | P1 | M | T2.12 | Not started |
-| T2.14 | Direct usage records | P1 | S | T2.05 | Not started |
-| T2.15 | Reorder suggestions on ledger usage | P1 | M | T2.10, T2.05 | Not started |
-| T2.16 | Reports I: consumption, waste, expiry, variance | P1 | M | T2.07, T1.23 | Not started |
-| T2.17 | Reports II: margin, cost of sales, receiving, count-based usage, CSV | P1 | M | T2.16, T2.03, T2.11 | Not started |
-| T2.18 | Weekly summary email | P1 | S | T2.16 | Not started |
-| T2.19 | Settings module | P1 | M | T1.04, T1.12 | Not started |
-| T2.20 | Onboarding flow | P1 | L | T2.12, T2.13, T1.14 | Not started |
-| T2.21 | Employee home and floor screens | P1 | M | T2.07, T2.09 | Not started |
-| T2.22 | Standalone end-to-end suite | P0 | M | T2.20 | Not started |
-| T3.01 | Adapter interface and boundary check | P1 | M | T2.04 | Not started |
-| T3.02 | Square connection lifecycle | P1 | M | T3.01, T1.12 | Not started |
-| T3.03 | Location mapping and catalog sync | P1 | M | T3.02 | Not started |
-| T3.04 | Product mapping and reprocessing | P1 | M | T3.03, T2.05 | Not started |
-| T3.05 | Order-line ingestion | P1 | L | T3.04, T1.20 | Not started |
-| T3.06 | Webhooks with dedupe via jobs | P1 | M | T3.05 | Not started |
-| T3.07 | Refunds, voids, discounts | P1 | M | T3.05 | Not started |
-| T3.08 | Reconciliation and failure recovery | P1 | M | T3.06 | Not started |
-| T3.09 | Integration health and sales-source status | P1 | S | T3.08 | Not started |
-| T3.10 | Mode switching with cutover | P1 | M | T3.05, T2.12 | Not started |
-| T3.11 | Square sandbox end-to-end run | P1 | S | T3.10, T0.09 | Not started |
-| T3.12 | Remove the legacy Square sync path | P1 | S | T3.11 | Not started |
-| T4.01 | Plan and entitlement data model (C-41) | P1 | M | T1.06 | Not started |
-| T4.02 | Stripe catalogue and per-location billing | P1 | M | T4.01 | Not started |
-| T4.03 | Subscription lifecycle policies | P1 | S | T4.02, ID-14 | Not started |
-| T4.04 | Stripe test-mode lifecycle run | P1 | S | T4.03, T0.09 | Not started |
-| T4.05 | Full data export | P1 | M | T2.17 | Not started |
-| T4.06 | Account deletion and retention | P1 | M | T4.05 | Not started |
-| T4.07 | Founder console and audited support access | P1 | M | T1.12, T1.20 | Not started |
-| T4.08 | Plan and entitlements view | P1 | S | T4.01 | Not started |
-| T4.09 | Production environment, backups, email | P1 | M | T0.09 | Not started |
-| T4.10 | Monitoring and alerting | P1 | M | T4.09 | Not started |
-| T4.11 | Rebrand to InventoryOS | P1 | S | — | Not started |
-| T4.12 | Legal and support pages | P1 | S | owner content | Not started |
-| T4.13 | Accessibility review and fixes | P1 | M | Stage 2 UI | Not started |
-| T4.14 | Load test at design headroom | P1 | M | T4.09 | Not started |
-| T4.15 | Invoice extraction trial on real invoices | P1 | S | T2.11, OA-4 | Not started |
-| T4.16 | Launch gate review | P1 | S | all P1 | Not started |
-| T4B.01–13 | R1.1 increment (outline) | P2 | — | G-R1 | Not started |
-| T5.01–04 | JuJu validation (outline; plan in JUJU_VALIDATION_PLAN) | P2 | — | M3/M4/M7 | Not started |
-| T6.01–05 | Multi-location (outline) | P3 | — | Stage 6 gate | Not started |
-| T7.01–07 | Advanced (outline) | P3 | — | Stage 7 gate | Not started |
-| T8.01–04 | Native POS feasibility (outline) | Deferred | — | Stage 8 gate | Deferred |
-
+| ID | Task | Pri | Size | Milestone | Depends on | Status |
+|---|---|---|---|---|---|---|
+| T0.01 | Hermetic test configuration | P0 | S | M0 | — | In review (verified locally 2026-11-05; CI arrives with T0.02) |
+| T0.02 | CI on GitHub Actions (SQLite + Postgres 16) | P0 | S | M0 | T0.01 | Not started |
+| T0.03 | Lock dependencies, audit, Dependabot | P0 | S | M0 | T0.02 | Not started |
+| T0.04 | Coding standards: ruff + mypy | P1 | S | M0 | T0.02 | Not started |
+| T0.05 | Extract the snack-box module (C-37) | P0 | M | M0 | T0.02, owner repo | Blocked (owner repo; on the critical path) |
+| T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | M0 | T0.01 | Ready |
+| T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | Ready |
+| T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | M0 | T0.01 | Ready |
+| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Blocked (owner accounts, OD-03) |
+| T0.10 | Structured logs and request ids | P1 | S | M0 | T0.01 | Ready |
+| T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | M0 | — | Ready |
+| T1.01 | Schema hygiene: timestamptz, constraints, delete rules | P0 | M | M1 | T0.02, T0.05 | Not started |
+| T1.02 | Scoped data-access layer (C-33) | P0 | M | M1 | T1.01 | Not started |
+| T1.03 | Tenant-isolation test suite | P0 | M | M1 | T1.02 | Not started |
+| T1.04 | Organization and location model | P0 | M | M1 | T1.02 | Not started |
+| T1.05 | Memberships and org switching | P0 | M | M1 | T1.02 | Not started |
+| T1.06 | Permission keys and role presets | P0 | M | M1 | T1.05 | Not started |
+| T1.07 | Server-side sessions, CSRF, POST logout | P1 | M | M1 | T1.05 | Not started |
+| T1.08 | Email verification, password reset and change | P1 | M | M1 | T1.07 | Not started |
+| T1.09 | Login throttling | P1 | S | M1 | T1.07 | Not started |
+| T1.10 | Invitations and team management | P1 | M | M1 | T1.06, T1.08 | Not started |
+| T1.11 | TOTP MFA | P1 | M | M1 | T1.07 | Not started |
+| T1.12 | Audit events | P1 | S | M1 | T1.05 | Not started |
+| T1.13 | Item model split (C-38) | P0 | L | M2 | T1.04 | Not started |
+| T1.14 | Item management UI | P1 | M | M2 | T1.13, T1.06 | Not started |
+| T1.15 | Units, packages and conversions | P0 | M | M2 | T1.13 | Not started |
+| T1.16 | Ledger schema and posting service | P0 | L | M2 | T1.01, T1.13, T1.15 | Not started |
+| T1.17 | Opening-balance migration | P0 | M | M2 | T1.16 | Not started |
+| T1.18 | Route existing writers through the ledger | P0 | M | M2 | T1.17 | Not started |
+| T1.19 | Exception model | P1 | M | M2 | T1.06, T1.16 | Not started |
+| T1.20 | Jobs table; scheduled evaluation for every tenant | P1 | M | M2 | T1.19 | Not started |
+| T1.21 | Nightly ledger verification | P1 | S | M2 | T1.20 | Not started |
+| T1.22 | Adjustments and movement history | P1 | M | M2 | T1.18, T1.06 | Not started |
+| T1.23 | Count sessions | P1 | L | M2 | T1.22, T1.19 | Not started |
+| T1.24 | Cost basis and valuation | P1 | M | M2 | T1.16 | Not started |
+| T1.25 | Core dashboard on ledger and exceptions | P1 | M | M2 | T1.19, T1.24 | Not started |
+| T2.01 | Owned product catalog (C-36) | P0 | M | M3 | T1.06, T1.13 | Not started |
+| T2.02 | Versioned recipes | P0 | L | M3 | T2.01, T1.15 | Not started |
+| T2.03 | Recipe costing, margins, completeness | P1 | M | M3 | T2.02, T1.24 | Not started |
+| T2.04 | Sales model and sources | P0 | M | M3 | T2.01, T1.04 | Not started |
+| T2.05 | Consumption engine | P0 | L | M3 | T2.02, T2.04, T1.18 | Not started |
+| T2.06 | Batch allocation refactor | P1 | L | M3 | T1.18 | Not started |
+| T2.07 | Waste module | P1 | M | M3 | T2.06, T2.02 | Not started |
+| T2.08 | Expiry queue and auto-dispose | P1 | M | M3 | T2.07 | Not started |
+| T2.09 | Production runs | P1 | L | M3 | T2.02, T2.06 | Not started |
+| T2.10 | Suppliers and supplier items | P1 | M | M3 | T1.13 | Not started |
+| T2.11 | Receiving on the ledger | P1 | L | M3 | T2.10, T2.06, T1.20 | Not started |
+| T2.12 | Standalone daily sales entry | P1 | M | M4 | T2.05 | Not started |
+| T2.13 | Sales file import | P1 | M | M4 | T2.12 | Not started |
+| T2.14 | Direct usage records | P1 | S | M4 | T2.05 | Not started |
+| T2.15 | Reorder suggestions on ledger usage | P1 | M | M4 | T2.10, T2.05 | Not started |
+| T2.16 | Reports I: consumption, waste, expiry, variance | P1 | M | M4 | T2.07, T1.23 | Not started |
+| T2.17 | Reports II: margin, cost of sales, receiving, count-based usage, CSV | P1 | M | M4 | T2.16, T2.03, T2.11 | Not started |
+| T2.18 | Weekly summary email | P1 | S | M4 | T2.16 | Not started |
+| T2.19 | Settings module | P1 | M | M3 | T1.04, T1.12 | Not started |
+| T2.20 | Onboarding flow | P1 | L | M4 | T2.12, T2.13, T1.14 | Not started |
+| T2.21 | Employee home and floor screens | P1 | M | M3 | T2.07, T2.09 | Not started |
+| T2.22 | Standalone end-to-end suite | P0 | M | M4 | T2.20 | Not started |
+| T3.01 | Adapter interface and boundary check | P1 | M | M5 | T2.04 | Not started |
+| T3.02 | Square connection lifecycle | P1 | M | M5 | T3.01, T1.12 | Not started |
+| T3.03 | Location mapping and catalog sync | P1 | M | M5 | T3.02 | Not started |
+| T3.04 | Product mapping and reprocessing | P1 | M | M5 | T3.03, T2.05 | Not started |
+| T3.05 | Order-line ingestion | P1 | L | M5 | T3.04, T1.20 | Not started |
+| T3.06 | Webhooks with dedupe via jobs | P1 | M | M5 | T3.05 | Not started |
+| T3.07 | Refunds, voids, discounts | P1 | M | M5 | T3.05 | Not started |
+| T3.08 | Reconciliation and failure recovery | P1 | M | M5 | T3.06 | Not started |
+| T3.09 | Integration health and sales-source status | P1 | S | M5 | T3.08 | Not started |
+| T3.10 | Mode switching with cutover | P1 | M | M5 | T3.05, T2.12 | Not started |
+| T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Not started |
+| T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Not started |
+| T4.01 | Plan and entitlement data model (C-41) | P1 | M | M6 | T1.06 | Not started |
+| T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Not started |
+| T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Not started |
+| T4.04 | Stripe test-mode lifecycle run | P1 | S | M6 | T4.03, T0.09 | Not started |
+| T4.05 | Full data export | P1 | M | M6 | T2.17 | Not started |
+| T4.06 | Account deletion and retention | P1 | M | M6 | T4.05 | Not started |
+| T4.07 | Founder console and audited support access | P1 | M | M6 | T1.12, T1.20 | Not started |
+| T4.08 | Plan and entitlements view | P1 | S | M6 | T4.01 | Not started |
+| T4.09 | Production environment, backups, email | P1 | M | M6 | T0.09 | Not started |
+| T4.10 | Monitoring and alerting | P1 | M | M6 | T4.09 | Not started |
+| T4.11 | Rebrand to InventoryOS | P1 | S | M6 | — | Not started |
+| T4.12 | Legal and support pages | P1 | S | M6 | owner content | Not started |
+| T4.13 | Accessibility review and fixes | P1 | M | M6 | Stage 2 UI | Not started |
+| T4.14 | Load test at design headroom | P1 | M | M6 | T4.09 | Not started |
+| T4.15 | Invoice extraction trial on real invoices | P1 | S | M6 | T2.11, OA-4 | Not started |
+| T4.16 | Contract migration (DM-16) | P1 | S | M6 | T1.05, T1.13, T1.18, T3.12 | Not started |
+| T4.17 | Launch gate review | P1 | S | M6 | all P1, incl. T4.16 | Not started |
+| T4B.01–13 | R1.1 increment (outline) | P2 | — | M7 | G-R1 | Not started |
+| T5.01–04 | JuJu validation (outline; plan in JUJU_VALIDATION_PLAN) | P2 | — | M3, M4, M7 | M3/M4/M7 | Not started |
+| T6.01–05 | Multi-location (outline) | P3 | — | M8 | Stage 6 gate | Not started |
+| T7.01–07 | Advanced (outline) | P3 | — | M9 | Stage 7 gate | Not started |
+| T8.01–04 | Native POS feasibility (outline) | Deferred | — | M10 | Stage 8 gate | Deferred |
 ---
 
 ## Stage 0 — Stabilize and foundation
@@ -181,10 +195,12 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** as listed; tests `tests/test_snack_box_*.py`, `tests/snack_box_support.py`.
 - **DB:** forward migration dropping the 11 tables (destructive; approved by C-37; local data is demo only). **API:** 35 routes removed. **UI:** shop and box templates removed.
 - **Security:** OAuth scope set reduced to five.
+- **Migration step:** DM-1 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T0.02; owner creates the repository.
 - **Acceptance:** no snack-box symbol remains (grep); 53 product routes; migration tests pass; OAuth scopes are the five product scopes.
 - **Tests:** migration test; route-count test; existing product tests green.
 - **Done when:** both repositories committed; InventoryOS CI green.
+- **Note:** on the critical path (T1.01 depends on it). Not bypassed without a documented, owner-approved alternative (e.g. a temporary branch) recorded as a decision.
 
 ### T0.06 Security quick fixes · P0 · S
 - **Objective:** close the stored-XSS hole and add baseline web hardening.
@@ -274,7 +290,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/db.py:48`, all `DateTime` columns in `app/models.py`, `_aware()` (e.g. `app/entitlements.py:75`).
 - **DB:** one migration, tested over populated data. **API · UI:** none.
 - **Security:** none.
-- **Depends on:** T0.02.
+- **Migration step:** DM-2 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
+- **Depends on:** T0.02, T0.05 (fewer tables to convert after DM-1).
 - **Acceptance:** probe PA5 inverted (stored datetimes come back aware); migration upgrade/downgrade over populated data passes on Postgres.
 - **Tests:** migration test; constraint violation tests.
 - **Done when:** merged; PA5 retired.
@@ -288,7 +305,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Likely files:** `app/access/` *(proposed)*, `app/web/*.py`, `app/orchestration/*.py`.
 - **DB · API · UI:** none.
 - **Security:** central enforcement point; deny by default.
-- **Depends on:** T0.05.
+- **Depends on:** T1.01 (which itself waits for the snack-box removal).
 - **Acceptance:** static test passes; existing cross-tenant tests pass.
 - **Tests:** static test; unit tests for the helpers.
 - **Done when:** no direct `get` on tenant-owned models outside the access layer.
@@ -313,6 +330,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/models.py:92-121,157-169`, `app/load/upsert.py:32-58`, `app/orchestration/subscriptions.py:43-66` (location limit).
 - **DB:** additive migration. **API:** location routes. **UI:** location settings screens.
 - **Security:** Owner/Administrator only (permission keys arrive in T1.06; interim: tenant owner).
+- **Migration step:** DM-3 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.02.
 - **Acceptance:** a tenant without Square creates a location and then a stock item (probe PA1 inverted); AC-ADM-01.
 - **Tests:** business-day helper unit tests (DST, cutoff); route tests.
@@ -326,6 +344,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/models.py:123-140`, `app/security.py:30-93`, `app/web/auth.py:66-70`.
 - **DB:** expand/backfill now, contract later. **API · UI:** org switcher.
 - **Security:** `OrgContext` built only from an active membership.
+- **Migration step:** DM-4 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.02.
 - **Acceptance:** PA3 inverted; a user in two orgs sees only the selected org's data (AC-STF-07).
 - **Tests:** migration test; switching test.
@@ -431,6 +450,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/models.py:195-238`, readers across `app/web/`, `app/orchestration/`, `app/transform/`.
 - **DB:** expand + backfill migrations. **API · UI:** none yet (T1.14).
 - **Security:** scoped repositories only.
+- **Migration step:** DM-5 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.04.
 - **Acceptance:** every existing stock item maps to exactly one item + item_location; existing screens unchanged in behaviour.
 - **Tests:** migration test over demo data; repository tests.
@@ -457,6 +477,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/units.py:36-130`, `receive_unit`/`pack_size_base` (`app/models.py:228-229`).
 - **DB:** two tables + backfill of packages. **API · UI:** conversion editor on the item screen.
 - **Security:** none.
+- **Migration step:** DM-5 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.13.
 - **Acceptance:** AC-INV-02, AC-INV-03; a base-unit change after movements is refused.
 - **Tests:** property tests for round-trips; JuJu press-yield example (1 lb ginger → 225 ml) as a fixture.
@@ -471,6 +492,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Likely files:** `app/orchestration/ledger.py`, `app/transform/ledger.py` *(proposed)*.
 - **DB:** three tables, indexes per data architecture §6. **API · UI:** none yet.
 - **Security:** only this service writes movements (static test); scoped context required.
+- **Migration step:** DM-6 (schema) — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.01, T1.13, T1.15.
 - **Acceptance:** AC-INV-04..07 on Postgres, including a real concurrent-posting test.
 - **Tests:** unit (validation), integration (idempotency, concurrency, reversal), static write-path test.
@@ -484,6 +506,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `stock_items.qty_base` (`app/models.py:214`).
 - **DB:** data migration. **API · UI:** none.
 - **Security:** none.
+- **Migration step:** DM-6 (backfill) — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.16.
 - **Acceptance:** for every item × location, Σ movements = previous `qty_base`.
 - **Tests:** migration test over demo data.
@@ -497,10 +520,11 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** writers listed in [database audit §4](../audit/INVENTORY_PROJECT_DATABASE_AUDIT.md#4-inventory-update-logic).
 - **DB:** none new. **API:** `/app/recalculate` removed. **UI:** counts show variance posted.
 - **Security:** none.
+- **Migration step:** DM-7 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.17.
 - **Acceptance:** concurrent apply posts once (AC-RCV-05, probe R4 inverted); no writer outside the posting service; weight/volume items no longer change without a movement.
-- **Tests:** writer tests; static test; probes R1–R6 replaced by tests of the new behaviour.
-- **Done when:** all baseline probes retired. Note: sales consumption is absent until T2.05 — acceptable because no customer uses the product before M4 (C-40).
+- **Tests:** writer tests; static test; probes R1, R2, R4, R5, R6 replaced by tests of the new behaviour (R3 was retired in T0.08).
+- **Done when:** probes R1, R2, R4, R5 and R6 retired. Note: sales consumption is absent until T2.05 — acceptable because no customer uses the product before M4 (C-40).
 
 ### T1.19 Exception model · P1 · M
 - **Objective:** one exception mechanism for everything that needs a person (G15).
@@ -510,6 +534,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/models.py:58-63,289-306`, `app/transform/alerts.py`, `app/orchestration/alerts.py`.
 - **DB:** table + partial unique index. **API · UI:** exception list and resolution.
 - **Security:** financial exceptions hidden from Employees.
+- **Migration step:** DM-8 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.06, T1.16.
 - **Acceptance:** AC-REC-06..09.
 - **Tests:** evaluator unit tests; dedupe and auto-resolve integration tests.
@@ -601,10 +626,11 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Objective:** InventoryOS owns products, variations and modifiers; POS catalogs will map onto them.
 - **Business reason:** today products are Square variations (`sold_items`), so a Standalone business cannot define what it sells (G1) and a native POS could never be added.
 - **Requirements:** RCP-FR-01, RCP-FR-03 (scale, add, none in R1), C-36.
-- **Technical:** `products`, `product_variations` (size, price per variation), `modifiers` + effects (scale factor, add lines, none); product screens; existing `sold_items` become external products in T3.03 (data kept).
+- **Technical:** `products`, `product_variations` (size, price per variation), `modifiers` + effects (scale factor, add lines, none); product screens; products and variations backfilled from existing `sold_items` (DM-9); Square-origin ones also get external-product mappings in T3.03 (DM-13).
 - **Existing code:** `app/models.py:171-193` (`SoldItem`), `app/cli.py:338`.
 - **DB:** new tables. **API · UI:** product and modifier screens.
 - **Security:** product permission; prices hidden from roles without it.
+- **Migration step:** DM-9 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.06, T1.13.
 - **Acceptance:** a Manager creates "Golden State" with 12 and 16 oz variations and a "Light ice" scale modifier without any POS.
 - **Tests:** model and route tests.
@@ -618,6 +644,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/models.py:240-253`, `app/cli.py:351`; JuJu recipe model as design reference.
 - **DB:** new tables + migration. **API · UI:** recipe editor with unit pickers; read-only recipe card.
 - **Security:** edit permission (Manager+); Employees view cards without costs (AC-RCP-09).
+- **Migration step:** DM-9 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T2.01, T1.15.
 - **Acceptance:** AC-RCP-01, -02, -05, -06, -09.
 - **Tests:** versioning (a sale before an edit uses the old version), cycle detection, scaling.
@@ -670,6 +697,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `StockBatch` (`app/models.py:479-501`), `allocate_fefo` (`app/transform/expiry.py`), `app/web/dashboard.py:271-284`.
 - **DB:** columns on batches and movements. **API · UI:** batch history view.
 - **Security:** none.
+- **Migration step:** DM-10 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.18.
 - **Acceptance:** AC-BAT-01..05, -08.
 - **Tests:** conservation property test; FEFO/FIFO allocation tests.
@@ -722,6 +750,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/models.py:224,380`, `stock_aliases` (`app/models.py:588`).
 - **DB:** two tables + backfill. **API · UI:** supplier screens.
 - **Security:** purchasing permission.
+- **Migration step:** DM-11 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.13.
 - **Acceptance:** AC-PRC-01, -02.
 - **Tests:** backfill and price-change tests.
@@ -731,10 +760,11 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Objective:** receiving (manual and invoice) posts receipt movements exactly once, with discrepancies and price checks; extraction kept, capped and gated.
 - **Business reason:** invoice receiving is the existing app's strongest feature; it must stop double-applying (C5) and stop depending on Square (C4).
 - **Requirements:** RCV-FR-01..14, RCV-FR-16, DR-25, PD-19, PD-25, AC-RCV-01..10.
-- **Technical:** `receivings` + lines with ordered (nullable, for R1.1 POs), invoiced, arrived, accepted; discrepancy types; price verification against supplier items; single posting with conditional status; corrections by reversal; reuse upload, SHA-256 dedupe, extraction (now a job), matching and alias learning; per-tenant daily extraction cap; verified-email gate; Employee-entered cost changes flagged.
+- **Technical:** `receivings` + lines with ordered (nullable, for R1.1 POs), invoiced, arrived, accepted; discrepancy types; price verification against supplier items; single posting with conditional status; corrections by reversal; reuse upload, SHA-256 dedupe, extraction (now a job), matching and alias learning; per-tenant daily extraction cap; verified-email gate; Employee-entered cost changes flagged; already-applied documents get receiving records for history, without new movements (DM-12).
 - **Existing code:** `app/orchestration/receiving.py`, `app/transform/receiving.py`, `app/extract/invoice.py`, `app/web/receiving.py`, `tests/test_receiving_flow.py`, `tests/test_invoice_ai.py`.
 - **DB:** receiving tables; documents kept. **API · UI:** review screen extended.
 - **Security:** S9 cap; safe file serving from T0.06.
+- **Migration step:** DM-12 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T2.10, T2.06, T1.20.
 - **Acceptance:** AC-RCV-01..10.
 - **Tests:** existing receiving tests adapted; concurrency test on Postgres.
@@ -908,6 +938,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/providers/square/oauth.py`, `app/web/dashboard.py:491-530`, `app/orchestration/sync.py:59-90`.
 - **DB:** constraint + status values. **API · UI:** connection screen.
 - **Security:** encrypted tokens, key outside DB, verified email required (T1.08).
+- **Migration step:** DM-14 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T3.01, T1.12.
 - **Acceptance:** AC-POS-01, AC-POS-09, AC-POS-11; probe PA4 inverted.
 - **Tests:** OAuth flow with mocked Square; revocation handling.
@@ -921,6 +952,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/orchestration/sync.py:93-130`, `app/transform/square_normalize.py:17`.
 - **DB:** new tables + migration from `sold_items`. **API · UI:** location mapping step.
 - **Security:** scoped.
+- **Migration step:** DM-13 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T3.02.
 - **Acceptance:** a sandbox catalog with modifiers imports with correct units; re-sync is idempotent.
 - **Tests:** recorded-payload tests.
@@ -1055,6 +1087,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `app/entitlements.py`, `app/models.py:30-35`, `app/orchestration/subscriptions.py`.
 - **DB:** tables + migration of the plan enum. **API · UI:** none (T4.08).
 - **Security:** entitlement changes only from verified billing events or audited admin actions (SEC-20).
+- **Migration step:** DM-15 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.06.
 - **Acceptance:** AC-SAAS-08, AC-SAAS-12; probe PA2 inverted.
 - **Tests:** entitlement matrix tests.
@@ -1242,14 +1275,28 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Tests:** the report.
 - **Done when:** results recorded; PD-25 cap value confirmed.
 
-### T4.16 Launch gate review · P1 · S
+### T4.16 Contract migration (DM-16) · P1 · S
+- **Objective:** remove the transition structures once nothing reads them: `users.tenant_id`, the `stock_items` compatibility layer, `stock_items.qty_base`, legacy writers.
+- **Business reason:** two sources of truth (a balance column and the ledger) invite the overwrite bugs the ledger exists to prevent.
+- **Requirements:** DR-01, DR-03, REL-10.
+- **Technical:** prove no reader remains (static test + grep); forward migration dropping the columns and the compatibility layer; legacy history tables (`inventory_counts`, `inventory_events`, `sales_daily`) stay read-only and are not dropped.
+- **Existing code:** `users.tenant_id` (`app/models.py:128`), `stock_items` (`app/models.py:195-238`).
+- **DB:** destructive contract migration — owner approval at the time (REL-10). **API · UI:** none.
+- **Security:** none.
+- **Migration step:** DM-16 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
+- **Depends on:** T1.05, T1.13, T1.18, T3.12.
+- **Acceptance:** no code references the dropped columns; migration tests pass on Postgres; all DM invariants still hold.
+- **Tests:** migration test; static test.
+- **Done when:** merged before the launch gate review (T4.17).
+
+### T4.17 Launch gate review · P1 · S
 - **Objective:** confirm every NFR §8 production-readiness gate with evidence (G-R1).
 - **Business reason:** "built" is not "production-ready" (owner's standing distinction).
 - **Requirements:** NFR §8 gates 1–12, AC-SAAS-09, AC-SAAS-10.
 - **Technical:** walk the [security and release checklist](SECURITY_AND_RELEASE_CHECKLIST.md); observed onboarding sessions with non-founders for both paths.
 - **Existing code:** —
 - **DB · API · UI · Security:** checklist.
-- **Depends on:** every P1 task.
+- **Depends on:** every P1 task, including T4.16.
 - **Acceptance:** every gate has evidence; owner signs off.
 - **Tests:** —
 - **Done when:** owner approval recorded as a C-decision.
