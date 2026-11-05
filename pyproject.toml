@@ -5,7 +5,7 @@ description = "Automated inventory intelligence for small businesses on Square"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
+    "uvicorn[standard]>=0.54.0",
     "sqlalchemy>=2.0.36",
     "alembic>=1.14",
     "pydantic-settings>=2.6",
