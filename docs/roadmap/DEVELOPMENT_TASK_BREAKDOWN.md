@@ -37,7 +37,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | ID | Task | Pri | Size | Milestone | Depends on | Status |
 |---|---|---|---|---|---|---|
 | T0.01 | Hermetic test configuration | P0 | S | M0 | — | Completed (2026-11-05; green in CI run #3) |
-| T0.02 | CI on GitHub Actions (SQLite + Postgres 16) | P0 | S | M0 | T0.01 | In review (both jobs green on `main`, CI run #3, 2026-11-05; ruleset "Protect main" active with both checks required, OD-04 done; awaits one blocked-merge test) |
+| T0.02 | CI on GitHub Actions (SQLite + Postgres 16) | P0 | S | M0 | T0.01 | Completed (2026-11-05; protection proven: direct push rejected, failing PR blocked) |
 | T0.03 | Lock dependencies, audit, Dependabot | P0 | S | M0 | T0.02 | Not started |
 | T0.04 | Coding standards: ruff + mypy | P1 | S | M0 | T0.02 | Not started |
 | T0.05 | Extract the snack-box module (C-37) | P0 | M | M0 | T0.02, owner repo | Blocked (owner repo; on the critical path) |

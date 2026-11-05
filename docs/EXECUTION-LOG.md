@@ -5,6 +5,38 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.02 completed: protection of `main` proven
+
+**Implemented**
+- Nothing new in code; this entry records the acceptance evidence for T0.02.
+
+**Verified**
+- **Direct push rejected:** pushing a commit straight to `main` returned "GH013: Repository rule
+  violations found for refs/heads/main … 2 of 2 required status checks are expected"; `main` was
+  unchanged (`c3dcaa9`).
+- **Failing pull request blocked:** throwaway PR #2 (branch `ci/blocked-merge-check`, one test
+  that asserts False) — both required checks "Failing after 2m · Required", and the "Merge pull
+  request" button disabled. The owner closed PR #2 and deleted the branch.
+- **Normal flow works:** PR #1 (documentation) passed both checks and was merged by the owner
+  (`84a98a1`).
+- Acceptance of T0.02 met: both jobs green on `main` (run #3), Postgres job with 0 skipped tests,
+  required checks enforced, a failing test blocks merging.
+
+**Files changed**
+- `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md` (T0.02 → Completed), this log.
+
+**Open issues**
+- Merged branch `docs/t0.02-protection` still exists on GitHub (harmless; GitHub's
+  "Automatically delete head branches" setting would remove such branches after merge).
+
+**Decisions made**
+- None.
+
+**Next task**
+- T0.03 lockfile, dependency audit, Dependabot (now Ready: T0.02 completed).
+
+---
+
 ## 2026-11-05 — T0.02 CI on GitHub Actions
 
 **Implemented**
