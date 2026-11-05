@@ -208,8 +208,8 @@ def _candidates(text: str, today: date, prefer: str) -> list[tuple[date, Decimal
             if prefer == "mdy"
             else [(digits[2:4], digits[:2], digits[4:]), (digits[:2], digits[2:4], digits[4:])]
         )
-        for month, day, year in pairs:
-            if value := _build(_year(year, today)[0], int(month), int(day)):
+        for mm, dd, yy in pairs:
+            if value := _build(_year(yy, today)[0], int(mm), int(dd)):
                 found.append((value, Decimal("0.6"), "six digits, no separators"))
                 break
 

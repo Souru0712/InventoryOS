@@ -12,16 +12,19 @@ import base64
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from app.config import get_settings
 from app.extract.images import prepare_for_model
+
+if TYPE_CHECKING:
+    from anthropic.types import ImageBlockParam
 
 log = logging.getLogger(__name__)
 
 SUPPORTED_MEDIA = {"image/jpeg", "image/png", "image/webp"}
 
-READ_SCHEMA = {
+READ_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "text": {
@@ -104,6 +107,18 @@ class ClaudeExpiryReader:
 
         # A date is photographed close up on a 12-megapixel phone; send what the model reads.
         image, media_type = prepare_for_model(image, media_type)
+        # media_type is one of SUPPORTED_MEDIA (checked above); the type checker only sees str.
+        photo = cast(
+            "ImageBlockParam",
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": base64.standard_b64encode(image).decode(),
+                },
+            },
+        )
 
         response = self._client.messages.create(
             model=self._model,
@@ -120,22 +135,12 @@ class ClaudeExpiryReader:
             messages=[
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": base64.standard_b64encode(image).decode(),
-                            },
-                        },
-                        {"type": "text", "text": "Read the date printed here."},
-                    ],
+                    "content": [photo, {"type": "text", "text": "Read the date printed here."}],
                 }
             ],
         )
         for block in response.content:
-            if getattr(block, "type", "") == "tool_use":
+            if block.type == "tool_use":
                 return _to_read(block.input, self.name)
         raise ExpiryReadError("the reader returned nothing usable")
 

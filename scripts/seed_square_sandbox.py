@@ -20,6 +20,7 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -44,7 +45,7 @@ def from_env_file(key: str) -> str:
 
 # A café's opening stock: things you count, in the units a till understands. The weights and
 # volumes the product also tracks are entered in StockPulse, not in Square, which is the point.
-ITEMS = [
+ITEMS: list[dict[str, Any]] = [
     {
         "name": "Oat milk 1L carton",
         "sku": "OATM-1L",

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.config import get_settings
+
+if TYPE_CHECKING:
+    from sentry_sdk.types import Event, Hint
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +23,7 @@ SENSITIVE_HEADERS = {
 _initialised = False
 
 
-def scrub(event: dict, _hint: dict | None = None) -> dict:
+def scrub(event: Event, _hint: Hint | None = None) -> Event:
     """Strip anything that could carry a session, a token or a customer's data from an event."""
     request = event.get("request")
     if not isinstance(request, dict):

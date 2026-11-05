@@ -249,7 +249,7 @@ def push_counts_to_square(db: Session, tenant_id: int, stock_item_ids: list[int]
             occurred_at,
         )
         for item in items
-        if item.location_id in locations
+        if item.provider_variation_id and item.location_id in locations
     ]
 
     token = _access_token(db, connection)

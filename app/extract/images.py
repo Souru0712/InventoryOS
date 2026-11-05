@@ -32,10 +32,10 @@ def prepare_for_model(content: bytes, media_type: str) -> tuple[bytes, str]:
         return content, media_type
 
     try:
-        with Image.open(io.BytesIO(content)) as image:
+        with Image.open(io.BytesIO(content)) as opened:
             # Phones record orientation in EXIF rather than in the pixels; a sideways invoice
             # reads far worse than an upright one.
-            image = ImageOps.exif_transpose(image)
+            image = ImageOps.exif_transpose(opened)
             if image.mode not in ("RGB", "L"):
                 image = image.convert("RGB")
             image.thumbnail((MAX_EDGE, MAX_EDGE))

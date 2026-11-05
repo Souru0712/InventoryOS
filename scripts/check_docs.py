@@ -49,7 +49,8 @@ PRODUCT_ID = (
 
 
 def check_product_ids() -> list[str]:
-    defined, referenced = set(), {}
+    defined: set[str] = set()
+    referenced: dict[str, str] = {}
     for doc in sorted(PRODUCT.glob("*.md")):
         text = read(doc)
         for line in text.splitlines():
@@ -79,7 +80,7 @@ def spec_releases() -> dict[str, str]:
 def check_traceability() -> list[str]:
     spec = set(spec_releases())
     section = read(AUDIT / "INVENTORYOS_REQUIREMENTS_TRACEABILITY.md").split("## 2.")[0]
-    seen = collections.Counter()
+    seen: collections.Counter[str] = collections.Counter()
     for line in section.splitlines():
         if re.match(r"^\|\s*\d+\s*\|", line):
             seen.update(re.findall(FR, [c.strip() for c in line.split("|")][3]))

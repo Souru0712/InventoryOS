@@ -9,11 +9,14 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from app.config import get_settings
 from app.extract.images import prepare_for_model
 from app.transform.receiving import ParsedLine
+
+if TYPE_CHECKING:
+    from anthropic.types import DocumentBlockParam, ImageBlockParam
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +29,7 @@ SUPPORTED_MEDIA = {
     ".pdf": "application/pdf",
 }
 
-EXTRACT_SCHEMA = {
+EXTRACT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "supplier": {"type": ["string", "null"]},
@@ -250,6 +253,14 @@ class ClaudeInvoiceExtractor:
         data = base64.standard_b64encode(payload_bytes).decode()
 
         block_type = "document" if media_type == "application/pdf" else "image"
+        # Type and media type come from SUPPORTED_MEDIA; the type checker only sees str.
+        original = cast(
+            "DocumentBlockParam | ImageBlockParam",
+            {
+                "type": block_type,
+                "source": {"type": "base64", "media_type": media_type, "data": data},
+            },
+        )
         response = self._client.messages.create(
             model=self._model,
             max_tokens=16000,
@@ -259,14 +270,7 @@ class ClaudeInvoiceExtractor:
                 {
                     "role": "user",
                     "content": [
-                        {
-                            "type": block_type,
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": data,
-                            },
-                        },
+                        original,
                         {
                             "type": "text",
                             "text": "Extract every delivered line item from this document.",

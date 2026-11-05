@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.datastructures import FormData
 
 from app.db import get_db
 from app.extract.invoice import ExtractionError
@@ -37,6 +38,12 @@ def _owned(db: Session, tenant_id: int, document_id: int) -> Document:
     if document is None or document.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="document not found")
     return document
+
+
+def _field(form: FormData, name: str) -> str:
+    """A text field's value; a file posted under a text field's name counts as empty."""
+    value = form.get(name)
+    return value if isinstance(value, str) else ""
 
 
 def _cents(raw: object) -> int | None:
@@ -214,20 +221,20 @@ async def apply_receipt(
             decisions.append(LineDecision(line.id, None, None, apply=False))
             continue
 
-        raw_item = form.get(f"{prefix}_item") or ""
+        raw_item = _field(form, f"{prefix}_item")
         stock_item_id = int(raw_item) if raw_item.isdigit() else None
         item = items.get(stock_item_id or -1)
         if item is None:
             decisions.append(LineDecision(line.id, None, None, apply=False))
             continue
 
-        raw_qty = (form.get(f"{prefix}_qty") or "").strip()
+        raw_qty = _field(form, f"{prefix}_qty").strip()
         try:
             qty_base = to_base(Decimal(raw_qty), item.stock_unit) if raw_qty else None
         except (InvalidOperation, UnitError, ValueError):
             qty_base = None
 
-        raw_date = (form.get(f"{prefix}_expires") or "").strip()
+        raw_date = _field(form, f"{prefix}_expires").strip()
         try:
             expires_on = date.fromisoformat(raw_date) if raw_date else None
         except ValueError:
@@ -245,8 +252,8 @@ async def apply_receipt(
         )
 
     # The header the reader filled in is editable too: a wrong supplier teaches the wrong alias.
-    supplier = (form.get("supplier") or "").strip() or None
-    invoice_number = (form.get("invoice_number") or "").strip() or None
+    supplier = _field(form, "supplier").strip() or None
+    invoice_number = _field(form, "invoice_number").strip() or None
     record_correction(db, document, "supplier", document.supplier, supplier, user_id=user.id)
     record_correction(
         db, document, "invoice_number", document.invoice_number, invoice_number, user_id=user.id

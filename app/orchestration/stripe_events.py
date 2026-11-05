@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -74,7 +75,7 @@ def plan_for_price(price_id: str | None) -> str | None:
     return None
 
 
-def _moment(value: object) -> datetime | None:
+def _moment(value: Any) -> datetime | None:
     """Stripe sends seconds since the epoch."""
     if not value:
         return None

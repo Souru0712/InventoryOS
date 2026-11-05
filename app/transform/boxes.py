@@ -6,7 +6,7 @@ box can never be filled with stock the customer has no reason to want just becau
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -263,7 +263,7 @@ def build_box(
             and sum(q.candidate.origin == c.origin for q in chosen) < bt.max_per_origin
         )
 
-    def take(limit: int, want) -> None:
+    def take(limit: int, want: Callable[[Pick], bool]) -> None:
         for p in pool:
             if sum(1 for q in chosen if want(q)) >= limit or len(chosen) >= rules.max_items:
                 return

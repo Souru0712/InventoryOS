@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -89,7 +90,7 @@ STATUS_ORDER = {"expired": 0, "at_risk": 1, "sell_first": 2, "no_signal": 3, "on
 
 def _expiry_summary(expiries: list[ItemExpiry], horizon_days: int) -> dict:
     """Page rows plus the totals the email leads with, from the same rule the alerts use."""
-    rows = []
+    rows: list[dict[str, Any]] = []
     for expiry in expiries:
         for position in expiry.positions:
             if position.remaining_base <= 0:
@@ -191,12 +192,12 @@ def _sync_status(
         .order_by(SyncRun.started_at.desc())
         .limit(1)
     ).first()
-    failing = last_run is not None and last_run.status is SyncStatus.FAILED
+    failed = last_run if last_run is not None and last_run.status is SyncStatus.FAILED else None
     return {
         "connected": connection is not None,
         "last_success_at": last_success.finished_at if last_success else None,
-        "error": (last_run.error or "")[:200] if failing else None,
-        "failed_at": last_run.finished_at if failing else None,
+        "error": (failed.error or "")[:200] if failed else None,
+        "failed_at": failed.finished_at if failed else None,
     }
 
 

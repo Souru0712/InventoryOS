@@ -239,7 +239,7 @@ def resolve_received_base(line: ParsedLine, item: Candidate) -> tuple[Decimal | 
         return None, "quantity on the invoice is zero or missing"
 
     unit = canonical_unit(line.unit)
-    is_pack_word = bool(line.unit) and line.unit.strip().lower().rstrip("s.") in PACK_WORDS
+    is_pack_word = bool(line.unit and line.unit.strip().lower().rstrip("s.") in PACK_WORDS)
 
     # 1. Explicit pack notation anywhere on the line: "2 cases of 6 x 1L".
     pack = parse_pack(line.raw_text) or parse_pack(line.name)
@@ -270,9 +270,9 @@ def resolve_received_base(line: ParsedLine, item: Candidate) -> tuple[Decimal | 
     if is_pack_word or unit is None:
         if item.pack_size_base and item.pack_size_base > ZERO:
             return (line.qty * item.pack_size_base).quantize(Decimal("0.0001")), None
-        size = parse_size(line.raw_text) or parse_size(line.name)
-        if size and dimension_of(size[1]) is item.dimension:
-            return to_base(line.qty * size[0], size[1]), None
+        stated = parse_size(line.raw_text) or parse_size(line.name)
+        if stated and dimension_of(stated[1]) is item.dimension:
+            return to_base(line.qty * stated[0], stated[1]), None
         if item.dimension is Dimension.COUNT:
             return to_base(line.qty, item.receive_unit or "each"), None
         return None, (

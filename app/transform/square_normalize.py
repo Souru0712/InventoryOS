@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.units import Dimension
@@ -35,7 +36,7 @@ def _decimal(value: object, default: str = "0") -> Decimal:
         return Decimal(default)
 
 
-def normalize_locations(raw: list[dict]) -> list[dict]:
+def normalize_locations(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
             "provider_location_id": loc["id"],
@@ -49,7 +50,7 @@ def normalize_locations(raw: list[dict]) -> list[dict]:
     ]
 
 
-def measurement_units(raw_objects: list[dict]) -> dict[str, tuple[str, Dimension]]:
+def measurement_units(raw_objects: list[dict[str, Any]]) -> dict[str, tuple[str, Dimension]]:
     """Map MEASUREMENT_UNIT object ids to (unit_code, dimension)."""
     mapping: dict[str, tuple[str, Dimension]] = {}
     for obj in raw_objects:
@@ -65,7 +66,7 @@ def measurement_units(raw_objects: list[dict]) -> dict[str, tuple[str, Dimension
     return mapping
 
 
-def normalize_catalog(raw_objects: list[dict]) -> list[dict]:
+def normalize_catalog(raw_objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Flatten ITEM/ITEM_VARIATION objects into one row per sellable variation."""
     categories = {
         obj["id"]: (obj.get("category_data") or {}).get("name", "")
@@ -73,7 +74,7 @@ def normalize_catalog(raw_objects: list[dict]) -> list[dict]:
         if obj.get("type") == "CATEGORY"
     }
     units = measurement_units(raw_objects)
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
 
     for obj in raw_objects:
         if obj.get("type") != "ITEM" or obj.get("is_deleted"):
@@ -108,9 +109,9 @@ def normalize_catalog(raw_objects: list[dict]) -> list[dict]:
     return rows
 
 
-def normalize_counts(raw: list[dict]) -> list[dict]:
+def normalize_counts(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Latest IN_STOCK quantity per catalog object and location."""
-    latest: dict[tuple[str, str], dict] = {}
+    latest: dict[tuple[str, str], dict[str, Any]] = {}
     for count in raw:
         if count.get("state") != "IN_STOCK":
             continue
@@ -127,7 +128,7 @@ def normalize_counts(raw: list[dict]) -> list[dict]:
     return list(latest.values())
 
 
-def _order_day(order: dict, tz: str) -> date | None:
+def _order_day(order: dict[str, Any], tz: str) -> date | None:
     stamp = order.get("closed_at") or order.get("created_at")
     if not stamp:
         return None
@@ -139,10 +140,10 @@ def _order_day(order: dict, tz: str) -> date | None:
 
 
 def daily_sales_from_orders(
-    raw_orders: list[dict], location_timezones: dict[str, str]
-) -> list[dict]:
+    raw_orders: list[dict[str, Any]], location_timezones: dict[str, str]
+) -> list[dict[str, Any]]:
     """Aggregate order line items into one row per variation / location / day."""
-    buckets: dict[tuple[str, str, date], dict] = defaultdict(
+    buckets: dict[tuple[str, str, date], dict[str, Any]] = defaultdict(
         lambda: {"units": Decimal("0"), "gross_cents": 0, "net_cents": 0}
     )
 

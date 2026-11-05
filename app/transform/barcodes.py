@@ -64,7 +64,7 @@ def expand_upc_e(code: str) -> str | None:
     system, body, check = code[0], code[1:7], code[7]
     if system not in ("0", "1"):
         return None
-    x1, x2, x3, x4, x5, x6 = body
+    x1, x2, x3, x4, x5, x6 = tuple(body)
     if x6 in ("0", "1", "2"):
         middle = f"{x1}{x2}{x6}0000{x3}{x4}{x5}"
     elif x6 == "3":

@@ -60,7 +60,9 @@ log = logging.getLogger("stockpulse")
 
 # One café: things you count, things you weigh, things you pour.
 # Quantities are yesterday morning's physical count, so today's sales draw them down.
-DEMO_STOCK = [
+DEMO_STOCK: list[
+    tuple[str, str, Dimension, str, int | str, int | str, int | str, str, str, str]
+] = [
     # (name, category, dimension, unit, counted, reorder, par, cost per unit, receive unit, pack)
     (
         "House Blend beans 1kg bag",
@@ -106,7 +108,7 @@ DEMO_STOCK = [
     ("Cold brew concentrate", "Coffee", Dimension.VOLUME, "l", "18", "4", "20", "6.20", "l", "5"),
 ]
 
-DEMO_MENU = [
+DEMO_MENU: list[tuple[str, str, int, list[tuple[str, str, str]], int]] = [
     # (name, category, price cents, recipe: [(stock name, qty, unit)], daily units)
     (
         "Latte",
@@ -403,8 +405,8 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 )
             )
             stock[name] = item
-            if price := DEMO_RETAIL.get(name):
-                item.retail_per_base_cents = (Decimal(price) * 100) / to_base("1", unit)
+            if retail := DEMO_RETAIL.get(name):
+                item.retail_per_base_cents = (Decimal(retail) * 100) / to_base("1", unit)
             if body := DEMO_CODES.get(name):
                 db.add(
                     ProductIdentifier(
@@ -418,7 +420,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
         sold: dict[str, SoldItem] = {}
         for name, category, price, recipe, _daily in DEMO_MENU:
-            item = SoldItem(
+            sold_item = SoldItem(
                 tenant_id=tenant.id,
                 provider="demo",
                 provider_item_id=f"demo-{name.lower().replace(' ', '-')}",
@@ -426,14 +428,14 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 category=category,
                 price_cents=price,
             )
-            db.add(item)
+            db.add(sold_item)
             db.flush()
-            sold[name] = item
+            sold[name] = sold_item
             for stock_name, quantity, unit in recipe:
                 db.add(
                     RecipeComponent(
                         tenant_id=tenant.id,
-                        sold_item_id=item.id,
+                        sold_item_id=sold_item.id,
                         stock_item_id=stock[stock_name].id,
                         qty_base_per_sale=to_base(quantity, unit),
                     )

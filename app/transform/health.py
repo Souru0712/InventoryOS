@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from app.transform.inventory import (
     StockView,
@@ -253,7 +254,7 @@ class HealthReport:
         lines.sort(key=lambda pair: (TONE_RANK[pair[1].tone], -pair[0].weight))
         return [finding for _, finding in lines]
 
-    def to_snapshot(self) -> dict:
+    def to_snapshot(self) -> dict[str, Any]:
         """What is kept each night, enough to explain the next day's change."""
         return {
             "score": self.score,
@@ -533,11 +534,11 @@ def overall(components: list[ComponentScore]) -> int | None:
     An unmeasured dimension drops out and the rest are reweighted, rather than being counted
     as a perfect 100 or a failing 0 - both would be a claim about something nobody knows.
     """
-    measured = [c for c in components if c.measured]
-    if not measured:
+    scored = [(c.score, c.weight) for c in components if c.score is not None]
+    if not scored:
         return None
-    weight = sum((c.weight for c in measured), ZERO)
-    return _round(sum((Decimal(c.score) * c.weight for c in measured), ZERO) / weight)
+    weight = sum((w for _, w in scored), ZERO)
+    return _round(sum((Decimal(s) * w for s, w in scored), ZERO) / weight)
 
 
 def score_inventory(health: HealthInput, now: datetime) -> HealthReport:
@@ -665,7 +666,7 @@ class Change:
     lines: list[tuple[int, str]]
 
 
-def contributions(snapshot: dict) -> dict[str, Decimal]:
+def contributions(snapshot: dict[str, Any]) -> dict[str, Decimal]:
     """How many of the overall points each measured dimension supplied."""
     measured = {
         key: value
@@ -678,7 +679,7 @@ def contributions(snapshot: dict) -> dict[str, Decimal]:
     return {key: Decimal(value["score"]) * WEIGHTS[key] / weight for key, value in measured.items()}
 
 
-def _describe(key: str, before: dict, after: dict, currency: str) -> str | None:
+def _describe(key: str, before: dict[str, Any], after: dict[str, Any], currency: str) -> str | None:
     """The plain-language reason a dimension moved, from its stored figures."""
 
     def delta(name: str) -> int:
@@ -719,7 +720,7 @@ def _describe(key: str, before: dict, after: dict, currency: str) -> str | None:
     return None
 
 
-def explain_change(before: dict, after: dict) -> Change | None:
+def explain_change(before: dict[str, Any], after: dict[str, Any]) -> Change | None:
     """Why the score moved between two snapshots, dimension by dimension."""
     if before.get("score") is None or after.get("score") is None:
         return None

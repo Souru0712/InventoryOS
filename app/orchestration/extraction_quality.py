@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -81,7 +82,7 @@ def correction_stats(
 
     per_supplier = Counter(supplier_of[row.document_id] for row in corrections)
     documents_per_supplier = Counter(supplier_of[document.id] for document in documents)
-    suppliers = [
+    suppliers: list[dict[str, Any]] = [
         {
             "supplier": supplier,
             "documents": documents_per_supplier[supplier],

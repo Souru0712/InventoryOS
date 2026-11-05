@@ -111,11 +111,17 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
         .order_by(Alert.notified_at.desc())
         .limit(1)
     ).first()
-    if recently_notified and _aware(recently_notified.notified_at) > cooldown:
+    if (
+        recently_notified
+        and recently_notified.notified_at
+        and _aware(recently_notified.notified_at) > cooldown
+    ):
         log.info("tenant %s alert digest suppressed by cooldown", tenant_id)
         return False
 
     tenant = db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise LookupError(f"tenant {tenant_id} has pending alerts but no tenant row")
     if not allows(tenant, "notifications"):
         log.info("tenant %s is not entitled to alerts; digest held", tenant_id)
         return False
