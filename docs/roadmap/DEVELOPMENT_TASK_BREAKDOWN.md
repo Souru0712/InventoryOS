@@ -42,7 +42,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T0.04 | Coding standards: ruff + mypy | P1 | S | M0 | T0.02 | Completed (2026-11-05; ruff and mypy required checks on main) |
 | T0.05 | Extract the snack-box module (C-37) | P0 | M | M0 | T0.02, owner repo | Blocked (owner repo; on the critical path) |
 | T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | M0 | T0.01 | Completed (2026-11-05; probe R7 retired) |
-| T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | In review (PR open; CI evidence in the execution log) |
+| T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | Completed (2026-11-05; no async routes, 60 s Anthropic timeout) |
 | T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | M0 | T0.01 | Ready |
 | T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Blocked (owner accounts, OD-03) |
 | T0.10 | Structured logs and request ids | P1 | S | M0 | T0.01 | Ready |
