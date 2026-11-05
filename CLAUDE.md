@@ -13,6 +13,9 @@ implementation sessions; the detail lives in `docs/`.
 
 ## How to work
 - One task at a time, only if its dependencies are Completed. Small, reviewable commits.
+- `main` is protected (ruleset "Protect main": both CI checks required, branch up to date, no force
+  push, no deletion, no bypass). Never push to `main` directly: push a branch, open a pull request,
+  and merge only when both checks are green and the owner approves. The repository is public.
 - Read the requirement before coding; no unrelated refactoring; preserve working behaviour.
 - Add or update tests with every change; run the full suite; CI must be green on SQLite and Postgres.
 - Record completion: task status in the index + an entry in `docs/EXECUTION-LOG.md`.
