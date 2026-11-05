@@ -41,8 +41,10 @@ issues · decisions · next task.
   `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md` (T0.03 → In review), this log.
 
 **Open issues**
-- "Dependency audit" and "Docker image" are not required checks yet; adding them to the "Protect
-  main" ruleset is the owner's call.
+- Resolved: the owner approved making "Dependency audit" and "Docker image" required; the
+  "Protect main" ruleset now requires all four checks (saved and confirmed after a reload). PR #3
+  (built before these jobs existed) can no longer merge on its own; PR #4 contains its commit and
+  replaces it.
 - The audit fails on any known vulnerability, not only critical ones (pip-audit has no severity
   filter); an accepted finding needs `--ignore-vuln` plus an ADR with a fix date.
 - Existing local `.venv` folders were made with pip; `uv sync` replaces them.
