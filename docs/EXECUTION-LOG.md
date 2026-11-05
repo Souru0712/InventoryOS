@@ -23,8 +23,12 @@ issues · decisions · next task.
   `postgresql` prefix the migration tests require.
 - Locally: docs checker 0 problems; suite on SQLite passed in T0.01 (545 + the docs contract test).
 - **Not verified yet:** an actual GitHub run (needs the push) and the PostgreSQL job (Docker is not
-  running on this machine; the earlier audit run on Postgres 16 was 548/548). Editable install
-  assumed safe: an earlier `pip install -e .` on this layout produced `top_level.txt` = `app` only.
+  running on this machine; the earlier audit run on Postgres 16 was 548/548).
+- **Correction after the first run (run #1, commit `5db2399`): both jobs failed at Install.**
+  setuptools refused the editable install ("Multiple top-level packages discovered in a
+  flat-layout: ['app', 'migrations']") — the earlier local `top_level.txt` was not evidence for a
+  fresh build. Fixed by installing dependencies only from `pyproject.toml` (as the Dockerfile
+  does); the generator was run locally and lists all 21 requirements. Re-run pending.
 
 **Files changed**
 - `.github/workflows/ci.yml` (new), `CLAUDE.md`, `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md`
