@@ -5,6 +5,33 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — Repository on GitHub (docs only)
+
+**Implemented**
+- Audit: TR-01 (only copy on one laptop) and OA-1 (push to GitHub) marked resolved; confirmed
+  finding 10 updated.
+
+**Verified**
+- `origin` = `github.com/Souru0712/InventoryOS`; `main` in sync with `origin/main` at `601540b`
+  (includes the owner's `scripts/send_test_webhook.py` commit). Unauthenticated GitHub API returns
+  404, consistent with a private repository. Only `.env.example` is tracked among env/db files.
+
+**Files changed**
+- `docs/audit/TECHNICAL_RISK_REGISTER.md`, `docs/audit/AUDIT_DECISIONS_AND_OPEN_QUESTIONS.md`,
+  this log.
+
+**Open issues**
+- No CI yet (TR-14). Local branch `docs/inventoryos-phase-1` (at `3fb4afa`, already in `main`'s
+  history) exists only locally.
+
+**Decisions made**
+- None.
+
+**Next task**
+- Agent, on go-ahead: Phase 3 plan.
+
+---
+
 ## 2026-11-04 — Owner answered the four audit questions (docs only)
 
 **Implemented**

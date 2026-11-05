@@ -17,7 +17,7 @@ The owner actions (§4) and questions (§5) remain open.
 | 7 | One person cannot belong to two businesses; there are no roles | probe PA3 | RUN |
 | 8 | One Square merchant can attach to two businesses | probe PA4 | RUN |
 | 9 | No recipe, production, waste, supplier, adjustment, count-session, staff, export or audit features exist | route list; [traceability](INVENTORYOS_REQUIREMENTS_TRACEABILITY.md) | CODE |
-| 10 | The code has no git remote and no CI | `git remote` empty | RUN |
+| 10 | The code had no git remote and has no CI (remote added 2026-11-05: private `Souru0712/InventoryOS`) | `git remote` empty on 2026-11-04; `origin` set and in sync on 2026-11-05 | RUN |
 | 11 | No customer data exists; the local database is demo seed data at migration head | read-only row counts | RUN |
 | 12 | JuJu has a working signed-movement ledger, production transactions and waste, single-tenant, TypeScript/Supabase; its CI passed on the audited code (documented) | [JuJu audit](JUJU_TECHNICAL_AUDIT.md); `git diff --stat 34ea7ec..HEAD` docs-only | CODE / documented |
 
@@ -54,7 +54,7 @@ The owner actions (§4) and questions (§5) remain open.
 
 | # | Action | Why |
 |---|---|---|
-| OA-1 | **Push this repository to a private GitHub repository** (as was done for JuJu) | TR-01: the only copy is this laptop |
+| OA-1 | ~~Push this repository to a private GitHub repository~~ **Done 2026-11-05** (`Souru0712/InventoryOS`) | TR-01 resolved |
 | OA-2 | Run the Square sandbox seller script in `NEEDS-YOU.md` §1 when the adapter rebuild starts | U1 |
 | OA-3 | Upgrade Node on this machine to 24.22.2 or newer 24.x | U7; JuJu's own checklist R29 |
 | OA-4 | Provide the real invoices when the extraction trial is scheduled | U3, TR-28 |

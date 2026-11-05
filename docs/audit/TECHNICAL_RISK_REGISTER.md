@@ -10,7 +10,7 @@ Timing: **Now** (before any build work) · **Engine** (first build milestone: le
 
 | ID | Category | Risk | Evidence | Likelihood | Impact | Severity | Mitigation | Dependencies | Timing |
 |---|---|---|---|---|---|---|---|---|---|
-| TR-01 | Operational | The only copy of the code is on one laptop: no git remote, no backup of the repository | `git remote` empty [RUN]; O1 | Medium | High (total loss) | **Critical** | Push to a private GitHub repository; enable CI there | Owner action | **Now** |
+| TR-01 | Operational | ~~The only copy of the code is on one laptop: no git remote, no backup of the repository~~ **Resolved 2026-11-05:** pushed to the private GitHub repository `Souru0712/InventoryOS`; local `main` matches `origin/main` (CI still to set up, TR-14) | `git remote` empty [RUN]; O1 | Medium | High (total loss) | **Critical** | Push to a private GitHub repository; enable CI there | Owner action | **Now** |
 | TR-02 | Data integrity | No inventory ledger: balances are overwritten by seven code paths; history cannot explain a number | C6; [DB audit §4](INVENTORY_PROJECT_DATABASE_AUDIT.md#4-inventory-update-logic) | High | High | **Critical** | Ledger with InventoryTransaction + movements; balances as projection (DR-01..07) | Ledger design approved (C-35); TR-07 context | Engine |
 | TR-03 | Data integrity | Theoretical consumption loses same-day sales after a count/receipt and drains the wrong location | C2, C3; probes R1, R2 [RUN] | High (daily for juice bars) | High | **Critical** | Replace the daily-aggregate engine with order-line consumption on the ledger; do not patch | TR-02, TR-22 | Engine |
 | TR-04 | Product scope / architecture | Standalone mode is impossible: no location, product, recipe or sales record can exist without Square; no alerts without Square | G1, G2, G14; probe PA1 [RUN] | High (certain) | High (half the launch offering) | **Critical** | Location/product creation, sales capture (STD-FR-02..04), alerts for every tenant | TR-02, TR-22 | Engine → Standalone |
@@ -44,7 +44,7 @@ Timing: **Now** (before any build work) · **Engine** (first build milestone: le
 
 ## Top five, in one line each
 
-1. **TR-01** push the code somewhere other than this laptop — today.
+1. ~~**TR-01** push the code somewhere other than this laptop~~ — done 2026-11-05 (private GitHub repository).
 2. **TR-02/03** the stock numbers are wrong by design for juice bars; the ledger replaces the engine.
 3. **TR-04** half of the launch offering (Standalone) has no path through the app at all.
 4. **TR-05** tenant isolation must become mechanical before the route count doubles.
