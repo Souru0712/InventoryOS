@@ -32,12 +32,16 @@ implementation sessions; the detail lives in `docs/`.
   modify them from here.
 
 ## Commands
-- Tests: `python -m pytest -q` from the repository root with the project venv
-  (Windows: `.venv/Scripts/python.exe -m pytest -q`). The suite is hermetic: under
+- Dependencies: `uv sync` installs exactly `uv.lock` into `.venv`. Change dependencies only in
+  `pyproject.toml` and re-run `uv lock`; commit both. The project is never packaged (`[tool.uv]
+  package = false`).
+- Tests: `uv run pytest -q` from the repository root (or `.venv/Scripts/python.exe -m pytest -q`). The suite is hermetic: under
   `APP_ENV=test` settings ignore `.env`, and `tests/conftest.py` clears inherited settings variables.
 - Postgres run: set `TEST_DATABASE_URL` to an empty Postgres 16 database.
 - CI: `.github/workflows/ci.yml` runs the docs checker and the suite on SQLite, and the suite on
-  PostgreSQL 16 (no skips allowed), on every push to `main` and every pull request.
+  PostgreSQL 16 (no skips allowed), plus a dependency audit (pip-audit on the lock) and a Docker
+  build whose installed versions must match `uv.lock`, on every push to `main` and every PR.
+  Dependabot proposes dependency, action and image updates weekly.
 - Audit probes in `docs/audit/probes/` assert known defects; never add them to CI.
 
 ## Documentation contract

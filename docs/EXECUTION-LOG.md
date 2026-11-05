@@ -5,6 +5,54 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.03 Lock dependencies, audit, Dependabot
+
+**Implemented**
+- `uv.lock` (uv 0.13.7, ID-05): 68 packages resolved from `pyproject.toml`; `.python-version` = 3.12.
+- `pyproject.toml`: dev tools moved from `[project.optional-dependencies]` to `[dependency-groups]`
+  so they never reach the image; `[tool.uv] package = false` — the repository is an application
+  and setuptools' flat-layout discovery refuses `app/` + `migrations/` (CI run #1's failure).
+- `Dockerfile`: copies uv from the pinned `ghcr.io/astral-sh/uv:0.13.7` image, exports the runtime
+  lock (no dev group) and installs it with `pip install --require-hashes`; uv is removed after.
+- `.github/workflows/ci.yml`: both test jobs install with `uv sync --frozen` (fails if the lock is
+  stale against `pyproject.toml`). New job **Dependency audit**: `uv export` of every locked
+  package, `pip-audit==2.10.1 --disable-pip` (no install). New job **Docker image**: builds the
+  image, lists its installed distributions, `scripts/check_lock_matches.py` fails on any version
+  that differs from the lock or any package not in it.
+- `.github/dependabot.yml`: weekly for uv (minor + patch grouped), GitHub Actions and Docker.
+- `README.md` quickstart and `CLAUDE.md` (dependencies, tests, CI) switched to uv.
+
+**Verified (locally)**
+- `uv lock --check` consistent; runtime export: 60 hashed pins, no pytest.
+- pip-audit on the full export: "No known vulnerabilities found".
+- `check_lock_matches.py`: passes on an environment installed from the export; fails (exit 1) on
+  a planted version mismatch.
+- Full suite on the locked versions (fresh venv from the export): 546 passed, 6 skipped (the
+  Postgres-only tests; the CI Postgres job runs them).
+- Workflow and Dependabot YAML parse; docs checker 0 problems.
+- **Not verified yet:** the four CI jobs on GitHub, including the Docker build (Docker is not
+  running on this machine).
+
+**Files changed**
+- `uv.lock`, `.python-version`, `scripts/check_lock_matches.py`, `.github/dependabot.yml` (new);
+  `pyproject.toml`, `Dockerfile`, `.github/workflows/ci.yml`, `README.md`, `CLAUDE.md`,
+  `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md` (T0.03 → In review), this log.
+
+**Open issues**
+- "Dependency audit" and "Docker image" are not required checks yet; adding them to the "Protect
+  main" ruleset is the owner's call.
+- The audit fails on any known vulnerability, not only critical ones (pip-audit has no severity
+  filter); an accepted finding needs `--ignore-vuln` plus an ADR with a fix date.
+- Existing local `.venv` folders were made with pip; `uv sync` replaces them.
+
+**Decisions made**
+- None new (ID-05 chose uv; the "uv" Dependabot ecosystem replaces "pip" because the lock is uv's).
+
+**Next task**
+- T0.04 coding standards: ruff + mypy (after this PR merges).
+
+---
+
 ## 2026-11-05 — T0.02 completed: protection of `main` proven
 
 **Implemented**

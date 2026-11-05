@@ -12,10 +12,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Dependencies before code, so a code change does not reinstall them.
-COPY pyproject.toml ./
-RUN python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']))" > requirements.txt \
-    && pip install -r requirements.txt
+# Dependencies before code, so a code change does not reinstall them. Exact versions and hashes
+# come from uv.lock; uv is copied in only to export them and removed afterwards.
+COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+RUN uv export --frozen --no-dev --no-emit-project --output-file requirements.txt \
+    && pip install --require-hashes -r requirements.txt \
+    && rm /usr/local/bin/uv
 
 COPY alembic.ini ./
 COPY migrations ./migrations

@@ -19,6 +19,11 @@ defaults:
     # `pytest | tee` hide a failing test run.
     shell: bash
 
+env:
+  UV_VERSION: "0.13.7"
+  # Use the job's Python 3.12; never download an interpreter.
+  UV_PYTHON_DOWNLOADS: never
+
 jobs:
   sqlite:
     name: Tests (SQLite)
@@ -29,23 +34,15 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - name: Install dependencies
-        # Dependencies only, as the Dockerfile does: the repository is not packaged (setuptools'
-        # flat-layout discovery refuses app/ + migrations/). T0.03 replaces this with a lockfile.
+      - name: Install locked dependencies
+        # --frozen: install exactly uv.lock and fail if it no longer matches pyproject.toml.
         run: |
-          python - > requirements-ci.txt <<'PY'
-          import tomllib
-          project = tomllib.load(open("pyproject.toml", "rb"))["project"]
-          for requirement in project["dependencies"] + project["optional-dependencies"]["dev"]:
-              print(requirement)
-          PY
-          python -m pip install -r requirements-ci.txt
+          python -m pip install "uv==${UV_VERSION}"
+          uv sync --frozen
       - name: Documentation contract
-        run: python scripts/check_docs.py
+        run: uv run --frozen python scripts/check_docs.py
       - name: Test suite
-        run: python -m pytest -q -p no:cacheprovider
+        run: uv run --frozen pytest -q -p no:cacheprovider
 
   postgres:
     name: Tests (PostgreSQL 16)
@@ -71,21 +68,45 @@ jobs:
       TEST_DATABASE_URL: postgresql+psycopg://inventoryos:inventoryos@postgres:5432/inventoryos_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install dependencies
-        # Same as the SQLite job; Python 3.12 comes from the container image.
+      - name: Install locked dependencies
         run: |
-          python - > requirements-ci.txt <<'PY'
-          import tomllib
-          project = tomllib.load(open("pyproject.toml", "rb"))["project"]
-          for requirement in project["dependencies"] + project["optional-dependencies"]["dev"]:
-              print(requirement)
-          PY
-          python -m pip install -r requirements-ci.txt
+          python -m pip install "uv==${UV_VERSION}"
+          uv sync --frozen
       - name: Test suite (no skips allowed)
         # The Postgres-only tests skip silently elsewhere; here every test must actually run.
         run: |
-          python -m pytest -q -p no:cacheprovider -rs | tee pytest.log
+          uv run --frozen pytest -q -p no:cacheprovider -rs | tee pytest.log
           if grep -Eq "[0-9]+ skipped" pytest.log; then
             echo "::error::tests were skipped on PostgreSQL"
             exit 1
           fi
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Audit every locked package for known vulnerabilities
+        # Hashed, fully pinned requirements let pip-audit check them without installing anything.
+        # A finding fails the job; an accepted one is ignored only with --ignore-vuln and an ADR.
+        run: |
+          python -m pip install "uv==${UV_VERSION}"
+          uv export --frozen --format requirements-txt --no-emit-project --output-file requirements-audit.txt
+          uvx --from "pip-audit==2.10.1" pip-audit --disable-pip --requirement requirements-audit.txt
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: docker build --tag inventoryos:ci .
+      - name: Installed versions match uv.lock
+        run: |
+          docker run --rm inventoryos:ci python -c "import importlib.metadata as m; print('\n'.join(f'{d.metadata[\"Name\"]}=={d.version}' for d in m.distributions()))" > image-packages.txt
+          python3 scripts/check_lock_matches.py uv.lock image-packages.txt
