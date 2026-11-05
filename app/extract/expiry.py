@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from app.config import get_settings
+from app.extract import ANTHROPIC_TIMEOUT_SECONDS
 from app.extract.images import prepare_for_model
 
 if TYPE_CHECKING:
@@ -96,7 +97,10 @@ class ClaudeExpiryReader:
         except ImportError as exc:
             raise ExpiryReadError("the anthropic package is not installed") from exc
 
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        # A 512-token answer: a whole-request limit of a minute is ample.
+        self._client = anthropic.Anthropic(
+            api_key=settings.anthropic_api_key, timeout=ANTHROPIC_TIMEOUT_SECONDS
+        )
         self._model = model or settings.extractor_model
 
     def read(self, image: bytes, media_type: str) -> ExpiryRead:

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from app.config import get_settings
+from app.extract import ANTHROPIC_TIMEOUT_SECONDS
 from app.extract.images import prepare_for_model
 from app.transform.receiving import ParsedLine
 
@@ -253,7 +254,9 @@ class ClaudeInvoiceExtractor:
         except ImportError as exc:
             raise ExtractionError("the anthropic package is not installed") from exc
 
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._client = anthropic.Anthropic(
+            api_key=settings.anthropic_api_key, timeout=ANTHROPIC_TIMEOUT_SECONDS
+        )
         self._model = model or settings.extractor_model
 
     def extract(self, content: bytes, filename: str) -> InvoiceExtract:
@@ -271,7 +274,9 @@ class ClaudeInvoiceExtractor:
                 "source": {"type": "base64", "media_type": media_type, "data": data},
             },
         )
-        response = self._client.messages.create(
+        # Streamed, so the timeout limits a silence rather than the whole reading: a long invoice
+        # can take more than a minute to write out.
+        with self._client.messages.stream(
             model=self._model,
             max_tokens=16000,
             system=SYSTEM_PROMPT,
@@ -288,7 +293,8 @@ class ClaudeInvoiceExtractor:
                     ],
                 }
             ],
-        )
+        ) as stream:
+            response = stream.get_final_message()
 
         if response.stop_reason == "refusal":
             raise ExtractionError("the model declined to read this document")

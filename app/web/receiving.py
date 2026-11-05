@@ -28,6 +28,7 @@ from app.orchestration.receiving import (
 from app.security import require_tenant, require_user, require_writable
 from app.storage import StorageError, get_storage
 from app.units import UnitError, to_base
+from app.web.inputs import posted_form
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -89,7 +90,7 @@ def receiving_index(
 
 
 @router.post("/app/receiving")
-async def upload_invoice(
+def upload_invoice(
     location_id: int = Form(...),
     kind: str = Form("invoice"),
     photo: UploadFile = File(...),
@@ -107,7 +108,7 @@ async def upload_invoice(
             tenant.id,
             location.id,
             photo.filename or "invoice.jpg",
-            await photo.read(),
+            photo.file.read(),
             photo.content_type or "image/jpeg",
             uploaded_by=user.id,
             kind=kind,
@@ -206,9 +207,10 @@ def reparse(
 
 
 @router.post("/app/receiving/{document_id}/apply")
-async def apply_receipt(
+def apply_receipt(
     document_id: int,
     request: Request,
+    form: FormData = Depends(posted_form),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
@@ -220,7 +222,6 @@ async def apply_receipt(
             f"/app/receiving/{document.id}?error=already_applied", status_code=303
         )
 
-    form = await request.form()
     items = {
         item.id: item
         for item in db.scalars(select(StockItem).where(StockItem.tenant_id == tenant.id))

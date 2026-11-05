@@ -19,6 +19,7 @@ from app.entitlements import PLAN_IDS
 from app.models import Tenant, User
 from app.orchestration.stripe_events import handle_event, price_for_plan
 from app.security import require_tenant, require_user
+from app.web.inputs import raw_body
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -95,11 +96,10 @@ def portal(
 
 
 @router.post("/billing/webhook")
-async def webhook(request: Request, db: Session = Depends(get_db)):
+def webhook(request: Request, payload: bytes = Depends(raw_body), db: Session = Depends(get_db)):
     """Stripe's word on what was paid. Verified, then applied once, whatever the order."""
     settings = get_settings()
     stripe = _stripe()
-    payload = await request.body()
     signature = request.headers.get("stripe-signature", "")
 
     if not settings.stripe_webhook_secret:

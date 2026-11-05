@@ -27,6 +27,7 @@ from app.providers.square.webhooks import (
     verify_signature,
 )
 from app.transform.square_normalize import normalize_counts
+from app.web.inputs import raw_body
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -109,13 +110,14 @@ def _catalog_read_recently(db: Session, tenant_id: int) -> bool:
 
 
 @router.post(NOTIFICATION_PATH)
-async def square_webhook(request: Request, db: Session = Depends(get_db)):
+def square_webhook(
+    request: Request, body: bytes = Depends(raw_body), db: Session = Depends(get_db)
+):
     settings = get_settings()
     key = settings.square_webhook_signature_key
     if not key:
         raise HTTPException(status_code=503, detail="SQUARE_WEBHOOK_SIGNATURE_KEY is not set")
 
-    body = await request.body()
     signature = request.headers.get("x-square-hmacsha256-signature", "")
     url = settings.app_base_url.rstrip("/") + NOTIFICATION_PATH
     if not verify_signature(url, body, signature, key):

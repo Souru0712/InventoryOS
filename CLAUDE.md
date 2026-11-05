@@ -31,6 +31,9 @@ implementation sessions; the detail lives in `docs/`.
 - Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
   `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or
   `javascript:` URLs (a test enforces both). Templates see only `PublicSettings`, never secrets.
+- Routes are plain `def` (FastAPI runs them in its threadpool); a route that needs the raw
+  body or a dynamic form takes it from `app/web/inputs.py`. `async def` routes would run the
+  synchronous database and API calls on the event loop and stall the worker (C8; a test enforces it).
 - An upload's type comes from its bytes (`detect_media_type`), never its name or Content-Type;
   uploads are served with an allow-listed type, `nosniff` and `Content-Disposition`.
 - JuJu (`C:\Users\oscar\.vscode\JuJu`) and the snack-box project are separate repositories: never
