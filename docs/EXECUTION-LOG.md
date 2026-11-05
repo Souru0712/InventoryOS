@@ -5,6 +5,74 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.07 Async correctness (C8)
+
+**Implemented**
+- Every route is now plain `def`, so FastAPI runs it in its threadpool and a slow call no longer
+  stops the event loop. The audit named four (`upload_invoice`, `apply_receipt`, `scan_expiry`,
+  `square_webhook`); the same fault was in six more and they are fixed too: the Stripe webhook,
+  the email-settings form, and the snack-box `pack`, `save_snack`, `save_settings`,
+  `save_review`, `save_preferences` (all ran synchronous database calls on the event loop).
+- `app/web/inputs.py`: `posted_form` and `raw_body`, async dependencies that read the body on the
+  event loop before the route starts. Uploads read `photo.file` synchronously in the thread.
+- Anthropic clients built with a 60 s timeout (`app/extract/__init__.py`; SDK default 600 s).
+  Invoice extraction now streams (`messages.stream` → `get_final_message()`), so the 60 s limits
+  a silence, not the whole reading: a non-streamed 16,000-token answer from a model that thinks by
+  default can take longer than a minute, and a whole-request limit would have failed long
+  invoices. The expiry reader (512 tokens) stays a single request.
+- `CLAUDE.md`: routes are plain `def`; bodies come from `app/web/inputs.py`.
+
+**Verified (locally)**
+- `tests/test_async_correctness.py`: (1) while an extraction is held open in a worker thread,
+  `/healthz` on the same event loop (httpx `ASGITransport`) answers before the extraction
+  finishes and in under 200 ms; the acceptance's "sleeping 5 s" is replaced by an extractor held
+  until the test releases it, which proves the same without a fixed wait. (2) No route endpoint
+  is a coroutine function; the test walks the included routers (FastAPI 0.162 keeps them nested)
+  and requires more than 50 routes, so it cannot pass by seeing none. With the old
+  `app/web/receiving.py` both tests fail ("/healthz waited for the extraction to finish").
+  The first version of these tests passed against the old code too; both flaws found that way
+  are fixed above.
+- `tests/test_invoice_ai.py`: the fake client supports streaming and records how it was built;
+  new test asserts the timeout is at most 60 s.
+- Full suite 571 passed, 6 skipped (568 + 3 new); ruff, ruff format, mypy (78 files) clean.
+
+**Files changed**
+- `app/web/inputs.py` (new), `app/web/receiving.py`, `scanning.py`, `webhooks.py`, `billing.py`,
+  `settings.py`, `boxes.py`, `shop.py`, `app/extract/__init__.py`, `invoice.py`, `expiry.py`;
+  `tests/test_async_correctness.py` (new), `tests/test_invoice_ai.py`; `CLAUDE.md`; task index
+  (T0.06 → Completed, T0.07 → In review); this log.
+
+**Open issues**
+- Extraction still runs inside the upload request (a worker thread for its duration; the default
+  threadpool has 40). Moving it to a job is T1.20.
+- Streaming extraction has not been run against the real API in this task (tests use a fake;
+  a real call would spend the owner's Anthropic credit).
+
+**Decisions made**
+- None new (T0.07 spec; streaming follows from its 60 s limit, reasons above).
+
+**Next task**
+- T0.08 disable Square write-back; T0.10 structured logs; T0.11 governance scaffolding.
+
+---
+
+## 2026-11-05 — T0.06 completed
+
+**Verified**
+- PR #11 merged by the owner (`9ae3707`, merge commit). CI on the PR head `3ad124a`, all five
+  required jobs green: SQLite 568 passed, 6 skipped; PostgreSQL 16 574 passed, 0 skipped; lint and
+  types; dependency audit; Docker image. Same five green on `main` after the merge. Acceptance
+  met: an HTML file sent as a `.jpg` is refused, and a real image is served with its own type and
+  `nosniff`; every response carries the headers (tested on representative routes); templates
+  render. Probe R7 retired.
+- Still not done: a real-browser click-through of the pages the CSP touches (recorded in the
+  T0.06 entry).
+
+**Files changed**
+- Task index (T0.06 → Completed), this log.
+
+---
+
 ## 2026-11-05 — T0.06 Security quick fixes (S3, S10, S11, S12)
 
 **Implemented**
