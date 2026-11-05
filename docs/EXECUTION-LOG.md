@@ -5,6 +5,84 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — Receiving: supplier pack notations from the owner's invoices (unplanned fix)
+
+Not a roadmap task. The owner shared the front pages of four suppliers' invoices (Central
+Boeki, USA Seafood, JFC, Hadson (Toko)). Running their printed pack wording through the
+receiving conversion found live quantity bugs; the owner approved fixing them before T0.08.
+The photos are not in this repository (it is public; they carry the store's address, phone and
+supplier accounts).
+
+**Found (each reproduced against `main` at `9fda108`)**
+- `3.9OZ x 14 x 2 #` (Hadson; `#` means pieces) read as 14 packs of 2 lb (28 lb a bundle).
+  For a counted item that sent the line to review as a weight; for an item tracked by weight it
+  would have booked pounds of chocolate.
+- Size-first notations (`2.4 oz x 10 #`), packs within cases (`10/5PK/2.70 FZ`, `3/6/6.76 FZ`)
+  and `FZ` for fluid ounces were not read at all.
+- Unit abbreviations `cs`, `BX`, `BUNDL`, `PK` (and plurals such as `boxes`) were not taken as
+  packs.
+- A quantity in pieces was multiplied by the whole case: JFC prints 30 EACH of
+  `3/30/1.93 OZ` at $1.05 = $31.50, which became 30 × 90 pieces.
+
+**Implemented** (`app/transform/receiving.py`)
+- `parse_pack` reads a chain of numbers joined by `x`, `*` or `/` with exactly one weight or
+  volume measure, in either order; the other numbers multiply into pieces per pack (`PK`, `PC`,
+  `EA`, `#` allowed as piece markers). `#` is pounds only when it is the notation's only measure
+  (`10/1.1#`, JFC). A chain with no measure, such as an expiry date `3/31/2027`, is skipped.
+- `pack_word()` with `PACK_ABBREVIATIONS`; `fz` → fluid ounces.
+- Conversion: a quantity in pieces counts pieces (one piece = the stated size); a counted item
+  received by the pack gets its pieces (`0.5 BUNDL` of `3.9OZ x 14 x 2 #` → 14). Before, a
+  counted item with a weight notation always went to review.
+- `normalize_name` strips the same notations from names (alias keys are re-normalized on both
+  sides when compared, so learned aliases keep matching).
+
+**Verified**
+- 27 new cases in `tests/test_receiving.py`, every notation copied from the four invoices; on
+  `main` the file does not even collect (the new helpers do not exist) and the KitKat notation
+  parses as (14, 2, lb). The existing receiving tests still pass (`6 x 1L`, `12x500g`, unit
+  mismatch flagged).
+- Full suite 598 passed, 6 skipped (571 + 27 new); ruff, ruff format, mypy (78 files) clean.
+
+**Gaps recorded, not fixed (extractor and product; for T2.11 and the T4.15 trial)**
+- **Barcodes:** printed per line on three of the four. They already help: matching looks for a
+  stock item's UPC in the line's `raw_text`, which the model is told to copy as printed. There
+  is no separate barcode field, so a barcode in its own column depends on the model including
+  it in `raw_text`.
+- **Returned and hand-corrected lines:** JFC's tempura line is circled "Return"; Hadson's
+  KitKat price is hand-corrected 112 → 126. The prompt says to transcribe only print, so a
+  returned line would be received. Needs a product decision on handwritten marks.
+- **Ordered vs shipped:** USA Seafood's salmon is 1 case ordered, 46.96 lb shipped at a price per
+  lb. The prompt asks for the quantity delivered; not checked against the real model.
+- **Multi-page invoices:** JFC (1 of 3) and Hadson (1 of 4); a document holds one photo.
+- **Supplier item codes** (JFC `05218`, Hadson `C019`) are not captured; they fit
+  `SupplierItem` (T2.10).
+- **Central Boeki** prints pieces per box (PC 40) beside a quantity already in pieces (12 EA);
+  if the model put 40 into `pack_size` the line would be multiplied. Not checked against the
+  real model.
+
+**Files changed**
+- `app/transform/receiving.py`, `tests/test_receiving.py`; task index (T0.07 → Completed);
+  `RISK_AND_DEPENDENCY_REGISTER.md` (OD-09 partly met); this log.
+
+**Next task**
+- T0.08 disable Square write-back.
+
+---
+
+## 2026-11-05 — T0.07 completed
+
+**Verified**
+- PR #12 merged by the owner (`9fda108`, merge commit). CI on the PR head `5724f17`, all five
+  required jobs green: SQLite 571 passed, 6 skipped; PostgreSQL 16 577 passed, 0 skipped; lint and
+  types; dependency audit; Docker image. Same five green on `main` after the merge. Acceptance
+  met: `/healthz` answers in under 200 ms while an extraction is held open.
+- Still not done: a real invoice through streaming extraction.
+
+**Files changed**
+- Task index (T0.07 → Completed), this log.
+
+---
+
 ## 2026-11-05 — T0.07 Async correctness (C8)
 
 **Implemented**
