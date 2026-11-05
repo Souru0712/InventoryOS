@@ -5,6 +5,96 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.06 Security quick fixes (S3, S10, S11, S12)
+
+**Implemented**
+- **S3 stored XSS / S12 content sniffing.** `detect_media_type()` (`app/extract/images.py`) reads
+  the type from the bytes: `%PDF-` in the first kilobyte, otherwise Pillow's header read (JPEG,
+  phone multi-picture JPEG "MPO", PNG, WebP, GIF; decompression bombs rejected). `save_upload`
+  refuses bytes that are none of these, stores them under the suffix for what they are
+  (`STORED_SUFFIX`) with that type, and only logs the browser's Content-Type when it disagrees.
+  The image route serves the allow-listed type for the stored suffix (never the stored
+  `content_type`, which pre-T0.06 rows took from the uploader), `X-Content-Type-Options:
+  nosniff`, and `Content-Disposition: inline` (`attachment` + `application/octet-stream` for a
+  suffix outside the list).
+- **SEC-13 size:** `MAX_UPLOAD_MB` default 20 → 15 (`app/config.py`, `.env.example`); it also
+  bounds expiry photos, which share the setting.
+- **S10 headers:** `app/web/headers.py`, an ASGI middleware outside everything (static files
+  included): CSP with a per-request script nonce (`default-src 'self'`, `object-src 'none'`,
+  `base-uri 'self'`, `frame-ancestors 'none'`, Google Fonts allowed, inline styles allowed),
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and HSTS (one year, no subdomains) when the
+  request is https. A header a route sets itself is kept.
+- Templates: the three inline scripts carry the nonce; the three inline handlers moved into
+  script (`data-confirm` + one listener in `base.html`; item form `change` listener; the
+  snack-box referral form's action).
+- **S11:** Jinja sees `PublicSettings` (base URL, support email, customer-link lifetime) instead
+  of the full `Settings` object.
+- Probe R7 retired (comment left in `docs/audit/probes/test_audit_probes.py`).
+- Upload tests use real sample files (`tests/sample_files.py`); `CLAUDE.md` gains the CSP and
+  upload rules.
+
+**Verified (locally)**
+- `tests/test_receiving_web.py` (8): HTML named `.jpg` and sent as `text/html` refused (replaces
+  R7); a real JPEG sent as `text/html` stored and served as `image/jpeg` with `nosniff` and
+  `inline`; PNG named `.jpg` stored and served as PNG; PDF by header; over 15 MB refused; a
+  pre-fix row with `text/html` served as `image/jpeg`; an unknown suffix downloads. With the two
+  receiving modules stashed, 6 of the 8 fail (the other two cover the size setting and T0.04's
+  form fix).
+- `tests/test_security_headers.py` (14): headers on `/`, `/login`, `/pricing`, a static file, a
+  404 and four signed-in pages; HSTS only over https; every inline script carries that response's
+  nonce; a fresh nonce per response; no template has an inline handler, `javascript:` URL or
+  un-nonced inline script; templates see no secret.
+- Full suite: 568 passed, 6 skipped (547 before + 21 new). ruff, ruff format, mypy (77 files)
+  clean; docs checker 0 problems.
+- **Not verified:** a real browser. The preview tool in this session reads another project's
+  launch configuration, so the CSP was checked by tests and by reading every template and the
+  vendored barcode library (no `eval`, no WebAssembly), not by loading pages.
+
+**Files changed**
+- `app/extract/images.py`, `app/extract/invoice.py`, `app/orchestration/receiving.py`,
+  `app/web/receiving.py`, `app/web/headers.py` (new), `app/main.py`, `app/web/templating.py`,
+  `app/config.py`, `.env.example`, 6 templates, `docs/audit/probes/test_audit_probes.py`;
+  tests: `sample_files.py`, `test_security_headers.py` (new), `test_receiving_web.py`,
+  `test_storage.py`, `test_invoice_ai.py`, `test_receiving_flow.py`, `test_square_writeback.py`,
+  `test_deployment.py`; `CLAUDE.md`; task index (T0.04 → Completed, T0.06 → In review); this log.
+
+**Open issues**
+- SEC-13 lists JPEG, PNG, HEIC and PDF. WebP and GIF are still accepted (existing behaviour,
+  not removed silently); HEIC needs a new dependency (`pillow-heif`), the owner's call.
+- No `form-action` in the CSP: checkout and Square connect post to this app, which redirects to
+  Stripe and Square, and browsers apply `form-action` to that redirect. Adding it needs those
+  hosts listed and a browser check.
+- Responses from an unhandled exception (500) are produced outside the middleware and carry no
+  headers.
+- A real-browser pass over the item form, expiring "Remove", the scan page and checkout.
+
+**Decisions made**
+- None new (SEC-08, SEC-09, SEC-13 and the T0.06 spec). Referrer policy
+  `strict-origin-when-cross-origin` keeps the customer sign-in token in a query string from
+  reaching other sites.
+
+**Next task**
+- T0.07 async correctness, T0.08 disable Square write-back, T0.10 structured logs, T0.11
+  governance scaffolding (all Ready).
+
+---
+
+## 2026-11-05 — T0.04 completed
+
+**Verified**
+- PR #10 merged by the owner (`db03e94`, merge commit, so `.git-blame-ignore-revs` holds). All
+  five jobs green on `main`. The owner approved making "Lint and types" required; the "Protect
+  main" ruleset now requires all five checks (saved, confirmed after a reload). Acceptance met:
+  CI runs ruff and mypy and passes on `main`; the commands are in `CLAUDE.md`.
+- The CI-evidence commit below (`5042a2b`) was pushed after the merge started; it is carried
+  into this branch.
+
+**Files changed**
+- Task index (T0.04 → Completed), this log.
+
+---
+
 ## 2026-11-05 — T0.04 Coding standards: ruff + mypy
 
 **Implemented** (ID-04; one commit per kind of change)

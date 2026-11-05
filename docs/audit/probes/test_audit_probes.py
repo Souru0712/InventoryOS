@@ -150,17 +150,9 @@ def test_R6_batch_removal_is_a_hard_delete(db, tenant, location):
     assert db.query(StockBatch).count() == 0
 
 
-def test_R7_invoice_image_is_served_with_the_uploaders_content_type(db, tenant, location):
-    from app.main import app
-    with TestClient(app) as client:
-        client.post("/login", data={"email": "owner@rosewood.test", "password": "a-good-password"})
-        r = client.post("/app/receiving", data={"location_id": str(location.id)},
-                        files={"photo": ("x.jpg", b"<script>alert(document.cookie)</script>", "text/html")},
-                        follow_redirects=False)
-        doc_id = int(r.headers["location"].rsplit("/", 1)[-1])
-        img = client.get(f"/app/receiving/{doc_id}/image")
-        assert img.headers["content-type"].startswith("text/html")
-        assert "x-content-type-options" not in {k.lower() for k in img.headers}
+# R7 (invoice image served with the uploader's Content-Type) retired in T0.06: the finding is fixed
+# and tests/test_receiving_web.py::test_html_named_jpg_and_sent_as_html_is_refused asserts the
+# safe behaviour in CI.
 
 
 def test_R8_forms_have_no_csrf_token_and_login_is_unthrottled(db, tenant):
