@@ -373,7 +373,7 @@ ProductionOrder, ProductionInput, ProductionOutput.
 **Business rules.** No double counting [CONFIRMED]: inputs leave stock at production; a sale of a
 drink using the prepared item consumes the prepared item, not the raw inputs (DR-18). Input
 availability shortfall warns but does not block (production happened physically); it raises a
-negative-balance exception as INV-FR-23 allows for system-observed events — **[OPEN] PD-15**
+negative-balance exception as INV-FR-23 allows for system-observed events — **decided: C-44 (PD-15)**
 whether to treat production like POS (allow) or like manual (block).
 **Dependencies.** M2, M3, M7.
 **Acceptance.** AC-PRD-01..07. **Reporting.** Production yield, batches made/used/wasted.

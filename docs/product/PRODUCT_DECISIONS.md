@@ -55,6 +55,8 @@ Source: Phase 1 brief, revised 2026-11-04, unless noted.
 | C-40 | **No pilot customers on the old engine**; pilots start after the engine milestone *(owner, 2026-11-04: "Approve all ten"; audit AD-08)* | A pilot's stock figures would be wrong (audit C2) and its history would need migrating | Onboard pilots now |
 | C-41 | **Retire the Starter and Pro plans** in favour of a data-driven plan catalogue (Complete and Standalone first, add-ons later); prices live only in billing configuration; core features are never gated *(owner, 2026-11-04: "Approve all ten"; audit AD-09)* | The current plans cannot express the approved pricing model (audit G3) | Keep Starter/Pro |
 | C-42 | **JuJu relationship: parity by specification until InventoryOS R1 ships**; revisit JuJu as an InventoryOS tenant via the generic sales API after R1.1 (was PD-03) *(owner, 2026-11-04: "Approve all ten"; audit AD-10)* | No audit evidence to change the blueprint's recommendation; code sharing is ruled out by C-25 | JuJu as a tenant now; shared library |
+| C-43 | **Phase 3 implementation decisions ID-01..ID-23 approved as recommended** in [IMPLEMENTATION_DECISIONS](../roadmap/IMPLEMENTATION_DECISIONS.md): modular monolith; Render hosting; GitHub Actions CI; ruff + mypy; uv lockfile; Postgres jobs table; HTMX for floor screens; Playwright; keep `tenant_id` naming; item tables; Resend; AWS S3; pilot policy (free Standalone pilots from M4, Square pilots from M5, paid after G-R1); multi-location pricing deferred to Stage 6; snack-box repository; JuJu reference tenant; Postgres-authoritative tests; project `CLAUDE.md`; ADRs; task tracking; RLS in R1.1; the listed new dependencies *(owner, 2026-11-05: "Approve all 23")* | Unblocks Stage 0 and the tasks naming these IDs | Decide individually |
+| C-44 | **Pending product recommendations approved as written** (via ID-14): PD-05, PD-07, PD-08, PD-10, PD-11, PD-12, PD-15, PD-16, PD-19, PD-25, PD-36, PD-38, PD-14, PD-17, PD-20, PD-22, PD-23, PD-24, PD-26, PD-27, PD-29, PD-30, PD-32, PD-37, PD-39, PD-40, PD-41 *(owner, 2026-11-05: "Approve all 23")* | The roadmap's tasks were written to these recommendations | Decide individually |
 
 ## 2. Recommendations adopted in this package
 
@@ -86,43 +88,43 @@ launch.
 | PD-02 | P0 | **Technical foundation** | Existing app: multi-tenant shell, Square OAuth/catalog, invoice extraction, Stripe, Python; lacks a ledger and makes Square authoritative for some counts (`track_mode=provider`). JuJu: strongest inventory domain, TypeScript/Supabase, single-tenant. New build | **Decided 2026-11-04 → C-25** |
 | PD-03 | P1 | **JuJu ↔ InventoryOS relationship** (options A–D, [JUJU §6](JUJU_REFERENCE_AND_PARITY.md#6-possible-future-relationships-no-commitment)) | The foundation is Python (C-25), so a shared library (C) and growing from JuJu's code (D) are ruled out without rewriting JuJu; A (parity by specification) or B (JuJu as a tenant via the sales API) remain | **Decided 2026-11-04 → C-42** |
 | PD-04 | P2 | Permanent home of these docs | Temporarily in the existing app's repo | **Decided → C-28** |
-| PD-05 | P1 | Trial length, card requirement, payment grace period | Existing app: 30-day trial | 30-day trial, no card; 7-day grace |
+| PD-05 | P1 | Trial length, card requirement, payment grace period | Existing app: 30-day trial | **Decided 2026-11-05 → C-44**, as recommended: 30-day trial, no card; 7-day grace |
 | PD-06 | P2 | One-off setup fee | Existing app sells $149 setup; not carried over | Optional founder-assisted setup only if approved |
-| PD-07 | P1 | Retention after cancellation; ingestion during read-only | Audit D10: 90 days then deletion | Read-only 90 days with ingestion continuing; deletion after notice; export throughout |
-| PD-08 | P1 | Cost basis | Both existing apps use latest cost | Snapshot = current cost at posting; valuation at latest cost; revisit FIFO actual cost in R2 |
+| PD-07 | P1 | Retention after cancellation; ingestion during read-only | Audit D10: 90 days then deletion | **Decided 2026-11-05 → C-44**, as recommended: Read-only 90 days with ingestion continuing; deletion after notice; export throughout |
+| PD-08 | P1 | Cost basis | Both existing apps use latest cost | **Decided 2026-11-05 → C-44**, as recommended: Snapshot = current cost at posting; valuation at latest cost; revisit FIFO actual cost in R2 |
 | PD-09 | P1 | Write inventory back to Square? | Owner's original pain: online orders accepted for sold-out items | **Decided 2026-11-04 → C-34** |
-| PD-10 | P1 | Refunds and stock | Both apps: refunds never restock | R1 record only; R1.1 operator classifies restock or waste |
-| PD-11 | P1 | Roles at launch | Brief lists eight roles; Advanced lists "more granular permissions" | R1: Owner, Administrator, Manager, Employee, Read-only; R1.1: Inventory manager, Purchasing staff, Production staff presets (core); custom roles Advanced |
-| PD-12 | P1 | Count variance approval | — | R1 post-then-review; pre-approval option R1.1 |
+| PD-10 | P1 | Refunds and stock | Both apps: refunds never restock | **Decided 2026-11-05 → C-44**, as recommended: R1 record only; R1.1 operator classifies restock or waste |
+| PD-11 | P1 | Roles at launch | Brief lists eight roles; Advanced lists "more granular permissions" | **Decided 2026-11-05 → C-44**, as recommended: R1: Owner, Administrator, Manager, Employee, Read-only; R1.1: Inventory manager, Purchasing staff, Production staff presets (core); custom roles Advanced |
+| PD-12 | P1 | Count variance approval | — | **Decided 2026-11-05 → C-44**, as recommended: R1 post-then-review; pre-approval option R1.1 |
 | PD-13 | P0 | **Release plan** ([spec §Roadmap boundaries](PRODUCT_SPECIFICATION.md#roadmap-boundaries)) | Both modes in R1; POs staged | **Decided 2026-11-04 → C-29** |
-| PD-14 | P2 | Attribution on shared devices | JuJu credits the signed-in account | R1 "logged by" picker; R1.1 PIN switch |
-| PD-15 | P1 | Production with insufficient recorded inputs | Physical production happened | Allow; record negative balance + exception |
-| PD-16 | P1 | Consumption trigger per sales source | Square: completed. JuJu: Ready. Standalone: end of business day | Per-source setting |
-| PD-17 | P2 | Default reprocessing window | — | Since last count of affected items, max 30 days, with preview |
+| PD-14 | P2 | Attribution on shared devices | JuJu credits the signed-in account | **Decided 2026-11-05 → C-44**, as recommended: R1 "logged by" picker; R1.1 PIN switch |
+| PD-15 | P1 | Production with insufficient recorded inputs | Physical production happened | **Decided 2026-11-05 → C-44**, as recommended: Allow; record negative balance + exception |
+| PD-16 | P1 | Consumption trigger per sales source | Square: completed. JuJu: Ready. Standalone: end of business day | **Decided 2026-11-05 → C-44**, as recommended: Per-source setting |
+| PD-17 | P2 | Default reprocessing window | — | **Decided 2026-11-05 → C-44**, as recommended: Since last count of affected items, max 30 days, with preview |
 | PD-18 | P0 | Tenant isolation **mechanism** (technical) | The requirement is decided (C-30); what remains is how the code enforces it. Existing app: per-route checks (audit S8); JuJu: RLS single-tenant | **Decided 2026-11-04 → C-33** |
-| PD-19 | P1 | Can Employees post a receiving? | Small shops: whoever receives posts | Yes; Employee-entered cost changes flagged |
-| PD-20 | P2 | MFA required for Owners/Administrators? | — | Optional at launch with strong prompt |
+| PD-19 | P1 | Can Employees post a receiving? | Small shops: whoever receives posts | **Decided 2026-11-05 → C-44**, as recommended: Yes; Employee-entered cost changes flagged |
+| PD-20 | P2 | MFA required for Owners/Administrators? | — | **Decided 2026-11-05 → C-44**, as recommended: Optional at launch with strong prompt |
 | PD-21 | P0 | Authentication approach | Existing auth lacks reset, verification and throttling (audit S1/S2) | **Decided 2026-11-04 → C-32** |
-| PD-22 | P2 | Sales tax on subscriptions | US SaaS taxability varies | Enable Stripe Tax; confirm with an accountant |
-| PD-23 | P2 | Subscription refund policy | — | No partial-month refunds; goodwill at founder discretion |
-| PD-24 | P2 | Email provider | Audit D9: Resend | Resend |
-| PD-25 | P1 | Assisted invoice extraction in R1, and its cap | Owner (2026-09-06): invoice photos are "the record and the ingestion path"; brief: enhancement | R1 includes photo as record and reviewed extraction; manual entry always available; cap per tenant per day |
-| PD-26 | P2 | Existing-app features not in the brief (health score, markdowns, date reading, barcode, weekly report) | Avoid silent creep and silent loss | Barcode lookup and weekly email R1; markdowns and date reading R2; health score only if the owner asks |
-| PD-27 | P2 | Alert channels | Existing app: email; JuJu: screens | In-app + email digest at R1 |
+| PD-22 | P2 | Sales tax on subscriptions | US SaaS taxability varies | **Decided 2026-11-05 → C-44**, as recommended: Enable Stripe Tax; confirm with an accountant |
+| PD-23 | P2 | Subscription refund policy | — | **Decided 2026-11-05 → C-44**, as recommended: No partial-month refunds; goodwill at founder discretion |
+| PD-24 | P2 | Email provider | Audit D9: Resend | **Decided 2026-11-05 → C-44**, as recommended: Resend |
+| PD-25 | P1 | Assisted invoice extraction in R1, and its cap | Owner (2026-09-06): invoice photos are "the record and the ingestion path"; brief: enhancement | **Decided 2026-11-05 → C-44**, as recommended: R1 includes photo as record and reviewed extraction; manual entry always available; cap per tenant per day |
+| PD-26 | P2 | Existing-app features not in the brief (health score, markdowns, date reading, barcode, weekly report) | Avoid silent creep and silent loss | **Decided 2026-11-05 → C-44**, as recommended: Barcode lookup and weekly email R1; markdowns and date reading R2; health score only if the owner asks |
+| PD-27 | P2 | Alert channels | Existing app: email; JuJu: screens | **Decided 2026-11-05 → C-44**, as recommended: In-app + email digest at R1 |
 | PD-28 | P1 | Private snack-box module in the existing app | Not part of InventoryOS; widens Square scopes | **Decided 2026-11-04 → C-37** |
-| PD-29 | P2 | Auto-dispose expired prepared batches default | JuJu: always on | Off by default; opt-in |
-| PD-30 | P2 | Quantity precision | — | 4 dp base units; 2 dp display |
+| PD-29 | P2 | Auto-dispose expired prepared batches default | JuJu: always on | **Decided 2026-11-05 → C-44**, as recommended: Off by default; opt-in |
+| PD-30 | P2 | Quantity precision | — | **Decided 2026-11-05 → C-44**, as recommended: 4 dp base units; 2 dp display |
 | PD-31 | P0 | **Commercial target under the new pricing** | 21 customers / $1,029 MRR was set with $49; at $99, 21 customers ≈ $2,079 MRR and $1,029 ≈ 11 customers | **Decided 2026-11-04 → C-26** |
-| PD-32 | P2 | Standalone beyond one location | Standalone is "$99/month for one location"; Complete is per location | Price additional Standalone locations like Complete (per location) until Multi-location pricing exists |
-| PD-33 | P2 | Multi-location price vs Complete per-location | Two Complete locations = $198, inside the ~$149–199+ range | Decide in Phase 3: per-location with a centralized-management add-on, or packages including N locations (E-06 supports both) |
+| PD-32 | P2 | Standalone beyond one location | Standalone is "$99/month for one location"; Complete is per location | **Decided 2026-11-05 → C-44**, as recommended: Price additional Standalone locations like Complete (per location) until Multi-location pricing exists |
+| PD-33 | P2 | Multi-location price vs Complete per-location | Two Complete locations = $198, inside the ~$149–199+ range | Decide in Phase 3: per-location with a centralized-management add-on, or packages including N locations (E-06 supports both) **Deferred to Stage 6 by C-43 (ID-15).** |
 | PD-34 | P2 | Advanced contents and boundaries | Advanced lists granular permissions and advanced audit history; core must keep standard roles and audit trail | Advanced = custom roles, extended history/exports, forecasting, automation, API; launch only when ≥ 3 paying customers ask for the same capability |
 | PD-35 | P1 (Phase 3) | **Native POS validation criteria and approach** | Large build; regulatory, hardware, support | Validate first: Scenario C interest captured at signup; ≥ 10 qualified prospects willing to pre-commit at $149+; build vs white-label vs partner costed; not before the $1,000 revenue gate |
-| PD-36 | P1 | What a Scenario C prospect gets at launch | No native POS | Standalone, or a supported POS + Complete; interest recorded |
-| PD-37 | P2 | Can Employees enter daily sales? | Often done at close by staff | Manager+ by default; Owner toggle allows Employees |
-| PD-38 | P1 | Standalone sales granularity | Daily totals vs per transaction | Daily totals per variation (modifiers optional) in R1 |
-| PD-39 | P2 | Billing on mode switch | Standalone ↔ Complete | Self-serve plan change at cutover, prorated |
-| PD-40 | P2 | Hour-level shelf life | Bubble-tea toppings expire in hours; date-only expiry can't express it | Expiry date-time for prepared items in R1.1 |
-| PD-41 | P2 | Can Production staff edit production recipes? | Prep leads often own batch recipes | No by default; Owner may grant |
+| PD-36 | P1 | What a Scenario C prospect gets at launch | No native POS | **Decided 2026-11-05 → C-44**, as recommended: Standalone, or a supported POS + Complete; interest recorded |
+| PD-37 | P2 | Can Employees enter daily sales? | Often done at close by staff | **Decided 2026-11-05 → C-44**, as recommended: Manager+ by default; Owner toggle allows Employees |
+| PD-38 | P1 | Standalone sales granularity | Daily totals vs per transaction | **Decided 2026-11-05 → C-44**, as recommended: Daily totals per variation (modifiers optional) in R1 |
+| PD-39 | P2 | Billing on mode switch | Standalone ↔ Complete | **Decided 2026-11-05 → C-44**, as recommended: Self-serve plan change at cutover, prorated |
+| PD-40 | P2 | Hour-level shelf life | Bubble-tea toppings expire in hours; date-only expiry can't express it | **Decided 2026-11-05 → C-44**, as recommended: Expiry date-time for prepared items in R1.1 |
+| PD-41 | P2 | Can Production staff edit production recipes? | Prep leads often own batch recipes | **Decided 2026-11-05 → C-44**, as recommended: No by default; Owner may grant |
 | PD-42 | P0 (Phase 3) | **Standalone vs Connected implementation sequence** | Both in R1; existing Square code unproven live | **Decided 2026-11-04 → C-27** |
 
 ## 4. Assumptions (to confirm)

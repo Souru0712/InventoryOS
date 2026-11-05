@@ -135,7 +135,8 @@ verification, reset and throttling (C-31), built by finishing the in-app login (
 isolation (C-33); the ledger owns all stock (C-34) and replaces the old engine (C-35); InventoryOS owns
 the product catalog (C-36); the snack-box module leaves (C-37); items are per organization (C-38);
 migration history kept (C-39); no pilots on the old engine (C-40); Starter/Pro retired (C-41); JuJu
-parity by specification until R1 (C-42).
+parity by specification until R1 (C-42). After Phase 3: implementation decisions approved (C-43) and
+pending product recommendations approved (C-44).
 
 | Key assumptions | ID |
 |---|---|
@@ -150,7 +151,7 @@ parity by specification until R1 (C-42).
 |---|---|---|
 | 1 | Product blueprint (this folder) | Complete — awaiting owner review |
 | 2 | Audit of the chosen codebase against this blueprint: all three operating modes without unnecessary Square dependency, ledger, tenancy and location scope, entitlements, Square live readiness; sizes the in-app login work (C-32); led to C-33..C-42 | Complete 2026-11-04 — [audit](../audit/README.md); decisions C-33..C-42 |
-| 3 | Gap analysis and roadmap: Complete and Standalone first; native POS evaluated separately; then multi-location and Advanced | Not started |
+| 3 | Gap analysis and roadmap: Complete and Standalone first; native POS evaluated separately; then multi-location and Advanced | Complete 2026-11-05 — [roadmap](../roadmap/README.md); ID-01..ID-23 approved (C-43) |
 
 ## 8. Rules for AI agents
 

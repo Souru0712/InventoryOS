@@ -5,6 +5,75 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — Owner approved implementation decisions ID-01..ID-23 (docs only)
+
+**Implemented**
+- `PRODUCT_DECISIONS.md`: C-43 (ID-01..ID-23 approved as recommended) and C-44 (27 pending product
+  recommendations approved via ID-14: PD-05, 07, 08, 10, 11, 12, 14, 15, 16, 17, 19, 20, 22, 23, 24,
+  25, 26, 27, 29, 30, 32, 36, 37, 38, 39, 40, 41); those PD rows marked decided; PD-33 marked
+  deferred to Stage 6. Still open: PD-06, PD-33, PD-34, PD-35.
+- `SAAS_REQUIREMENTS.md` (trial, sales tax, refunds, retention) and `PRODUCT_SPECIFICATION.md`
+  (PD-15) no longer show those items as open.
+- Roadmap: decisions marked approved; T0.09 now blocked only on owner accounts (OD-03); OD-01 done;
+  README handoff updated. Product README §6–7 updated.
+
+**Verified**
+- Scripts: links and anchors resolve across `docs/`; product IDs all defined; roadmap task,
+  decision and requirement references consistent; index dependencies valid.
+
+**Files changed**
+- `docs/product/` PRODUCT_DECISIONS, SAAS_REQUIREMENTS, PRODUCT_SPECIFICATION, README;
+  `docs/roadmap/` IMPLEMENTATION_DECISIONS, DEVELOPMENT_TASK_BREAKDOWN, RISK_AND_DEPENDENCY_REGISTER,
+  README; this log.
+
+**Open issues**
+- Owner dependencies OD-02..OD-11 (snack-box repository, accounts, branch protection, content,
+  invoices, JuJu values); validation decisions O-1..O-7; questions Q-1..Q-5. Nothing committed yet.
+
+**Decisions made**
+- None by the agent.
+
+**Next task**
+- T0.01 hermetic test configuration (Ready), on the owner's go-ahead.
+
+---
+
+## 2026-11-05 — Phase 3 roadmap and implementation handoff (docs only)
+
+**Implemented**
+- `docs/roadmap/`: 15 documents — README (governance, Claude Code handoff), gap analysis (56
+  capability rows), target architecture, target domain and data architecture, operating-mode plan,
+  SaaS and pricing plan, master roadmap (Stages 0–8, M0–M10, gates G0–G5 and G-R1), task
+  breakdown (86 detailed tasks for Stages 0–4 + outline tasks for 4B–8, status index), data
+  migration roadmap (DM-1..DM-16), testing and quality strategy, security and release checklist,
+  risk and dependency register, customer validation plan, JuJu validation plan, implementation
+  decisions (ID-01..ID-23).
+- Repository-root `CLAUDE.md`: project instructions for implementation sessions (ID-19).
+- `docs/product/README.md` §7: Phase 3 marked complete.
+
+**Verified**
+- Script checks: all task IDs, decision IDs and requirement IDs referenced in the roadmap are
+  defined; index dependencies only point to earlier tasks and match each task's own entry;
+  269 relative links and anchors across `docs/roadmap/`, `docs/audit/` and `docs/product/` resolve.
+- The customer and JuJu validation plans were drafted by delegated agents and reviewed: no
+  fabricated evidence; owner inputs marked.
+
+**Files changed**
+- `docs/roadmap/*` (new), `CLAUDE.md` (new), `docs/product/README.md`, this log. No application code,
+  schema, configuration or dependency changed; no migration run; nothing deployed.
+
+**Open issues**
+- ID-01..ID-23 await owner approval; owner dependencies OD-01..OD-11; validation-plan decisions
+  O-1..O-7; questions Q-1..Q-5.
+
+**Decisions made**
+- None by the agent.
+
+**Next task**
+- Owner: approve the IDs. Agent, on go-ahead: T0.01 (hermetic tests), the first Ready task.
+
+---
+
 ## 2026-11-05 — Repository on GitHub (docs only)
 
 **Implemented**

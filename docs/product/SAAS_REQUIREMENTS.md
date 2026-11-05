@@ -90,10 +90,10 @@ signed_up (unverified) → verified → onboarding → active (trialing|paid) �
 | SAAS-B-08 | Resubscribe from read-only restores full access immediately; no data lost | R1 |
 | SAAS-B-09 | Entitlement check is a single server-side function used by every write path ("can this org write?") | R1 |
 | SAAS-B-10 | Core capabilities are never gated: Complete and Standalone differ only in sales source; entitlements gate location count and beyond-core (Advanced) capabilities only (E-05) | R1 |
-| SAAS-B-11 | Trial: length and whether a card is required — **[OPEN] PD-05** (existing app: 30-day trial) | R1 |
+| SAAS-B-11 | Trial: **30 days, no card; 7-day payment grace** (C-44, PD-05) | R1 |
 | SAAS-B-12 | One-off done-for-you setup fee — **[OPEN] PD-06** (existing app sells $149); not offered unless approved | — |
-| SAAS-B-13 | Sales tax on the subscription (e.g. Stripe Tax) — **[OPEN] PD-22** | R1 |
-| SAAS-B-14 | Refunds of subscription charges: manual by founder via Stripe; policy published — **[OPEN] PD-23** | R1 |
+| SAAS-B-13 | Sales tax on the subscription: **Stripe Tax, confirmed with an accountant** (C-44, PD-22) | R1 |
+| SAAS-B-14 | Refunds of subscription charges: manual by founder via Stripe; policy published: **no partial-month refunds; goodwill at the founder's discretion** (C-44, PD-23) | R1 |
 | SAAS-B-15 | Billing events (status changes, failures) written to AuditEvent and visible to Owners | R1 |
 | SAAS-B-16 | Plans, prices, per-location rates and packages are configuration in the billing provider and plan table; no price appears in domain code (E-01, DR-36) | R1 |
 | SAAS-B-17 | Entitlement set per subscription: allowed modes, max locations, capability flags, usage limits; one server-side check (E-02) | R1 |
@@ -164,7 +164,7 @@ Rules:
 |---|---|---|
 | SAAS-D-01 | Owner/Manager can export all business data as CSV (zip): items, conversions, suppliers, recipes + versions, movements, batches, receivings + invoices (files), waste, counts, exceptions | R1 |
 | SAAS-D-02 | Export available in every state except deleted | R1 |
-| SAAS-D-03 | Retention after cancellation: **[OPEN] PD-07** (audit recommended read-only 90 days, then deletion) | R1 |
+| SAAS-D-03 | Retention after cancellation: **read-only 90 days with ingestion continuing, then deletion after notice; export throughout** (C-44, PD-07) | R1 |
 | SAAS-D-04 | Deletion on Owner request: confirmation, 7-day cancellable window, then hard deletion of tenant data and files; backups age out per backup retention; written confirmation | R1 |
 | SAAS-D-05 | Personal data of staff (names, emails) deleted with the organization; AuditEvents keep actor ids only where legally needed | R1 |
 | SAAS-D-06 | Privacy policy and terms published before first paying customer | R1 |
