@@ -9,8 +9,8 @@ overselling.
 ## Quickstart
 
 ```bash
-python -m venv .venv && .venv/Scripts/activate
-pip install -e ".[dev]"
+uv sync                                  # .venv with the exact versions in uv.lock (install uv first: https://docs.astral.sh/uv/)
+.venv/Scripts/activate                   # Windows; on macOS/Linux: source .venv/bin/activate
 cp .env.example .env
 python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"   # ENCRYPTION_KEY
 python -c "import secrets;print(secrets.token_hex(32))"                                     # SECRET_KEY

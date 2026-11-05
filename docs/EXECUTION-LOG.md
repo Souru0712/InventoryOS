@@ -5,6 +5,90 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.03 Lock dependencies, audit, Dependabot
+
+**Implemented**
+- `uv.lock` (uv 0.13.7, ID-05): 68 packages resolved from `pyproject.toml`; `.python-version` = 3.12.
+- `pyproject.toml`: dev tools moved from `[project.optional-dependencies]` to `[dependency-groups]`
+  so they never reach the image; `[tool.uv] package = false` — the repository is an application
+  and setuptools' flat-layout discovery refuses `app/` + `migrations/` (CI run #1's failure).
+- `Dockerfile`: copies uv from the pinned `ghcr.io/astral-sh/uv:0.13.7` image, exports the runtime
+  lock (no dev group) and installs it with `pip install --require-hashes`; uv is removed after.
+- `.github/workflows/ci.yml`: both test jobs install with `uv sync --frozen` (fails if the lock is
+  stale against `pyproject.toml`). New job **Dependency audit**: `uv export` of every locked
+  package, `pip-audit==2.10.1 --disable-pip` (no install). New job **Docker image**: builds the
+  image, lists its installed distributions, `scripts/check_lock_matches.py` fails on any version
+  that differs from the lock or any package not in it.
+- `.github/dependabot.yml`: weekly for uv (minor + patch grouped), GitHub Actions and Docker.
+- `README.md` quickstart and `CLAUDE.md` (dependencies, tests, CI) switched to uv.
+
+**Verified (locally)**
+- `uv lock --check` consistent; runtime export: 60 hashed pins, no pytest.
+- pip-audit on the full export: "No known vulnerabilities found".
+- `check_lock_matches.py`: passes on an environment installed from the export; fails (exit 1) on
+  a planted version mismatch.
+- Full suite on the locked versions (fresh venv from the export): 546 passed, 6 skipped (the
+  Postgres-only tests; the CI Postgres job runs them).
+- Workflow and Dependabot YAML parse; docs checker 0 problems.
+- **CI on PR #4 (commit `7202e41`), all four jobs green:** SQLite 546 passed, 6 skipped, docs
+  0 problems; PostgreSQL 16 552 passed, 0 skipped; audit "No known vulnerabilities found"; Docker
+  image built, "checked 58 installed packages against 68 locked" with no mismatch (58 = the 60
+  runtime pins minus `tzdata`, Windows only, and `httpx2-jsfetch`, browser only).
+
+**Files changed**
+- `uv.lock`, `.python-version`, `scripts/check_lock_matches.py`, `.github/dependabot.yml` (new);
+  `pyproject.toml`, `Dockerfile`, `.github/workflows/ci.yml`, `README.md`, `CLAUDE.md`,
+  `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md` (T0.03 → In review), this log.
+
+**Open issues**
+- Resolved: the owner approved making "Dependency audit" and "Docker image" required; the
+  "Protect main" ruleset now requires all four checks (saved and confirmed after a reload). PR #3
+  (built before these jobs existed) can no longer merge on its own; PR #4 contains its commit and
+  replaces it.
+- The audit fails on any known vulnerability, not only critical ones (pip-audit has no severity
+  filter); an accepted finding needs `--ignore-vuln` plus an ADR with a fix date.
+- Existing local `.venv` folders were made with pip; `uv sync` replaces them.
+
+**Decisions made**
+- None new (ID-05 chose uv; the "uv" Dependabot ecosystem replaces "pip" because the lock is uv's).
+
+**Next task**
+- T0.04 coding standards: ruff + mypy (after this PR merges).
+
+---
+
+## 2026-11-05 — T0.02 completed: protection of `main` proven
+
+**Implemented**
+- Nothing new in code; this entry records the acceptance evidence for T0.02.
+
+**Verified**
+- **Direct push rejected:** pushing a commit straight to `main` returned "GH013: Repository rule
+  violations found for refs/heads/main … 2 of 2 required status checks are expected"; `main` was
+  unchanged (`c3dcaa9`).
+- **Failing pull request blocked:** throwaway PR #2 (branch `ci/blocked-merge-check`, one test
+  that asserts False) — both required checks "Failing after 2m · Required", and the "Merge pull
+  request" button disabled. The owner closed PR #2 and deleted the branch.
+- **Normal flow works:** PR #1 (documentation) passed both checks and was merged by the owner
+  (`84a98a1`).
+- Acceptance of T0.02 met: both jobs green on `main` (run #3), Postgres job with 0 skipped tests,
+  required checks enforced, a failing test blocks merging.
+
+**Files changed**
+- `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md` (T0.02 → Completed), this log.
+
+**Open issues**
+- Merged branch `docs/t0.02-protection` still exists on GitHub (harmless; GitHub's
+  "Automatically delete head branches" setting would remove such branches after merge).
+
+**Decisions made**
+- None.
+
+**Next task**
+- T0.03 lockfile, dependency audit, Dependabot (now Ready: T0.02 completed).
+
+---
+
 ## 2026-11-05 — T0.02 CI on GitHub Actions
 
 **Implemented**
