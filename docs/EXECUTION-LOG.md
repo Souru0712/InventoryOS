@@ -36,8 +36,36 @@ issues · decisions · next task.
 - **Fixes after run #2:** the Postgres job now runs in a `python:3.12-slim` container on the
   database's network and connects to host `postgres` (no published port); a workflow-level
   `shell: bash` default turns on `pipefail`, because GitHub's implicit shell does not, which would
-  have let `pytest | tee` hide a failing run (demonstrated locally: exit 3 propagates). Re-run
-  pending.
+  have let `pytest | tee` hide a failing run (demonstrated locally: exit 3 propagates).
+- **Run #3 (commit `c3dcaa9`): both jobs green** (3 m 47 s). Tests (SQLite): docs checker "0
+  problems", **546 passed, 6 skipped**. Tests (PostgreSQL 16, server 16.15, service healthy):
+  **552 passed, 0 skipped** — the 6 Postgres-only tests ran. Read from the raw job logs.
+- **Required check (OD-04), checked in GitHub settings after the owner enabled it:** the
+  Branches page lists no branch protection rule; the Rulesets page shows none and states "Your
+  rulesets won't be enforced on this private repository until you move to GitHub Team
+  organization account." Not in effect; owner decision recorded as open in the risk register.
+- Owner declined a plan upgrade and asked for the protections to be added. A ruleset "Protect
+  main" was filled in through the settings page (Active; default branch; required checks
+  Tests (SQLite) and Tests (PostgreSQL 16); block force pushes; restrict deletions) and submitted;
+  GitHub did not save it — the Rulesets page still reports none. The classic branch-protection
+  form carries the same notice ("won't be enforced on this private repository until you move to a
+  GitHub Team or Enterprise organization account"). Server-side protection of `main` is not
+  available on this plan.
+- **Owner made the repository public** so the ruleset is enforced. The owner's saved ruleset
+  had "Require status checks to pass" ticked but **no checks listed**; both checks were added and
+  saved (verified after reload): Tests (PostgreSQL 16), Tests (SQLite). Final ruleset: Active ·
+  default branch · restrict deletions · required checks with "up to date before merging" and "not
+  required on creation" · block force pushes · empty bypass list. OD-04 done.
+- **Public-exposure checks:** all 25 commits scanned — the only env file ever committed is
+  `.env.example`; no secret-shaped strings; secret settings only ever had placeholder or test
+  values; no uploads, images or databases ever committed. **Commit metadata carries the owner's
+  personal email** on every commit (now public); rewriting history would need a force push, which
+  the ruleset blocks and which is not recommended. The planning documents (pricing hypotheses,
+  validation plans, JuJu context) are now public too.
+- `CLAUDE.md`: pull-request workflow — `main` is never pushed to directly.
+- **T0.01 → Completed** (its done-definition: merged and run by CI). **T0.02 stays In review**
+  until the owner requires the check on `main` (OD-04) and a deliberately failing branch shows a
+  blocked merge.
 
 **Files changed**
 - `.github/workflows/ci.yml` (new), `CLAUDE.md`, `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md`
