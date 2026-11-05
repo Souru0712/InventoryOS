@@ -1,6 +1,6 @@
 """Snack box rules that need no database: allocation, credit, taste, and the box builder."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -21,7 +21,7 @@ from app.transform.credits import (
 )
 from app.transform.taste import Received, Review, Stated, Taste, build_taste, crowd_quality
 
-T0 = datetime(2026, 9, 1, tzinfo=timezone.utc)
+T0 = datetime(2026, 9, 1, tzinfo=UTC)
 RULES = Rules(
     min_items=8,
     max_items=12,

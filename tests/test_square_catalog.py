@@ -1,6 +1,6 @@
 """Catalog changes follow Square, without deleting anything of ours."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -8,7 +8,6 @@ import pytest
 from app.load.upsert import sync_catalog_presence
 from app.models import (
     InventoryCount,
-    Location,
     ProductIdentifier,
     ProviderConnection,
     SoldItem,
@@ -73,7 +72,7 @@ class FakeSquareCatalog:
                 "location_id": "LOC-SQ-1",
                 "state": "IN_STOCK",
                 "quantity": str(quantity),
-                "calculated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "calculated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             }
             for variation, quantity in self.counts.items()
         ]
@@ -128,7 +127,7 @@ def test_a_variation_deleted_in_square_is_hidden_and_its_history_is_kept(db, ten
             stock_item_id=item.id,
             qty_base=Decimal("12"),
             source="manual",
-            counted_at=datetime.now(timezone.utc),
+            counted_at=datetime.now(UTC),
         )
     )
     db.commit()
@@ -204,6 +203,6 @@ def test_a_catalog_event_re_reads_the_catalog_once_for_a_burst(db, tenant, conne
     assert _catalog_read_recently(db, tenant.id) is True
 
     run = db.query(SyncRun).order_by(SyncRun.started_at.desc()).first()
-    run.started_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    run.started_at = datetime.now(UTC) - timedelta(minutes=5)
     db.commit()
     assert _catalog_read_recently(db, tenant.id) is False

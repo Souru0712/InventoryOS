@@ -6,9 +6,9 @@ import argparse
 import logging
 import random
 import sys
-from pathlib import Path
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -17,9 +17,9 @@ from app.db import init_db, run_migrations, session_scope, stamp_migrations
 from app.entitlements import allows, state
 from app.models import (
     EmailSuppression,
+    IdentifierType,
     InventoryCount,
     Location,
-    IdentifierType,
     ProductIdentifier,
     RecipeComponent,
     SalesDaily,
@@ -38,18 +38,21 @@ from app.orchestration.expiry_corpus import (
     MANIFEST,
     add_to_corpus,
     as_regression_cases,
-    report as corpus_report,
     run_corpus,
 )
+from app.orchestration.expiry_corpus import (
+    report as corpus_report,
+)
 from app.orchestration.extraction_quality import correction_stats, correction_summary
-from app.orchestration.health import current as current_health, record_snapshot
-from app.orchestration.reporting import send_weekly_report, weekly_report
+from app.orchestration.health import current as current_health
+from app.orchestration.health import record_snapshot
 from app.orchestration.receiving import parse_document
+from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
 from app.orchestration.views import refresh_derived_quantities
 from app.security import hash_password
-from app.transform.reports import money
 from app.transform.barcodes import check_digit
+from app.transform.reports import money
 from app.units import Dimension, to_base
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -337,7 +340,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
     """Seed a realistic café so you can demo before anyone connects Square."""
     init_db()
     random.seed(7)
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
 
     with session_scope() as db:
         if db.scalars(select(User).where(User.email == args.email.lower())).first():
@@ -365,7 +368,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
         db.flush()
 
         stock: dict[str, StockItem] = {}
-        anchor = datetime.combine(today - timedelta(days=1), datetime.min.time(), timezone.utc)
+        anchor = datetime.combine(today - timedelta(days=1), datetime.min.time(), UTC)
         for name, category, dimension, unit, on_hand, reorder, par, cost, recv, pack in DEMO_STOCK:
             qty_base = to_base(on_hand, unit)
             item = StockItem(

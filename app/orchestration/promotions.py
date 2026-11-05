@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -52,7 +52,7 @@ def suggestions_for(
     db: Session, tenant_id: int, today: date | None = None, location_id: int | None = None
 ) -> list[Suggestion]:
     """What is worth marking down right now, biggest loss first."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     velocity = velocity_map(db, tenant_id, today)
     already = _open_decisions(db, tenant_id, today)
 
@@ -98,7 +98,7 @@ def _record(
     snooze_until: date | None = None,
     today: date | None = None,
 ) -> Promotion:
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     item = suggestion.item
     batch = db.get(StockBatch, item.batch_id) if item.batch_id else None
     promotion = Promotion(
@@ -161,7 +161,7 @@ def snooze(
     today: date | None = None,
 ) -> Promotion:
     """Ask again later. The suggestion is recomputed then, against whatever the shelf holds."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     return _record(
         db,
         tenant_id,
@@ -178,7 +178,7 @@ def end(db: Session, promotion: Promotion, today: date | None = None) -> Promoti
     item = db.get(StockItem, promotion.stock_item_id)
     promotion.status = PromotionStatus.ENDED
     promotion.units_after_base = Decimal(item.qty_base or 0) if item else None
-    promotion.ended_at = datetime.now(timezone.utc)
+    promotion.ended_at = datetime.now(UTC)
     db.flush()
     return promotion
 
@@ -196,7 +196,7 @@ def _velocity_since(
 
 def running(db: Session, tenant_id: int, today: date | None = None) -> list[RunningPromotion]:
     """Markdowns in progress, each with what has happened to its sales since."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     rows = db.scalars(
         select(Promotion).where(
             Promotion.tenant_id == tenant_id, Promotion.status == PromotionStatus.ACTIVE

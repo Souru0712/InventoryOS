@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -194,7 +194,7 @@ def apply_provider_counts(db: Session, tenant_id: int, rows: list[dict]) -> int:
         if item.provider_variation_id
     }
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     updated = 0
     for row in rows:
         location_id = location_ids.get(row["provider_location_id"])

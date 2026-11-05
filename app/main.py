@@ -18,7 +18,6 @@ from app.db import init_db
 from app.entitlements import NotEntitled
 from app.monitoring import init_monitoring
 from app.orchestration import scheduler
-from app.web.templating import templates
 from app.web import (
     auth,
     billing,
@@ -30,10 +29,13 @@ from app.web import (
     promotions,
     receiving,
     scanning,
-    settings as settings_page,
     shop,
     webhooks,
 )
+from app.web import (
+    settings as settings_page,
+)
+from app.web.templating import templates
 
 logging.basicConfig(
     level=logging.INFO,

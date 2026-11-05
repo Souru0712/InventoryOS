@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -52,7 +52,7 @@ class ReviewProblem(ValueError):
 def aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def tags(text: str | None) -> frozenset[str]:
@@ -79,7 +79,7 @@ def find_or_create(
             tenant_id=tenant_id,
             email=email,
             referral_code=new_referral_code(db, tenant_id),
-            created_at=now or datetime.now(timezone.utc),
+            created_at=now or datetime.now(UTC),
         )
         db.add(customer)
         db.flush()
@@ -92,7 +92,7 @@ def _hash(raw: str) -> str:
 
 def issue_login_link(db: Session, customer: Customer, now: datetime | None = None) -> str | None:
     """Email a one-time sign-in link. None when this address has asked for too many links lately."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     recent = db.scalar(
         select(func.count(CustomerLoginToken.id)).where(
             CustomerLoginToken.customer_id == customer.id,
@@ -139,7 +139,7 @@ def redeem_login_token(
     db: Session, tenant_id: int, raw: str, now: datetime | None = None
 ) -> Customer | None:
     """The customer behind a valid, unused, unexpired link for this store; the link is spent."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     token = db.scalars(
         select(CustomerLoginToken).where(
             CustomerLoginToken.tenant_id == tenant_id, CustomerLoginToken.token_hash == _hash(raw)
@@ -191,7 +191,7 @@ def update_preferences(
     now: datetime | None = None,
 ) -> list[str]:
     """Save what the customer changed and audit each field. allergens=frozenset() means 'none'."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     changed: list[str] = []
 
     def set_field(field: str, new) -> None:
@@ -241,7 +241,7 @@ def set_product_preference(
     now: datetime | None = None,
 ) -> None:
     """Favourite, never-again, or clear (None). Every change is audited, including an undo."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     item = db.get(StockItem, stock_item_id)
     if item is None or item.tenant_id != customer.tenant_id:
         raise LookupError("no such item at this store")
@@ -333,7 +333,7 @@ def submit_review(
     now: datetime | None = None,
 ) -> int:
     """Save survey answers for a picked-up box. Every question is optional; answering again corrects."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if order.customer_id != customer.id:
         raise LookupError("not this customer's box")
     if order.status is not BoxOrderStatus.PICKED_UP:
@@ -401,7 +401,7 @@ def _clear_survey_never_again(db: Session, customer: Customer, item_id: int, now
 
 def deactivate(db: Session, customer: Customer, now: datetime | None = None) -> None:
     """Close the account. Orders, reviews, referrals and credit stay: they are financial history."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if not customer.is_active:
         return
     customer.is_active = False

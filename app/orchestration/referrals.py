@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -160,7 +160,7 @@ def referral_for_order(db: Session, order: BoxOrder) -> Referral | None:
 
 def qualify_for_order(db: Session, order: BoxOrder, now: datetime | None = None) -> Referral | None:
     """The friend's first box was picked up: the referral qualifies and the referrer is paid."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     referral = referral_for_order(db, order)
     if referral is None or referral.status is not ReferralStatus.PENDING:
         return referral
@@ -192,7 +192,7 @@ def qualify_for_order(db: Session, order: BoxOrder, now: datetime | None = None)
 
 def unwind_for_order(db: Session, order: BoxOrder, now: datetime | None = None) -> Referral | None:
     """The first box was cancelled or refunded: an unpaid referral is cancelled, a paid reward reversed."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     referral = referral_for_order(db, order)
     if referral is None:
         return None

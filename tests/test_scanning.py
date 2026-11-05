@@ -26,7 +26,7 @@ from app.orchestration.scanning import (
     receive_scanned,
     suspicious,
 )
-from app.units import Dimension, to_base
+from app.units import Dimension
 
 COKE = "049000028911"  # a real-looking 12 digit UPC-A
 

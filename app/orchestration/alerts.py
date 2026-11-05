@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -41,7 +41,7 @@ def all_proposals(db: Session, tenant_id: int, now: datetime) -> list[AlertPropo
 
 def evaluate_and_store(db: Session, tenant_id: int, now: datetime | None = None) -> dict:
     """Open new alerts, resolve fixed ones. Returns a small stats dict."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     proposals = all_proposals(db, tenant_id, now)
 
     open_alerts = {
@@ -90,7 +90,7 @@ def evaluate_and_store(db: Session, tenant_id: int, now: datetime | None = None)
 def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) -> bool:
     """Email un-notified alerts, at most one digest per cooldown window."""
     settings = get_settings()
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     cooldown = now - timedelta(hours=settings.alert_cooldown_hours)
 
     pending = list(
@@ -195,12 +195,12 @@ def open_alerts(db: Session, tenant_id: int) -> list[Alert]:
 
 
 def proposals_for(db: Session, tenant_id: int, now: datetime | None = None) -> list[AlertProposal]:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     return evaluate_stock(stock_views(db, tenant_id), velocity_map(db, tenant_id, now.date()), now)
 
 
 def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 ZERO = Decimal("0")

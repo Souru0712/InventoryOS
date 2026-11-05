@@ -1,6 +1,6 @@
 """Deployed settings, readiness, error reporting and scheduler uniqueness."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -176,7 +176,7 @@ def test_readiness_fails_without_leaking_why(client, monkeypatch):
 
 
 def test_a_rerun_report_job_does_not_send_the_weekly_report_twice(db, tenant, monkeypatch):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     tenant.report_day, tenant.report_hour = now.weekday(), now.hour
     db.commit()
 

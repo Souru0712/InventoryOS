@@ -1,7 +1,7 @@
 """Stripe's events applied to an account: every state in the lifecycle, in the wrong order too."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,7 +14,7 @@ from app.models import Plan, SubscriptionStatus, Tenant
 from app.orchestration.stripe_events import handle_event, plan_for_price, price_for_plan
 
 STARTER_PRICE, PRO_PRICE = "price_starter_29", "price_pro_59"
-NOW = datetime(2026, 9, 17, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture(autouse=True)

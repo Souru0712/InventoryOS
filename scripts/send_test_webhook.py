@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -42,8 +42,8 @@ def inventory_event(merchant: str, variation: str, location: str, quantity: str)
     return {
         "merchant_id": merchant,
         "type": "inventory.count.updated",
-        "event_id": f"test-{datetime.now(timezone.utc).timestamp()}",
-        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "event_id": f"test-{datetime.now(UTC).timestamp()}",
+        "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "data": {
             "type": "inventory.count",
             "object": {
@@ -54,9 +54,7 @@ def inventory_event(merchant: str, variation: str, location: str, quantity: str)
                         "location_id": location,
                         "state": "IN_STOCK",
                         "quantity": quantity,
-                        "calculated_at": datetime.now(timezone.utc)
-                        .isoformat()
-                        .replace("+00:00", "Z"),
+                        "calculated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                     }
                 ]
             },

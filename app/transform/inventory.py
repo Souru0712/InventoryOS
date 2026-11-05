@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_CEILING, Decimal
 
 from app.units import Dimension, format_qty, from_base
@@ -158,5 +158,5 @@ def stale_after(last_counted_at: datetime | None, max_age_days: int, now: dateti
         return True
     reference = last_counted_at
     if reference.tzinfo is None:
-        reference = reference.replace(tzinfo=timezone.utc)
+        reference = reference.replace(tzinfo=UTC)
     return (now - reference) > timedelta(days=max_age_days)

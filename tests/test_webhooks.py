@@ -1,7 +1,7 @@
 """Square tells us when stock moves at the till. Only if it can prove it is Square."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -135,7 +135,7 @@ def test_an_empty_signature_or_key_is_never_valid():
 
 
 def test_an_unsigned_call_is_refused(client, connected):
-    response = post(client, event("99", datetime.now(timezone.utc)), signature="not-the-signature")
+    response = post(client, event("99", datetime.now(UTC)), signature="not-the-signature")
     assert response.status_code == 400
     assert quantity_now(connected) == Decimal("34")
 
@@ -144,7 +144,7 @@ def test_an_unsigned_call_is_refused(client, connected):
 
 
 def test_a_sale_at_the_till_updates_our_count(client, connected):
-    response = post(client, event("30", datetime.now(timezone.utc)))
+    response = post(client, event("30", datetime.now(UTC)))
     assert response.status_code == 200
     assert response.json()["updated"] == 1
     assert quantity_now(connected) == Decimal("30")
@@ -152,15 +152,15 @@ def test_a_sale_at_the_till_updates_our_count(client, connected):
 
 def test_a_count_calculated_before_our_last_read_is_ignored(client, connected):
     # An offline till can deliver yesterday's number today; older news never wins.
-    post(client, event("30", datetime.now(timezone.utc)))
-    stale = datetime.now(timezone.utc) - timedelta(days=1)
+    post(client, event("30", datetime.now(UTC)))
+    stale = datetime.now(UTC) - timedelta(days=1)
     response = post(client, event("99", stale))
     assert response.json()["updated"] == 0
     assert quantity_now(connected) == Decimal("30")
 
 
 def test_another_event_type_is_acknowledged_and_ignored(client, connected):
-    payload = event("1", datetime.now(timezone.utc))
+    payload = event("1", datetime.now(UTC))
     payload["type"] = "order.created"
     body = post(client, payload).json()
     assert body["ignored"] == "order.created"
@@ -168,7 +168,7 @@ def test_another_event_type_is_acknowledged_and_ignored(client, connected):
 
 
 def test_a_merchant_we_do_not_know_is_ignored_not_retried(client, connected):
-    payload = event("5", datetime.now(timezone.utc))
+    payload = event("5", datetime.now(UTC))
     payload["merchant_id"] = "SOMEONE-ELSE"
     response = post(client, payload)
     assert response.status_code == 200

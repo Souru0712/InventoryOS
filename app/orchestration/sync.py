@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -15,10 +15,10 @@ from app.load.upsert import (
     apply_provider_counts,
     ensure_tracked_stock_items,
     sync_catalog_presence,
-    upsert_locations,
-    upsert_sales_daily,
     sync_identifiers_from_catalog,
     sync_retail_prices,
+    upsert_locations,
+    upsert_sales_daily,
     upsert_sold_items,
 )
 from app.models import (
@@ -73,9 +73,9 @@ def active_connection(db: Session, tenant_id: int, provider: str = "square") -> 
 def _access_token(db: Session, connection: ProviderConnection) -> str:
     expires_at = connection.expires_at
     if expires_at and expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = expires_at.replace(tzinfo=UTC)
 
-    if expires_at and expires_at - REFRESH_MARGIN < datetime.now(timezone.utc):
+    if expires_at and expires_at - REFRESH_MARGIN < datetime.now(UTC):
         if not connection.refresh_token_enc:
             raise NotConnected(
                 f"square token for tenant {connection.tenant_id} expires at {expires_at} "
@@ -119,14 +119,14 @@ def sync_catalog(db: Session, tenant_id: int) -> dict:
             _rows, stats = _pull_catalog(db, tenant_id, client)
     except Exception as exc:
         run.status = SyncStatus.FAILED
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = datetime.now(UTC)
         run.error = f"{type(exc).__name__}: {exc}"
         db.commit()
         log.exception("catalog sync failed for tenant %s", tenant_id)
         raise
 
     run.status = SyncStatus.SUCCESS
-    run.finished_at = datetime.now(timezone.utc)
+    run.finished_at = datetime.now(UTC)
     run.stats_json = json.dumps(stats, default=str)
     db.flush()
     log.info("catalog sync for tenant %s: %s", tenant_id, stats)
@@ -174,7 +174,7 @@ def run_sync(db: Session, tenant_id: int, days_back: int = SALES_LOOKBACK_DAYS) 
                         ),
                     )
 
-                end = datetime.now(timezone.utc)
+                end = datetime.now(UTC)
                 orders = client.orders(provider_location_ids, end - timedelta(days=days_back), end)
                 stats["sales_rows"] = upsert_sales_daily(
                     db, tenant_id, daily_sales_from_orders(orders, timezones)
@@ -189,12 +189,12 @@ def run_sync(db: Session, tenant_id: int, days_back: int = SALES_LOOKBACK_DAYS) 
         stats.update(evaluate_and_store(db, tenant_id))
 
         run.status = SyncStatus.SUCCESS
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = datetime.now(UTC)
         run.stats_json = json.dumps(stats, default=str)
         db.flush()
     except Exception as exc:
         run.status = SyncStatus.FAILED
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = datetime.now(UTC)
         run.error = f"{type(exc).__name__}: {exc}"
         db.flush()
         db.commit()
@@ -240,7 +240,7 @@ def push_counts_to_square(db: Session, tenant_id: int, stock_item_ids: list[int]
     if not items:
         return 0
 
-    occurred_at = datetime.now(timezone.utc)
+    occurred_at = datetime.now(UTC)
     changes = [
         physical_count_change(
             item.provider_variation_id,
@@ -289,7 +289,7 @@ def push_adjustments_to_square(
         loc.id: loc.provider_location_id
         for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
     }
-    occurred_at = datetime.now(timezone.utc)
+    occurred_at = datetime.now(UTC)
     pushing: list[tuple[StockItem, dict]] = []
     for item in db.scalars(
         select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.id.in_(list(wanted)))

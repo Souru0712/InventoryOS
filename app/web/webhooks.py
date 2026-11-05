@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
@@ -94,7 +94,7 @@ def _parse(stamp: str | None) -> datetime | None:
 def _aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def _catalog_read_recently(db: Session, tenant_id: int) -> bool:
@@ -105,7 +105,7 @@ def _catalog_read_recently(db: Session, tenant_id: int) -> bool:
         .limit(1)
     ).first()
     started = _aware(last.started_at) if last else None
-    return bool(started and datetime.now(timezone.utc) - started < CATALOG_DEBOUNCE)
+    return bool(started and datetime.now(UTC) - started < CATALOG_DEBOUNCE)
 
 
 @router.post(NOTIFICATION_PATH)

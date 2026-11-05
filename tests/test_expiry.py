@@ -144,7 +144,7 @@ def test_volume_works_in_base_units_like_everything_else():
 
 # --- through the database: Square-tracked stock, alerts, the digest -------------------------
 
-from datetime import datetime, timezone  # noqa: E402
+from datetime import UTC, datetime  # noqa: E402
 
 import pytest  # noqa: E402
 
@@ -163,7 +163,7 @@ from app.orchestration.alerts import evaluate_and_store, send_alert_digest  # no
 from app.orchestration.views import expiry_positions, velocity_map  # noqa: E402
 from app.units import Dimension  # noqa: E402
 
-NOW = datetime(2026, 9, 10, 8, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 10, 8, 0, tzinfo=UTC)
 
 
 @pytest.fixture

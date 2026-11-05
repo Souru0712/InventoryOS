@@ -18,7 +18,7 @@ import argparse
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -234,7 +234,7 @@ def main() -> int:
                     "location_id": location_id,
                     "state": "IN_STOCK",
                     "quantity": str(item["count"]),
-                    "occurred_at": datetime.now(timezone.utc)
+                    "occurred_at": datetime.now(UTC)
                     .isoformat(timespec="seconds")
                     .replace("+00:00", "Z"),
                 },

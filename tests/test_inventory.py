@@ -1,12 +1,12 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from app.transform.inventory import (
     Component,
     SaleRow,
     StockView,
-    consumption_by_day,
     consumed_since,
+    consumption_by_day,
     daily_velocity,
     days_of_cover,
     derived_quantity,
@@ -52,13 +52,13 @@ def test_consumption_only_counts_days_after_the_count():
         TODAY - timedelta(days=1): Decimal("7"),
         TODAY: Decimal("3"),
     }
-    anchor = datetime(2026, 9, 5, tzinfo=timezone.utc)  # yesterday
+    anchor = datetime(2026, 9, 5, tzinfo=UTC)  # yesterday
     assert consumed_since(daily, anchor, TODAY) == Decimal("3")
 
 
 def test_derived_quantity_never_goes_negative():
     daily = {TODAY: Decimal("40000")}
-    anchor = datetime(2026, 9, 5, tzinfo=timezone.utc)
+    anchor = datetime(2026, 9, 5, tzinfo=UTC)
     assert derived_quantity(to_base(30, "l"), anchor, daily, TODAY) == Decimal("0")
 
 
@@ -110,9 +110,9 @@ def test_valuation_handles_sub_cent_unit_costs():
 
 
 def test_stale_count_detection():
-    now = datetime(2026, 9, 6, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 6, tzinfo=UTC)
     assert stale_after(None, 14, now) is True
-    assert stale_after(datetime(2026, 8, 1, tzinfo=timezone.utc), 14, now) is True
-    assert stale_after(datetime(2026, 9, 1, tzinfo=timezone.utc), 14, now) is False
+    assert stale_after(datetime(2026, 8, 1, tzinfo=UTC), 14, now) is True
+    assert stale_after(datetime(2026, 9, 1, tzinfo=UTC), 14, now) is False
     # Naive timestamps from the database are treated as UTC, not crashed on.
     assert stale_after(datetime(2026, 9, 1), 14, now) is False

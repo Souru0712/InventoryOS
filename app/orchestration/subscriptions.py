@@ -8,7 +8,7 @@ happens to open the app.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 def expire_due_trials(db: Session, now: datetime | None = None) -> list[int]:
     """End every trial whose time is up. Returns the tenants that changed."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     expired = []
     for tenant in db.scalars(
         select(Tenant).where(Tenant.subscription_status == SubscriptionStatus.TRIALING)
@@ -30,7 +30,7 @@ def expire_due_trials(db: Session, now: datetime | None = None) -> list[int]:
         if ends is None:
             continue
         if ends.tzinfo is None:
-            ends = ends.replace(tzinfo=timezone.utc)
+            ends = ends.replace(tzinfo=UTC)
         if ends <= now:
             tenant.subscription_status = SubscriptionStatus.EXPIRED
             # The floor everyone falls back to; what they actually buy decides the rest.
@@ -103,7 +103,7 @@ def change_plan(db: Session, tenant: Tenant, plan: str) -> Tenant:
 
 def mark_past_due(db: Session, tenant: Tenant, now: datetime | None = None) -> Tenant:
     """A payment failed. The grace period runs from the first failure, not from each retry."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if tenant.subscription_status is not SubscriptionStatus.PAST_DUE:
         tenant.past_due_since = now
     tenant.subscription_status = SubscriptionStatus.PAST_DUE

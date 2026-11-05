@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -232,7 +232,7 @@ def receive_scanned(
     """Raise stock for a scanned receipt, date the lot, and push the delta to Square."""
     if qty_base is None or qty_base <= ZERO:
         raise ValueError("received quantity must be above zero")
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
 
     item.qty_base = Decimal(item.qty_base or 0) + Decimal(qty_base)
     db.add(

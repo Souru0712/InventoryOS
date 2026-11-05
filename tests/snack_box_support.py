@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -17,7 +17,7 @@ from app.models import BoxLine, BoxOrder, SnackProfile, StockBatch, StockItem, T
 from app.orchestration import boxes, customers
 from app.units import Dimension
 
-NOW = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 14, 12, 0, tzinfo=UTC)
 FLAVOR_CYCLE = ("sweet", "salty", "spicy", "weird")
 ORIGINS = ("US", "JP", "KR", "MX")
 

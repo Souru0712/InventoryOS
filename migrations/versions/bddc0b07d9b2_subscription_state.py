@@ -6,8 +6,8 @@ Revises: 9bbbef6381cc
 
 from datetime import datetime, timedelta
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # Kept as a literal: a migration must not change if the product later changes its trial.
 TRIAL_DAYS = 30

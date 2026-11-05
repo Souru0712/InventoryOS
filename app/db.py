@@ -116,7 +116,7 @@ def session_scope() -> Iterator[Session]:
         db.close()
 
 
-def alembic_config(url: str | None = None) -> "Config":
+def alembic_config(url: str | None = None) -> Config:
     """Alembic config wired to this app, usable from code and from the CLI."""
     from alembic.config import Config
 

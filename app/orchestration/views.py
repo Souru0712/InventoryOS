@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -203,7 +203,7 @@ def expiry_positions(
     velocity: dict[int, Decimal] | None = None,
 ) -> list[ItemExpiry]:
     """Every item that holds dated stock, with each lot positioned and projected for today."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     batches = batches_by_item(db, tenant_id)
     if not batches:
         return []
@@ -230,7 +230,7 @@ def velocity_map(
     window_days: int = VELOCITY_WINDOW_DAYS,
 ) -> dict[int, Decimal]:
     """Base units per day per stock item over the trailing window."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     window_start = today - timedelta(days=window_days - 1)
     daily = consumption(db, tenant_id, window_start)
     return {item_id: daily_velocity(days, window_days, today) for item_id, days in daily.items()}
@@ -238,7 +238,7 @@ def velocity_map(
 
 def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None = None) -> int:
     """Recompute weight/volume quantities: last physical count minus consumption since."""
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     items = list(
         db.scalars(
             select(StockItem).where(
@@ -276,7 +276,7 @@ def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None =
 def _aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def expiry_coverage(db: Session, tenant_id: int, location_id: int | None = None) -> Coverage:

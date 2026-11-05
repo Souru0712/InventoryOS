@@ -11,7 +11,7 @@ import logging
 import signal
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.base import BaseScheduler
@@ -54,7 +54,7 @@ def sync_all_tenants() -> None:
 
 def send_due_reports(now: datetime | None = None) -> None:
     """Send each tenant its weekly report at its configured day and hour, once."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     with session_scope() as db:
         due = [
             tenant.id

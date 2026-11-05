@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from app.orchestration.scanning import CONFIDENT_ENOUGH, DateReading, read_expiry_photo
+from app.orchestration.scanning import DateReading, read_expiry_photo
 
 log = logging.getLogger(__name__)
 

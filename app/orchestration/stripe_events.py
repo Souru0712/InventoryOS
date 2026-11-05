@@ -11,7 +11,7 @@ subscription back to life.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -79,7 +79,7 @@ def _moment(value: object) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromtimestamp(int(value), tz=timezone.utc)
+        return datetime.fromtimestamp(int(value), tz=UTC)
     except (TypeError, ValueError, OSError):
         return None
 
@@ -87,7 +87,7 @@ def _moment(value: object) -> datetime | None:
 def _subscription_plan(subscription: dict) -> str | None:
     items = ((subscription.get("items") or {}).get("data")) or []
     for item in items:
-        plan = plan_for_price(((item.get("price") or {}).get("id")))
+        plan = plan_for_price((item.get("price") or {}).get("id"))
         if plan:
             return plan
     return None
@@ -123,7 +123,7 @@ def _is_stale(tenant: Tenant, event: dict) -> bool:
     if created is None or seen is None:
         return False
     if seen.tzinfo is None:
-        seen = seen.replace(tzinfo=timezone.utc)
+        seen = seen.replace(tzinfo=UTC)
     return created < seen
 
 
@@ -237,7 +237,7 @@ def handle_event(db: Session, event: dict) -> dict:
             tenant.subscription_status = SubscriptionStatus.ACTIVE
             tenant.past_due_since = None
         tenant.current_period_start = (
-            _moment((payload.get("period_start"))) or tenant.current_period_start
+            _moment(payload.get("period_start")) or tenant.current_period_start
         )
         tenant.current_period_end = _moment(payload.get("period_end")) or tenant.current_period_end
         result["status"] = tenant.subscription_status.value

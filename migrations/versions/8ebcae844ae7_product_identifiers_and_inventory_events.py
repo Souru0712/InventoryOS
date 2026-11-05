@@ -8,10 +8,11 @@ Create Date: 2026-09-13 11:06:52.353404
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from alembic import op
-from datetime import datetime, timezone
+
 from app.db import Qty
 
 revision: str = "8ebcae844ae7"
@@ -37,7 +38,7 @@ def _backfill_identifiers() -> None:
         .all()
     )
     seen: set[tuple[int, str]] = set()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for row in rows:
         for kind, raw in (("UPC", row["upc"]), ("SKU", row["sku"])):
             value = (raw or "").strip()

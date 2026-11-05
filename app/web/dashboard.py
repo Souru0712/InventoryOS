@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -42,11 +42,11 @@ from app.orchestration.views import (
 )
 from app.providers.square import oauth
 from app.security import (
-    require_writable,
     SESSION_STATE_KEY,
     new_state,
     require_tenant,
     require_user,
+    require_writable,
 )
 from app.transform.alerts import counts_as_waste_risk
 from app.transform.expiry import ItemExpiry
@@ -220,7 +220,7 @@ def expiring(
             "currency": tenant_currency(db, tenant.id),
             "locations": _locations(db, tenant.id),
             "selected_location": location,
-            "today": datetime.now(timezone.utc).date(),
+            "today": datetime.now(UTC).date(),
             "coverage": expiry_coverage(db, tenant.id, location),
             **summary,
         },
@@ -364,7 +364,7 @@ def create_item(
             status_code=400,
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item = StockItem(
         tenant_id=tenant.id,
         location_id=location.id,
@@ -421,7 +421,7 @@ def record_count(
         raise HTTPException(status_code=404, detail="stock item not found")
 
     qty_base = to_base(quantity, item.stock_unit)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item.qty_base = qty_base
     item.last_counted_at = now
     db.add(

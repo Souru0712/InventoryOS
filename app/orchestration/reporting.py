@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 def weekly_report(db: Session, tenant_id: int, today: date | None = None) -> WeeklyReport:
-    today = today or datetime.now(timezone.utc).date()
+    today = today or datetime.now(UTC).date()
     start, end = week_bounds(today)
     return build_weekly_report(
         sales=sale_rows(db, tenant_id),
@@ -37,7 +37,7 @@ def report_sent_recently(
     db: Session, tenant_id: int, now: datetime | None = None, within_days: int = 6
 ) -> bool:
     """True when this week's report already went out, or was logged as skipped."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     # Six days, not seven, so next week's slot at the same hour is never mistaken for this one.
     entry = db.scalars(
         select(EmailLog.id)

@@ -1,6 +1,6 @@
 """End to end: photo of an invoice raises the right stock in the right units."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -178,7 +178,7 @@ def test_applying_a_delivery_raises_stock_and_files_the_record(db, tenant, locat
     # Receiving re-anchors derived stock so depletion restarts from a known quantity.
     counts = db.query(InventoryCount).filter(InventoryCount.source == "receipt").all()
     assert len(counts) == 3
-    assert stock["whole-milk"].last_counted_at == datetime(2026, 9, 4, tzinfo=timezone.utc)
+    assert stock["whole-milk"].last_counted_at == datetime(2026, 9, 4, tzinfo=UTC)
 
 
 def test_supplier_wording_is_learned_so_the_next_invoice_is_automatic(db, tenant, location, stock):
@@ -248,7 +248,7 @@ def test_an_unreadable_photo_leaves_the_document_for_a_human(db, tenant, locatio
 
 # --- dated deliveries ---------------------------------------------------------------------
 
-from datetime import date  # noqa: E402
+from datetime import UTC, date  # noqa: E402
 
 from app.models import StockBatch  # noqa: E402
 
@@ -296,9 +296,7 @@ def receive(db, document, decisions=None):
     decisions = decisions or [
         LineDecision(line.id, line.stock_item_id, line.received_qty_base) for line in document.lines
     ]
-    result = apply_document(
-        db, document.id, decisions, now=datetime(2026, 9, 6, tzinfo=timezone.utc)
-    )
+    result = apply_document(db, document.id, decisions, now=datetime(2026, 9, 6, tzinfo=UTC))
     db.commit()
     return result
 

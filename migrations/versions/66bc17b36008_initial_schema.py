@@ -11,6 +11,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+
 from app.db import Qty
 
 revision: str = "66bc17b36008"

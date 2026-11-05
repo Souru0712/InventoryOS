@@ -4,7 +4,7 @@ The matrix at the bottom walks one account through its whole life: trial, Starte
 a failed payment, the grace period, cancellation.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -26,7 +26,7 @@ from app.entitlements import (
     state,
 )
 from app.main import app
-from app.models import Location, Plan, StockItem, SubscriptionStatus, Tenant, TrackMode, User
+from app.models import Location, Plan, StockItem, SubscriptionStatus, Tenant, TrackMode
 from app.orchestration.subscriptions import (
     apply_location_limit,
     change_plan,
@@ -35,10 +35,9 @@ from app.orchestration.subscriptions import (
     mark_past_due,
     start_subscription,
 )
-from app.security import hash_password
 from app.units import Dimension
 
-NOW = datetime(2026, 9, 17, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 
 
 def account(status: SubscriptionStatus, plan: str = "pro", **fields) -> Tenant:
@@ -279,7 +278,7 @@ def signed_up(client, status: SubscriptionStatus, plan: str = "pro") -> int:
         tenant.subscription_status = status
         tenant.plan = Plan(plan)
         if status is SubscriptionStatus.TRIALING:
-            tenant.trial_ends_at = datetime.now(timezone.utc) - timedelta(days=1)
+            tenant.trial_ends_at = datetime.now(UTC) - timedelta(days=1)
         location = Location(
             tenant_id=tenant.id, provider="demo", provider_location_id="l1", name="Main"
         )

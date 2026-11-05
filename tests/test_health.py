@@ -1,6 +1,6 @@
 """One health number, and every reason behind it."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -27,7 +27,7 @@ from app.transform.health import (
 from app.transform.inventory import StockView
 from app.units import Dimension
 
-NOW = datetime(2026, 9, 14, 8, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 
 
 def view(id=1, **overrides) -> StockView:
@@ -244,9 +244,7 @@ def test_every_data_gap_says_what_to_fix():
 
 
 def test_weight_and_volume_not_counted_recently_is_a_data_gap():
-    stale = health(
-        1, track_mode="derived", last_counted_at=datetime(2026, 8, 1, tzinfo=timezone.utc)
-    )
+    stale = health(1, track_mode="derived", last_counted_at=datetime(2026, 8, 1, tzinfo=UTC))
     assert "not counted" in " ".join(f.text for f in score_data([stale], None, 0, NOW).findings)
 
 

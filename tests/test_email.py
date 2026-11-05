@@ -1,6 +1,6 @@
 """Email as a channel people actually receive: real text parts, their choices, and no repeats."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -124,9 +124,7 @@ def test_the_weekly_report_is_readable_without_html(db, tenant, milk, mail):
 
 
 def test_a_sign_in_link_is_readable_without_html(db, tenant, mail):
-    from app.orchestration.customers import issue_login_link
-
-    from app.orchestration.customers import find_or_create
+    from app.orchestration.customers import find_or_create, issue_login_link
 
     customer = find_or_create(db, tenant.id, "shopper@rosewood.test")
     db.commit()
@@ -230,9 +228,7 @@ def test_new_alerts_still_wait_for_the_cooldown_to_pass(db, tenant, milk, mail):
 
     assert send_alert_digest(db, tenant.id) is False, "inside the cooldown window"
 
-    first.notified_at = datetime.now(timezone.utc) - timedelta(
-        hours=get_settings().alert_cooldown_hours + 1
-    )
+    first.notified_at = datetime.now(UTC) - timedelta(hours=get_settings().alert_cooldown_hours + 1)
     db.commit()
     assert send_alert_digest(db, tenant.id) is True
     assert len(mail) == 2

@@ -1,7 +1,7 @@
 """Inventory health against a real database: the score, the history, and the pages it drives."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from html.parser import HTMLParser
 
@@ -27,7 +27,7 @@ from app.orchestration.views import expiry_positions
 from app.units import Dimension
 from app.web.dashboard import _expiry_summary
 
-NOW = datetime(2026, 9, 14, 8, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 TODAY = NOW.date()
 
 

@@ -1,6 +1,7 @@
 """Migrations must build exactly the schema the models describe, on SQLite and on Postgres."""
 
 import os
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -134,13 +135,13 @@ def test_every_migration_survives_a_database_that_already_has_rows(fresh_url):
     A column added NOT NULL with no default builds fine on an empty table and fails on a
     populated one, which is the only kind a customer has.
     """
-    from datetime import date, datetime, timezone
+    from datetime import date, datetime
 
     config = alembic_config(fresh_url)
     scripts = ScriptDirectory.from_config(config)
     revisions = list(reversed(list(scripts.walk_revisions())))
     engine = create_engine(fresh_url, poolclass=NullPool)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     photo = "ab" * 32
 
     # Rows to plant as soon as the table they belong to exists, so later revisions

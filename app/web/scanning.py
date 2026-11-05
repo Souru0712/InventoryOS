@@ -6,7 +6,7 @@ The page talks JSON to these routes so a scan never reloads the camera.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import UTC, date
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -28,7 +28,7 @@ from app.orchestration.scanning import (
     suspicious,
 )
 from app.orchestration.views import stock_views, tenant_currency, velocity_map
-from app.security import require_writable, require_tenant, require_user
+from app.security import require_tenant, require_user, require_writable
 from app.transform.barcodes import canonical
 from app.transform.dates import prefer_for_currency
 from app.transform.inventory import days_of_cover
@@ -244,9 +244,9 @@ def count(
     qty_base = _quantity(quantity, item, as_packs=False)
     before = Decimal(item.qty_base or 0)
     item.qty_base = qty_base
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item.last_counted_at = now
     db.add(
         InventoryCount(

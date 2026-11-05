@@ -19,11 +19,11 @@ from app.orchestration.receiving import (
     LineDecision,
     UploadRejected,
     apply_document,
-    record_correction,
     parse_document,
+    record_correction,
     save_upload,
 )
-from app.security import require_writable, require_tenant, require_user
+from app.security import require_tenant, require_user, require_writable
 from app.storage import StorageError, get_storage
 from app.units import UnitError, to_base
 from app.web.templating import templates

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -283,7 +283,7 @@ def apply_document(
     user_id: int | None = None,
 ) -> dict:
     """Receive the delivery: raise stock, date it, cost it, anchor derived items, learn the wording."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     document = db.get(Document, document_id)
     if document is None:
         raise ValueError(f"document {document_id} not found")

@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.transform.alerts import evaluate_item, evaluate_stock
 from app.transform.inventory import StockView
 from app.units import Dimension, to_base
 
-NOW = datetime(2026, 9, 6, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 6, tzinfo=UTC)
 
 
 def view(**overrides) -> StockView:
@@ -71,7 +71,7 @@ def test_weight_and_count_items_use_the_same_rules():
 
 
 def test_stale_count_only_applies_to_derived_stock():
-    old = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    old = datetime(2026, 8, 1, tzinfo=UTC)
     healthy = dict(qty_base=to_base(90, "l"), reorder_point_base=to_base(5, "l"))
     derived = evaluate_item(view(last_counted_at=old, **healthy), Decimal("0"), NOW)
     provider = evaluate_item(

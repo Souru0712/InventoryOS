@@ -8,7 +8,7 @@ corrections recorded during review add up to.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ def correction_stats(
     db: Session, tenant_id: int, days: int = 90, now: datetime | None = None
 ) -> dict:
     """Corrections per field, per supplier, and the lines that keep coming back wrong."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     since = now - timedelta(days=days)
 
     documents = list(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
@@ -112,5 +112,5 @@ def _normalize_token(data: dict) -> dict:
         "access_token": data["access_token"],
         "refresh_token": data.get("refresh_token"),
         "merchant_id": data.get("merchant_id", ""),
-        "expires_at": parsed or datetime.now(timezone.utc) + timedelta(days=30),
+        "expires_at": parsed or datetime.now(UTC) + timedelta(days=30),
     }
