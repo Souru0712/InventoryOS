@@ -6,9 +6,10 @@ humans and AI development agents. Phase 1 is product definition only: no applica
 or existing documentation was changed.
 
 > **Location.** InventoryOS is the new name for StockPulse (C-24) and is built on this repository's
-> codebase (C-25); this folder is the permanent home of its product docs (C-28). The owner is
-> renaming the repository. Building on this code does **not** mean its current features already meet
-> this blueprint — the Phase 2 audit measures the gaps.
+> codebase (C-25); this folder is the permanent home of its product docs (C-28). The repository
+> folder is now `InventoryOS` (formerly `POS-Inventory-Automation`); the code and its branding still
+> say StockPulse. Building on this code does **not** mean its current features already meet this
+> blueprint — the Phase 2 audit measures the gaps.
 
 ## 1. Product overview
 
@@ -21,8 +22,8 @@ cost and where money is lost. Not a stock-counting app, and not a POS at launch.
 
 | Entity | What it is | Role |
 |---|---|---|
-| **InventoryOS** | The product defined here — the new name for StockPulse (C-24) | Built on the POS-Inventory-Automation codebase (C-25); no InventoryOS release yet |
-| **InventoryOS codebase (formerly StockPulse)** | `C:\Users\oscar\.vscode\POS-Inventory-Automation` (rename pending) — Python inventory app with Square integration | Chosen foundation (C-25); current state documented in the [technical audit](../audit/00-INDEX.md); gaps measured in Phase 2 |
+| **InventoryOS** | The product defined here — the new name for StockPulse (C-24) | Built on the InventoryOS codebase (C-25); no InventoryOS release yet |
+| **InventoryOS codebase (formerly StockPulse)** | `C:\Users\oscar\.vscode\InventoryOS` (renamed from `POS-Inventory-Automation`) — Python inventory app with Square integration; still branded StockPulse in code | Chosen foundation (C-25); current state documented in the [technical audit](../audit/00-INDEX.md); gaps measured in Phase 2 |
 | **JuJu Juice** | `C:\Users\oscar\.vscode\JuJu` — separate juice business with its own customer site and staff/kitchen platform | Real-world reference and demonstration environment; keeps its own brand, experience and requirements |
 
 **Three customer scenarios and operating modes** — one engine; only the source of sales data
@@ -52,7 +53,7 @@ logic. No customer validation has been done yet.
 | [SAAS_REQUIREMENTS](SAAS_REQUIREMENTS.md) | Multi-tenancy, authentication, account lifecycle, billing and entitlements, onboarding, export/deletion, tenant administration |
 | [JUJU_REFERENCE_AND_PARITY](JUJU_REFERENCE_AND_PARITY.md) | JuJu's actual workflows, capability matrices, shared vs JuJu-specific, relationship options, repository boundaries |
 | [INTEGRATION_REQUIREMENTS](INTEGRATION_REQUIREMENTS.md) | Provider abstraction, Square as first candidate, sync and idempotency, Standalone data-entry alternatives, native POS boundary |
-| [NON_FUNCTIONAL_REQUIREMENTS](NON_FUNCTIONAL_REQUIREMENTS.md) | Security, reliability, performance, accessibility, maintainability, observability, risks, production readiness standard |
+| [NON_FUNCTIONAL_REQUIREMENTS](NON_FUNCTIONAL_REQUIREMENTS.md) | Security, reliability, performance, scalability, accessibility, maintainability, observability, risks, production readiness standard |
 | [PRODUCT_DECISIONS](PRODUCT_DECISIONS.md) | Decisions with rationale and alternatives (C-01..23), adopted recommendations, **open decisions PD-01..42**, assumptions A-01..14, contradictions |
 | [PRODUCT_GLOSSARY](PRODUCT_GLOSSARY.md) | Terminology for UI, code and docs |
 | [PRODUCT_ACCEPTANCE_CRITERIA](PRODUCT_ACCEPTANCE_CRITERIA.md) | Testable criteria (`AC-<MOD>-nn`), workflow-level success conditions, business-level requirements |
@@ -123,14 +124,18 @@ Full lists: [PRODUCT_DECISIONS §3–5](PRODUCT_DECISIONS.md#3-open-decisions).
 
 | Most important open decisions | ID |
 |---|---|
-| Release plan (R1 scope) | PD-13 |
-| Tenant isolation mechanism and authentication approach | PD-18, PD-21 |
 | Native POS validation criteria | PD-35 |
 | Multi-location pricing vs Complete's per-location price | PD-33 |
 
 Decided 2026-11-04: InventoryOS is the new name for StockPulse (C-24); it is built on this codebase
 (C-25); the target is 21 paying customers with $1,000 MRR gating new products (C-26); the build
-order is engine → Standalone → Square (C-27).
+order is engine → Standalone → Square (C-27); the release plan is approved (C-29); one configurable
+product serves every target segment with each business's data separated (C-30); login must include
+verification, reset and throttling (C-31), built by finishing the in-app login (C-32). After the Phase 2 audit: scoped data access for tenant
+isolation (C-33); the ledger owns all stock (C-34) and replaces the old engine (C-35); InventoryOS owns
+the product catalog (C-36); the snack-box module leaves (C-37); items are per organization (C-38);
+migration history kept (C-39); no pilots on the old engine (C-40); Starter/Pro retired (C-41); JuJu
+parity by specification until R1 (C-42).
 
 | Key assumptions | ID |
 |---|---|
@@ -144,7 +149,7 @@ order is engine → Standalone → Square (C-27).
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Product blueprint (this folder) | Complete — awaiting owner review |
-| 2 | Audit of the chosen codebase against this blueprint: all three operating modes without unnecessary Square dependency, ledger, tenancy and location scope, entitlements, Square live readiness; informs PD-18, PD-21, PD-03 | Not started — do not begin automatically |
+| 2 | Audit of the chosen codebase against this blueprint: all three operating modes without unnecessary Square dependency, ledger, tenancy and location scope, entitlements, Square live readiness; sizes the in-app login work (C-32); led to C-33..C-42 | Complete 2026-11-04 — [audit](../audit/README.md); decisions C-33..C-42 |
 | 3 | Gap analysis and roadmap: Complete and Standalone first; native POS evaluated separately; then multi-location and Advanced | Not started |
 
 ## 8. Rules for AI agents

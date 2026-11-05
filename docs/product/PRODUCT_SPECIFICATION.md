@@ -422,7 +422,7 @@ mode. Everything else is mode-independent (U-09).
 | POS-FR-10 | Sync history and error log with retry; failed items visible as exceptions | R1 | B |
 | POS-FR-11 | Duplicate event prevention by event id and by order-line identity | R1 | B |
 | POS-FR-12 | Daily reconciliation: count of orders/lines in Square vs ingested for the business day; mismatch → exception | R1 | B |
-| POS-FR-13 | Optional write-back of availability/counts to Square for items Square tracks (PD-09) | R1.1 | S O |
+| POS-FR-13 | Optional write-back of availability/counts to Square for items Square tracks (C-34) | R1.1 | S O |
 | POS-FR-14 | Reprocess consumption for a period after fixing a mapping, as reversal + re-post, with confirmation | R1 | R |
 | POS-FR-15 | Adapter boundary: business logic consumes normalized order events, never Square payloads | R1 | B |
 | POS-FR-16 | Generic sales API for first-party ordering sites (e.g. JuJu) and unsupported POS systems, same normalized model (file import is STD-FR-03) | R1.1 | B R |
@@ -610,7 +610,8 @@ sales source is refused (`sales_source_overlap`).
 
 ## User experience and application structure
 
-Principles: operational speed first (common Employee tasks ≤ 3 taps from home); mobile-first for
+Principles: operational speed first (every Employee task opens within 2 taps of the employee home;
+waste is saved within 3 taps of choosing the item, WST-FR-01); mobile-first for
 floor tasks, tablet for counts and receiving, desktop for reports and setup; consistent glossary
 terms; no visual design system or frontend framework is prescribed here [CONFIRMED]; WCAG 2.1 AA
 (NFR UX-01).
@@ -704,7 +705,7 @@ ADM business/location/time zone ──► STF auth, roles ──► INV items, u
                     ADM subscription/billing (parallel; gates write access)
 ```
 
-### Release plan [RECOMMENDED — PD-13 for approval]
+### Release plan [CONFIRMED 2026-11-04 — C-29]
 
 Phase 3 priority [CONFIRMED 2026-11-04]: **Complete and Standalone first**; InventoryOS POS evaluated
 separately; then multi-location and Advanced.

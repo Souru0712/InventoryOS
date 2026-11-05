@@ -7,9 +7,10 @@ conversations. "UI label" is what customers see where it differs from the domain
 
 | Term | Definition |
 |---|---|
-| **InventoryOS** | The commercial SaaS product defined in this package. Has no codebase as of 2026-11-04 |
-| **InventoryOS codebase (formerly StockPulse)** | The Python/FastAPI codebase in `POS-Inventory-Automation` (rename pending); InventoryOS's chosen foundation (C-25). "StockPulse" is the retired product name (C-24) |
+| **InventoryOS** | The commercial SaaS product defined in this package. Built on the InventoryOS codebase (C-25); no InventoryOS release yet |
+| **InventoryOS codebase (formerly StockPulse)** | The Python/FastAPI codebase in the `InventoryOS` repository (formerly `POS-Inventory-Automation`); InventoryOS's chosen foundation (C-25). "StockPulse" is the retired product name (C-24) |
 | **JuJu / JuJu Juice** | A separate juice-bar business and its own customer + staff platform (`JuJu` repository) |
+| **Snack-box project** | The owner's separate side project: curated and mystery boxes of Japanese snacks for the owner's convenience store. Its code sits inside the InventoryOS codebase today and moves to its own project (C-37). Not InventoryOS |
 | **Organization** | A customer business; the tenant. UI: "business" |
 | **Business location** | A physical site of an organization. UI: "location" |
 | **Storage location** | An area inside a business location (walk-in, dry store, line fridge). UI: "storage area" |

@@ -498,6 +498,16 @@ Steps (import): upload → choose/save column mapping → learned product matchi
 
 ## WF-17 Refund and void handling
 
+Steps:
+1. A refund or void arrives from the POS (C), or an operator corrects entered sales (S → WF-26).
+2. The system deduplicates by provider refund/void id and links it to the original
+   SalesTransaction; an unknown original is stored as an orphan and matched later.
+3. It applies the case rule below: voids of completed orders reverse that order's consumption;
+   refunds record a SalesReturn and reduce net sales but never restore stock on their own.
+4. A Manager+ may classify a refunded item as **Restock** or **Waste** (R1.1); only Restock posts a
+   reversal.
+5. Daily reports show refunds, voids and any classifications.
+
 | Case | Behaviour | Stock |
 |---|---|---|
 | Cancelled/voided before completion | Stored; no consumption | No change |
@@ -662,6 +672,30 @@ Steps:
 Requirements: each task reachable in ≤ 2 taps from the employee home; no cost data shown to
 Employees; "logged by" person picker on shared devices (PD-14); works on a 375 px screen; large
 touch targets.
+
+Steps:
+1. The employee opens the employee home on a phone or the shared tablet and, on a shared device,
+   picks who they are (PD-14).
+2. The home shows only the tasks their role and location allow, with today's alerts on top.
+3. They perform each task through its own workflow (table above); each task saves independently,
+   so an interrupted shift loses nothing already saved.
+4. At close they dispose of expired batches, enter the day's sales (S, if permitted) and do any
+   spot count due.
+
+| Field | Detail |
+|---|---|
+| Trigger | Start of shift; an alert; a delivery arrives; end of day |
+| Actor | Employee (also Production staff, Inventory manager or Manager doing floor tasks) |
+| Preconditions | Active membership with location access; location set up; for daily sales entry (S), the `sales.record` permission |
+| Inputs | Task-specific: invoice photo and quantities, batch multiplier and yield, waste item/quantity/reason, counts, daily sales |
+| System behavior | Filters tasks by role and location; hides costs from Employees; records the acting person on every record; each task posts through its own workflow's ledger rules |
+| Ledger effects | None of its own; the ledger effects are those of WF-07, WF-09, WF-11, WF-14, WF-16 and WF-18 |
+| Records created | The records of the underlying workflows, each with actor and device context |
+| Notifications | Alert bar on the employee home; manager notified of large waste or variances per thresholds (WF-18, WF-19) |
+| Exceptions | Task not permitted → message naming who can do it; would go negative → "count first"; offline or network error → nothing posts and the employee is told to retry (offline queueing is R1.1) |
+| Failure handling | Failed saves are shown, never silently dropped; undo window on waste and production |
+| Audit | Actor and, on shared devices, the selected person on every record |
+| Outcome | The day's operational events recorded by the people who did them, without admin screens |
 
 ## WF-24 Reporting and review
 

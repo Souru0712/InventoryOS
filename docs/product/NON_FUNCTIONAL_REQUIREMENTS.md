@@ -1,7 +1,8 @@
 # Non-Functional Requirements
 
-Authoritative source for **security, reliability, performance, accessibility, maintainability and
-observability**, and the **production readiness standard**. Business data, supplier information,
+Authoritative source for **security, reliability, performance, scalability, accessibility,
+maintainability and observability**, and the **production readiness standard**. Multi-tenancy,
+subscription lifecycle and data retention are specified in [SAAS_REQUIREMENTS](SAAS_REQUIREMENTS.md). Business data, supplier information,
 employee records and sales information are protected data [CONFIRMED].
 
 Scale assumption for sizing [ASSUMED A-03]: launch 21 organizations; design headroom 500. Per
@@ -60,6 +61,23 @@ organization ≤ 1,000 items, ≤ 1,500 POS order lines/day, ≤ 15 users.
 | PERF-05 | Waste log from item selection to saved ≤ 3 taps, ≤ 2 s round-trip on 4G |
 | PERF-06 | Invoice extraction result ≤ 60 s, off the request path, with progress state |
 | PERF-07 | Webhook acknowledgement ≤ 2 s |
+
+## 3a. Scalability [PROPOSED]
+
+Sizing note [ASSUMED, from A-03 plus an assumed average of ~5 recipe lines per order line]: a busy
+Connected location could post ~7,500 ledger movements a day (~2.7 million a year). At the 500-org
+headroom that is on the order of a billion movements a year. The ledger is the table that grows;
+everything below follows from that.
+
+| ID | Requirement |
+|---|---|
+| SCL-01 | The design headroom in A-03 is reached without architectural change; PERF targets hold at that headroom, verified by the pre-launch load test ([acceptance criteria](PRODUCT_ACCEPTANCE_CRITERIA.md#non-functional)) |
+| SCL-02 | The web tier holds no per-user state in process memory, so any instance can serve any request and instances can be added |
+| SCL-03 | Heavy work runs off the request path in background jobs: POS ingestion, invoice extraction, exports, report snapshots, nightly ledger verification. Job queues are fair per tenant, so one tenant's backlog cannot starve the others |
+| SCL-04 | Screens read balances from the maintained projection (DR-03) and history reports from snapshots, never by summing a tenant's whole ledger per request. Ledger storage is indexed by organization, location, item and time; partitioning or archival of old movements is decided in Phase 2 and must keep every movement retrievable (DR-02) |
+| SCL-05 | Per-tenant limits (items, users, locations, extraction volume, API calls) are configuration in the entitlement set (E-02), so a large tenant is a plan question rather than an incident |
+| SCL-06 | POS synchronization respects provider rate limits: per-connection queues, backoff and resumable backfills; a slow or throttled provider delays only that connection |
+| SCL-07 | Location is a dimension of every location-scoped record and index from R1 (DR-35), so multi-location Expansion needs no data migration |
 
 ## 4. Accessibility and usability
 

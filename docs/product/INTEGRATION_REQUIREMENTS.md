@@ -31,7 +31,7 @@ A POS adapter implements these capabilities; anything it cannot provide is decla
 | `fetch_orders(since cursor)` | `NormalizedOrder {external_order_id, version, state, occurred_at, location, lines[], refunds[]}`; `NormalizedOrderLine {line_uid, external_variation_id, name, qty, modifiers[{external_modifier_id, name, qty}], note}` | Yes |
 | `parse_webhook(raw, headers)` | Verified `NormalizedEvent {event_id, type, entity_ids, occurred_at}` or rejection | Yes (if provider has webhooks) |
 | `fetch_refunds(since)` | `NormalizedRefund {external_refund_id, order_id, lines[{line_uid, qty}], amount, status}` | Yes |
-| `push_inventory(commands)` | Absolute count or adjustment per external variation with idempotency key | Optional (PD-09) |
+| `push_inventory(commands)` | Absolute count or adjustment per external variation with idempotency key | Optional, R1.1 (C-34) |
 
 Non-POS sources produce the same normalized sales model: daily sales entry (STD-FR-02) and sales
 file import (STD-FR-03) in **R1**; an authenticated sales API (POS-FR-16) in R1.1 for first-party
@@ -44,7 +44,7 @@ ordering systems such as JuJu's and for unsupported POS systems. See §9.
 | ID | Requirement |
 |---|---|
 | SQ-01 | OAuth code flow (not personal access tokens) with `state` CSRF protection; tokens encrypted at rest; refresh before expiry; detect revoked authorization and mark connection `revoked` with an exception |
-| SQ-02 | Scopes: read merchant profile, catalog and orders; refunds/payments read only if needed for refund detail; inventory write **only** when write-back is enabled (PD-09). No payment-write or order-write scopes (existing app over-scoped: audit S6) |
+| SQ-02 | Scopes: read merchant profile, catalog and orders; refunds/payments read only if needed for refund detail; inventory write **only** when write-back is enabled (R1.1, C-34). No payment-write or order-write scopes (existing app over-scoped: audit S6) |
 | SQ-03 | One active connection per Square merchant + location across all organizations (DR-22) |
 | SQ-04 | Connection page: merchant name, mapped location, status, last successful catalog/order sync, last error, reconnect, disconnect (revokes token, stops ingestion, keeps history) |
 | SQ-05 | Location association: choose which Square locations to track, up to the location entitlement (Complete is per location); others listed as not tracked |
@@ -72,10 +72,10 @@ ordering systems such as JuJu's and for unsupported POS systems. See §9.
 | SQ-17 | Daily reconciliation per business day (location time zone): Square completed-order count and line count vs ingested; mismatch → `pos_reconciliation_mismatch` |
 | SQ-18 | Non-inventory lines (gift cards, custom amounts) recognized and skipped without exceptions; configurable "ignore" mapping |
 
-### 3.4 Write-back to Square (R1.1, PD-09)
+### 3.4 Write-back to Square (R1.1, C-34)
 
 The existing app pushes receipts and counts to Square because the owner's original pain was
-online orders accepted for sold-out items. If kept:
+online orders accepted for sold-out items. It is off in R1 (C-34); when it returns in R1.1:
 - Only for items Square tracks inventory on, and only as **availability/counts derived from
   InventoryOS** — InventoryOS remains authoritative.
 - Through the outbox (`OutboundCommand`): local commit first, then send with an idempotency key
@@ -173,7 +173,7 @@ online orders accepted for sold-out items. If kept:
 | Webhooks | Inventory count, catalog version (+ snack-box payments) | Payment and refund created/updated |
 | Verified live | Never (mocked only) | Sandbox verified incl. webhooks and refunds; real POS walk-in untested |
 
-Sources: `POS-Inventory-Automation/docs/audit/06-square-integration.md`; JuJu `README.md`,
+Sources: [audit 06](../audit/06-square-integration.md); JuJu `README.md`,
 `src/server/walkins.ts`, `src/server/payments.ts`.
 
 ## 9. Standalone data-entry alternatives

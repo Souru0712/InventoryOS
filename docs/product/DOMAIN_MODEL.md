@@ -168,7 +168,7 @@ Every tenant-owned entity carries `organization_id` (DR-09); location-scoped one
 | `adjustment` | + / − | InventoryAdjustment |
 | `manual_consumption` | − | Direct usage record (Standalone, STD-FR-04) |
 | `transfer_out` / `transfer_in` | − / + | Transfer (Expansion, WF-22) |
-| `pos_correction` | + / − | POS-owned count difference, only if PD-09 adopts POS-owned SKUs |
+| `pos_correction` | + / − | POS-originated count change on an item with write-back enabled (R1.1 only; C-34, INTEGRATION_REQUIREMENTS §3.4) |
 | `reversal` | opposite of reversed | Correction (WF-26) |
 
 ### 4.3 Batches
@@ -281,7 +281,7 @@ Every tenant-owned entity carries `organization_id` (DR-09); location-scoped one
 | DR-06 | A source record's posted movements are immutable; the source record is marked `corrected` when reversed |
 | DR-07 | Concurrency: status transitions are conditional (`… WHERE status = 'draft'`); postings to one item × location serialize (row lock on the balance/item). No lost updates, no double posts |
 | DR-08 | Negative recorded balance: permitted only from system-observed events (POS consumption; production per PD-15); raises `negative_balance`. Manual waste/adjustment/production cannot cross zero without Manager+ override with reason |
-| DR-09 | Tenant isolation: every tenant-owned row has `organization_id`; every reference stays within one organization; every query is scoped by a central mechanism, not per-route convention (PD-18 decides mechanism) |
+| DR-09 | Tenant isolation: every tenant-owned row has `organization_id`; every reference stays within one organization; every query is scoped by a central mechanism, not per-route convention (mechanism: C-33) |
 | DR-10 | Quantities stored in item base unit (g, ml, each) as exact decimals (fixed-point, ≥ 4 dp); money in minor units or fixed-point; no binary floating point |
 | DR-11 | Conversions: same dimension via constants; cross-dimension only via an ItemUnitConversion for that item. Unconvertible entries are rejected (manual) or recorded as gaps (system) |
 | DR-12 | Counts are observations; they generate `count_variance` movements for the difference and never set a balance directly |

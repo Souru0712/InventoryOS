@@ -132,7 +132,7 @@ Legend — **JuJu status:** ✅ supports · 🟡 partial · ❌ lacks · ➖ not
 **Variation:** JuJu needs a brand/business-specific variation of the InventoryOS capability.
 **Share:** the capability should be one shared implementation/spec with InventoryOS.
 **Exclusive:** stays JuJu-only. **StockPulse** column (context for Phase 2, from
-`POS-Inventory-Automation/docs/audit/02-feature-inventory.md`): A verified · B unverified ·
+[audit 02](../audit/02-feature-inventory.md)): A verified · B unverified ·
 C partial · D missing.
 
 | InventoryOS capability | JuJu status | Evidence / gap | Variation | Share | Exclusive | StockPulse |
@@ -194,7 +194,7 @@ C partial · D missing.
 | Receiving | Yes | Yes | **Yes** (4-quantity receiving, invoices) | No | Internal | Suppliers, items | JuJu lacks invoices and discrepancies |
 | Suppliers | Yes | Yes | **Yes** | No | Internal | — | JuJu has a contact list only |
 | Waste | Yes | Yes | **Yes** | JuJu reason list | Internal | Inventory | — |
-| Employees (team, roles, MFA) | Yes | Yes | Role model shared conceptually | JuJu's own auth and staff accounts | Internal | Auth | Separate identity systems unless PD-03 decides otherwise |
+| Employees (team, roles, MFA) | Yes | Yes | Role model shared conceptually | JuJu's own auth and staff accounts | Internal | Auth | Separate identity systems (C-42: parity by specification until R1) |
 | Kitchen workflows (order board, kitchen display, queue, pickup capacity) | Yes | No (InventoryOS is not a kitchen display) | No | Yes — entirely JuJu's | Internal | Orders | Would only be relevant to a future native POS |
 | Orders and sales (online ordering, payments, walk-ins, refunds, loyalty) | Yes | As a **sales source** only | Sales transaction model (via sales API) | Yes — ordering, payments, loyalty stay JuJu's | Customer-facing + internal | Payments (Square) | JuJu would send order lines at "Ready" through POS-FR-16 |
 | Reporting (inventory side: usage, waste, margins, purchasing) | Yes | Yes | **Yes** | No | Internal | Ledger | — |
@@ -250,7 +250,7 @@ recipe authoring [CONFIRMED].
 
 ## 6. Possible future relationships (no commitment)
 
-No commitment yet (PD-03). Because InventoryOS is built on the Python codebase (C-25), options C and
+Decided 2026-11-04 (C-42): option A, parity by specification, until InventoryOS R1 ships; revisit B after R1.1. Because InventoryOS is built on the Python codebase (C-25), options C and
 D are ruled out unless JuJu is rewritten; A and B remain:
 
 | Option | Description | Benefits | Costs / risks |

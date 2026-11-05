@@ -15,7 +15,7 @@ outcomes below are hypotheses.
 | | **InventoryOS** | **InventoryOS codebase (formerly StockPulse)** | **JuJu Juice** |
 |---|---|---|---|
 | What it is | The commercial SaaS product defined here — the new name for StockPulse (C-24) | The existing inventory application with Square integration | A separate juice brand/business with its own platform |
-| Code | Built on the codebase to the right (C-25); no InventoryOS release yet | `POS-Inventory-Automation` repository (rename pending) | `JuJu` repository |
+| Code | Built on the codebase to the right (C-25); no InventoryOS release yet | `InventoryOS` repository (formerly `POS-Inventory-Automation`) | `JuJu` repository |
 | Role | — | **Chosen technical foundation** (C-25); Phase 2 audits it against this blueprint | **Real-world reference and demonstration environment**; must keep its own brand, customer experience, business logic and requirements |
 | Not | — | Not assumed to meet the blueprint already; its Square integration does not define InventoryOS's integration architecture | Not the commercial product; not the definition of every customer's needs |
 

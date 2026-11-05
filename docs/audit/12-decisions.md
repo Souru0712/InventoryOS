@@ -1,6 +1,7 @@
 # 12 — Decisions requiring founder approval
 
-Each has a recommendation; none is started until you answer.
+Each has a recommendation; none is started until you answer. **Status 2026-11-04:** D3 → C-35 and
+D6 → C-37 in [PRODUCT_DECISIONS](../product/PRODUCT_DECISIONS.md); the rest are mapped in its §7.
 
 | ID | Decision | Conflict found | Recommendation | Blocks |
 |---|---|---|---|---|

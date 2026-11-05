@@ -10,13 +10,14 @@ onboarding, data export and deletion**. InventoryOS is a multi-tenant commercial
 | SAAS-T-01 | Tenant = **Organization** (one business). Every tenant-owned record carries `organization_id` | R1 |
 | SAAS-T-02 | Business locations belong to one organization; location-scoped records carry `location_id`. The number of active locations is set by the entitlement (Complete: location quantity; Standalone: one); memberships carry a location scope | R1 |
 | SAAS-T-03 | Users are global identities; access to an organization only through an active Membership | R1 |
-| SAAS-T-04 | Tenant scoping enforced by a **central mechanism** (e.g. database row-level security, or a mandatory scoped data-access layer) — never by per-route convention. Mechanism chosen in Phase 2 (PD-18) | R1 |
+| SAAS-T-04 | Tenant scoping enforced by a **central mechanism** (e.g. database row-level security, or a mandatory scoped data-access layer) — never by per-route convention. Mechanism: mandatory scoped data-access layer, Postgres RLS later as a second guard (C-33) | R1 |
 | SAAS-T-05 | Cross-tenant references impossible: every foreign key target must belong to the same organization (validated in the write path; DB-enforced where practical) | R1 |
 | SAAS-T-06 | Background jobs run per organization with the organization id as explicit context; a job never queries across tenants except system-level schedulers that only enumerate tenant ids | R1 |
 | SAAS-T-07 | Files stored under tenant-scoped keys; served via authorized, short-lived URLs or proxied responses (DR-28) | R1 |
 | SAAS-T-08 | External webhooks route to exactly one organization via the connection's external merchant + location (DR-22) | R1 |
 | SAAS-T-09 | Automated isolation tests: for every resource type, a user of org A receives 404/403 for org B's ids on read, write and file access | R1 |
 | SAAS-T-10 | Support/admin access to a tenant is explicit, logged (AuditEvent with support actor) and time-boxed | R1 |
+| SAAS-T-11 | One codebase and one schema serve every tenant. Differences between businesses and segments are tenant configuration and data, never tenant-specific code branches, schemas or deployments [CONFIRMED C-30] | R1 |
 
 Context: the existing app is multi-tenant with checks repeated by hand per route (audit S8); JuJu
 is single-store with no tenant concept but enforces roles with Postgres RLS. Neither is a drop-in
@@ -27,23 +28,32 @@ answer to SAAS-T-04; Phase 2 decides.
 | ID | Requirement | Rel |
 |---|---|---|
 | SAAS-A-01 | Registration with email + password; password policy ≥ 10 chars, breached-password check where available | R1 |
-| SAAS-A-02 | Email verification before connecting a POS, uploading invoices (AI cost) or inviting staff | R1 |
-| SAAS-A-03 | Login with throttling per account and per IP; generic error messages | R1 |
+| SAAS-A-02 | Email verification before connecting a POS, uploading invoices (AI cost) or inviting staff [CONFIRMED C-31] | R1 |
+| SAAS-A-03 | Login with throttling per account and per IP; generic error messages [CONFIRMED C-31] | R1 |
 | SAAS-A-04 | Logout; "log out all devices" | R1 |
-| SAAS-A-05 | Password reset by emailed single-use, expiring token; change password while signed in | R1 |
+| SAAS-A-05 | Password reset by emailed single-use, expiring token; change password while signed in [CONFIRMED C-31] | R1 |
 | SAAS-A-06 | Sessions: secure, HttpOnly, SameSite cookies where the architecture allows; idle and absolute timeouts; revocation on password change and membership revocation | R1 |
 | SAAS-A-07 | MFA (TOTP) available to all; strongly prompted for Owners (PD-20 decides whether required) | R1 |
 | SAAS-A-08 | Invitations: emailed link, expires in 7 days, single use, bound to invited email | R1 |
 | SAAS-A-09 | Organization switcher for users with several memberships | R1 |
 | SAAS-A-10 | SSO (Google/Microsoft) | Future |
 
-**Options (PD-21, still open; the Python foundation was chosen in C-25):**
+**Options considered (PD-21, decided 2026-11-04 → C-32: option 1).** Every option had to meet SAAS-A-01..09, including the three
+the owner made non-negotiable: verification, reset and throttling (C-31). Starting point: the
+existing app already has sign-up, login and logout, bcrypt password hashing, signed-cookie sessions
+and SMTP email; it lacks verification, reset, throttling (audit S1/S2) and revocable sessions (S5).
 
-| Option | Precedent | Fits if… |
-|---|---|---|
-| Framework-native auth in the app | Existing app (custom; lacks reset, verification, throttle — audit S1/S2) | Python foundation is chosen and the gaps are closed |
-| Supabase Auth | JuJu (password, TOTP MFA, reset via SMTP) | No longer fits — the foundation is Python (C-25) |
-| Managed identity provider (Auth0, Clerk, WorkOS, Cognito) | None | Speed matters more than per-user cost and vendor coupling |
+| Option | What it means here | Strengths | Costs and risks |
+|---|---|---|---|
+| **1. Finish the in-app auth** [RECOMMENDED] | Keep the existing login and add verification, reset, throttling, server-side sessions and TOTP MFA, using maintained libraries for hashing, tokens and one-time codes | No vendor or per-user fees; users, memberships and roles stay in one database with the tenant model (SAAS-T-03); fits the server-rendered app; much of the flow exists | InventoryOS owns this security code and its tests; throttling must use shared storage (the database) to work across app instances; signed-cookie sessions cannot be revoked, so a server-side session table replaces them |
+| **2. Managed identity provider** (e.g. Auth0, Clerk, WorkOS, AWS Cognito) | The provider hosts sign-up, login, verification, reset, throttling and bot protection, MFA and later SSO; the app keeps Organization, Membership and roles and trusts the provider's sign-in | Least security code to own; MFA, breached-password checks and SSO are usually built in | Monthly cost grows with users (prices change; compare at decision time); lock-in, since leaving can force password resets where hashes cannot be exported; user data in two places; another sub-processor and outage dependency; redirect-based login adds integration work |
+| **3. Self-hosted open-source identity server** (e.g. Keycloak, Ory, Authentik) | Run an identity service next to the app | Option 2's features without per-user fees | Another service to operate, patch, secure and back up; heavy for a one-founder team at 21 customers |
+| Supabase Auth | JuJu's approach | Works and is proven in JuJu | Ruled out: a managed provider like option 2 that also ties the Python app to a Supabase project it does not otherwise use |
+
+Why option 1: the missing pieces are well understood and bounded, the scale is small (A-03), and
+identity stays next to the memberships and tenant model it must agree with. Option 2 is the better
+choice if the owner would rather not own security code, or if SSO (SAAS-A-10) becomes a sales
+requirement early; revisit C-32 if that happens. Phase 2 sizes option 1's work.
 
 Criteria: security defaults, MFA, email flows, multi-org membership support, cost at 21–500 users,
 lock-in, fit with the chosen tenancy mechanism.
