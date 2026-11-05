@@ -28,7 +28,16 @@ issues · decisions · next task.
   setuptools refused the editable install ("Multiple top-level packages discovered in a
   flat-layout: ['app', 'migrations']") — the earlier local `top_level.txt` was not evidence for a
   fresh build. Fixed by installing dependencies only from `pyproject.toml` (as the Dockerfile
-  does); the generator was run locally and lists all 21 requirements. Re-run pending.
+  does); the generator was run locally and lists all 21 requirements.
+- **Run #2 (commit `fd1e3f0`):** Tests (SQLite) **passed** on GitHub — docs checker "0 problems",
+  suite **546 passed, 6 skipped** in 1 m 43 s. Tests (PostgreSQL 16) failed before any test:
+  Docker could not publish the database port ("failed to start userland proxy for port mapping
+  0.0.0.0:5432 … timed out starting the userland proxy").
+- **Fixes after run #2:** the Postgres job now runs in a `python:3.12-slim` container on the
+  database's network and connects to host `postgres` (no published port); a workflow-level
+  `shell: bash` default turns on `pipefail`, because GitHub's implicit shell does not, which would
+  have let `pytest | tee` hide a failing run (demonstrated locally: exit 3 propagates). Re-run
+  pending.
 
 **Files changed**
 - `.github/workflows/ci.yml` (new), `CLAUDE.md`, `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md`
