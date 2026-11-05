@@ -5,6 +5,48 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.03 completed; Dependabot set to lockfile-only
+
+**Implemented**
+- `.github/dependabot.yml` (uv): `versioning-strategy: lockfile-only`, and major updates of
+  `python-dateutil` ignored, each with a comment giving the reason.
+
+**Verified**
+- PR #4 merged by the owner (`d2957b8`); PR #3's commit came with it and GitHub marked PR #3
+  merged. All four required checks green on `main` at `d2957b8`. Acceptance of T0.03 met: the
+  image installs exactly the locked versions (Docker image job), pip-audit runs in CI with no
+  finding.
+- Dependabot's first run on `main` (config valid; 4 of 6 update jobs succeeded) opened PRs #5–#8.
+  Each only raised a minimum in `pyproject.toml`, the default "increase" strategy for
+  applications: #5 setuptools (build-system table, unused with `package = false`), #6 uvicorn (lock
+  unchanged), #7 psycopg and #8 sentry-sdk, which would have **downgraded** the lock (3.3.8 →
+  3.3.6, 2.74.0 → 2.73.0).
+- The 2 failed jobs: both "dependency_file_not_resolvable" for `python-dateutil` 3.x, because
+  botocore requires `python-dateutil>=2.1,<3.0.0`.
+- GitHub's Dependabot options reference lists `uv` among the ecosystems that support
+  `versioning-strategy`, and `lockfile-only` means pull requests only for lockfile updates.
+- Dependabot YAML parses; docs checker 0 problems.
+- **Not verified yet:** Dependabot's next run under the new configuration (it runs after this
+  merges).
+
+**Files changed**
+- `.github/dependabot.yml`, `docs/roadmap/DEVELOPMENT_TASK_BREAKDOWN.md` (T0.03 → Completed), this
+  log.
+
+**Open issues**
+- The owner closes PRs #5–#8 after this merges.
+- Merged branches `docs/t0.02-protection`, `docs/record-t0.02` and `t0.03-lock-deps` still on
+  GitHub.
+
+**Decisions made**
+- None new: lockfile-only keeps ID-05's intent (the lock is the source of exact versions; ranges
+  in `pyproject.toml` change only by hand).
+
+**Next task**
+- T0.04 coding standards: ruff + mypy.
+
+---
+
 ## 2026-11-05 — T0.03 Lock dependencies, audit, Dependabot
 
 **Implemented**

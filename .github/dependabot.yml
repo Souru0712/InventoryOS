@@ -5,9 +5,17 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Update uv.lock only. The default for applications raises the minimums in pyproject.toml,
+    # and its first run proposed downgrades of locked versions (psycopg, sentry-sdk).
+    versioning-strategy: "lockfile-only"
     groups:
       python-minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # botocore requires python-dateutil < 3, so a 3.x update cannot resolve and fails every
+      # run. Remove this once botocore accepts 3.x.
+      - dependency-name: "python-dateutil"
+        update-types: ["version-update:semver-major"]
   # Pinned actions in .github/workflows.
   - package-ecosystem: "github-actions"
     directory: "/"
