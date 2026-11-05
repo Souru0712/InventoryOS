@@ -28,6 +28,11 @@ implementation sessions; the detail lives in `docs/`.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).
+- Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
+  `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or
+  `javascript:` URLs (a test enforces both). Templates see only `PublicSettings`, never secrets.
+- An upload's type comes from its bytes (`detect_media_type`), never its name or Content-Type;
+  uploads are served with an allow-listed type, `nosniff` and `Content-Disposition`.
 - JuJu (`C:\Users\oscar\.vscode\JuJu`) and the snack-box project are separate repositories: never
   modify them from here.
 

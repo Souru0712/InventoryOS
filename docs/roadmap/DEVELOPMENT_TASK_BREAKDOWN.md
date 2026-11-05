@@ -39,9 +39,9 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T0.01 | Hermetic test configuration | P0 | S | M0 | — | Completed (2026-11-05; green in CI run #3) |
 | T0.02 | CI on GitHub Actions (SQLite + Postgres 16) | P0 | S | M0 | T0.01 | Completed (2026-11-05; protection proven: direct push rejected, failing PR blocked) |
 | T0.03 | Lock dependencies, audit, Dependabot | P0 | S | M0 | T0.02 | Completed (2026-11-05; image installs the lock, pip-audit and lock-match checks required) |
-| T0.04 | Coding standards: ruff + mypy | P1 | S | M0 | T0.02 | In review (PR open; CI evidence in the execution log) |
+| T0.04 | Coding standards: ruff + mypy | P1 | S | M0 | T0.02 | Completed (2026-11-05; ruff and mypy required checks on main) |
 | T0.05 | Extract the snack-box module (C-37) | P0 | M | M0 | T0.02, owner repo | Blocked (owner repo; on the critical path) |
-| T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | M0 | T0.01 | Ready |
+| T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | M0 | T0.01 | In review (PR open; CI evidence in the execution log) |
 | T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | Ready |
 | T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | M0 | T0.01 | Ready |
 | T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Blocked (owner accounts, OD-03) |

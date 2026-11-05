@@ -28,7 +28,7 @@
     </div>
     <div class="field">
       <label for="dimension">Tracked by</label>
-      <select id="dimension" name="dimension" required onchange="syncUnits()">
+      <select id="dimension" name="dimension" required>
         <option value="count">Count</option>
         <option value="weight">Weight</option>
         <option value="volume">Volume</option>
@@ -99,7 +99,7 @@
 </form>
 </div>
 
-<script>
+<script nonce="{{ request.state.csp_nonce }}">
   const UNITS = {
     count: [{% for unit in UNITS_BY_DIMENSION[Dimension.COUNT] %}["{{ unit.code }}", "{{ unit.label }}"],{% endfor %}],
     weight: [{% for unit in UNITS_BY_DIMENSION[Dimension.WEIGHT] %}["{{ unit.code }}", "{{ unit.label }}"],{% endfor %}],
@@ -119,6 +119,7 @@
     fill(document.getElementById("stock_unit"), UNITS[dimension]);
     fill(document.getElementById("receive_unit"), UNITS[dimension].concat([["each", "case / box"]]));
   }
+  document.getElementById("dimension").addEventListener("change", syncUnits);
   syncUnits();
 </script>
 {% endblock %}

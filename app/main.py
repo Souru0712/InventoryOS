@@ -35,6 +35,7 @@ from app.web import (
 from app.web import (
     settings as settings_page,
 )
+from app.web.headers import SecurityHeaders
 from app.web.templating import templates
 
 logging.basicConfig(
@@ -66,6 +67,8 @@ app.add_middleware(
     https_only=settings.app_base_url.startswith("https"),
     same_site="lax",
 )
+# Added last, so it wraps everything else, static files included.
+app.add_middleware(SecurityHeaders)
 
 static_dir = Path(__file__).resolve().parent / "web" / "static"
 static_dir.mkdir(parents=True, exist_ok=True)

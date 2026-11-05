@@ -13,7 +13,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.extract.invoice import SUPPORTED_MEDIA, ExtractionError, Extractor, get_extractor
+from app.extract.images import detect_media_type
+from app.extract.invoice import (
+    STORED_SUFFIX,
+    SUPPORTED_MEDIA,
+    ExtractionError,
+    Extractor,
+    get_extractor,
+)
 from app.models import (
     Document,
     DocumentLine,
@@ -109,7 +116,11 @@ def save_upload(
     uploaded_by: int | None = None,
     kind: str = "invoice",
 ) -> Document:
-    """Store the photo as the receiving record, deduplicated by content hash."""
+    """Store the photo as the receiving record, deduplicated by content hash.
+
+    `content_type` is what the browser claimed. It is only logged: what is stored, and later
+    served, is decided by the bytes themselves (S3, S12).
+    """
     settings = get_settings()
     limit = settings.max_upload_mb * 1024 * 1024
     if not content:
@@ -122,6 +133,19 @@ def save_upload(
         raise UploadRejected(
             f"{suffix or 'that file type'} cannot be read; use {', '.join(sorted(SUPPORTED_MEDIA))}"
         )
+    media_type = detect_media_type(content)
+    if media_type is None:
+        raise UploadRejected(
+            f"that file is not a readable photo or PDF; use {', '.join(sorted(SUPPORTED_MEDIA))}"
+        )
+    if media_type != content_type:
+        log.info(
+            "tenant %s upload %r was sent as %s but is %s",
+            tenant_id,
+            filename,
+            content_type,
+            media_type,
+        )
 
     digest = hashlib.sha256(content).hexdigest()
     existing = db.scalars(
@@ -131,9 +155,9 @@ def save_upload(
         log.info("tenant %s re-uploaded document %s", tenant_id, existing.id)
         return existing
 
-    key = f"{tenant_id}/{digest}{suffix}"
+    key = f"{tenant_id}/{digest}{STORED_SUFFIX[media_type]}"
     try:
-        get_storage().put(key, content, content_type or "image/jpeg")
+        get_storage().put(key, content, media_type)
     except StorageError:
         log.exception("could not store an upload for tenant %s", tenant_id)
         raise UploadRejected("the photo could not be saved; please try again") from None
@@ -144,7 +168,7 @@ def save_upload(
         uploaded_by=uploaded_by,
         kind=kind,
         storage_key=key,
-        content_type=content_type or "image/jpeg",
+        content_type=media_type,
         sha256=digest,
         byte_size=len(content),
     )

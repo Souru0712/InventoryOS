@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from pathlib import PurePosixPath
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
 from app.db import get_db
-from app.extract.invoice import ExtractionError
+from app.extract.invoice import SUPPORTED_MEDIA, ExtractionError
 from app.models import Document, DocumentStatus, Location, StockItem, Tenant, User
 from app.orchestration.extraction_quality import correction_stats
 from app.orchestration.receiving import (
@@ -169,10 +170,21 @@ def document_image(
     except StorageError:
         log.exception("photo for document %s is missing from storage", document.id)
         raise HTTPException(status_code=404, detail="photo not found") from None
+    # The type comes from the allow-list by stored suffix, never from what the uploader sent:
+    # records stored before T0.06 kept the uploader's Content-Type, which could be text/html (S3).
+    suffix = PurePosixPath(document.storage_key).suffix.lower()
+    media_type = SUPPORTED_MEDIA.get(suffix)
+    disposition = "inline"
+    if media_type is None:
+        media_type, disposition = "application/octet-stream", "attachment"
     return Response(
         content,
-        media_type=document.content_type,
-        headers={"Cache-Control": "private, max-age=3600"},
+        media_type=media_type,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "Content-Disposition": f'{disposition}; filename="document-{document.id}{suffix}"',
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

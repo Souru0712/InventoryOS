@@ -13,11 +13,43 @@ import logging
 
 log = logging.getLogger(__name__)
 
+# What Pillow calls each image format we accept. Phones save multi-picture JPEGs, which Pillow
+# reports as MPO; to everything else they are ordinary JPEGs.
+_IMAGE_FORMATS = {
+    "JPEG": "image/jpeg",
+    "MPO": "image/jpeg",
+    "PNG": "image/png",
+    "WEBP": "image/webp",
+    "GIF": "image/gif",
+}
+
 # The long edge the model resizes to anyway.
 MAX_EDGE = 1568
 # Comfortably under the API's 5 MB per-image limit, after base64 inflates it by a third.
 MAX_BYTES = 3_500_000
 JPEG_QUALITY = 85
+
+
+def detect_media_type(content: bytes) -> str | None:
+    """What the bytes are, read from the bytes; None when they are not a type we accept.
+
+    The file name and the browser's Content-Type are the uploader's claims; this is the only
+    thing an upload's stored and served type is decided by (S3, S12).
+    """
+    # PDF readers accept the header anywhere in the first kilobyte.
+    if b"%PDF-" in content[:1024]:
+        return "application/pdf"
+    try:
+        from PIL import Image
+    except ImportError:  # pragma: no cover - Pillow is a dependency
+        log.error("Pillow is not installed; no image upload can be accepted")
+        return None
+    try:
+        # Reads the header only; decoding the pixels waits for prepare_for_model.
+        with Image.open(io.BytesIO(content)) as image:
+            return _IMAGE_FORMATS.get(image.format or "")
+    except (OSError, ValueError, Image.DecompressionBombError):
+        return None
 
 
 def prepare_for_model(content: bytes, media_type: str) -> tuple[bytes, str]:

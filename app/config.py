@@ -42,7 +42,8 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     extractor_model: str = "claude-opus-5"
-    max_upload_mb: int = 20
+    # SEC-13: uploads are at most 15 MB.
+    max_upload_mb: int = 15
 
     # Where invoice photos live. "local" is a directory, which must be a persistent volume when
     # deployed; "s3" is any S3-compatible bucket (AWS, R2, Backblaze, Spaces, MinIO).

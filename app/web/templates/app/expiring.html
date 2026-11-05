@@ -107,7 +107,7 @@ from the last four weeks of sales.</p>
       </td>
       <td>
         <form method="post" action="/app/expiring/{{ p.batch.id }}/remove"
-              onsubmit="return confirm('Remove this date? The stock itself is not changed.');">
+              data-confirm="Remove this date? The stock itself is not changed.">
           <button class="btn small secondary" type="submit" title="Remove a wrongly entered date">Remove</button>
         </form>
       </td>
