@@ -14,7 +14,7 @@ and the NFR rule that every acceptance criterion maps to a test or a documented 
 | Workflow | One test module per WF-01..28 in R1 scope, driving services end to end | `tests/workflows/` *(proposed)* | Postgres CI | minutes |
 | Route / API | HTTP via `TestClient`: forms, CSRF, redirects, webhooks | `tests/` | both | seconds |
 | Permission matrix | Generated: every permission key × role → allowed/denied (AC-STF-02) | `tests/test_permissions.py` *(proposed)* | both | seconds |
-| Tenant isolation | Generated from the route table: every id route × operation with another tenant's id → 404/403 (AC-SAAS-01) | `tests/test_isolation.py` *(proposed)* | Postgres CI | minutes |
+| Tenant isolation | Generated from the route table: every id route × operation with another tenant's id → 404/403 (AC-SAAS-01) | `tests/test_isolation.py` (T1.03) | SQLite and Postgres CI | about a minute |
 | Migration | Model/migration diff, single head, downgrade, upgrade over populated data + per-step invariants ([migration roadmap §5](DATA_MIGRATION_ROADMAP.md#5-validation-per-step-migration-test-invariants)) | `tests/test_migrations.py` (existing) | both | minutes |
 | Contract (adapters) | Square adapter against recorded payloads; business logic only against normalized fixtures (AC-POS-12) | `tests/` (existing Square fixtures) | both | seconds |
 | Static architecture | Only the posting service writes movements/balances; no unscoped queries; provider imports only in `app/providers/`; no price literals in domain code; every route declares a permission | `tests/test_architecture.py` *(proposed)* | both | seconds |

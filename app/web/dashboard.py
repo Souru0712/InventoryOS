@@ -44,6 +44,7 @@ from app.orchestration.views import (
 from app.providers.square import oauth
 from app.security import (
     SESSION_STATE_KEY,
+    location_filter,
     new_state,
     require_org,
     require_tenant,
@@ -126,7 +127,7 @@ def _locations(db: Session, org: OrgContext) -> list[Location]:
 @router.get("/app", response_class=HTMLResponse)
 def dashboard(
     request: Request,
-    location: int | None = None,
+    location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_org),
@@ -199,7 +200,7 @@ def _sync_status(
 @router.get("/app/expiring", response_class=HTMLResponse)
 def expiring(
     request: Request,
-    location: int | None = None,
+    location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_org),

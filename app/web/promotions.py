@@ -23,7 +23,13 @@ from app.orchestration.promotions import (
     suggestions_for,
 )
 from app.orchestration.views import tenant_currency
-from app.security import require_org, require_tenant, require_user, require_writable
+from app.security import (
+    location_filter,
+    require_org,
+    require_tenant,
+    require_user,
+    require_writable,
+)
 from app.units import to_base
 from app.web.templating import templates
 
@@ -34,7 +40,7 @@ router = APIRouter()
 @router.get("/app/promotions", response_class=HTMLResponse)
 def promotions_page(
     request: Request,
-    location: int | None = None,
+    location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_org),
