@@ -208,23 +208,9 @@
 <a class="skip" href="#content">Skip to content</a>
 <header class="site">
   <div class="inner">
-    {% if shop %}
-    <a class="brand" href="/shop/{{ shop.id }}">{{ shop.name }}</a>
-    {% else %}
     <a class="brand" href="/"><i></i>Stock<span>Pulse</span></a>
-    {% endif %}
     <nav>
-      {% if shop %}
-        {% if customer %}
-        <a href="/shop/{{ shop.id }}/me">My box</a>
-        <a href="/shop/{{ shop.id }}/me/orders">Orders</a>
-        <a href="/shop/{{ shop.id }}/me/preferences">Preferences</a>
-        <a href="/shop/{{ shop.id }}/me/referrals">Refer a friend</a>
-        <a href="/shop/{{ shop.id }}/logout">Sign out</a>
-        {% else %}
-        <a class="btn small" href="/shop/{{ shop.id }}/login">Sign in</a>
-        {% endif %}
-      {% elif tenant %}
+      {% if tenant %}
         {% set path = request.url.path %}
         {% macro nav(href, label) %}
           {% set on = path == href or (href != "/app" and path.startswith(href ~ "/")) %}
@@ -235,7 +221,6 @@
         {{ nav("/app/receiving", "Receiving") }}
         {{ nav("/app/expiring", "Expiring") }}
         {{ nav("/app/promotions", "Promotions") }}
-        {% if owns_snack_box(tenant) %}{{ nav("/app/boxes", "Boxes") }}{% endif %}
         {{ nav("/app/reorder", "Reorder") }}
         {{ nav("/app/report", "Report") }}
         {{ nav("/app/settings", "Settings") }}

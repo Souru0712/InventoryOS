@@ -16,10 +16,6 @@ SCOPES = [
     "INVENTORY_READ",
     "INVENTORY_WRITE",
     "ORDERS_READ",
-    # Snack boxes: a hosted checkout per order, and the payment/refund webhooks that follow it.
-    "ORDERS_WRITE",
-    "PAYMENTS_READ",
-    "PAYMENTS_WRITE",
 ]
 
 

@@ -22,10 +22,8 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import SCHEDULER_LOCK, LeaderLock, session_scope
-from app.entitlements import owns_snack_box
-from app.models import BoxSettings, Plan, ProviderConnection, Tenant
+from app.models import Plan, ProviderConnection, Tenant
 from app.observability import log_context, new_request_id
-from app.orchestration.boxes import expire_unpaid, reconcile
 from app.orchestration.health import record_snapshot
 from app.orchestration.reporting import report_sent_recently, send_weekly_report
 from app.orchestration.subscriptions import expire_due_trials
@@ -107,29 +105,6 @@ def record_health_snapshots() -> None:
                 log.exception("health snapshot failed for tenant %s", tenant_id)
 
 
-def box_housekeeping() -> None:
-    """Cancel unpaid box orders, then bring box allocations back into step with Square."""
-    with session_scope() as db:
-        tenant_ids = [
-            row.tenant_id
-            for row in db.scalars(select(BoxSettings))
-            if owns_snack_box(row.tenant_id)
-        ]
-    for tenant_id in tenant_ids:
-        try:
-            with session_scope() as db:
-                expired = expire_unpaid(db, tenant_id)
-                open_issues = sum(1 for row in reconcile(db, tenant_id) if row.issues)
-            log.info(
-                "box housekeeping for tenant %s: %s expired, %s items need a look",
-                tenant_id,
-                expired,
-                open_issues,
-            )
-        except Exception:
-            log.exception("box housekeeping failed for tenant %s", tenant_id)
-
-
 def _job(func: Callable[[], None]) -> Callable[[], None]:
     """Each run of a job gets its own id on every line it logs, as a web request does."""
 
@@ -174,14 +149,6 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         hour=2,
         minute=15,
         id="record_health_snapshots",
-        max_instances=1,
-        coalesce=True,
-    )
-    scheduler.add_job(
-        _job(box_housekeeping),
-        "interval",
-        minutes=10,
-        id="box_housekeeping",
         max_instances=1,
         coalesce=True,
     )

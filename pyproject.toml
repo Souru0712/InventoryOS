@@ -100,17 +100,6 @@ strict_equality = true
 warn_return_any = true
 
 [[tool.mypy.overrides]]
-# The snack-box module leaves this repository in T0.05 (C-37); typing it here would be wasted.
-module = [
-    "app.orchestration.boxes",
-    "app.orchestration.customers",
-    "app.orchestration.referrals",
-    "app.web.boxes",
-    "app.web.shop",
-]
-ignore_errors = true
-
-[[tool.mypy.overrides]]
 # These ship no type information; stub packages would be new dependencies for a few call sites.
 module = ["apscheduler.*", "boto3", "botocore.*"]
 ignore_missing_imports = true

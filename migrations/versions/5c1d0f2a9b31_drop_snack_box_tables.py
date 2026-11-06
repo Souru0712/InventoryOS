@@ -1,0 +1,529 @@
+"""Drop the snack-box tables (DM-1, T0.05)
+
+The snack-box module moved to its own private repository (C-37, ADR-0016). This removes its 11
+tables, its five enum types and inventory_events.box_order_id, the reverse of e7b19fdcb1ce.
+webhook_events, created by that same migration, belongs to the product and stays.
+
+Destructive by design and approved by C-37: local and demo data only. The downgrade recreates
+the tables empty, so the chain still rolls back to base.
+
+Revision ID: 5c1d0f2a9b31
+Revises: 948e22969d09
+Create Date: 2026-11-06
+
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+from app.db import Qty
+
+revision: str = "5c1d0f2a9b31"
+down_revision: str | None = "948e22969d09"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    with op.batch_alter_table("inventory_events", schema=None) as batch_op:
+        batch_op.drop_column("box_order_id")
+
+    with op.batch_alter_table("credit_transactions", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_credit_transactions_tenant_id"))
+        batch_op.drop_index(batch_op.f("ix_credit_transactions_customer_id"))
+
+    op.drop_table("credit_transactions")
+    with op.batch_alter_table("snack_profiles", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_snack_profiles_tenant_id"))
+
+    op.drop_table("snack_profiles")
+    with op.batch_alter_table("referrals", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_referrals_tenant_id"))
+        batch_op.drop_index(batch_op.f("ix_referrals_referrer_customer_id"))
+
+    op.drop_table("referrals")
+    with op.batch_alter_table("customer_product_preferences", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_customer_product_preferences_tenant_id"))
+        batch_op.drop_index(batch_op.f("ix_customer_product_preferences_customer_id"))
+
+    op.drop_table("customer_product_preferences")
+    with op.batch_alter_table("box_reviews", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_box_reviews_tenant_id"))
+        batch_op.drop_index(batch_op.f("ix_box_reviews_customer_id"))
+        batch_op.drop_index(batch_op.f("ix_box_reviews_box_order_id"))
+
+    op.drop_table("box_reviews")
+    with op.batch_alter_table("box_lines", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_box_lines_tenant_id"))
+        batch_op.drop_index(batch_op.f("ix_box_lines_stock_item_id"))
+        batch_op.drop_index(batch_op.f("ix_box_lines_box_order_id"))
+
+    op.drop_table("box_lines")
+    with op.batch_alter_table("preference_changes", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_preference_changes_tenant_id"))
+        batch_op.drop_index(batch_op.f("ix_preference_changes_customer_id"))
+
+    op.drop_table("preference_changes")
+    with op.batch_alter_table("customer_login_tokens", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_customer_login_tokens_tenant_id"))
+        batch_op.drop_index(batch_op.f("ix_customer_login_tokens_customer_id"))
+
+    op.drop_table("customer_login_tokens")
+    with op.batch_alter_table("box_settings", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_box_settings_tenant_id"))
+
+    op.drop_table("box_settings")
+    with op.batch_alter_table("box_orders", schema=None) as batch_op:
+        batch_op.drop_index("ix_box_orders_tenant_status")
+        batch_op.drop_index(batch_op.f("ix_box_orders_tenant_id"))
+        batch_op.drop_index(batch_op.f("ix_box_orders_customer_id"))
+
+    op.drop_table("box_orders")
+    with op.batch_alter_table("customers", schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f("ix_customers_tenant_id"))
+
+    op.drop_table("customers")
+
+    # Postgres keeps enum types after their tables are dropped; remove them so upgrade can rebuild.
+    if op.get_bind().dialect.name == "postgresql":
+        for name in (
+            "boxorderstatus",
+            "boxlinestatus",
+            "productpreferencestate",
+            "referralstatus",
+            "creditkind",
+        ):
+            op.execute(f"DROP TYPE IF EXISTS {name}")
+
+
+def downgrade() -> None:
+    op.create_table(
+        "customers",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("email", sa.String(length=255), nullable=False),
+        sa.Column("first_name", sa.String(length=100), nullable=True),
+        sa.Column("last_name", sa.String(length=100), nullable=True),
+        sa.Column("phone", sa.String(length=40), nullable=True),
+        sa.Column("referral_code", sa.String(length=24), nullable=False),
+        sa.Column("allergens", sa.String(length=200), nullable=True),
+        sa.Column("allergens_confirmed_at", sa.DateTime(), nullable=True),
+        sa.Column("dietary", sa.String(length=200), nullable=False),
+        sa.Column("spice", sa.String(length=16), nullable=False),
+        sa.Column("novelty", sa.String(length=16), nullable=False),
+        sa.Column("liked_categories", sa.String(length=500), nullable=False),
+        sa.Column("avoided_categories", sa.String(length=500), nullable=False),
+        sa.Column("is_active", sa.Boolean(), nullable=False),
+        sa.Column("deactivated_at", sa.DateTime(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("tenant_id", "email"),
+        sa.UniqueConstraint("tenant_id", "referral_code"),
+    )
+    with op.batch_alter_table("customers", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_customers_tenant_id"), ["tenant_id"], unique=False)
+
+    op.create_table(
+        "box_orders",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("location_id", sa.Integer(), nullable=False),
+        sa.Column("customer_id", sa.Integer(), nullable=False),
+        sa.Column("box_type", sa.String(length=16), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "PENDING_PAYMENT",
+                "PAID",
+                "PACKED",
+                "PICKED_UP",
+                "CANCELLED",
+                "REFUNDED",
+                name="boxorderstatus",
+            ),
+            nullable=False,
+        ),
+        sa.Column("price_cents", sa.Integer(), nullable=False),
+        sa.Column("discount_cents", sa.Integer(), nullable=False),
+        sa.Column("credit_cents", sa.Integer(), nullable=False),
+        sa.Column("payment_source", sa.String(length=16), nullable=True),
+        sa.Column("square_order_id", sa.String(length=120), nullable=True),
+        sa.Column("square_payment_id", sa.String(length=120), nullable=True),
+        sa.Column("payment_url", sa.String(length=500), nullable=True),
+        sa.Column("pay_by", sa.DateTime(), nullable=True),
+        sa.Column("pickup_on", sa.Date(), nullable=True),
+        sa.Column("attention", sa.String(length=500), nullable=True),
+        sa.Column("rules", sa.String(length=16), nullable=True),
+        sa.Column("overall_rating", sa.Integer(), nullable=True),
+        sa.Column("would_reorder", sa.String(length=8), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("paid_at", sa.DateTime(), nullable=True),
+        sa.Column("packed_at", sa.DateTime(), nullable=True),
+        sa.Column("picked_up_at", sa.DateTime(), nullable=True),
+        sa.Column("cancelled_at", sa.DateTime(), nullable=True),
+        sa.Column("refunded_at", sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["customer_id"],
+            ["customers.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["location_id"],
+            ["locations.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("tenant_id", "square_order_id"),
+    )
+    with op.batch_alter_table("box_orders", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_box_orders_customer_id"), ["customer_id"], unique=False
+        )
+        batch_op.create_index(batch_op.f("ix_box_orders_tenant_id"), ["tenant_id"], unique=False)
+        batch_op.create_index("ix_box_orders_tenant_status", ["tenant_id", "status"], unique=False)
+
+    op.create_table(
+        "box_settings",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("location_id", sa.Integer(), nullable=True),
+        sa.Column("is_open", sa.Boolean(), nullable=False),
+        sa.Column("price_sweet_cents", sa.Integer(), nullable=False),
+        sa.Column("price_chaos_cents", sa.Integer(), nullable=False),
+        sa.Column("price_world_cents", sa.Integer(), nullable=False),
+        sa.Column("min_items", sa.Integer(), nullable=False),
+        sa.Column("max_items", sa.Integer(), nullable=False),
+        sa.Column("target_cogs_cents", sa.Integer(), nullable=False),
+        sa.Column("packaging_cents", sa.Integer(), nullable=False),
+        sa.Column("payment_fee_bps", sa.Integer(), nullable=False),
+        sa.Column("payment_fee_fixed_cents", sa.Integer(), nullable=False),
+        sa.Column("min_contribution_cents", sa.Integer(), nullable=False),
+        sa.Column("min_days_after_pickup", sa.Integer(), nullable=False),
+        sa.Column("pickup_after_days", sa.Integer(), nullable=False),
+        sa.Column("referral_reward_cents", sa.Integer(), nullable=False),
+        sa.Column("referral_discount_cents", sa.Integer(), nullable=False),
+        sa.Column("payment_window_minutes", sa.Integer(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["location_id"],
+            ["locations.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("tenant_id"),
+    )
+    with op.batch_alter_table("box_settings", schema=None) as batch_op:
+        batch_op.create_index(batch_op.f("ix_box_settings_tenant_id"), ["tenant_id"], unique=False)
+
+    op.create_table(
+        "customer_login_tokens",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("customer_id", sa.Integer(), nullable=False),
+        sa.Column("token_hash", sa.String(length=64), nullable=False),
+        sa.Column("expires_at", sa.DateTime(), nullable=False),
+        sa.Column("used_at", sa.DateTime(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["customer_id"],
+            ["customers.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("token_hash"),
+    )
+    with op.batch_alter_table("customer_login_tokens", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_customer_login_tokens_customer_id"), ["customer_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_customer_login_tokens_tenant_id"), ["tenant_id"], unique=False
+        )
+
+    op.create_table(
+        "preference_changes",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("customer_id", sa.Integer(), nullable=False),
+        sa.Column("field", sa.String(length=40), nullable=False),
+        sa.Column("old_value", sa.String(length=500), nullable=True),
+        sa.Column("new_value", sa.String(length=500), nullable=True),
+        sa.Column("source", sa.String(length=16), nullable=False),
+        sa.Column("changed_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["customer_id"],
+            ["customers.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    with op.batch_alter_table("preference_changes", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_preference_changes_customer_id"), ["customer_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_preference_changes_tenant_id"), ["tenant_id"], unique=False
+        )
+
+    op.create_table(
+        "box_lines",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("box_order_id", sa.Integer(), nullable=False),
+        sa.Column("stock_item_id", sa.Integer(), nullable=False),
+        sa.Column("qty_base", Qty(), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum("ALLOCATED", "PACKED", "SHORT", "RELEASED", name="boxlinestatus"),
+            nullable=False,
+        ),
+        sa.Column("unit_cost_cents", Qty(), nullable=False),
+        sa.Column("count_applied", sa.Boolean(), nullable=False),
+        sa.Column("fit", Qty(), nullable=False),
+        sa.Column("shelf", Qty(), nullable=False),
+        sa.Column("driver", sa.String(length=16), nullable=False),
+        sa.Column("why", sa.String(length=500), nullable=False),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("released_at", sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["box_order_id"],
+            ["box_orders.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["stock_item_id"],
+            ["stock_items.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("box_order_id", "stock_item_id"),
+    )
+    with op.batch_alter_table("box_lines", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_box_lines_box_order_id"), ["box_order_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_box_lines_stock_item_id"), ["stock_item_id"], unique=False
+        )
+        batch_op.create_index(batch_op.f("ix_box_lines_tenant_id"), ["tenant_id"], unique=False)
+
+    op.create_table(
+        "box_reviews",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("customer_id", sa.Integer(), nullable=False),
+        sa.Column("box_order_id", sa.Integer(), nullable=False),
+        sa.Column("stock_item_id", sa.Integer(), nullable=False),
+        sa.Column("rating", sa.String(length=16), nullable=False),
+        sa.Column("send_again", sa.Boolean(), nullable=False),
+        sa.Column("note", sa.String(length=500), nullable=True),
+        sa.Column("submitted_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["box_order_id"],
+            ["box_orders.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["customer_id"],
+            ["customers.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["stock_item_id"],
+            ["stock_items.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("box_order_id", "stock_item_id"),
+    )
+    with op.batch_alter_table("box_reviews", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_box_reviews_box_order_id"), ["box_order_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_box_reviews_customer_id"), ["customer_id"], unique=False
+        )
+        batch_op.create_index(batch_op.f("ix_box_reviews_tenant_id"), ["tenant_id"], unique=False)
+
+    op.create_table(
+        "customer_product_preferences",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("customer_id", sa.Integer(), nullable=False),
+        sa.Column("stock_item_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "state",
+            sa.Enum("FAVORITE", "NEVER_AGAIN", name="productpreferencestate"),
+            nullable=False,
+        ),
+        sa.Column("source", sa.String(length=16), nullable=False),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["customer_id"],
+            ["customers.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["stock_item_id"],
+            ["stock_items.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("customer_id", "stock_item_id"),
+    )
+    with op.batch_alter_table("customer_product_preferences", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_customer_product_preferences_customer_id"), ["customer_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_customer_product_preferences_tenant_id"), ["tenant_id"], unique=False
+        )
+
+    op.create_table(
+        "referrals",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("referrer_customer_id", sa.Integer(), nullable=False),
+        sa.Column("referred_customer_id", sa.Integer(), nullable=False),
+        sa.Column("code", sa.String(length=24), nullable=False),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "PENDING", "QUALIFIED", "REWARDED", "CANCELLED", "REVERSED", name="referralstatus"
+            ),
+            nullable=False,
+        ),
+        sa.Column("box_order_id", sa.Integer(), nullable=True),
+        sa.Column("reward_cents", sa.Integer(), nullable=False),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("qualified_at", sa.DateTime(), nullable=True),
+        sa.Column("rewarded_at", sa.DateTime(), nullable=True),
+        sa.Column("cancelled_at", sa.DateTime(), nullable=True),
+        sa.Column("reversed_at", sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["box_order_id"],
+            ["box_orders.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["referred_customer_id"],
+            ["customers.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["referrer_customer_id"],
+            ["customers.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("tenant_id", "referred_customer_id"),
+    )
+    with op.batch_alter_table("referrals", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_referrals_referrer_customer_id"), ["referrer_customer_id"], unique=False
+        )
+        batch_op.create_index(batch_op.f("ix_referrals_tenant_id"), ["tenant_id"], unique=False)
+
+    op.create_table(
+        "snack_profiles",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("stock_item_id", sa.Integer(), nullable=False),
+        sa.Column("boxable", sa.Boolean(), nullable=False),
+        sa.Column("flavors", sa.String(length=120), nullable=False),
+        sa.Column("origin", sa.String(length=40), nullable=False),
+        sa.Column("allergens", sa.String(length=200), nullable=True),
+        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["stock_item_id"],
+            ["stock_items.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("stock_item_id"),
+    )
+    with op.batch_alter_table("snack_profiles", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_snack_profiles_tenant_id"), ["tenant_id"], unique=False
+        )
+
+    op.create_table(
+        "credit_transactions",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("customer_id", sa.Integer(), nullable=False),
+        sa.Column("amount_cents", sa.Integer(), nullable=False),
+        sa.Column(
+            "kind",
+            sa.Enum(
+                "REFERRAL_REWARD",
+                "REFERRAL_REVERSAL",
+                "REDEMPTION",
+                "REDEMPTION_RETURN",
+                "ADJUSTMENT",
+                name="creditkind",
+            ),
+            nullable=False,
+        ),
+        sa.Column("reference", sa.String(length=80), nullable=False),
+        sa.Column("box_order_id", sa.Integer(), nullable=True),
+        sa.Column("referral_id", sa.Integer(), nullable=True),
+        sa.Column("note", sa.String(length=300), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["box_order_id"],
+            ["box_orders.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["customer_id"],
+            ["customers.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["referral_id"],
+            ["referrals.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("tenant_id", "reference"),
+    )
+    with op.batch_alter_table("credit_transactions", schema=None) as batch_op:
+        batch_op.create_index(
+            batch_op.f("ix_credit_transactions_customer_id"), ["customer_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_credit_transactions_tenant_id"), ["tenant_id"], unique=False
+        )
+
+    with op.batch_alter_table("inventory_events", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("box_order_id", sa.Integer(), nullable=True))

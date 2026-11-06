@@ -10,12 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Customer, Tenant, User
+from app.models import Tenant, User
 from app.observability import bind
 
 SESSION_USER_KEY = "uid"
 SESSION_STATE_KEY = "oauth_state"
-SESSION_CUSTOMER_KEY = "cid"
 
 
 def hash_password(password: str) -> str:
@@ -84,37 +83,3 @@ def require_writable(
 
 def email_taken(db: Session, email: str) -> bool:
     return db.scalars(select(User).where(User.email == email.lower())).first() is not None
-
-
-def login_customer(request: Request, customer: Customer) -> None:
-    """A shopper signs in beside, never instead of, a store login in the same browser."""
-    request.session[SESSION_CUSTOMER_KEY] = customer.id
-
-
-def logout_customer(request: Request) -> None:
-    request.session.pop(SESSION_CUSTOMER_KEY, None)
-
-
-def current_customer(
-    tenant_id: int, request: Request, db: Session = Depends(get_db)
-) -> Customer | None:
-    customer_id = request.session.get(SESSION_CUSTOMER_KEY)
-    if not customer_id:
-        return None
-    customer = db.get(Customer, customer_id)
-    # A shopper at one store is nobody at another, whatever the cookie says.
-    if customer is None or not customer.is_active or customer.tenant_id != tenant_id:
-        return None
-    return customer
-
-
-def require_customer(
-    tenant_id: int, customer: Customer | None = Depends(current_customer)
-) -> Customer:
-    if customer is None:
-        raise HTTPException(
-            status_code=status.HTTP_303_SEE_OTHER,
-            detail="sign in required",
-            headers={"Location": f"/shop/{tenant_id}/login"},
-        )
-    return customer
