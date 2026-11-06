@@ -104,6 +104,9 @@ def _normalize_token(data: dict) -> dict:
     parsed: datetime | None = None
     if expires_at:
         parsed = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        # Square's stamps carry an offset; one without is read as UTC (columns refuse naive).
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
     return {
         "access_token": data["access_token"],
         "refresh_token": data.get("refresh_token"),

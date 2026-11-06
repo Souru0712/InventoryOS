@@ -56,3 +56,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0022](0022-row-level-security-in-r1-1.md) | Postgres RLS timing | ID-22 | Accepted |
 | [ADR-0023](0023-approved-new-dependencies.md) | New runtime dependencies | ID-23 | Accepted |
 | [ADR-0024](0024-invoice-photos-in-postgres.md) | Invoice photos kept briefly, in Postgres | C-48 | Accepted |
+| [ADR-0025](0025-schema-integrity-conventions.md) | Schema integrity conventions: UTC instants, delete rules, named CHECKs | T1.01 (DM-2) | Proposed |

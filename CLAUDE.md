@@ -30,6 +30,8 @@ implementation sessions; the detail lives in `docs/`.
 - Every query goes through the scoped data-access layer (tenant + location) (C-33).
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
+- Schema (ADR-0025): instants are `UTCDateTime` (aware UTC; naive values refused); every foreign
+  key is `ref()` (RESTRICT) or `owned_by()` (CASCADE, parts of a parent only); CHECKs are named.
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).
 - Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
   `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or

@@ -72,12 +72,6 @@ class NotEntitled(PermissionError):
         super().__init__(DENIAL_REASONS.get(capability, "That is not part of your plan."))
 
 
-def _aware(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
-
-
 def effective_plan(tenant: Tenant) -> str:
     """The plan whose capabilities apply now. A trial is given the full product on purpose."""
     if tenant.subscription_status is SubscriptionStatus.TRIALING:
@@ -94,7 +88,7 @@ def trial_days_left(tenant: Tenant, now: datetime | None = None) -> int | None:
     """Whole days remaining, or None when this is not a trial."""
     if tenant.subscription_status is not SubscriptionStatus.TRIALING:
         return None
-    ends = _aware(tenant.trial_ends_at)
+    ends = tenant.trial_ends_at
     if ends is None:
         return None
     now = now or datetime.now(UTC)
@@ -103,7 +97,7 @@ def trial_days_left(tenant: Tenant, now: datetime | None = None) -> int | None:
 
 def grace_ends(tenant: Tenant) -> datetime | None:
     """When a failed payment stops being forgiven."""
-    since = _aware(tenant.past_due_since)
+    since = tenant.past_due_since
     return since + timedelta(days=GRACE_DAYS) if since else None
 
 
@@ -119,7 +113,7 @@ def access(tenant: Tenant, now: datetime | None = None) -> Access:
     if status is SubscriptionStatus.ACTIVE:
         return Access.FULL
     if status is SubscriptionStatus.TRIALING:
-        ends = _aware(tenant.trial_ends_at)
+        ends = tenant.trial_ends_at
         return Access.FULL if ends is None or now < ends else Access.READ_ONLY
     if status is SubscriptionStatus.PAST_DUE:
         # Stripe is still retrying the card; the shop keeps working while it does.

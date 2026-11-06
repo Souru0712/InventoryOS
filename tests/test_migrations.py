@@ -9,10 +9,11 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import CheckConstraint, create_engine, inspect, select, text
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
-from app.db import Base, alembic_config
+from app.db import Base, UTCDateTime, alembic_config
 
 POSTGRES_URL = os.environ.get("TEST_DATABASE_URL", "")
 if not POSTGRES_URL.startswith("postgresql"):
@@ -99,6 +100,105 @@ def test_the_snack_box_tables_are_dropped(migrated):
     assert "webhook_events" in inspector.get_table_names()
     columns = {c["name"] for c in inspector.get_columns("inventory_events")}
     assert "box_order_id" not in columns
+
+
+def test_timestamps_checks_and_delete_rules_are_migrated(migrated):
+    """DM-2 (T1.01): what the models declare, a migrated database enforces."""
+    inspector = inspect(migrated)
+    postgres = migrated.dialect.name == "postgresql"
+    for table in Base.metadata.sorted_tables:
+        if postgres:
+            types = {c["name"]: c["type"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if isinstance(column.type, UTCDateTime):
+                    assert types[column.name].timezone, f"{table.name}.{column.name} is naive"
+
+        declared = {c.name for c in table.constraints if isinstance(c, CheckConstraint)}
+        found = {c["name"] for c in inspector.get_check_constraints(table.name)}
+        assert declared <= found, f"{table.name} lacks {declared - found}"
+
+        rules = {(fk.parent.name, fk.ondelete) for fk in table.foreign_keys}
+        found_rules = {
+            (fk["constrained_columns"][0], fk["options"].get("ondelete"))
+            for fk in inspector.get_foreign_keys(table.name)
+        }
+        assert found_rules == rules, table.name
+
+
+BEFORE_DM2 = "5c1d0f2a9b31"
+NOON = "2026-11-04 12:00:00"
+# Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both
+# databases receive exactly this text. The test's own constant data.
+ROWS_BEFORE_DM2 = [
+    "INSERT INTO tenants (name, plan, subscription_status, report_day, report_hour, timezone,"
+    " created_at, trial_ends_at) VALUES ('Rosewood', 'PRO', 'TRIALING', 0, 7, 'UTC',"
+    " '2026-11-04 12:00:00', '2026-11-04 12:00:00')",
+    "INSERT INTO locations (tenant_id, provider, provider_location_id, name, timezone, currency,"
+    " is_active) VALUES (1, 'demo', 'l1', 'Main', 'UTC', 'USD', true)",
+    "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension, stock_unit,"
+    " track_mode, qty_base, reorder_point_base, cost_per_base_cents, lead_time_days,"
+    " receive_unit, is_active) VALUES (1, 1, 'milk', 'Milk', 'COUNT', 'each', 'MANUAL', '-2.0000',"
+    " '1.0000', '0.0000', 2, 'each', true)",
+    "INSERT INTO inventory_counts (tenant_id, stock_item_id, qty_base, source, counted_at)"
+    " VALUES (1, 1, '3.0000', 'manual', '2026-11-04 12:00:00')",
+    "INSERT INTO documents (tenant_id, location_id, kind, currency, storage_key, content_type,"
+    " sha256, byte_size, status, uploaded_at) VALUES (1, 1, 'invoice', 'USD', '1/a.jpg',"
+    " 'image/jpeg', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 12,"
+    " 'APPLIED', '2026-11-04 12:00:00')",
+    "INSERT INTO document_lines (tenant_id, document_id, line_no, raw_text, parsed_name,"
+    " parsed_qty, match_confidence, status) VALUES (1, 1, 1, '2 milk', 'milk', '2.0000',"
+    " '0.0000', 'APPLIED')",
+]
+
+
+def test_dm2_keeps_every_instant_and_row_through_upgrade_and_downgrade(fresh_url):
+    """Values unchanged when read as UTC (DATA_MIGRATION_ROADMAP, DM-2), and back again."""
+    from datetime import datetime
+
+    from app.models import InventoryCount, Tenant
+
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM2)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    noon = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+    tables = (
+        "tenants",
+        "locations",
+        "stock_items",
+        "inventory_counts",
+        "documents",
+        "document_lines",
+    )
+
+    def counts() -> dict[str, int]:
+        with engine.connect() as connection:
+            # Table names come from this test's own tuple.
+            return {
+                table: connection.execute(text(f"SELECT count(*) FROM {table}")).scalar()  # noqa: S608
+                for table in tables
+            }
+
+    try:
+        with engine.begin() as connection:
+            for statement in ROWS_BEFORE_DM2:
+                connection.execute(text(statement))
+
+        command.upgrade(config, "head")
+        assert counts() == dict.fromkeys(tables, 1)
+        with Session(engine) as db:
+            tenant = db.scalars(select(Tenant)).one()
+            assert tenant.created_at == noon
+            assert tenant.trial_ends_at == noon
+            assert tenant.trial_ends_at.utcoffset().total_seconds() == 0
+            assert db.scalars(select(InventoryCount)).one().counted_at == noon
+
+        command.downgrade(config, BEFORE_DM2)
+        assert counts() == dict.fromkeys(tables, 1)
+        with engine.connect() as connection:
+            stored = connection.execute(text("SELECT trial_ends_at FROM tenants")).scalar()
+        assert str(stored).startswith(NOON), stored
+    finally:
+        engine.dispose()
 
 
 def test_quantity_columns_survive_the_round_trip(migrated):

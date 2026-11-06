@@ -71,7 +71,7 @@ def _drop_stale(db: Session, tenant_id: int, rows: list[dict]) -> list[dict]:
         if item is None:
             continue
         calculated_at = _parse(row.get("calculated_at"))
-        last_seen = _aware(item.last_synced_at)
+        last_seen = item.last_synced_at
         if calculated_at and last_seen and calculated_at < last_seen:
             log.info("ignored a stale count for item %s", item.id)
             continue
@@ -83,15 +83,11 @@ def _parse(stamp: str | None) -> datetime | None:
     if not stamp:
         return None
     try:
-        return _aware(datetime.fromisoformat(stamp.replace("Z", "+00:00")))
+        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
     except ValueError:
         return None
-
-
-def _aware(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
+    # Square's stamps carry an offset; one without is read as UTC.
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
 def _catalog_read_recently(db: Session, tenant_id: int) -> bool:
@@ -101,7 +97,7 @@ def _catalog_read_recently(db: Session, tenant_id: int) -> bool:
         .order_by(SyncRun.started_at.desc())
         .limit(1)
     ).first()
-    started = _aware(last.started_at) if last else None
+    started = last.started_at if last else None
     return bool(started and datetime.now(UTC) - started < CATALOG_DEBOUNCE)
 
 

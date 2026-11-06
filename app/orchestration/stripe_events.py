@@ -123,8 +123,6 @@ def _is_stale(tenant: Tenant, event: dict) -> bool:
     seen = tenant.stripe_event_at
     if created is None or seen is None:
         return False
-    if seen.tzinfo is None:
-        seen = seen.replace(tzinfo=UTC)
     return created < seen
 
 

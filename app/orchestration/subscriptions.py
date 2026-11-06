@@ -29,8 +29,6 @@ def expire_due_trials(db: Session, now: datetime | None = None) -> list[int]:
         ends = tenant.trial_ends_at
         if ends is None:
             continue
-        if ends.tzinfo is None:
-            ends = ends.replace(tzinfo=UTC)
         if ends <= now:
             tenant.subscription_status = SubscriptionStatus.EXPIRED
             # The floor everyone falls back to; what they actually buy decides the rest.
