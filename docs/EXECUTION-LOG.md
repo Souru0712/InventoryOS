@@ -5,6 +5,81 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T1.02 Scoped data-access layer (C-33)
+
+**Implemented**
+- `app/access/` (strict mypy): `OrgContext` (frozen; organization, user, locations; built only by
+  `for_user` through the new `require_org` dependency, or `system(tenant_id)` for scheduled jobs,
+  signed webhooks and the command line) and `select_scoped`, `get_scoped`, `update_scoped`, which
+  add the organization filter and, for a location-limited context, the location filter. They
+  refuse instead of guessing: tables owned by no organization, tables without `tenant_id`, and
+  (under a location limit) tables whose location is known only through a parent.
+- Every service that took `tenant_id: int` now takes `org: OrgContext` (57 functions: 44 public, 13 private helpers); the
+  document, promotion and scanning services that loaded rows by id take it too. Rewritten with an
+  AST script, then reviewed by hand.
+- Every route that reads tenant rows takes `org`. The per-route `if row.tenant_id != tenant.id`
+  checks are gone: a row from another organization is simply not found (404).
+- `app/access/system.py` holds the only cross-organization queries, each named for its job:
+  sign-in by email, the connection a Square webhook names, the scheduler's tenant lists, the
+  Stripe account lookups. Webhooks and scheduled jobs then work through `OrgContext.system`.
+- The readiness check's `SELECT 1` moved to `app.db.ping()`. `parse-doc` on the command line now
+  takes `--tenant`, like the other per-tenant commands.
+- ADR-0026 (Proposed until this pull request is merged); `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_scoped_access.py` (10): the scan finds no raw query in `app/web` or
+  `app/orchestration`, and a second test proves it catches the old pattern (six findings in a
+  pre-T1.02 snippet). Scoped select, get and update stay inside one organization; a location
+  limit narrows location rows and not organization-wide ones, and refuses counts (location known
+  only through the item); global tables are refused; a context is frozen; sign-in by email and
+  webhook merchant lookups behave.
+- Existing cross-tenant tests pass unchanged; the suite's callers now pass a context.
+- Full suite 583 passed, 9 skipped (573 before; the skips are Postgres-only migration runs);
+  ruff, mypy (74 files) and the docs checker clean. Demo seeder, `health` and `report` commands
+  ran on a scratch database.
+
+**Deviations from the task text**
+- `OrgContext` has no permissions field: the permission catalogue arrives in T1.06, and a field
+  nothing checks would be dead weight (ADR-0026).
+- The static test also bans `.query()` and SQLAlchemy's `text`, `insert` and `delete`, not only
+  `db.get`, `session.get` and `select`.
+
+**Files changed**
+- `app/access/{__init__,context,scoped,system}.py` (new), `app/security.py` (`require_org`),
+  `app/db.py` (`ping`), every module in `app/orchestration/` that queries, `app/web/{auth,
+  dashboard,health,ops,promotions,receiving,scanning,webhooks}.py`, `app/cli.py`; tests: the new
+  `test_scoped_access.py` and the callers in eleven test modules; ADR-0026 (new), ADR-0025
+  (Accepted), ADR-0001, the ADR index, `CLAUDE.md`, `pyproject.toml` (comment),
+  `TARGET_ARCHITECTURE.md`, task index (T1.01 → Completed, T1.02 → In review), this log.
+
+**Open issues**
+- Outside the scan, as the task scopes it: `app/load` (Square writers, replaced through the
+  ledger in T1.16–T1.18), `app/notify`, `app/security`, `app/entitlements` and the command line
+  keep their own tenant filters.
+
+**Next task**
+- T1.03 Tenant-isolation test suite.
+
+---
+
+## 2026-11-06 — T1.01 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #19 was merged with a merge commit (`38dbcf8`). CI
+  on its head `7700b14`, all five required jobs green: SQLite 573 passed, 9 skipped; PostgreSQL 16
+  582 passed, 0 skipped, so DM-2 converted, round-tripped and was checked on Postgres; lint and
+  types; dependency audit; Docker image. Same five green on `main` after the merge. Acceptance
+  met: probe PA5 inverted and retired; the migration upgrades and downgrades over populated data
+  on Postgres.
+
+**Decisions**
+- ADR-0025 accepted with the merge.
+
+**Files changed**
+- Task index (T1.01 → Completed), ADR-0025 status and index, this log.
+
+---
+
 ## 2026-11-06 — T1.01 Schema hygiene: timestamptz, constraints, delete rules (DM-2)
 
 **Implemented**
