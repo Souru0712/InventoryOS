@@ -6,9 +6,9 @@ from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, select_scoped
 from app.models import (
     InventoryCount,
     Location,
@@ -40,12 +40,9 @@ from app.transform.inventory import (
 VELOCITY_WINDOW_DAYS = 28
 
 
-def stock_views(db: Session, tenant_id: int, location_id: int | None = None) -> list[StockView]:
-    location_names = {
-        loc.id: loc.name
-        for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
-    }
-    query = select(StockItem).where(StockItem.tenant_id == tenant_id, StockItem.is_active.is_(True))
+def stock_views(db: Session, org: OrgContext, location_id: int | None = None) -> list[StockView]:
+    location_names = {loc.id: loc.name for loc in db.scalars(select_scoped(org, Location))}
+    query = select_scoped(org, StockItem).where(StockItem.is_active.is_(True))
     if location_id is not None:
         query = query.where(StockItem.location_id == location_id)
 
@@ -80,18 +77,16 @@ def stock_views(db: Session, tenant_id: int, location_id: int | None = None) -> 
     ]
 
 
-def tenant_currency(db: Session, tenant_id: int) -> str:
+def tenant_currency(db: Session, org: OrgContext) -> str:
     """The currency money is shown in; a tenant's locations share one."""
     location = db.scalars(
-        select(Location)
-        .where(Location.tenant_id == tenant_id, Location.is_active.is_(True))
-        .limit(1)
+        select_scoped(org, Location).where(Location.is_active.is_(True)).limit(1)
     ).first()
     return location.currency if location else "USD"
 
 
-def sale_rows(db: Session, tenant_id: int, since: date | None = None) -> list[SaleRow]:
-    query = select(SalesDaily).where(SalesDaily.tenant_id == tenant_id)
+def sale_rows(db: Session, org: OrgContext, since: date | None = None) -> list[SaleRow]:
+    query = select_scoped(org, SalesDaily)
     if since is not None:
         query = query.where(SalesDaily.dt >= since)
     return [
@@ -100,25 +95,21 @@ def sale_rows(db: Session, tenant_id: int, since: date | None = None) -> list[Sa
     ]
 
 
-def sold_item_names(db: Session, tenant_id: int) -> dict[int, str]:
-    return {
-        item.id: item.name
-        for item in db.scalars(select(SoldItem).where(SoldItem.tenant_id == tenant_id))
-    }
+def sold_item_names(db: Session, org: OrgContext) -> dict[int, str]:
+    return {item.id: item.name for item in db.scalars(select_scoped(org, SoldItem))}
 
 
-def components(db: Session, tenant_id: int) -> list[Component]:
+def components(db: Session, org: OrgContext) -> list[Component]:
     return [
         Component(row.sold_item_id, row.stock_item_id, Decimal(row.qty_base_per_sale))
-        for row in db.scalars(select(RecipeComponent).where(RecipeComponent.tenant_id == tenant_id))
+        for row in db.scalars(select_scoped(org, RecipeComponent))
     ]
 
 
-def _provider_items(db: Session, tenant_id: int) -> list[StockItem]:
+def _provider_items(db: Session, org: OrgContext) -> list[StockItem]:
     return list(
         db.scalars(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant_id,
+            select_scoped(org, StockItem).where(
                 StockItem.track_mode == TrackMode.PROVIDER,
                 StockItem.provider_variation_id.is_not(None),
             )
@@ -127,20 +118,18 @@ def _provider_items(db: Session, tenant_id: int) -> list[StockItem]:
 
 
 def provider_consumption(
-    db: Session, tenant_id: int, since: date | None = None
+    db: Session, org: OrgContext, since: date | None = None
 ) -> dict[int, dict[date, Decimal]]:
     """Sales of POS-tracked SKUs, which have no recipe: each unit sold at a location is one gone there."""
     stock = {
-        (item.location_id, item.provider_variation_id): item.id
-        for item in _provider_items(db, tenant_id)
+        (item.location_id, item.provider_variation_id): item.id for item in _provider_items(db, org)
     }
     if not stock:
         return {}
     provider_ids = {
-        sold.id: sold.provider_item_id
-        for sold in db.scalars(select(SoldItem).where(SoldItem.tenant_id == tenant_id))
+        sold.id: sold.provider_item_id for sold in db.scalars(select_scoped(org, SoldItem))
     }
-    query = select(SalesDaily).where(SalesDaily.tenant_id == tenant_id)
+    query = select_scoped(org, SalesDaily)
     if since is not None:
         query = query.where(SalesDaily.dt >= since)
 
@@ -153,32 +142,29 @@ def provider_consumption(
 
 
 def consumption(
-    db: Session, tenant_id: int, since: date | None = None
+    db: Session, org: OrgContext, since: date | None = None
 ) -> dict[int, dict[date, Decimal]]:
     """Base units consumed per stock item per day: via recipes, plus direct sales of POS SKUs."""
-    daily = consumption_by_day(sale_rows(db, tenant_id, since), components(db, tenant_id))
-    for item_id, days in provider_consumption(db, tenant_id, since).items():
+    daily = consumption_by_day(sale_rows(db, org, since), components(db, org))
+    for item_id, days in provider_consumption(db, org, since).items():
         merged = daily.setdefault(item_id, {})
         for day, qty in days.items():
             merged[day] = merged.get(day, ZERO) + qty
     return daily
 
 
-def sales_signal(db: Session, tenant_id: int) -> set[int]:
+def sales_signal(db: Session, org: OrgContext) -> set[int]:
     """Stock items whose depletion shows up in sales: POS-tracked, or linked by a recipe.
 
     For anything else a velocity of zero means "unknown", not "not selling".
     """
-    linked = {
-        row.stock_item_id
-        for row in db.scalars(select(RecipeComponent).where(RecipeComponent.tenant_id == tenant_id))
-    }
-    return linked | {item.id for item in _provider_items(db, tenant_id)}
+    linked = {row.stock_item_id for row in db.scalars(select_scoped(org, RecipeComponent))}
+    return linked | {item.id for item in _provider_items(db, org)}
 
 
-def batches_by_item(db: Session, tenant_id: int) -> dict[int, list[Batch]]:
+def batches_by_item(db: Session, org: OrgContext) -> dict[int, list[Batch]]:
     result: dict[int, list[Batch]] = defaultdict(list)
-    for row in db.scalars(select(StockBatch).where(StockBatch.tenant_id == tenant_id)):
+    for row in db.scalars(select_scoped(org, StockBatch)):
         result[row.stock_item_id].append(
             Batch(
                 id=row.id,
@@ -197,21 +183,21 @@ def batches_by_item(db: Session, tenant_id: int) -> dict[int, list[Batch]]:
 
 def expiry_positions(
     db: Session,
-    tenant_id: int,
+    org: OrgContext,
     today: date | None = None,
     location_id: int | None = None,
     velocity: dict[int, Decimal] | None = None,
 ) -> list[ItemExpiry]:
     """Every item that holds dated stock, with each lot positioned and projected for today."""
     today = today or datetime.now(UTC).date()
-    batches = batches_by_item(db, tenant_id)
+    batches = batches_by_item(db, org)
     if not batches:
         return []
-    velocity = velocity if velocity is not None else velocity_map(db, tenant_id, today)
-    signal = sales_signal(db, tenant_id)
+    velocity = velocity if velocity is not None else velocity_map(db, org, today)
+    signal = sales_signal(db, org)
 
     result = []
-    for item in stock_views(db, tenant_id, location_id):
+    for item in stock_views(db, org, location_id):
         lots = batches.get(item.id)
         if not lots:
             continue
@@ -225,24 +211,23 @@ def expiry_positions(
 
 def velocity_map(
     db: Session,
-    tenant_id: int,
+    org: OrgContext,
     today: date | None = None,
     window_days: int = VELOCITY_WINDOW_DAYS,
 ) -> dict[int, Decimal]:
     """Base units per day per stock item over the trailing window."""
     today = today or datetime.now(UTC).date()
     window_start = today - timedelta(days=window_days - 1)
-    daily = consumption(db, tenant_id, window_start)
+    daily = consumption(db, org, window_start)
     return {item_id: daily_velocity(days, window_days, today) for item_id, days in daily.items()}
 
 
-def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None = None) -> int:
+def refresh_derived_quantities(db: Session, org: OrgContext, today: date | None = None) -> int:
     """Recompute weight/volume quantities: last physical count minus consumption since."""
     today = today or datetime.now(UTC).date()
     items = list(
         db.scalars(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant_id,
+            select_scoped(org, StockItem).where(
                 StockItem.track_mode == TrackMode.DERIVED,
                 StockItem.is_active.is_(True),
             )
@@ -251,11 +236,11 @@ def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None =
     if not items:
         return 0
 
-    daily = consumption(db, tenant_id)
+    daily = consumption(db, org)
     updated = 0
     for item in items:
         anchor = db.scalars(
-            select(InventoryCount)
+            select_scoped(org, InventoryCount)
             .where(InventoryCount.stock_item_id == item.id)
             .order_by(InventoryCount.counted_at.desc())
             .limit(1)
@@ -273,11 +258,11 @@ def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None =
     return updated
 
 
-def expiry_coverage(db: Session, tenant_id: int, location_id: int | None = None) -> Coverage:
+def expiry_coverage(db: Session, org: OrgContext, location_id: int | None = None) -> Coverage:
     """Coverage across stock that can expire: everything not dismissed as never expiring."""
-    batches = batches_by_item(db, tenant_id)
+    batches = batches_by_item(db, org)
     entries = []
-    for item in stock_views(db, tenant_id, location_id):
+    for item in stock_views(db, org, location_id):
         if item.tracks_expiry is False:
             continue
         _, undated = allocate_fefo(item.qty_base, batches.get(item.id, []))

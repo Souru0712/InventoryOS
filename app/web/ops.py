@@ -6,10 +6,9 @@ import logging
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 
 from app.config import get_settings
-from app.db import engine, schema_revisions
+from app.db import ping, schema_revisions
 from app.storage import get_storage
 
 log = logging.getLogger(__name__)
@@ -38,8 +37,7 @@ def readyz():
 
 def _database() -> str:
     try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
+        ping()
         return "ok"
     except Exception:
         log.exception("readiness: database unreachable")

@@ -9,9 +9,9 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, get_scoped, select_scoped
 from app.config import get_settings
 from app.extract.images import detect_media_type
 from app.extract.invoice import (
@@ -107,7 +107,7 @@ def _as_text(value: object) -> str | None:
 
 def save_upload(
     db: Session,
-    tenant_id: int,
+    org: OrgContext,
     location_id: int,
     filename: str,
     content: bytes,
@@ -140,29 +140,27 @@ def save_upload(
     if media_type != content_type:
         log.info(
             "tenant %s upload %r was sent as %s but is %s",
-            tenant_id,
+            org.tenant_id,
             filename,
             content_type,
             media_type,
         )
 
     digest = hashlib.sha256(content).hexdigest()
-    existing = db.scalars(
-        select(Document).where(Document.tenant_id == tenant_id, Document.sha256 == digest)
-    ).first()
+    existing = db.scalars(select_scoped(org, Document).where(Document.sha256 == digest)).first()
     if existing:
-        log.info("tenant %s re-uploaded document %s", tenant_id, existing.id)
+        log.info("tenant %s re-uploaded document %s", org.tenant_id, existing.id)
         return existing
 
-    key = f"{tenant_id}/{digest}{STORED_SUFFIX[media_type]}"
+    key = f"{org.tenant_id}/{digest}{STORED_SUFFIX[media_type]}"
     try:
         get_storage().put(key, content, media_type)
     except StorageError:
-        log.exception("could not store an upload for tenant %s", tenant_id)
+        log.exception("could not store an upload for tenant %s", org.tenant_id)
         raise UploadRejected("the photo could not be saved; please try again") from None
 
     document = Document(
-        tenant_id=tenant_id,
+        tenant_id=org.tenant_id,
         location_id=location_id,
         uploaded_by=uploaded_by,
         kind=kind,
@@ -176,15 +174,13 @@ def save_upload(
     return document
 
 
-def candidates_for(db: Session, tenant_id: int, location_id: int) -> list[Candidate]:
+def candidates_for(db: Session, org: OrgContext, location_id: int) -> list[Candidate]:
     aliases: dict[int, list[str]] = {}
-    for alias in db.scalars(select(StockAlias).where(StockAlias.tenant_id == tenant_id)):
+    for alias in db.scalars(select_scoped(org, StockAlias)):
         aliases.setdefault(alias.stock_item_id, []).append(alias.alias)
 
     codes: dict[int, list[tuple[str, str]]] = {}
-    for row in db.scalars(
-        select(ProductIdentifier).where(ProductIdentifier.tenant_id == tenant_id)
-    ):
+    for row in db.scalars(select_scoped(org, ProductIdentifier)):
         codes.setdefault(row.stock_item_id, []).append(
             (row.identifier_type.value.upper(), row.value)
         )
@@ -205,8 +201,7 @@ def candidates_for(db: Session, tenant_id: int, location_id: int) -> list[Candid
             aliases=tuple(aliases.get(item.id, ())),
         )
         for item in db.scalars(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant_id,
+            select_scoped(org, StockItem).where(
                 StockItem.location_id == location_id,
                 StockItem.is_active.is_(True),
             )
@@ -214,18 +209,17 @@ def candidates_for(db: Session, tenant_id: int, location_id: int) -> list[Candid
     ]
 
 
-def alias_index(db: Session, tenant_id: int) -> dict[str, int]:
+def alias_index(db: Session, org: OrgContext) -> dict[str, int]:
     return build_alias_index(
-        [
-            (alias.alias, alias.stock_item_id)
-            for alias in db.scalars(select(StockAlias).where(StockAlias.tenant_id == tenant_id))
-        ]
+        [(alias.alias, alias.stock_item_id) for alias in db.scalars(select_scoped(org, StockAlias))]
     )
 
 
-def parse_document(db: Session, document_id: int, extractor: Extractor | None = None) -> Document:
+def parse_document(
+    db: Session, org: OrgContext, document_id: int, extractor: Extractor | None = None
+) -> Document:
     """Read the photo and match every line against this location's stock."""
-    document = db.get(Document, document_id)
+    document = get_scoped(db, org, Document, document_id)
     if document is None:
         raise ValueError(f"document {document_id} not found")
     if document.status is DocumentStatus.APPLIED:
@@ -264,8 +258,8 @@ def parse_document(db: Session, document_id: int, extractor: Extractor | None = 
 
     results = match_document(
         extract.lines,
-        candidates_for(db, document.tenant_id, document.location_id),
-        alias_index(db, document.tenant_id),
+        candidates_for(db, org, document.location_id),
+        alias_index(db, org),
     )
     for result in results:
         document.lines.append(_to_row(document, result))
@@ -300,6 +294,7 @@ def _to_row(document: Document, result: MatchResult) -> DocumentLine:
 
 def apply_document(
     db: Session,
+    org: OrgContext,
     document_id: int,
     decisions: list[LineDecision],
     now: datetime | None = None,
@@ -307,7 +302,7 @@ def apply_document(
 ) -> dict:
     """Receive the delivery: raise stock, date it, cost it, anchor derived items, learn the wording."""
     now = now or datetime.now(UTC)
-    document = db.get(Document, document_id)
+    document = get_scoped(db, org, Document, document_id)
     if document is None:
         raise ValueError(f"document {document_id} not found")
     if document.status is DocumentStatus.APPLIED:
@@ -325,10 +320,7 @@ def apply_document(
         )
         for line in document.lines
     }
-    items = {
-        item.id: item
-        for item in db.scalars(select(StockItem).where(StockItem.tenant_id == document.tenant_id))
-    }
+    items = {item.id: item for item in db.scalars(select_scoped(org, StockItem))}
 
     applied = 0
     batches = 0
@@ -403,7 +395,7 @@ def apply_document(
         line.received_qty_base = Decimal(quantity)
         line.expires_on = expires_on
         line.status = LineStatus.APPLIED
-        _learn_alias(db, document, line, item.id)
+        _learn_alias(db, org, document, line, item.id)
         received[item.id] = received.get(item.id, ZERO) + Decimal(quantity)
         applied += 1
 
@@ -419,16 +411,14 @@ def apply_document(
     }
 
 
-def _learn_alias(db: Session, document: Document, line: DocumentLine, stock_item_id: int) -> None:
+def _learn_alias(
+    db: Session, org: OrgContext, document: Document, line: DocumentLine, stock_item_id: int
+) -> None:
     """Remember supplier wording so the next invoice matches without a human."""
     alias = normalize_name(line.parsed_name)
     if not alias:
         return
-    existing = db.scalars(
-        select(StockAlias).where(
-            StockAlias.tenant_id == document.tenant_id, StockAlias.alias == alias
-        )
-    ).first()
+    existing = db.scalars(select_scoped(org, StockAlias).where(StockAlias.alias == alias)).first()
     if existing:
         existing.times_seen += 1
         existing.stock_item_id = stock_item_id

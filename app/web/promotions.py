@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, get_scoped
 from app.db import get_db
 from app.models import Promotion, StockItem, Tenant, User
 from app.orchestration.promotions import (
@@ -22,7 +23,7 @@ from app.orchestration.promotions import (
     suggestions_for,
 )
 from app.orchestration.views import tenant_currency
-from app.security import require_tenant, require_user, require_writable
+from app.security import require_org, require_tenant, require_user, require_writable
 from app.units import to_base
 from app.web.templating import templates
 
@@ -36,9 +37,10 @@ def promotions_page(
     location: int | None = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     today = datetime.now(UTC).date()
-    suggestions = suggestions_for(db, tenant.id, today, location)
+    suggestions = suggestions_for(db, org, today, location)
     return templates.TemplateResponse(
         request,
         "app/promotions.html",
@@ -46,15 +48,15 @@ def promotions_page(
             "title": "Promotions",
             "tenant": tenant,
             "suggestions": suggestions,
-            "running": running(db, tenant.id, today),
-            "currency": tenant_currency(db, tenant.id),
+            "running": running(db, org, today),
+            "currency": tenant_currency(db, org),
             "at_risk_cents": sum(s.cost_at_risk_cents for s in suggestions),
         },
     )
 
 
-def _suggestion_or_404(db: Session, tenant_id: int, stock_item_id: int):
-    suggestion = find_suggestion(suggestions_for(db, tenant_id), stock_item_id)
+def _suggestion_or_404(db: Session, org: OrgContext, stock_item_id: int):
+    suggestion = find_suggestion(suggestions_for(db, org), stock_item_id)
     if suggestion is None:
         raise HTTPException(status_code=404, detail="that suggestion no longer applies")
     return suggestion
@@ -67,12 +69,13 @@ def accept_promotion(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_org),
 ):
     """Start the markdown. An empty price means the suggested one was good enough."""
-    item = db.get(StockItem, stock_item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, stock_item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
-    suggestion = _suggestion_or_404(db, tenant.id, stock_item_id)
+    suggestion = _suggestion_or_404(db, org, stock_item_id)
 
     price_cents = suggestion.suggested_price_cents
     if price.strip():
@@ -85,7 +88,7 @@ def accept_promotion(
             raise HTTPException(status_code=400, detail="a price has to be above zero")
         price_cents = int(entered.quantize(Decimal("1")))
 
-    accept(db, tenant.id, suggestion, price_cents, user_id=user.id)
+    accept(db, org, suggestion, price_cents, user_id=user.id)
     db.commit()
     return RedirectResponse("/app/promotions?started=1", status_code=303)
 
@@ -96,8 +99,9 @@ def dismiss_promotion(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_org),
 ):
-    dismiss(db, tenant.id, _suggestion_or_404(db, tenant.id, stock_item_id), user_id=user.id)
+    dismiss(db, org, _suggestion_or_404(db, org, stock_item_id), user_id=user.id)
     db.commit()
     return RedirectResponse("/app/promotions?dismissed=1", status_code=303)
 
@@ -108,19 +112,23 @@ def snooze_promotion(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_org),
 ):
-    snooze(db, tenant.id, _suggestion_or_404(db, tenant.id, stock_item_id), user_id=user.id)
+    snooze(db, org, _suggestion_or_404(db, org, stock_item_id), user_id=user.id)
     db.commit()
     return RedirectResponse("/app/promotions?snoozed=1", status_code=303)
 
 
 @router.post("/app/promotions/{promotion_id}/end")
 def end_promotion(
-    promotion_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_writable)
+    promotion_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
-    promotion = db.get(Promotion, promotion_id)
-    if promotion is None or promotion.tenant_id != tenant.id:
+    promotion = get_scoped(db, org, Promotion, promotion_id)
+    if promotion is None:
         raise HTTPException(status_code=404, detail="promotion not found")
-    end(db, promotion)
+    end(db, org, promotion)
     db.commit()
     return RedirectResponse("/app/promotions?ended=1", status_code=303)

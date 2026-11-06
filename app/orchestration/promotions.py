@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, get_scoped, select_scoped
 from app.models import Promotion, PromotionStatus, StockBatch, StockItem
 from app.orchestration.views import consumption, expiry_positions, velocity_map
 from app.transform.inventory import daily_velocity
@@ -36,12 +36,10 @@ class RunningPromotion:
     days_running: int
 
 
-def _open_decisions(db: Session, tenant_id: int, today: date) -> set[int]:
+def _open_decisions(db: Session, org: OrgContext, today: date) -> set[int]:
     """Items already spoken for: running, dismissed, or snoozed until later."""
     spoken_for = set()
-    for row in db.scalars(
-        select(Promotion).where(Promotion.tenant_id == tenant_id, Promotion.status.in_(DECIDED))
-    ):
+    for row in db.scalars(select_scoped(org, Promotion).where(Promotion.status.in_(DECIDED))):
         if row.status is PromotionStatus.SNOOZED and row.snooze_until and row.snooze_until <= today:
             continue  # the snooze has run out, so it can be suggested again
         spoken_for.add(row.stock_item_id)
@@ -49,15 +47,15 @@ def _open_decisions(db: Session, tenant_id: int, today: date) -> set[int]:
 
 
 def suggestions_for(
-    db: Session, tenant_id: int, today: date | None = None, location_id: int | None = None
+    db: Session, org: OrgContext, today: date | None = None, location_id: int | None = None
 ) -> list[Suggestion]:
     """What is worth marking down right now, biggest loss first."""
     today = today or datetime.now(UTC).date()
-    velocity = velocity_map(db, tenant_id, today)
-    already = _open_decisions(db, tenant_id, today)
+    velocity = velocity_map(db, org, today)
+    already = _open_decisions(db, org, today)
 
     inputs: list[PromotionInput] = []
-    for expiry in expiry_positions(db, tenant_id, today, location_id, velocity=velocity):
+    for expiry in expiry_positions(db, org, today, location_id, velocity=velocity):
         item = expiry.item
         if item.id in already or not item.retail_per_base_cents:
             continue
@@ -90,7 +88,7 @@ def suggestions_for(
 
 def _record(
     db: Session,
-    tenant_id: int,
+    org: OrgContext,
     suggestion: Suggestion,
     status: PromotionStatus,
     user_id: int | None,
@@ -100,9 +98,9 @@ def _record(
 ) -> Promotion:
     today = today or datetime.now(UTC).date()
     item = suggestion.item
-    batch = db.get(StockBatch, item.batch_id) if item.batch_id else None
+    batch = get_scoped(db, org, StockBatch, item.batch_id) if item.batch_id else None
     promotion = Promotion(
-        tenant_id=tenant_id,
+        tenant_id=org.tenant_id,
         stock_item_id=item.stock_item_id,
         stock_batch_id=item.batch_id,
         status=status,
@@ -128,7 +126,7 @@ def _record(
 
 def accept(
     db: Session,
-    tenant_id: int,
+    org: OrgContext,
     suggestion: Suggestion,
     price_cents: int,
     user_id: int | None = None,
@@ -137,7 +135,7 @@ def accept(
     """Start a markdown at the price the owner settled on, which may not be the suggested one."""
     return _record(
         db,
-        tenant_id,
+        org,
         suggestion,
         PromotionStatus.ACTIVE,
         user_id,
@@ -147,14 +145,14 @@ def accept(
 
 
 def dismiss(
-    db: Session, tenant_id: int, suggestion: Suggestion, user_id: int | None = None
+    db: Session, org: OrgContext, suggestion: Suggestion, user_id: int | None = None
 ) -> Promotion:
-    return _record(db, tenant_id, suggestion, PromotionStatus.DISMISSED, user_id)
+    return _record(db, org, suggestion, PromotionStatus.DISMISSED, user_id)
 
 
 def snooze(
     db: Session,
-    tenant_id: int,
+    org: OrgContext,
     suggestion: Suggestion,
     user_id: int | None = None,
     days: int = 1,
@@ -164,7 +162,7 @@ def snooze(
     today = today or datetime.now(UTC).date()
     return _record(
         db,
-        tenant_id,
+        org,
         suggestion,
         PromotionStatus.SNOOZED,
         user_id,
@@ -173,9 +171,9 @@ def snooze(
     )
 
 
-def end(db: Session, promotion: Promotion, today: date | None = None) -> Promotion:
+def end(db: Session, org: OrgContext, promotion: Promotion, today: date | None = None) -> Promotion:
     """Close a markdown and record where the stock ended up, for the comparison afterwards."""
-    item = db.get(StockItem, promotion.stock_item_id)
+    item = get_scoped(db, org, StockItem, promotion.stock_item_id)
     promotion.status = PromotionStatus.ENDED
     promotion.units_after_base = Decimal(item.qty_base or 0) if item else None
     promotion.ended_at = datetime.now(UTC)
@@ -184,31 +182,29 @@ def end(db: Session, promotion: Promotion, today: date | None = None) -> Promoti
 
 
 def _velocity_since(
-    db: Session, tenant_id: int, stock_item_id: int, start: date, today: date
+    db: Session, org: OrgContext, stock_item_id: int, start: date, today: date
 ) -> Decimal | None:
     """Sales a day for one item over the days a markdown has been running."""
     days = (today - start).days + 1
     if days <= 0:
         return None
-    daily = consumption(db, tenant_id, start).get(stock_item_id, {})
+    daily = consumption(db, org, start).get(stock_item_id, {})
     return daily_velocity(daily, days, today)
 
 
-def running(db: Session, tenant_id: int, today: date | None = None) -> list[RunningPromotion]:
+def running(db: Session, org: OrgContext, today: date | None = None) -> list[RunningPromotion]:
     """Markdowns in progress, each with what has happened to its sales since."""
     today = today or datetime.now(UTC).date()
     rows = db.scalars(
-        select(Promotion).where(
-            Promotion.tenant_id == tenant_id, Promotion.status == PromotionStatus.ACTIVE
-        )
+        select_scoped(org, Promotion).where(Promotion.status == PromotionStatus.ACTIVE)
     )
     result = []
     for promotion in rows:
-        item = db.get(StockItem, promotion.stock_item_id)
+        item = get_scoped(db, org, StockItem, promotion.stock_item_id)
         if item is None:
             continue
         start = promotion.starts_on or today
-        during = _velocity_since(db, tenant_id, item.id, start, today)
+        during = _velocity_since(db, org, item.id, start, today)
         result.append(
             RunningPromotion(
                 promotion=promotion,

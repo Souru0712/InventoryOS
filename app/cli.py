@@ -12,6 +12,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from app.access import OrgContext
 from app.config import require_deployable
 from app.db import init_db, run_migrations, session_scope, stamp_migrations
 from app.entitlements import allows, state
@@ -260,17 +261,17 @@ def cmd_billing(args: argparse.Namespace) -> int:
 
 def cmd_sync(args: argparse.Namespace) -> int:
     with session_scope() as db:
-        stats = run_sync(db, args.tenant, days_back=args.days)
+        stats = run_sync(db, OrgContext.system(args.tenant), days_back=args.days)
     print(f"tenant {args.tenant}: {stats}")
     return 0
 
 
 def cmd_alerts(args: argparse.Namespace) -> int:
     with session_scope() as db:
-        refresh_derived_quantities(db, args.tenant)
-        stats = evaluate_and_store(db, args.tenant)
+        refresh_derived_quantities(db, OrgContext.system(args.tenant))
+        stats = evaluate_and_store(db, OrgContext.system(args.tenant))
         if args.send:
-            stats["emailed"] = send_alert_digest(db, args.tenant)
+            stats["emailed"] = send_alert_digest(db, OrgContext.system(args.tenant))
     print(f"tenant {args.tenant}: {stats}")
     return 0
 
@@ -278,10 +279,10 @@ def cmd_alerts(args: argparse.Namespace) -> int:
 def cmd_report(args: argparse.Namespace) -> int:
     with session_scope() as db:
         if args.send:
-            sent = send_weekly_report(db, args.tenant)
+            sent = send_weekly_report(db, OrgContext.system(args.tenant))
             print(f"weekly report sent: {sent}")
             return 0
-        report = weekly_report(db, args.tenant)
+        report = weekly_report(db, OrgContext.system(args.tenant))
     print(f"week {report.period_start} to {report.period_end}")
     print(f"  net sales        {money(report.net_cents)}")
     print(f"  inventory value  {money(report.inventory_value_cents)}")
@@ -298,7 +299,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_extraction_quality(args: argparse.Namespace) -> int:
     """How much of each invoice the owner still has to fix, and what keeps going wrong."""
     with session_scope() as db:
-        stats = correction_stats(db, args.tenant, days=args.days)
+        stats = correction_stats(db, OrgContext.system(args.tenant), days=args.days)
     print(correction_summary(stats))
     if not stats["documents"]:
         return 0
@@ -329,7 +330,7 @@ def cmd_expiry_corpus(args: argparse.Namespace) -> int:
 
 def cmd_parse_doc(args: argparse.Namespace) -> int:
     with session_scope() as db:
-        document = parse_document(db, args.document)
+        document = parse_document(db, OrgContext.system(args.tenant), args.document)
         print(f"document {document.id}: {document.status.value}, {len(document.lines)} lines")
         for line in sorted(document.lines, key=lambda row: row.line_no):
             print(
@@ -464,7 +465,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 )
         db.flush()
 
-        refresh_derived_quantities(db, tenant.id, today)
+        refresh_derived_quantities(db, OrgContext.system(tenant.id), today)
         # Dated after the refresh, so each lot is a share of what is actually left.
         for name, share, days in DEMO_LOTS:
             item = stock[name]
@@ -483,8 +484,8 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 )
             )
         db.flush()
-        stats = evaluate_and_store(db, tenant.id)
-        record_snapshot(db, tenant.id)
+        stats = evaluate_and_store(db, OrgContext.system(tenant.id))
+        record_snapshot(db, OrgContext.system(tenant.id))
         tenant_id = tenant.id
 
     print(f"seeded tenant {tenant_id} ({args.name})")
@@ -498,9 +499,9 @@ def cmd_health(args: argparse.Namespace) -> int:
     """Print the health score and its reasons; --snapshot also keeps tonight's record."""
     with session_scope() as db:
         if args.snapshot:
-            row = record_snapshot(db, args.tenant)
+            row = record_snapshot(db, OrgContext.system(args.tenant))
             print(f"snapshot kept for {row.dt}: {row.score}")
-        health = current_health(db, args.tenant)
+        health = current_health(db, OrgContext.system(args.tenant))
     report, actions = health.report, health.actions
     print(
         f"inventory health: {report.score if report.score is not None else '-'} ({report.band_label})"
@@ -574,6 +575,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_expiry_corpus)
 
     p = sub.add_parser("parse-doc", help="re-read an uploaded invoice")
+    p.add_argument("--tenant", type=int, required=True)
     p.add_argument("--document", type=int, required=True)
     p.set_defaults(func=cmd_parse_doc)
 

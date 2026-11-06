@@ -18,11 +18,11 @@ from datetime import UTC, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
-from sqlalchemy import select
 
+from app.access import OrgContext
+from app.access.system import connected_tenant_ids, subscribed_tenants
 from app.config import get_settings
 from app.db import SCHEDULER_LOCK, LeaderLock, session_scope
-from app.models import Plan, ProviderConnection, Tenant
 from app.observability import log_context, new_request_id
 from app.orchestration.health import record_snapshot
 from app.orchestration.reporting import report_sent_recently, send_weekly_report
@@ -38,17 +38,12 @@ STANDBY_POLL_SECONDS = 30
 
 def sync_all_tenants() -> None:
     with session_scope() as db:
-        tenant_ids = [
-            connection.tenant_id
-            for connection in db.scalars(
-                select(ProviderConnection).where(ProviderConnection.status == "active")
-            )
-        ]
+        tenant_ids = connected_tenant_ids(db)
     for tenant_id in tenant_ids:
         with log_context(tenant_id=tenant_id):
             try:
                 with session_scope() as db:
-                    stats = run_sync(db, tenant_id)
+                    stats = run_sync(db, OrgContext.system(tenant_id))
                 log.info("synced tenant %s: %s", tenant_id, stats)
             except Exception:
                 log.exception("scheduled sync failed for tenant %s", tenant_id)
@@ -60,7 +55,7 @@ def send_due_reports(now: datetime | None = None) -> None:
     with session_scope() as db:
         due = [
             tenant.id
-            for tenant in db.scalars(select(Tenant).where(Tenant.plan != Plan.CANCELED))
+            for tenant in subscribed_tenants(db)
             if tenant.report_day == now.weekday() and tenant.report_hour == now.hour
         ]
     for tenant_id in due:
@@ -69,12 +64,12 @@ def send_due_reports(now: datetime | None = None) -> None:
                 with session_scope() as db:
                     # A retried or restarted job lands in the same hour; the email log says if
                     # it went.
-                    if report_sent_recently(db, tenant_id, now):
+                    if report_sent_recently(db, OrgContext.system(tenant_id), now):
                         log.info(
                             "weekly report for tenant %s already went out this week", tenant_id
                         )
                         continue
-                    send_weekly_report(db, tenant_id)
+                    send_weekly_report(db, OrgContext.system(tenant_id))
                 log.info("weekly report sent for tenant %s", tenant_id)
             except Exception:
                 log.exception("weekly report failed for tenant %s", tenant_id)
@@ -94,12 +89,12 @@ def close_finished_trials() -> None:
 def record_health_snapshots() -> None:
     """Keep each tenant's health for the night, so tomorrow can say why it moved."""
     with session_scope() as db:
-        tenant_ids = [t.id for t in db.scalars(select(Tenant).where(Tenant.plan != Plan.CANCELED))]
+        tenant_ids = [tenant.id for tenant in subscribed_tenants(db)]
     for tenant_id in tenant_ids:
         with log_context(tenant_id=tenant_id):
             try:
                 with session_scope() as db:
-                    row = record_snapshot(db, tenant_id)
+                    row = record_snapshot(db, OrgContext.system(tenant_id))
                 log.info("health snapshot for tenant %s: %s", tenant_id, row.score)
             except Exception:
                 log.exception("health snapshot failed for tenant %s", tenant_id)

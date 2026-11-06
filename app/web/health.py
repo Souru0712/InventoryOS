@@ -10,11 +10,12 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext
 from app.db import get_db
 from app.entitlements import history_days, require
 from app.models import Tenant
 from app.orchestration.health import current, over_time
-from app.security import require_tenant
+from app.security import require_org, require_tenant
 from app.transform.health import reorder_lines
 from app.units import format_approx, format_qty
 from app.web.templating import templates
@@ -28,9 +29,10 @@ def health_page(
     location: int | None = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     now = datetime.now(UTC)
-    health = current(db, tenant.id, location, now)
+    health = current(db, org, location, now)
     return templates.TemplateResponse(
         request,
         "app/health.html",
@@ -40,7 +42,7 @@ def health_page(
             "report": health.report,
             "actions": health.actions,
             # Starter sees today's score; the history behind it is part of Pro.
-            "trend": over_time(db, tenant.id, health.report, now.date(), days=history_days(tenant)),
+            "trend": over_time(db, org, health.report, now.date(), days=history_days(tenant)),
             "history_days": history_days(tenant),
             "by_id": {item.item.id: item for item in health.input.items},
             "currency": health.input.currency,
@@ -54,8 +56,9 @@ def reorder_page(
     location: int | None = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
-    health = current(db, tenant.id, location)
+    health = current(db, org, location)
     return templates.TemplateResponse(
         request,
         "app/reorder.html",
@@ -78,9 +81,10 @@ def reorder_csv(
     location: int | None = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     require(tenant, "reorder_csv")
-    health = current(db, tenant.id, location)
+    health = current(db, org, location)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(

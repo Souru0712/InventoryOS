@@ -10,9 +10,10 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, select_scoped
+from app.access.system import trialing_tenants
 from app.entitlements import location_allowance
 from app.models import Location, Plan, SubscriptionStatus, Tenant
 
@@ -23,9 +24,7 @@ def expire_due_trials(db: Session, now: datetime | None = None) -> list[int]:
     """End every trial whose time is up. Returns the tenants that changed."""
     now = now or datetime.now(UTC)
     expired = []
-    for tenant in db.scalars(
-        select(Tenant).where(Tenant.subscription_status == SubscriptionStatus.TRIALING)
-    ):
+    for tenant in trialing_tenants(db):
         ends = tenant.trial_ends_at
         if ends is None:
             continue
@@ -47,7 +46,7 @@ def apply_location_limit(db: Session, tenant: Tenant) -> int:
     """
     allowance = location_allowance(tenant)
     locations = list(
-        db.scalars(select(Location).where(Location.tenant_id == tenant.id).order_by(Location.id))
+        db.scalars(select_scoped(OrgContext.system(tenant.id), Location).order_by(Location.id))
     )
     changed = 0
     for index, location in enumerate(locations):

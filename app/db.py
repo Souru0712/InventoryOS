@@ -189,6 +189,12 @@ def stamp_migrations(revision: str = "head", url: str | None = None) -> None:
     command.stamp(alembic_config(url), revision)
 
 
+def ping() -> None:
+    """Raise unless the database answers; for the readiness check, which reads no rows."""
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+
+
 def schema_revisions() -> tuple[str | None, str | None]:
     """(revision the database is at, newest revision the code knows about)."""
     from alembic.migration import MigrationContext

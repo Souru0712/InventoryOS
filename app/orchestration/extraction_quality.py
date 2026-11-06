@@ -11,9 +11,9 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, select_scoped
 from app.models import Document, DocumentLine, DocumentStatus, ExtractionCorrection
 
 # Read out in the order a reviewer meets them.
@@ -28,7 +28,7 @@ FIELD_LABELS = {
 
 
 def correction_stats(
-    db: Session, tenant_id: int, days: int = 90, now: datetime | None = None
+    db: Session, org: OrgContext, days: int = 90, now: datetime | None = None
 ) -> dict:
     """Corrections per field, per supplier, and the lines that keep coming back wrong."""
     now = now or datetime.now(UTC)
@@ -36,8 +36,7 @@ def correction_stats(
 
     documents = list(
         db.scalars(
-            select(Document).where(
-                Document.tenant_id == tenant_id,
+            select_scoped(org, Document).where(
                 Document.status == DocumentStatus.APPLIED,
                 Document.uploaded_at >= since,
             )
@@ -57,10 +56,16 @@ def correction_stats(
             "products": [],
         }
 
-    lines = list(db.scalars(select(DocumentLine).where(DocumentLine.document_id.in_(document_ids))))
+    lines = list(
+        db.scalars(
+            select_scoped(org, DocumentLine).where(DocumentLine.document_id.in_(document_ids))
+        )
+    )
     corrections = list(
         db.scalars(
-            select(ExtractionCorrection).where(ExtractionCorrection.document_id.in_(document_ids))
+            select_scoped(org, ExtractionCorrection).where(
+                ExtractionCorrection.document_id.in_(document_ids)
+            )
         )
     )
 

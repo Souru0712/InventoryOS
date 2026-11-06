@@ -14,9 +14,9 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access.system import tenant_by_id, tenant_by_stripe_id
 from app.config import get_settings
 from app.entitlements import PLAN_IDS, STARTER
 from app.models import SubscriptionStatus, Tenant
@@ -99,17 +99,17 @@ def _tenant_for(db: Session, payload: dict, event: dict) -> Tenant | None:
     metadata = payload.get("metadata") or {}
     reference = metadata.get("tenant_id") or payload.get("client_reference_id")
     if reference:
-        tenant = db.get(Tenant, int(reference))
+        tenant = tenant_by_id(db, int(reference))
         if tenant:
             return tenant
 
-    for column, value in (
-        (Tenant.stripe_subscription_id, payload.get("subscription") or payload.get("id")),
-        (Tenant.stripe_customer_id, payload.get("customer")),
+    for key, value in (
+        ("subscription_id", payload.get("subscription") or payload.get("id")),
+        ("customer_id", payload.get("customer")),
     ):
         if not value or not isinstance(value, str):
             continue
-        tenant = db.scalars(select(Tenant).where(column == value)).first()
+        tenant = tenant_by_stripe_id(db, **{key: value})
         if tenant:
             return tenant
 

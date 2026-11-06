@@ -27,7 +27,10 @@ implementation sessions; the detail lives in `docs/`.
 
 ## Architecture rules (do not break)
 - Only the ledger posting service writes stock movements and balances (DR-01..07).
-- Every query goes through the scoped data-access layer (tenant + location) (C-33).
+- Every query goes through the scoped data-access layer (tenant + location) (C-33, ADR-0026):
+  routes take `org: OrgContext = Depends(require_org)`, services take `org`, queries use
+  `select_scoped`/`get_scoped`/`update_scoped`; a lookup across organizations is a named function
+  in `app/access/system.py`. A test fails on raw queries in `app/web` and `app/orchestration`.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Schema (ADR-0025): instants are `UTCDateTime` (aware UTC; naive values refused); every foreign
@@ -56,8 +59,8 @@ implementation sessions; the detail lives in `docs/`.
   `APP_ENV=test` settings ignore `.env`, and `tests/conftest.py` clears inherited settings variables.
 - Postgres run: set `TEST_DATABASE_URL` to an empty Postgres 16 database.
 - Lint and format: `uv run ruff check .` and `uv run ruff format .` (line length 100, bandit
-  security rules on). Types: `uv run mypy`, strict for `app/transform/` and the coming
-  `app/access/` and `app/ledger/`, gradual elsewhere. Settings in `pyproject.toml`. Keep formatting-only changes in their own
+  security rules on). Types: `uv run mypy`, strict for `app/transform/`, `app/access/` and
+  the coming `app/ledger/`, gradual elsewhere. Settings in `pyproject.toml`. Keep formatting-only changes in their own
   commit and list it in `.git-blame-ignore-revs`.
 - CI: `.github/workflows/ci.yml` runs the docs checker and the suite on SQLite, and the suite on
   PostgreSQL 16 (no skips allowed), plus lint and types (ruff, mypy), a dependency audit

@@ -8,6 +8,7 @@ from html.parser import HTMLParser
 import pytest
 from fastapi.testclient import TestClient
 
+from app.access import OrgContext
 from app.config import get_settings
 from app.db import Base, SessionLocal, engine
 from app.main import app
@@ -106,7 +107,7 @@ def test_health_and_the_expiring_page_agree_on_the_money(db, tenant, location):
     db.commit()
 
     horizon = get_settings().expiry_horizon_days
-    expiries = expiry_positions(db, tenant.id, TODAY)
+    expiries = expiry_positions(db, OrgContext.system(tenant.id), TODAY)
     figures = expiry_figures(expiries, horizon)
     page = _expiry_summary(expiries, horizon)
 
@@ -122,7 +123,7 @@ def test_a_real_store_is_scored_with_its_reasons(db, tenant, location):
     sells(db, tenant, location, water, "5")
     db.commit()
 
-    health = current(db, tenant.id, now=NOW)
+    health = current(db, OrgContext.system(tenant.id), now=NOW)
     assert health.report.score is not None
     assert health.report.component("stock").figures["out_of_stock"] == 1
     assert any("out of stock" in action.text for action in health.actions.urgent)
@@ -136,8 +137,8 @@ def test_a_real_store_is_scored_with_its_reasons(db, tenant, location):
 def test_a_night_is_kept_once_however_often_it_runs(db, tenant, location):
     stock(db, tenant, location, "coke")
     db.commit()
-    record_snapshot(db, tenant.id, now=NOW)
-    record_snapshot(db, tenant.id, now=NOW)
+    record_snapshot(db, OrgContext.system(tenant.id), now=NOW)
+    record_snapshot(db, OrgContext.system(tenant.id), now=NOW)
     db.commit()
 
     [row] = db.query(HealthSnapshot).all()
@@ -153,12 +154,12 @@ def test_the_next_day_explains_why_the_score_moved(db, tenant, location):
     db.commit()
 
     yesterday = NOW - timedelta(days=1)
-    record_snapshot(db, tenant.id, now=yesterday)
+    record_snapshot(db, OrgContext.system(tenant.id), now=yesterday)
     coke.qty_base = Decimal("300")  # the delivery arrived overnight
     db.commit()
 
-    report = current(db, tenant.id, now=NOW).report
-    trend = over_time(db, tenant.id, report, TODAY)
+    report = current(db, OrgContext.system(tenant.id), now=NOW).report
+    trend = over_time(db, OrgContext.system(tenant.id), report, TODAY)
     assert trend.compared_with == yesterday.date()
     assert trend.change.points > 0
     assert any("fewer at or below the reorder point" in line for _, line in trend.change.lines)
@@ -168,10 +169,15 @@ def test_the_comparison_with_the_monthly_average_needs_three_nights(db, tenant, 
     stock(db, tenant, location, "coke")
     db.commit()
     for back in (3, 2, 1):
-        record_snapshot(db, tenant.id, now=NOW - timedelta(days=back))
+        record_snapshot(db, OrgContext.system(tenant.id), now=NOW - timedelta(days=back))
     db.commit()
 
-    trend = over_time(db, tenant.id, current(db, tenant.id, now=NOW).report, TODAY)
+    trend = over_time(
+        db,
+        OrgContext.system(tenant.id),
+        current(db, OrgContext.system(tenant.id), now=NOW).report,
+        TODAY,
+    )
     assert trend.benchmark is not None
     assert trend.benchmark.days == 3
     assert [row.dt for row in trend.history] == [TODAY - timedelta(days=d) for d in (3, 2, 1)]
@@ -190,7 +196,12 @@ def test_a_damaged_snapshot_costs_the_comparison_not_the_page(db, tenant, locati
     )
     db.commit()
 
-    trend = over_time(db, tenant.id, current(db, tenant.id, now=NOW).report, TODAY)
+    trend = over_time(
+        db,
+        OrgContext.system(tenant.id),
+        current(db, OrgContext.system(tenant.id), now=NOW).report,
+        TODAY,
+    )
     assert trend.change is None
     assert trend.compared_with == TODAY - timedelta(days=1)
 

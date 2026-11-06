@@ -11,9 +11,9 @@ from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, get_scoped, select_scoped
 from app.config import get_settings
 from app.db import get_db
 from app.models import ProductIdentifier, StockItem, Tenant, TrackMode, User
@@ -28,7 +28,7 @@ from app.orchestration.scanning import (
     suspicious,
 )
 from app.orchestration.views import stock_views, tenant_currency, velocity_map
-from app.security import require_tenant, require_user, require_writable
+from app.security import require_org, require_tenant, require_user, require_writable
 from app.transform.barcodes import canonical
 from app.transform.dates import prefer_for_currency
 from app.transform.inventory import days_of_cover
@@ -41,7 +41,10 @@ router = APIRouter()
 
 @router.get("/app/scan", response_class=HTMLResponse)
 def scan_page(
-    request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     return templates.TemplateResponse(
         request,
@@ -52,14 +55,14 @@ def scan_page(
             # JSON-safe: the page needs only enough to offer a list to link a new code to.
             "item_options": [
                 {"id": view.id, "name": view.name, "stock_unit": view.stock_unit}
-                for view in stock_views(db, tenant.id)
+                for view in stock_views(db, org)
             ],
         },
     )
 
 
-def _item_payload(db: Session, tenant_id: int, item: StockItem, code: str, kind: str) -> dict:
-    velocity = velocity_map(db, tenant_id).get(item.id, Decimal("0"))
+def _item_payload(db: Session, org: OrgContext, item: StockItem, code: str, kind: str) -> dict:
+    velocity = velocity_map(db, org).get(item.id, Decimal("0"))
     cover = days_of_cover(Decimal(item.qty_base or 0), velocity)
     from app.orchestration.scanning import location_name
 
@@ -79,7 +82,7 @@ def _item_payload(db: Session, tenant_id: int, item: StockItem, code: str, kind:
             "reorder_label": format_qty(item.reorder_point_base or 0, item.stock_unit),
             "cover_days": str(cover) if cover is not None else None,
             "cost_cents": int(Decimal(item.cost_per_base_cents or 0)),
-            "location": location_name(db, item),
+            "location": location_name(db, org, item),
             "pack_size": str(from_base(pack, item.stock_unit)) if pack else None,
             "receive_unit": item.receive_unit or "each",
         },
@@ -93,13 +96,14 @@ def lookup(
     refresh: bool = True,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     """Resolve a scanned code against this tenant's own identifier table first."""
     value, kind = canonical(code, symbology)
     if not value:
         raise HTTPException(status_code=400, detail="no code was scanned")
 
-    identifier = find_by_code(db, tenant.id, code, symbology)
+    identifier = find_by_code(db, org, code, symbology)
     if identifier is None:
         return JSONResponse(
             {
@@ -110,8 +114,8 @@ def lookup(
             }
         )
 
-    item = db.get(StockItem, identifier.stock_item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, identifier.stock_item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
 
     # Square owns the quantity, so ask it for this one variation before showing a number.
@@ -124,18 +128,18 @@ def lookup(
         )
 
         try:
-            refresh_item_from_square(db, tenant.id, item)
+            refresh_item_from_square(db, org, item)
             db.commit()
         except NotConnected:
             pass
         except Exception as exc:
             db.rollback()
             log.exception("could not refresh item %s from square for tenant %s", item.id, tenant.id)
-            record_square_failure(db, tenant.id, "item", exc)
+            record_square_failure(db, org, "item", exc)
             db.commit()
             square_unreachable = True
 
-    payload = _item_payload(db, tenant.id, item, value, identifier.identifier_type.value)
+    payload = _item_payload(db, org, item, value, identifier.identifier_type.value)
     payload["square_unreachable"] = square_unreachable
     return JSONResponse(payload)
 
@@ -147,20 +151,21 @@ def link(
     symbology: str | None = Form(None),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
     """Teach the scanner a code it did not know."""
-    item = db.get(StockItem, stock_item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, stock_item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
     try:
-        identifier = link_code(db, tenant.id, item.id, code, symbology, source="scan")
+        identifier = link_code(db, org, item.id, code, symbology, source="scan")
     except CodeInUse as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     return JSONResponse(
-        _item_payload(db, tenant.id, item, identifier.value, identifier.identifier_type.value)
+        _item_payload(db, org, item, identifier.value, identifier.identifier_type.value)
     )
 
 
@@ -193,10 +198,11 @@ def receive(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_org),
 ):
     """Scan, then receive: stock rises, the lot is dated, Square gets the delta."""
-    item = db.get(StockItem, stock_item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, stock_item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
 
     qty_base = _quantity(quantity, item, as_packs)
@@ -241,12 +247,13 @@ def count(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_org),
 ):
     """Correct the count from the shelf. Nothing is sent to Square (C-34)."""
     from app.models import InventoryCount
 
-    item = db.get(StockItem, stock_item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, stock_item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
 
     qty_base = _quantity(quantity, item, as_packs=False)
@@ -290,14 +297,16 @@ def count(
 
 @router.get("/app/scan/codes/{stock_item_id}")
 def codes_for_item(
-    stock_item_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    stock_item_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
-    item = db.get(StockItem, stock_item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, stock_item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
     rows = db.scalars(
-        select(ProductIdentifier).where(
-            ProductIdentifier.tenant_id == tenant.id,
+        select_scoped(org, ProductIdentifier).where(
             ProductIdentifier.stock_item_id == stock_item_id,
         )
     )
@@ -321,6 +330,7 @@ def scan_expiry(
     photo: UploadFile = File(...),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     """Read the date off a photo of the packaging. The product is already known, so this
     only has to answer 'which date', which is a far smaller question than 'which product'."""
@@ -336,7 +346,7 @@ def scan_expiry(
     reading = read_expiry_photo(
         image,
         photo.content_type or "image/jpeg",
-        prefer=prefer_for_currency(tenant_currency(db, tenant.id)),
+        prefer=prefer_for_currency(tenant_currency(db, org)),
     )
     return JSONResponse(
         {

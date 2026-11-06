@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, get_scoped, select_scoped
 from app.extract.expiry import ExpiryReader, ExpiryReadError, get_reader
 from app.models import (
     IdentifierType,
@@ -45,7 +45,7 @@ class ScanHit:
 
 
 def find_by_code(
-    db: Session, tenant_id: int, raw: str, symbology: str | None = None
+    db: Session, org: OrgContext, raw: str, symbology: str | None = None
 ) -> ProductIdentifier | None:
     """Resolve a scanned code locally. Much faster than asking Square on every scan."""
     keys = lookup_keys(raw, symbology)
@@ -54,9 +54,7 @@ def find_by_code(
     rows = {
         row.value: row
         for row in db.scalars(
-            select(ProductIdentifier).where(
-                ProductIdentifier.tenant_id == tenant_id, ProductIdentifier.value.in_(keys)
-            )
+            select_scoped(org, ProductIdentifier).where(ProductIdentifier.value.in_(keys))
         )
     }
     # keys are ordered most-canonical first, so the first hit is the best one.
@@ -68,7 +66,7 @@ def find_by_code(
 
 def link_code(
     db: Session,
-    tenant_id: int,
+    org: OrgContext,
     stock_item_id: int,
     raw: str,
     symbology: str | None = None,
@@ -80,9 +78,7 @@ def link_code(
         raise ValueError("nothing to link: the code is empty")
 
     existing = db.scalars(
-        select(ProductIdentifier).where(
-            ProductIdentifier.tenant_id == tenant_id, ProductIdentifier.value == value
-        )
+        select_scoped(org, ProductIdentifier).where(ProductIdentifier.value == value)
     ).first()
     if existing is not None:
         if existing.stock_item_id != stock_item_id:
@@ -90,7 +86,7 @@ def link_code(
         return existing
 
     identifier = ProductIdentifier(
-        tenant_id=tenant_id,
+        tenant_id=org.tenant_id,
         stock_item_id=stock_item_id,
         identifier_type=IdentifierType(kind),
         value=value,
@@ -277,6 +273,6 @@ def receive_scanned(
     return {"qty_after_base": item.qty_base, "dated": batch is not None}
 
 
-def location_name(db: Session, item: StockItem) -> str:
-    location = db.get(Location, item.location_id)
+def location_name(db: Session, org: OrgContext, item: StockItem) -> str:
+    location = get_scoped(db, org, Location, item.location_id)
     return location.name if location else ""

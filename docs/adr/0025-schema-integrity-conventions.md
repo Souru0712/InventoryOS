@@ -1,6 +1,6 @@
 # ADR-0025: Schema integrity conventions: UTC instants, delete rules, named CHECKs
 
-- **Status:** Proposed, 2026-11-06 (in the T1.01 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-06 (the owner merged the T1.01 pull request, #19: "Yes, merge it")
 - **Decision ID:** none (implements T1.01, migration step DM-2, and rules DR-08, DR-20, DR-24)
 - **Tasks:** T1.01, and every later task that adds a table (T1.02 onwards)
 

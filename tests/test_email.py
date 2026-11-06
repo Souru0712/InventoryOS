@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.access import OrgContext
 from app.config import get_settings
 from app.models import Alert, AlertKind, EmailLog, StockItem, TrackMode, User
 from app.notify.email import suppress
@@ -106,7 +107,7 @@ def second_user(db, tenant, email: str, **preferences) -> User:
 
 def test_the_alert_digest_is_readable_without_html(db, tenant, milk, mail):
     alert(db, tenant, milk, AlertKind.LOW_STOCK, "Whole milk is at 4 l, below its reorder point")
-    assert send_alert_digest(db, tenant.id) is True
+    assert send_alert_digest(db, OrgContext.system(tenant.id)) is True
 
     text = plain(mail[0])
     assert "Whole milk is at 4 l" in text
@@ -116,7 +117,7 @@ def test_the_alert_digest_is_readable_without_html(db, tenant, milk, mail):
 
 
 def test_the_weekly_report_is_readable_without_html(db, tenant, milk, mail):
-    assert send_weekly_report(db, tenant.id) is True
+    assert send_weekly_report(db, OrgContext.system(tenant.id)) is True
 
     text = plain(mail[0])
     assert "Net sales" in text and "Stock on hand" in text
@@ -131,7 +132,7 @@ def test_someone_who_turned_the_weekly_report_off_is_not_sent_it(db, tenant, mil
     owner.wants_weekly_report = False
     db.commit()
 
-    assert send_weekly_report(db, tenant.id) is False
+    assert send_weekly_report(db, OrgContext.system(tenant.id)) is False
     assert mail == []
 
 
@@ -150,7 +151,7 @@ def test_each_person_gets_only_the_alert_categories_they_want(db, tenant, milk, 
         "6 l of Whole milk will not sell before 20 Sep",
         2400,
     )
-    assert send_alert_digest(db, tenant.id) is True
+    assert send_alert_digest(db, OrgContext.system(tenant.id)) is True
 
     by_recipient = {message["To"]: plain(message) for message in mail}
     assert set(by_recipient) == {"owner@rosewood.test", "chef@rosewood.test"}
@@ -166,7 +167,7 @@ def test_nobody_wanting_a_category_means_nothing_is_sent(db, tenant, milk, mail)
     db.commit()
     alert(db, tenant, milk, AlertKind.LOW_STOCK, "Whole milk is low")
 
-    assert send_alert_digest(db, tenant.id) is False
+    assert send_alert_digest(db, OrgContext.system(tenant.id)) is False
     assert mail == []
 
 
@@ -177,7 +178,7 @@ def test_a_bounced_address_is_never_written_to_again(db, tenant, milk, mail):
     suppress(db, "OWNER@rosewood.test", "550 mailbox does not exist")
     db.commit()
 
-    assert send_weekly_report(db, tenant.id) is False
+    assert send_weekly_report(db, OrgContext.system(tenant.id)) is False
     assert mail == []
     logged = db.query(EmailLog).one()
     assert logged.status == "suppressed"
@@ -189,11 +190,11 @@ def test_clearing_a_suppression_lets_mail_flow_again(db, tenant, milk, mail):
 
     suppress(db, "owner@rosewood.test", "550 mailbox full")
     db.commit()
-    send_weekly_report(db, tenant.id)
+    send_weekly_report(db, OrgContext.system(tenant.id))
     assert unsuppress(db, "owner@rosewood.test") is True
     db.commit()
 
-    assert send_weekly_report(db, tenant.id) is True
+    assert send_weekly_report(db, OrgContext.system(tenant.id)) is True
     assert len(mail) == 1
 
 
@@ -204,19 +205,21 @@ def test_a_retried_digest_does_not_email_the_same_alerts_twice(db, tenant, milk,
     """The scheduler retrying, or two syncs in an hour, must not mean two digests."""
     alert(db, tenant, milk, AlertKind.LOW_STOCK, "Whole milk is at 4 l, below its reorder point")
 
-    assert send_alert_digest(db, tenant.id) is True
-    assert send_alert_digest(db, tenant.id) is False
+    assert send_alert_digest(db, OrgContext.system(tenant.id)) is True
+    assert send_alert_digest(db, OrgContext.system(tenant.id)) is False
     assert len(mail) == 1
 
 
 def test_new_alerts_still_wait_for_the_cooldown_to_pass(db, tenant, milk, mail):
     first = alert(db, tenant, milk, AlertKind.LOW_STOCK, "Whole milk is low")
-    send_alert_digest(db, tenant.id)
+    send_alert_digest(db, OrgContext.system(tenant.id))
     alert(db, tenant, milk, AlertKind.OUT_OF_STOCK, "Whole milk is out")
 
-    assert send_alert_digest(db, tenant.id) is False, "inside the cooldown window"
+    assert send_alert_digest(db, OrgContext.system(tenant.id)) is False, (
+        "inside the cooldown window"
+    )
 
     first.notified_at = datetime.now(UTC) - timedelta(hours=get_settings().alert_cooldown_hours + 1)
     db.commit()
-    assert send_alert_digest(db, tenant.id) is True
+    assert send_alert_digest(db, OrgContext.system(tenant.id)) is True
     assert len(mail) == 2

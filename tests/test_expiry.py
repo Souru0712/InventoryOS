@@ -3,6 +3,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+from app.access import OrgContext
 from app.transform.expiry import Batch, allocate_fefo, fefo_order, project_batches
 from app.units import to_base
 
@@ -210,7 +211,7 @@ def red_bull(db, tenant, location):
 
 
 def test_square_tracked_stock_gets_its_velocity_from_direct_sales(db, tenant, red_bull):
-    assert velocity_map(db, tenant.id, TODAY)[red_bull.id] == Decimal("4")
+    assert velocity_map(db, OrgContext.system(tenant.id), TODAY)[red_bull.id] == Decimal("4")
 
 
 def test_sales_at_another_location_do_not_count(db, tenant, location, red_bull):
@@ -230,11 +231,11 @@ def test_sales_at_another_location_do_not_count(db, tenant, location, red_bull):
         )
     )
     db.commit()
-    assert velocity_map(db, tenant.id, TODAY)[red_bull.id] == Decimal("4")
+    assert velocity_map(db, OrgContext.system(tenant.id), TODAY)[red_bull.id] == Decimal("4")
 
 
 def test_the_projection_runs_end_to_end(db, tenant, red_bull):
-    [expiry] = expiry_positions(db, tenant.id, TODAY)
+    [expiry] = expiry_positions(db, OrgContext.system(tenant.id), TODAY)
     assert expiry.positions[0].projected_leftover_base == Decimal("24")
 
 
@@ -260,13 +261,13 @@ def test_an_item_with_no_sales_signal_is_not_projected(db, tenant, location):
         )
     )
     db.commit()
-    [expiry] = expiry_positions(db, tenant.id, TODAY)
+    [expiry] = expiry_positions(db, OrgContext.system(tenant.id), TODAY)
     # No recipe, not POS-tracked: zero velocity would be a guess, so nothing is projected.
     assert expiry.positions[0].projected_leftover_base is None
 
 
 def test_a_waste_risk_alert_opens_with_the_money_at_stake(db, tenant, red_bull):
-    evaluate_and_store(db, tenant.id, NOW)
+    evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
     alert = db.query(Alert).filter(Alert.kind == AlertKind.WASTE_RISK).one()
     assert alert.qty_base == Decimal("24")
@@ -275,20 +276,20 @@ def test_a_waste_risk_alert_opens_with_the_money_at_stake(db, tenant, red_bull):
 
 
 def test_the_digest_leads_with_the_money(db, tenant, red_bull):
-    evaluate_and_store(db, tenant.id, NOW)
+    evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
-    send_alert_digest(db, tenant.id, NOW)
+    send_alert_digest(db, OrgContext.system(tenant.id), NOW)
     db.commit()
     subject = db.query(EmailLog).one().subject
     assert subject.startswith("$26.40 of stock at risk")
 
 
 def test_the_alert_resolves_once_the_stock_can_sell_in_time(db, tenant, red_bull):
-    evaluate_and_store(db, tenant.id, NOW)
+    evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
     red_bull.qty_base = Decimal("40")  # marked down and sold; Square sync brings the new count
     db.commit()
-    evaluate_and_store(db, tenant.id, NOW)
+    evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
     alert = db.query(Alert).filter(Alert.kind == AlertKind.WASTE_RISK).one()
     assert alert.resolved_at is not None
@@ -317,7 +318,7 @@ def test_expired_stock_raises_its_own_alert(db, tenant, location):
         )
     )
     db.commit()
-    evaluate_and_store(db, tenant.id, NOW)
+    evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
     alert = db.query(Alert).filter(Alert.kind == AlertKind.EXPIRED).one()
     # 8,000 ml at 0.07 cents per ml.
@@ -416,7 +417,7 @@ def test_dismissed_items_leave_the_figure_entirely(db, tenant, location):
     db.add_all([perishable, cups])
     db.commit()
 
-    result = expiry_coverage(db, tenant.id)
+    result = expiry_coverage(db, OrgContext.system(tenant.id))
     assert [row.item.name for row in result.rows] == ["Milk"]
     assert result.percent == 0
 
@@ -429,4 +430,4 @@ def test_dismissed_items_leave_the_figure_entirely(db, tenant, location):
         )
     )
     db.commit()
-    assert expiry_coverage(db, tenant.id).percent == 100
+    assert expiry_coverage(db, OrgContext.system(tenant.id)).percent == 100

@@ -6,6 +6,7 @@ import io
 import pytest
 from fastapi.testclient import TestClient
 
+from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
 from app.extract.invoice import ExtractionError, StubExtractor
 from app.main import app
@@ -72,7 +73,9 @@ def test_s3_failures_surface_as_storage_errors():
 
 def test_an_upload_is_saved_under_its_key_not_a_filesystem_path(db, tenant, location):
     content = jpeg("a-delivery-note")
-    document = save_upload(db, tenant.id, location.id, "Note.JPG", content, "image/jpeg")
+    document = save_upload(
+        db, OrgContext.system(tenant.id), location.id, "Note.JPG", content, "image/jpeg"
+    )
     db.commit()
     assert document.storage_key == f"{tenant.id}/{hashlib.sha256(content).hexdigest()}.jpg"
     assert get_storage().get(document.storage_key) == content
@@ -80,13 +83,20 @@ def test_an_upload_is_saved_under_its_key_not_a_filesystem_path(db, tenant, loca
 
 def test_a_photo_missing_from_storage_fails_the_document_with_a_reason(db, tenant, location):
     document = save_upload(
-        db, tenant.id, location.id, "note.jpg", jpeg("gone-missing"), "image/jpeg"
+        db,
+        OrgContext.system(tenant.id),
+        location.id,
+        "note.jpg",
+        jpeg("gone-missing"),
+        "image/jpeg",
     )
     db.commit()
     (get_storage().root / document.storage_key).unlink()
 
     with pytest.raises(ExtractionError):
-        parse_document(db, document.id, StubExtractor({"lines": []}))
+        parse_document(
+            db, OrgContext.system(document.tenant_id), document.id, StubExtractor({"lines": []})
+        )
     assert document.status is DocumentStatus.FAILED
     assert "could not be read" in document.error
 

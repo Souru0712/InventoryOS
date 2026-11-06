@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, select_scoped
 from app.config import get_settings
 from app.models import HealthSnapshot
 from app.orchestration.promotions import suggestions_for
@@ -70,18 +70,18 @@ def expiry_figures(expiries: list[ItemExpiry], horizon_days: int) -> ExpiryFigur
 
 
 def health_input(
-    db: Session, tenant_id: int, today: date, location_id: int | None = None
+    db: Session, org: OrgContext, today: date, location_id: int | None = None
 ) -> HealthInput:
-    velocity = velocity_map(db, tenant_id, today)
-    signal = sales_signal(db, tenant_id)
+    velocity = velocity_map(db, org, today)
+    signal = sales_signal(db, org)
     items = [
         ItemHealth(view, velocity.get(view.id, ZERO), view.id in signal)
-        for view in stock_views(db, tenant_id, location_id)
+        for view in stock_views(db, org, location_id)
     ]
 
-    expiries = expiry_positions(db, tenant_id, today, location_id, velocity=velocity)
-    coverage = expiry_coverage(db, tenant_id, location_id)
-    suggestions = suggestions_for(db, tenant_id, today, location_id)
+    expiries = expiry_positions(db, org, today, location_id, velocity=velocity)
+    coverage = expiry_coverage(db, org, location_id)
+    suggestions = suggestions_for(db, org, today, location_id)
     return HealthInput(
         items=items,
         expiry=expiry_figures(expiries, get_settings().expiry_horizon_days),
@@ -89,7 +89,7 @@ def health_input(
         needs_dates=len(coverage.needs_dates),
         promotable_urgent=sum(1 for s in suggestions if s.urgency == "critical"),
         promotable=len(suggestions),
-        currency=tenant_currency(db, tenant_id),
+        currency=tenant_currency(db, org),
     )
 
 
@@ -101,24 +101,22 @@ class Health:
 
 
 def current(
-    db: Session, tenant_id: int, location_id: int | None = None, now: datetime | None = None
+    db: Session, org: OrgContext, location_id: int | None = None, now: datetime | None = None
 ) -> Health:
     now = now or datetime.now(UTC)
-    inputs = health_input(db, tenant_id, now.date(), location_id)
+    inputs = health_input(db, org, now.date(), location_id)
     return Health(score_inventory(inputs, now), build_actions(inputs), inputs)
 
 
-def record_snapshot(db: Session, tenant_id: int, now: datetime | None = None) -> HealthSnapshot:
+def record_snapshot(db: Session, org: OrgContext, now: datetime | None = None) -> HealthSnapshot:
     """Keep today's health. Running it twice in a night replaces the row rather than adding one."""
     now = now or datetime.now(UTC)
-    report = current(db, tenant_id, now=now).report
+    report = current(db, org, now=now).report
     row = db.scalars(
-        select(HealthSnapshot).where(
-            HealthSnapshot.tenant_id == tenant_id, HealthSnapshot.dt == now.date()
-        )
+        select_scoped(org, HealthSnapshot).where(HealthSnapshot.dt == now.date())
     ).first()
     if row is None:
-        row = HealthSnapshot(tenant_id=tenant_id, dt=now.date())
+        row = HealthSnapshot(tenant_id=org.tenant_id, dt=now.date())
         db.add(row)
     row.score = report.score
     row.band = report.band
@@ -136,7 +134,7 @@ class OverTime:
 
 
 def over_time(
-    db: Session, tenant_id: int, report: HealthReport, today: date, days: int = HISTORY_DAYS
+    db: Session, org: OrgContext, report: HealthReport, today: date, days: int = HISTORY_DAYS
 ) -> OverTime:
     """Today against the last night on record, and against the last `days` of them.
 
@@ -145,8 +143,8 @@ def over_time(
     if days <= 0:
         return OverTime(change=None, compared_with=None, benchmark=None, history=[])
     prior = db.scalars(
-        select(HealthSnapshot)
-        .where(HealthSnapshot.tenant_id == tenant_id, HealthSnapshot.dt < today)
+        select_scoped(org, HealthSnapshot)
+        .where(HealthSnapshot.dt < today)
         .order_by(HealthSnapshot.dt.desc())
         .limit(1)
     ).first()
@@ -157,13 +155,14 @@ def over_time(
             change = explain_change(json.loads(prior.detail_json), report.to_snapshot())
         except (ValueError, TypeError, KeyError):
             # A damaged row should cost the comparison, not the whole dashboard.
-            log.exception("health snapshot %s for tenant %s could not be read", prior.id, tenant_id)
+            log.exception(
+                "health snapshot %s for tenant %s could not be read", prior.id, org.tenant_id
+            )
 
     window = list(
         db.scalars(
-            select(HealthSnapshot)
+            select_scoped(org, HealthSnapshot)
             .where(
-                HealthSnapshot.tenant_id == tenant_id,
                 HealthSnapshot.dt >= today - timedelta(days=days),
                 HealthSnapshot.dt < today,
             )

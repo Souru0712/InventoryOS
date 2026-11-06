@@ -18,4 +18,4 @@ Microservices; module-first package reorganization
 
 ## Consequences
 
-Not built yet: the scoped data-access package arrives in T1.02 and the single ledger posting service in T1.16. Until then new code keeps the existing layers (`extract`, `transform`, `load`, `orchestration`, `web`).
+The scoped data-access package `app/access/` is built (T1.02, [ADR-0026](0026-scoped-data-access.md)); the single ledger posting service arrives in T1.16. Until then new code keeps the existing layers (`extract`, `transform`, `load`, `orchestration`, `web`).
