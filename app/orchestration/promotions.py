@@ -47,15 +47,23 @@ def _open_decisions(db: Session, org: OrgContext, today: date) -> set[int]:
 
 
 def suggestions_for(
-    db: Session, org: OrgContext, today: date | None = None, location_id: int | None = None
+    db: Session,
+    org: OrgContext,
+    today: date | None = None,
+    location_id: int | None = None,
+    now: datetime | None = None,
 ) -> list[Suggestion]:
-    """What is worth marking down right now, biggest loss first."""
-    today = today or datetime.now(UTC).date()
+    """What is worth marking down right now, biggest loss first.
+
+    Without a given today, each lot is judged on its location's business day (AC-ADM-01).
+    """
+    fixed = today
+    today = today or (now or datetime.now(UTC)).date()
     velocity = velocity_map(db, org, today)
     already = _open_decisions(db, org, today)
 
     inputs: list[PromotionInput] = []
-    for expiry in expiry_positions(db, org, today, location_id, velocity=velocity):
+    for expiry in expiry_positions(db, org, fixed, location_id, velocity=velocity, now=now):
         item = expiry.item
         if item.id in already or not item.retail_per_base_cents:
             continue

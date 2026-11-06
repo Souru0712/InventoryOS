@@ -98,7 +98,7 @@ def test_every_timestamp_column_is_an_aware_instant():
         for column in table.columns
         if isinstance(column.type, UTCDateTime)
     ]
-    assert len(aware) == 31
+    assert len(aware) >= 31, "the walk must find the timestamp columns"
 
 
 # --- CHECK constraints (DB1) ----------------------------------------------------------------------

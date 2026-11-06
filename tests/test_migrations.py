@@ -125,6 +125,41 @@ def test_timestamps_checks_and_delete_rules_are_migrated(migrated):
         assert found_rules == rules, table.name
 
 
+def test_dm3_a_location_needs_no_pos_and_the_downgrade_gives_it_ids(fresh_url):
+    """DM-3 (T1.04): owner-added locations carry no provider ids; rolling back names them."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, "head")
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day, report_hour,"
+                    " timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING', 0, 7, 'UTC',"
+                    " '2026-11-06 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                    " VALUES (1, 'Main', 'America/Los_Angeles', 'USD', true)"
+                )
+            )
+            row = connection.execute(
+                text("SELECT business_day_cutoff_hour, open_days FROM locations")
+            ).one()
+        assert tuple(row) == (0, 127), "server defaults give a midnight day, open every day"
+
+        command.downgrade(config, "68c6fdbc31a7")
+        with engine.connect() as connection:
+            ids = connection.execute(
+                text("SELECT provider, provider_location_id FROM locations")
+            ).one()
+        assert tuple(ids) == ("manual", "manual-1")
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

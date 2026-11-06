@@ -48,6 +48,9 @@ def upsert_locations(
             changed += 1
             continue
         for key, value in row.items():
+            # An archived location stays off even while the POS still lists it as open.
+            if key == "is_active" and location.archived_at is not None:
+                continue
             if getattr(location, key) != value:
                 setattr(location, key, value)
                 changed += 1

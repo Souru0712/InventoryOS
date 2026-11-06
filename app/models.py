@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -146,6 +147,9 @@ class Tenant(Base):
     # When the newest Stripe event we applied was created, so an older one arriving late
     # cannot undo a newer state.
     stripe_event_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # The business profile (ADM-FR-01): where it is and who to write to about the account.
+    address: Mapped[str | None] = mapped_column(String(300))
+    contact_email: Mapped[str | None] = mapped_column(String(255))
     report_day: Mapped[int] = mapped_column(Integer, default=0)  # 0 = Monday
     report_hour: Mapped[int] = mapped_column(Integer, default=7)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
@@ -189,17 +193,38 @@ class ProviderConnection(Base):
 
 
 class Location(Base):
+    """A site the business runs, with or without a POS (ADM-FR-02)."""
+
     __tablename__ = "locations"
-    __table_args__ = (UniqueConstraint("tenant_id", "provider", "provider_location_id"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", "provider_location_id"),
+        CheckConstraint(
+            "business_day_cutoff_hour BETWEEN 0 AND 23",
+            name="ck_locations_business_day_cutoff_hour",
+        ),
+        CheckConstraint("open_days BETWEEN 0 AND 127", name="ck_locations_open_days"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
-    provider: Mapped[str] = mapped_column(String(32), default="square")
-    provider_location_id: Mapped[str] = mapped_column(String(120))
+    # Set when a POS created the location; one added by the owner has neither (mapping: T3.03).
+    provider: Mapped[str | None] = mapped_column(String(32))
+    provider_location_id: Mapped[str | None] = mapped_column(String(120))
     name: Mapped[str] = mapped_column(String(200))
+    address: Mapped[str | None] = mapped_column(String(300))
+    # IANA name. "Today", expiry and reports follow this zone (DR-20, AC-ADM-01).
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    # The hour a business day starts: before it, it is still the day before (A-08).
+    business_day_cutoff_hour: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0")
+    )
+    # Weekdays the location opens, Monday as bit 0 (app/transform/business_days.py).
+    open_days: Mapped[int] = mapped_column(Integer, default=127, server_default=text("127"))
     currency: Mapped[str] = mapped_column(String(8), default="USD")
+    # Off because the plan does not cover it, the POS closed it, or it is archived.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The owner archived it: it stays off whatever the plan or the POS says, until restored.
+    archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class SoldItem(Base):

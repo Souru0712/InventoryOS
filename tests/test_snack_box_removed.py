@@ -18,9 +18,10 @@ SNACK_BOX_TRACES = re.compile(
 )
 
 
-def test_the_product_has_its_53_routes_and_none_of_the_shops():
+def test_none_of_the_shops_routes_remain():
+    """T0.05 left 53 product routes (88 less the shop's 35); later tasks add their own."""
     paths = [route.path for route in api_routes(app.routes)]
-    assert len(paths) == 53
+    assert len(paths) >= 53, "the walk must reach the routers' routes"
     assert not [p for p in paths if p.startswith(("/shop", "/app/boxes"))]
 
 

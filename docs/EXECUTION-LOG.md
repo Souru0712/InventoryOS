@@ -5,6 +5,82 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T1.04 Organization and location model (DM-3)
+
+**Implemented**
+- **Locations without a POS.** Owners add, edit, archive and restore locations at
+  `/app/locations`: name, address, IANA time zone, currency, the hour the business day starts,
+  open days. Provider ids are optional; an owner-added location has none and is never sent to
+  Square (the sync's Square calls now take only locations with a Square id, which mypy flagged).
+- **Archive is its own state** (`archived_at`): the plan limit skips archived locations and the
+  Square sync leaves them off, so an upgrade or Square's status cannot bring one back. Adding and
+  restoring respect the plan's allowance (Starter covers one).
+- **Square keeps what it supplies** for a location it created: name, time zone and currency are
+  shown read-only and not saved from the form; address, cutoff and open days are the owner's.
+- **Business profile** (ADM-FR-01): name, address and account contact email on the settings
+  page. The optional logo is left for later.
+- **Business days** (`app/transform/business_days.py`, strict mypy): `business_date(instant,
+  zone, cutoff)` and the open-days mask helpers. Expiry is now judged on each item's location
+  business day unless a caller fixes the date: dashboard, expiring page, health, markdown
+  suggestions and the alert job (AC-ADM-01).
+- **DM-3**, migration `912d17673f03` (additive): `tenants.address`, `contact_email`;
+  `locations.address`, `business_day_cutoff_hour` (default 0, CHECK 0–23), `open_days` (default
+  127, CHECK 0–127), `archived_at`; provider ids nullable. Its downgrade names owner-added
+  locations `manual-<id>` so the older schema's constraints hold.
+- Empty states point a business without Square to "Add a location". Probe PA1 retired.
+- ADR-0027 (Proposed until this pull request is merged); `CLAUDE.md` states the business-day rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_business_days.py` (11): local date versus UTC, cutoff, both daylight-saving
+  changes in Los Angeles, offsets, refusals, time-zone names, open-day masks.
+- `tests/test_locations.py` (19): PA1 inverted (a business without Square adds a location, then
+  an item); five refusals with reasons; editing; Square-owned fields kept; archive and restore;
+  the Starter allowance for adding and restoring; an archived location stays off through a Square
+  sync and an upgrade; the business profile and its refusals; AC-ADM-01 (a lot dated the 5th is
+  expired at 03:00 UTC on the 6th in a UTC location and not in Los Angeles, in positions and in
+  the alert job; moving the zone moves the day); the cutoff; a fixed date still applies; the new
+  pages render.
+- Isolation suite: the coverage test flagged the four new location routes until they had cases,
+  and the integer cutoff field until it was listed as a quantity; 33 cases pass.
+- DM-3 migration test: a location with no provider ids gets the server defaults (midnight, every
+  day); the downgrade names it `manual-1`. Two older tests that pinned exact counts (53 routes, 31
+  timestamp columns) now check what they were for without the number.
+- Full suite 647 passed, 10 skipped (612 before; the new skip is the DM-3 migration test's Postgres run); ruff, mypy and the docs checker clean. No browser check: the preview tool
+  reads another project's launch configuration in this session; the pages are covered by route
+  and rendering tests.
+
+**Open issues**
+- Until roles exist (T1.06) every member of a business can manage its locations; the requirement
+  is Owner and Administrator (`location.manage`).
+
+**Files changed**
+- `app/transform/business_days.py`, `app/web/locations.py`, templates `app/locations.html` and
+  `app/location_form.html`, migration `912d17673f03` (all new); `app/models.py`, `app/main.py`,
+  `app/load/upsert.py`, `app/orchestration/{alerts,health,promotions,subscriptions,sync,views}.py`,
+  `app/web/promotions.py`, templates `dashboard.html`, `item_form.html`, `settings.html`; tests
+  `test_business_days.py`, `test_locations.py` (new), `test_isolation.py`, `test_migrations.py`,
+  `test_schema_hygiene.py`, `test_snack_box_removed.py`; probe file (PA1 retired); ADR-0027 and the
+  index, `CLAUDE.md`, task index (T1.03 → Completed, T1.04 → In review), this log.
+
+**Next task**
+- T1.05 Memberships and org switching.
+
+---
+
+## 2026-11-06 — T1.03 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #21 was merged with a merge commit (`68f4e89`). CI
+  on its head `0d543e4`, all five required jobs green: SQLite 612 passed, 9 skipped; PostgreSQL 16
+  621 passed, 0 skipped (the isolation suite runs in both); lint and types; dependency audit;
+  Docker image. Same five green on `main` after the merge. Acceptance met: 404/403 for every route
+  and operation; the suite runs on Postgres in a required check.
+
+**Files changed**
+- Task index (T1.03 → Completed), this log.
+
+---
+
 ## 2026-11-06 — T1.03 Tenant-isolation test suite
 
 **Implemented**

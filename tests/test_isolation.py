@@ -39,7 +39,7 @@ from tests.sample_files import jpeg
 from tests.test_async_correctness import api_routes
 
 # Integer parameters that are quantities, not identifiers. Any other integer is an identifier.
-NOT_IDENTIFIERS = {"lead_time_days"}
+NOT_IDENTIFIERS = {"lead_time_days", "business_day_cutoff_hour"}
 
 
 def _is_int(annotation) -> bool:
@@ -139,9 +139,21 @@ CASES = {
         "data": {"stock_item_id": ids["item"], "quantity": "5"}
     },
     ("GET", "/app/scan/codes/{stock_item_id}"): lambda ids: {},
+    ("GET", "/app/locations/{location_id}"): lambda ids: {},
+    ("POST", "/app/locations/{location_id}"): lambda ids: {
+        "data": {
+            "name": "Renamed",
+            "timezone": "America/Chicago",
+            "currency": "USD",
+            "open_days": ["mon"],
+        }
+    },
+    ("POST", "/app/locations/{location_id}/archive"): lambda ids: {},
+    ("POST", "/app/locations/{location_id}/restore"): lambda ids: {},
 }
 
 PATH_ROWS = {
+    "location_id": "location",
     "batch_id": "batch",
     "item_id": "item",
     "stock_item_id": "item",

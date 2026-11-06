@@ -35,6 +35,8 @@ implementation sessions; the detail lives in `docs/`.
   until it has one); an optional `?location=` goes through `location_filter`.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
+- "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`
+  (`app/transform/business_days.py`, ADR-0027), never UTC's date.
 - Schema (ADR-0025): instants are `UTCDateTime` (aware UTC; naive values refused); every foreign
   key is `ref()` (RESTRICT) or `owned_by()` (CASCADE, parts of a parent only); CHECKs are named.
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).

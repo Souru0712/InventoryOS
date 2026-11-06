@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+{% if request.query_params.get("saved") %}<div class="notice ok">Location saved.</div>{% endif %}
+{% if request.query_params.get("archived") %}<div class="notice ok">Location archived. Its items and history are kept.</div>{% endif %}
+{% if request.query_params.get("restored") %}<div class="notice ok">Location restored.</div>{% endif %}
+{% if request.query_params.get("error") == "limit" %}
+  <div class="notice error">Your plan covers {{ allowance }} active location{{ "s" if allowance != 1 else "" }}. Archive one or upgrade first.</div>
+{% endif %}
+
+<h1>Locations</h1>
+<p class="lede">Each location keeps its own stock, time zone and business day. "Today", expiry
+dates and reports follow the location's clock.</p>
+
+<p>
+  {% if room %}
+    <a class="btn small" href="/app/locations/new">Add location</a>
+  {% else %}
+    <span class="small muted">Your plan covers {{ allowance }} active location{{ "s" if allowance != 1 else "" }}.</span>
+  {% endif %}
+</p>
+
+{% if not locations %}
+  <div class="card"><p style="margin:0;">No locations yet. Add one to start adding stock, or connect Square to bring yours in.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Location</th><th>Time zone</th><th>Day starts</th><th>Open</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for location in locations %}
+    <tr>
+      <td>
+        <a href="/app/locations/{{ location.id }}">{{ location.name }}</a>
+        {% if location.address %}<div class="small muted">{{ location.address }}</div>{% endif %}
+        {% if location.provider_location_id %}<div class="small muted">From Square</div>{% endif %}
+      </td>
+      <td>{{ location.timezone }}</td>
+      <td>{{ "%02d:00"|format(location.business_day_cutoff_hour) }}</td>
+      <td class="small">{{ open_day_names(location.open_days)|map("capitalize")|join(", ") or "Closed" }}</td>
+      <td>
+        {% if location.archived_at %}<span class="pill expired">archived</span>
+        {% elif not location.is_active %}<span class="pill at_risk">not tracked</span>
+        {% else %}<span class="pill ok">active</span>{% endif %}
+      </td>
+      <td>
+        {% if location.archived_at %}
+          <form method="post" action="/app/locations/{{ location.id }}/restore"><button class="btn small secondary" type="submit">Restore</button></form>
+        {% else %}
+          <form method="post" action="/app/locations/{{ location.id }}/archive"><button class="btn small secondary" type="submit">Archive</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

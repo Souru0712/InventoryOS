@@ -19,6 +19,7 @@ from app.models import (
     StockItem,
     TrackMode,
 )
+from app.transform.business_days import business_date
 from app.transform.expiry import (
     Batch,
     Coverage,
@@ -181,19 +182,33 @@ def batches_by_item(db: Session, org: OrgContext) -> dict[int, list[Batch]]:
     return dict(result)
 
 
+def business_dates(db: Session, org: OrgContext, now: datetime) -> dict[int, date]:
+    """Each location's business day at this instant, in its own time zone and cutoff."""
+    return {
+        location.id: business_date(now, location.timezone, location.business_day_cutoff_hour)
+        for location in db.scalars(select_scoped(org, Location))
+    }
+
+
 def expiry_positions(
     db: Session,
     org: OrgContext,
     today: date | None = None,
     location_id: int | None = None,
     velocity: dict[int, Decimal] | None = None,
+    now: datetime | None = None,
 ) -> list[ItemExpiry]:
-    """Every item that holds dated stock, with each lot positioned and projected for today."""
-    today = today or datetime.now(UTC).date()
+    """Every item that holds dated stock, with each lot positioned and projected for its day.
+
+    A given today is used for every item; otherwise each item's day is its location's business
+    day at now (AC-ADM-01), so a lot dated today in Los Angeles is not expired by UTC's midnight.
+    """
+    now = now or datetime.now(UTC)
     batches = batches_by_item(db, org)
     if not batches:
         return []
-    velocity = velocity if velocity is not None else velocity_map(db, org, today)
+    days = {} if today is not None else business_dates(db, org, now)
+    velocity = velocity if velocity is not None else velocity_map(db, org, today or now.date())
     signal = sales_signal(db, org)
 
     result = []
@@ -202,8 +217,9 @@ def expiry_positions(
         if not lots:
             continue
         speed = velocity.get(item.id, ZERO) if item.id in signal else None
+        day = today or days.get(item.location_id) or now.date()
         positions, undated = project_batches(
-            item.qty_base, lots, speed, today, item.cost_per_base_cents
+            item.qty_base, lots, speed, day, item.cost_per_base_cents
         )
         result.append(ItemExpiry(item, positions, undated))
     return result

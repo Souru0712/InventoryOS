@@ -46,7 +46,7 @@ def promotions_page(
     org: OrgContext = Depends(require_org),
 ):
     today = datetime.now(UTC).date()
-    suggestions = suggestions_for(db, org, today, location)
+    suggestions = suggestions_for(db, org, location_id=location)
     return templates.TemplateResponse(
         request,
         "app/promotions.html",

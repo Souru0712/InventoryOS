@@ -4,6 +4,9 @@
 <h1>Add stock item</h1>
 <p class="lede">Anything Square does not count for you: the milk, the flour, the beans in the hopper.</p>
 {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+{% if not locations %}
+<div class="notice error">Stock lives at a location. <a href="/app/locations/new">Add a location</a> first.</div>
+{% endif %}
 
 <form class="card" method="post" action="/app/items/new">
   <div class="row">
