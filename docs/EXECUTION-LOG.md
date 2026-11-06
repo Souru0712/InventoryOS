@@ -5,6 +5,39 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T0.05 and T0.11 completed; staging deferred (C-49); gate G0
+
+**Verified**
+- T0.05: the owner merged PR #18 with a merge commit (`ee755a2`). CI on its head `f050811`, all
+  five required jobs green: SQLite 544 passed, 7 skipped, docs checker 0 problems; PostgreSQL 16
+  551 passed, 0 skipped; lint and types; dependency audit; Docker image. The same five are green
+  on `main` after the merge. Acceptance met: no snack-box symbol remains (test), 53 product
+  routes, five Square scopes, migration tests pass on both databases.
+- T0.11: PR #16 was merged with a merge commit (`56d6e7c`); CI on its head green on all five jobs
+  (SQLite 614 passed, 6 skipped; PostgreSQL 16 620 passed, 0 skipped). Acceptance met: an ADR
+  for every approved ID, indexed and enforced by the docs checker; `CLAUDE.md` points to them.
+
+**Decisions**
+- C-49 (owner, 2026-11-06, "defer staging"): staging is not created until a task needs a public
+  HTTPS endpoint, first T3.11 (Square sandbox run). T0.09 is Deferred: `render.yaml` stays on
+  `main`; the Blueprint, its secrets, the C-48 photo storage and T0.09's acceptance checks are
+  done before T3.11. TR-26 moves from G0 to G5.
+- Gate G0: every exit criterion is met except "staging deployed from `main`", which C-49 defers:
+  CI green on SQLite and Postgres 16 for every push (T0.02); suite hermetic with a developer
+  `.env` present (T0.01); dependencies locked and audited (T0.03); probes R3 and R7 retired and C8
+  fixed (T0.08, T0.06, T0.07); write-back off with no swallowed failures (T0.08); snack-box code
+  and scopes gone (T0.05). The owner started Stage 1 on 2026-11-06 ("Let's start on Stage 1").
+
+**Files changed**
+- Task index (T0.05, T0.11 → Completed; T0.09 → Deferred; T1.01 → In progress), T0.09 entry,
+  `PRODUCT_DECISIONS.md` (C-49), master roadmap and testing strategy (G0), OD-03, TR-26,
+  `docs/roadmap/README.md`, ADR-0002, this log.
+
+**Next task**
+- T1.01 Schema hygiene (DM-2).
+
+---
+
 ## 2026-11-06 — T0.05 Extract the snack-box module (C-37)
 
 **Implemented**
