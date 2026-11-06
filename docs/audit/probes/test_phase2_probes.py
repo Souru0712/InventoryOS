@@ -1,5 +1,4 @@
 """Phase 2 audit probes: each asserts CURRENT behaviour against the InventoryOS blueprint; a pass confirms the finding."""
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +11,6 @@ from app.security import hash_password
 # PA1 (a tenant without Square cannot create any stock item) retired in T1.04: owners add
 # locations themselves; tests/test_locations.py::test_a_business_without_square_adds_a_location_then_its_stock
 # asserts it in CI.
-
 
 def test_PA2_starter_plan_gates_core_features(db, tenant):
     """Phase 1 E-05 says core is never gated; Starter withholds the reorder CSV and custom thresholds."""
@@ -29,13 +27,7 @@ def test_PA3_one_person_cannot_belong_to_two_businesses(db, tenant):
     other = Tenant(name="Second Shop")
     db.add(other)
     db.flush()
-    db.add(
-        User(
-            tenant_id=other.id,
-            email="owner@rosewood.test",
-            password_hash=hash_password("a-good-password"),
-        )
-    )
+    db.add(User(tenant_id=other.id, email="owner@rosewood.test", password_hash=hash_password("a-good-password")))
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
@@ -47,16 +39,9 @@ def test_PA4_one_square_merchant_can_attach_to_two_tenants(db, tenant):
     db.add(other)
     db.flush()
     for t in (tenant.id, other.id):
-        db.add(
-            ProviderConnection(
-                tenant_id=t, provider="square", merchant_id="MERCHANT-1", access_token_enc="x"
-            )
-        )
+        db.add(ProviderConnection(tenant_id=t, provider="square", merchant_id="MERCHANT-1", access_token_enc="x"))
     db.commit()
-    assert (
-        db.query(ProviderConnection).filter(ProviderConnection.merchant_id == "MERCHANT-1").count()
-        == 2
-    )
+    assert db.query(ProviderConnection).filter(ProviderConnection.merchant_id == "MERCHANT-1").count() == 2
 
 
 # PA5 (stored datetimes come back naive, DB3) retired in T1.01: every instant is timestamptz and

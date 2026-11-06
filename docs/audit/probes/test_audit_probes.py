@@ -1,5 +1,4 @@
 """Audit probes: each test asserts the CURRENT (suspected-defective) behaviour, so a pass confirms the finding."""
-
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -10,18 +9,8 @@ from app.db import SessionLocal
 from app.extract.invoice import StubExtractor
 from app.load.upsert import apply_provider_counts
 from app.models import (
-    Document,
-    DocumentStatus,
-    InventoryCount,
-    InventoryEvent,
-    Location,
-    RecipeComponent,
-    SalesDaily,
-    SoldItem,
-    StockBatch,
-    StockItem,
-    TrackMode,
-    WebhookEvent,
+    Document, DocumentStatus, InventoryCount, InventoryEvent, Location, RecipeComponent,
+    SalesDaily, SoldItem, StockBatch, StockItem, TrackMode, WebhookEvent,
 )
 from app.orchestration import receiving as receiving_mod
 from app.orchestration.receiving import LineDecision, apply_document, parse_document, save_upload
@@ -40,9 +29,7 @@ def test_R1_count_day_sales_after_the_count_are_never_deducted():
 
 
 def _two_locations(db, tenant, location):
-    other = Location(
-        tenant_id=tenant.id, provider="demo", provider_location_id="loc-2", name="Second"
-    )
+    other = Location(tenant_id=tenant.id, provider="demo", provider_location_id="loc-2", name="Second")
     db.add(other)
     db.flush()
     return other
@@ -51,45 +38,18 @@ def _two_locations(db, tenant, location):
 def test_R2_recipe_consumption_ignores_location(db, tenant, location):
     """Milk lives at location A. Lattes sold only at location B still drain A's milk."""
     other = _two_locations(db, tenant, location)
-    milk = StockItem(
-        tenant_id=tenant.id,
-        location_id=location.id,
-        slug="milk",
-        name="Milk",
-        dimension=Dimension.VOLUME,
-        stock_unit="ml",
-        track_mode=TrackMode.DERIVED,
-        qty_base=Decimal("10000"),
-    )
+    milk = StockItem(tenant_id=tenant.id, location_id=location.id, slug="milk", name="Milk",
+                     dimension=Dimension.VOLUME, stock_unit="ml", track_mode=TrackMode.DERIVED,
+                     qty_base=Decimal("10000"))
     latte = SoldItem(tenant_id=tenant.id, provider="demo", provider_item_id="latte", name="Latte")
     db.add_all([milk, latte])
     db.flush()
-    db.add(
-        RecipeComponent(
-            tenant_id=tenant.id,
-            sold_item_id=latte.id,
-            stock_item_id=milk.id,
-            qty_base_per_sale=Decimal("200"),
-        )
-    )
-    db.add(
-        InventoryCount(
-            tenant_id=tenant.id,
-            stock_item_id=milk.id,
-            qty_base=Decimal("10000"),
-            source="manual",
-            counted_at=datetime(2026, 11, 1, 23, 0),
-        )
-    )
-    db.add(
-        SalesDaily(
-            tenant_id=tenant.id,
-            sold_item_id=latte.id,
-            location_id=other.id,
-            dt=date(2026, 11, 2),
-            units=Decimal("10"),
-        )
-    )
+    db.add(RecipeComponent(tenant_id=tenant.id, sold_item_id=latte.id, stock_item_id=milk.id,
+                           qty_base_per_sale=Decimal("200")))
+    db.add(InventoryCount(tenant_id=tenant.id, stock_item_id=milk.id, qty_base=Decimal("10000"),
+                          source="manual", counted_at=datetime(2026, 11, 1, 23, 0)))
+    db.add(SalesDaily(tenant_id=tenant.id, sold_item_id=latte.id, location_id=other.id,
+                      dt=date(2026, 11, 2), units=Decimal("10")))
     db.commit()
     refresh_derived_quantities(db, tenant.id, today=date(2026, 11, 3))
     db.commit()
@@ -97,35 +57,15 @@ def test_R2_recipe_consumption_ignores_location(db, tenant, location):
     assert milk.qty_base == Decimal("8000")  # 10 lattes sold at the OTHER location took 2 L here
 
 
-INVOICE = {
-    "supplier": "Northside",
-    "invoice_number": "NS-1",
-    "lines": [
-        {
-            "raw_text": "CUPS",
-            "product_name": "Cups",
-            "quantity": 24,
-            "unit": "each",
-            "pack_size": None,
-            "unit_price_cents": 10,
-            "line_total_cents": 240,
-        }
-    ],
-}
+INVOICE = {"supplier": "Northside", "invoice_number": "NS-1", "lines": [
+    {"raw_text": "CUPS", "product_name": "Cups", "quantity": 24, "unit": "each",
+     "pack_size": None, "unit_price_cents": 10, "line_total_cents": 240}]}
 
 
 def _provider_item(db, tenant, location, qty="10"):
-    item = StockItem(
-        tenant_id=tenant.id,
-        location_id=location.id,
-        slug="cups",
-        name="Cups",
-        dimension=Dimension.COUNT,
-        stock_unit="each",
-        track_mode=TrackMode.PROVIDER,
-        provider_variation_id="VAR1",
-        qty_base=Decimal(qty),
-    )
+    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="cups", name="Cups",
+                     dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.PROVIDER,
+                     provider_variation_id="VAR1", qty_base=Decimal(qty))
     db.add(item)
     db.commit()
     return item
@@ -137,16 +77,9 @@ def _provider_item(db, tenant, location, qty="10"):
 
 def test_R4_concurrent_apply_raises_stock_twice(db, tenant, location):
     """Two requests (double-click) both load the document before either commits."""
-    item = StockItem(
-        tenant_id=tenant.id,
-        location_id=location.id,
-        slug="cups",
-        name="Cups",
-        dimension=Dimension.COUNT,
-        stock_unit="each",
-        track_mode=TrackMode.MANUAL,
-        qty_base=Decimal("10"),
-    )
+    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="cups", name="Cups",
+                     dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.MANUAL,
+                     qty_base=Decimal("10"))
     db.add(item)
     db.commit()
     doc = save_upload(db, tenant.id, location.id, "inv2.jpg", b"y", "image/jpeg")
@@ -163,8 +96,7 @@ def test_R4_concurrent_apply_raises_stock_twice(db, tenant, location):
         apply_document(s2, doc_id, [LineDecision(line_id, item_id, Decimal("24"))])
         s2.commit()
     finally:
-        s1.close()
-        s2.close()
+        s1.close(); s2.close()
     db.expire_all()
     assert db.get(StockItem, item_id).qty_base == Decimal("58")  # 10 + 24 + 24
     assert db.query(InventoryCount).filter_by(stock_item_id=item_id, source="receipt").count() == 2
@@ -184,18 +116,10 @@ def test_R5_duplicate_inventory_webhook_is_not_deduplicated_by_event_id(db, tena
 
 def test_R6_batch_removal_is_a_hard_delete(db, tenant, location):
     item = _provider_item(db, tenant, location)
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            received_qty_base=Decimal("5"),
-            expires_on=date(2026, 12, 1),
-            source="label",
-        )
-    )
+    db.add(StockBatch(tenant_id=tenant.id, stock_item_id=item.id, received_qty_base=Decimal("5"),
+                      expires_on=date(2026, 12, 1), source="label"))
     db.commit()
     from app.main import app
-
     with TestClient(app) as client:
         client.post("/login", data={"email": "owner@rosewood.test", "password": "a-good-password"})
         batch_id = db.query(StockBatch).one().id
@@ -212,14 +136,9 @@ def test_R6_batch_removal_is_a_hard_delete(db, tenant, location):
 
 def test_R8_forms_have_no_csrf_token_and_login_is_unthrottled(db, tenant):
     from app.main import app
-
     with TestClient(app) as client:
         page = client.get("/login").text
         assert "csrf" not in page.lower()
-        codes = {
-            client.post(
-                "/login", data={"email": "owner@rosewood.test", "password": f"wrong-{i}xxxxx"}
-            ).status_code
-            for i in range(30)
-        }
+        codes = {client.post("/login", data={"email": "owner@rosewood.test", "password": f"wrong-{i}xxxxx"}).status_code
+                 for i in range(30)}
         assert codes == {401}  # 30 bad attempts, never locked or throttled
