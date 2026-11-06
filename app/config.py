@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     square_env: str = "sandbox"
     square_api_version: str = "2025-01-23"
     square_webhook_signature_key: str = ""
+    # C-34: in R1 nothing is written to Square. Write-back returns in R1.1 through the outbox;
+    # until then the push functions in app/orchestration/sync.py refuse to run.
+    square_write_back: bool = False
 
     smtp_host: str = ""
     smtp_port: int = 587

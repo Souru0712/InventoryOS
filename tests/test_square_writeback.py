@@ -1,14 +1,15 @@
-"""What StockPulse sends Square: a delivery adjusts, an observation counts.
+"""Nothing InventoryOS does writes to Square (C-34, T0.08).
 
-Square owns the count for its own SKUs. Anything the app worked out - a previous count plus a
-delivery, or a derived weight - must never be sent as a physical count, because a count replaces
-whatever Square holds, including the sale it rang up a minute ago.
+Write-back returns in R1.1 through the outbox. The push functions are kept for it and refuse to
+run until then; the tests at the bottom pin what they send when it is switched on.
 """
 
 from decimal import Decimal
 
 import pytest
+from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.extract.invoice import StubExtractor
 from app.models import ProviderConnection, StockItem, TrackMode
 from app.orchestration import sync
@@ -36,12 +37,13 @@ INVOICE = {
 
 
 class FakeSquare:
-    """Square's inventory ledger, with only the two operations StockPulse ever sends it."""
+    """Square's inventory ledger, recording every write it is sent."""
 
     def __init__(self, ledger: dict):
         self.ledger = ledger
         self.changes: list[dict] = []
         self.keys: list[str] = []
+        self.calls = 0
 
     def __call__(self, _token):  # stands in for SquareClient(token)
         return self
@@ -53,6 +55,7 @@ class FakeSquare:
         return False
 
     def apply_inventory_changes(self, changes: list[dict], idempotency_key: str) -> dict:
+        self.calls += 1
         if idempotency_key in self.keys:
             return {}  # Square drops a repeat of the same key
         self.keys.append(idempotency_key)
@@ -100,6 +103,20 @@ def square(db, tenant, location, monkeypatch):
     return fake, item
 
 
+@pytest.fixture
+def write_back_on(monkeypatch):
+    monkeypatch.setattr(get_settings(), "square_write_back", True, raising=False)
+
+
+@pytest.fixture
+def signed_in():
+    from app.main import app
+
+    with TestClient(app) as client:
+        client.post("/login", data={"email": "owner@rosewood.test", "password": "a-good-password"})
+        yield client
+
+
 def shelf(fake: FakeSquare, location) -> Decimal:
     return fake.ledger[("VAR-COKE", location.provider_location_id)]
 
@@ -122,20 +139,92 @@ def receive_by_invoice(db, tenant, location, item, quantity: str) -> dict:
     return result
 
 
-def test_a_delivery_cannot_erase_a_sale_that_happened_just_before_it(db, tenant, location, square):
-    """Square 24, a sale takes it to 20, an invoice brings 24. Square must end at 44, not 48."""
+# --- R1: nothing is written to Square ---------------------------------------------------------
+
+
+def test_write_back_is_off_by_default():
+    assert get_settings().square_write_back is False
+
+
+def test_receiving_an_invoice_sends_nothing_to_square(db, tenant, location, square):
+    """Replaces audit probe R3: a delivery used to be pushed, and a failed push was swallowed."""
+    fake, item = square
+
+    receive_by_invoice(db, tenant, location, item, "24")
+
+    assert fake.calls == 0
+    assert shelf(fake, location) == Decimal("24")
+    db.refresh(item)
+    assert item.qty_base == Decimal("48")
+
+
+def test_receiving_by_scan_sends_nothing_to_square(db, location, square):
+    from app.orchestration.scanning import receive_scanned
+
+    fake, item = square
+    receive_scanned(db, item, Decimal("6"))
+    db.commit()
+
+    assert fake.calls == 0
+    db.refresh(item)
+    assert item.qty_base == Decimal("30")
+
+
+def test_counting_by_scan_sends_nothing_to_square(db, square, signed_in):
+    fake, item = square
+
+    response = signed_in.post("/app/scan/count", data={"stock_item_id": item.id, "quantity": "37"})
+
+    assert response.status_code == 200
+    assert "pushed_to_pos" not in response.json()
+    assert fake.calls == 0
+    db.refresh(item)
+    assert item.qty_base == Decimal("37")
+
+
+def test_a_count_from_the_dashboard_sends_nothing_to_square(db, square, signed_in):
+    fake, item = square
+
+    response = signed_in.post(
+        f"/app/items/{item.id}/count", data={"quantity": "40"}, follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert fake.calls == 0
+    db.refresh(item)
+    assert item.qty_base == Decimal("40")
+
+
+def test_the_push_functions_refuse_while_write_back_is_off(db, tenant, square):
+    """A call before R1.1 is a bug: it fails loudly instead of quietly not writing."""
+    fake, item = square
+    with pytest.raises(sync.WriteBackDisabled):
+        sync.push_counts_to_square(db, tenant.id, [item.id])
+    with pytest.raises(sync.WriteBackDisabled):
+        sync.push_adjustments_to_square(db, tenant.id, {item.id: Decimal("24")})
+    assert fake.calls == 0
+
+
+# --- R1.1: what the kept push functions send once write-back is switched on -------------------
+
+
+def test_an_adjustment_cannot_erase_a_sale_that_happened_just_before_it(
+    db, tenant, location, square, write_back_on
+):
+    """Square 24, a sale takes it to 20, a delivery brings 24. Square must end at 44, not 48."""
     fake, item = square
     fake.ledger[("VAR-COKE", location.provider_location_id)] = Decimal("20")
 
-    result = receive_by_invoice(db, tenant, location, item, "24")
+    assert sync.push_adjustments_to_square(db, tenant.id, {item.id: Decimal("24")}) == 1
 
-    assert result["pushed_to_pos"] == 1
     assert [change["type"] for change in fake.changes] == ["ADJUSTMENT"]
     assert fake.changes[0]["adjustment"]["quantity"] == "24"
     assert shelf(fake, location) == Decimal("44")
 
 
-def test_a_physical_count_sends_the_number_someone_read_off_the_shelf(db, tenant, location, square):
+def test_a_physical_count_sends_the_number_someone_read_off_the_shelf(
+    db, tenant, location, square, write_back_on
+):
     fake, item = square
     fake.ledger[("VAR-COKE", location.provider_location_id)] = Decimal("20")
     item.qty_base = Decimal("37")
@@ -147,20 +236,9 @@ def test_a_physical_count_sends_the_number_someone_read_off_the_shelf(db, tenant
     assert shelf(fake, location) == Decimal("37")
 
 
-def test_receiving_by_scan_and_by_invoice_take_the_same_pathway(db, tenant, location, square):
-    from app.orchestration.scanning import receive_scanned
-
-    fake, item = square
-    receive_scanned(db, item, Decimal("6"))
-    db.commit()
-    receive_by_invoice(db, tenant, location, item, "24")
-
-    assert [change["type"] for change in fake.changes] == ["ADJUSTMENT", "ADJUSTMENT"]
-    assert [change["adjustment"]["quantity"] for change in fake.changes] == ["6", "24"]
-    assert shelf(fake, location) == Decimal("54")
-
-
-def test_the_same_receipt_pushed_twice_is_only_counted_once(db, tenant, location, square):
+def test_the_same_receipt_pushed_twice_is_only_counted_once(
+    db, tenant, location, square, write_back_on
+):
     """The idempotency key is the receipt, so a retried push is Square's to drop."""
     fake, item = square
     for _attempt in range(2):
@@ -168,7 +246,9 @@ def test_the_same_receipt_pushed_twice_is_only_counted_once(db, tenant, location
     assert shelf(fake, location) == Decimal("48")
 
 
-def test_a_derived_weight_is_never_pushed_to_square_at_all(db, tenant, location, square):
+def test_a_derived_weight_is_never_pushed_to_square_at_all(
+    db, tenant, location, square, write_back_on
+):
     """Flour is calculated from recipes; sending it as a count would be inventing an observation."""
     fake, _item = square
     flour = StockItem(
@@ -188,3 +268,34 @@ def test_a_derived_weight_is_never_pushed_to_square_at_all(db, tenant, location,
     assert sync.push_counts_to_square(db, tenant.id, [flour.id]) == 0
     assert sync.push_adjustments_to_square(db, tenant.id, {flour.id: Decimal("25000")}) == 0
     assert fake.changes == []
+
+
+def test_a_failed_square_read_during_a_scan_is_recorded_and_shown(
+    db, tenant, square, signed_in, monkeypatch
+):
+    """The one remaining Square call outside a sync used to fail into the log only."""
+    from app.models import IdentifierType, ProductIdentifier, SyncRun, SyncStatus
+
+    _fake, item = square
+    db.add(
+        ProductIdentifier(
+            tenant_id=tenant.id,
+            stock_item_id=item.id,
+            identifier_type=IdentifierType.UPC,
+            value="049000050103",
+            source="manual",
+        )
+    )
+    db.commit()
+
+    def unreachable(*_args, **_kwargs):
+        raise ConnectionError("square timed out")
+
+    monkeypatch.setattr(sync, "refresh_item_from_square", unreachable)
+    response = signed_in.get("/app/scan/lookup", params={"code": "049000050103"})
+
+    assert response.status_code == 200
+    assert response.json()["square_unreachable"] is True
+    run = db.query(SyncRun).filter(SyncRun.tenant_id == tenant.id).one()
+    assert (run.kind, run.status) == ("item", SyncStatus.FAILED)
+    assert "square timed out" in run.error

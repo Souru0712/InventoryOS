@@ -212,6 +212,9 @@
               (it.cover_days ? " &middot; " + esc(it.cover_days) + " d cover" : "") + '</div>' +
           '</div>' +
         '</div>' +
+        (data.square_unreachable
+          ? '<div class="notice error" style="margin:12px 0 0;">Square could not be reached, so this is the last count InventoryOS has, not Square\'s.</div>'
+          : "") +
         '<p style="margin:14px 0 0; display:flex; gap:8px; flex-wrap:wrap;">' +
           '<button class="btn" type="button" data-act="receive">Receive</button>' +
           '<button class="btn secondary" type="button" data-act="count">Correct count</button>' +
@@ -330,11 +333,9 @@
       '<div class="card">' +
         '<div class="notice ok" style="margin:0;">' + esc(message) + '</div>' +
         '<p class="small muted" style="margin:10px 0 0;">' +
-          (out.pushed_to_pos
-            ? "Square was updated."
-            : out.pos_tracked
-              ? "Square could not be reached, so it will be corrected on the next sync."
-              : "Kept here; Square does not count this item.") +
+          (out.pos_tracked
+            ? "Saved here only. InventoryOS does not update Square, and Square's next sync replaces this number with its own."
+            : "Kept here; Square does not count this item.") +
           (out.dated ? " The batch is dated, so it will show on Expiring." : "") +
         '</p>' +
         '<p style="margin:14px 0 0;">' +

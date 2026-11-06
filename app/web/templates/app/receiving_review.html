@@ -3,9 +3,6 @@
 {% if request.query_params.get("applied") %}
   <div class="notice ok">
     Received {{ request.query_params.get("applied") }} line(s).
-    {% if request.query_params.get("pushed")|int > 0 %}
-      {{ request.query_params.get("pushed") }} count(s) pushed back to Square.
-    {% endif %}
     {% if request.query_params.get("batches")|int > 0 %}
       {{ request.query_params.get("batches") }} dated batch(es) now tracked &mdash;
       <a href="/app/expiring">see what expires first</a>.
@@ -131,8 +128,7 @@
           <a class="btn secondary" href="/app/receiving">Back</a>
         </p>
         <p class="small muted">Checked lines raise your stock and re-anchor weight and volume items.
-        Where Square owns the count, the corrected number is pushed back so your storefront matches
-        the shelf. A best-before date applies to the whole line &mdash; check one pack, not every
+        InventoryOS does not change your Square counts. A best-before date applies to the whole line &mdash; check one pack, not every
         one &mdash; and dated lines are sold first-expired-first-out.</p>
       {% else %}
         <p class="small muted" style="margin-top:14px;">
