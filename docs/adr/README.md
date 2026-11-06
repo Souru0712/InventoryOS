@@ -43,7 +43,7 @@ Task status and the record of work follow the roadmap's
 | [ADR-0009](0009-keep-tenant-naming.md) | Physical naming | ID-09 | Accepted |
 | [ADR-0010](0010-item-model-tables.md) | Item model tables (C-38) | ID-10 | Accepted |
 | [ADR-0011](0011-resend-for-email.md) | Email provider | ID-11 | Accepted |
-| [ADR-0012](0012-s3-object-storage.md) | Object storage | ID-12 | Accepted |
+| [ADR-0012](0012-s3-object-storage.md) | Object storage | ID-12 | Superseded by ADR-0024 |
 | [ADR-0013](0013-pilot-policy.md) | Pilot policy (refines C-40) | ID-13 | Accepted |
 | [ADR-0014](0014-approve-pending-product-recommendations.md) | Approve pending product recommendations | ID-14 | Accepted |
 | [ADR-0015](0015-defer-multi-location-pricing.md) | Multi-location pricing (PD-33) | ID-15 | Accepted |
@@ -55,3 +55,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0021](0021-task-tracking-in-the-repository.md) | Task tracking | ID-21 | Accepted |
 | [ADR-0022](0022-row-level-security-in-r1-1.md) | Postgres RLS timing | ID-22 | Accepted |
 | [ADR-0023](0023-approved-new-dependencies.md) | New runtime dependencies | ID-23 | Accepted |
+| [ADR-0024](0024-invoice-photos-in-postgres.md) | Invoice photos kept briefly, in Postgres | C-48 | Accepted |

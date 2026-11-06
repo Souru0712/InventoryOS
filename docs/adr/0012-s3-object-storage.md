@@ -1,6 +1,6 @@
 # ADR-0012: Object storage
 
-- **Status:** Accepted, 2026-11-05 (owner: "Approve all 23", recorded as C-43 in [PRODUCT_DECISIONS](../product/PRODUCT_DECISIONS.md))
+- **Status:** Superseded by [ADR-0024](0024-invoice-photos-in-postgres.md) on 2026-11-06 (C-48). Was accepted 2026-11-05 (owner: "Approve all 23", recorded as C-43 in [PRODUCT_DECISIONS](../product/PRODUCT_DECISIONS.md))
 - **Decision ID:** ID-12 in [IMPLEMENTATION_DECISIONS](../roadmap/IMPLEMENTATION_DECISIONS.md#1-decisions-approved-2026-11-05)
 - **Tasks:** T0.09
 
