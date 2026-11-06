@@ -4,7 +4,7 @@ Phase 3, 2026-11-05. Planning only. **Recommended** decisions needed to implemen
 Product decisions already made by the owner (C-01..C-42) are not repeated; see
 [PRODUCT_DECISIONS](../product/PRODUCT_DECISIONS.md). Once the owner approves an ID it is recorded as
 a `C-` entry there and as an ADR in `docs/adr/` (T0.11). Status: **all 23 approved by the owner on
-2026-11-05 ("Approve all 23") and recorded as C-43**; ID-14's product recommendations are C-44.
+2026-11-05 ("Approve all 23") and recorded as C-43**, and as [ADR-0001..0023](../adr/README.md) (T0.11); ID-14's product recommendations are C-44.
 
 ## 1. Decisions (approved 2026-11-05)
 

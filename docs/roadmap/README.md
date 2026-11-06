@@ -54,7 +54,7 @@ Phase 2 (C-34 wording) with no requirement change.
 | What the product must do; decisions | `docs/product/` (PRODUCT_DECISIONS wins in a conflict) |
 | What exists in code today | `docs/audit/` (evidence, dated) |
 | What to build next, in which order, and its status | DEVELOPMENT_TASK_BREAKDOWN index |
-| Technical decisions | IMPLEMENTATION_DECISIONS until approved → `docs/adr/` (ADRs) + C-entries |
+| Technical decisions | IMPLEMENTATION_DECISIONS until approved → [ADRs](../adr/README.md) (0001–0023 for ID-01..ID-23) + C-entries |
 | What happened | `docs/EXECUTION-LOG.md` |
 
 ### 4.2 Task statuses

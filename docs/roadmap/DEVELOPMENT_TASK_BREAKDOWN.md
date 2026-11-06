@@ -45,8 +45,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | Completed (2026-11-05; no async routes, 60 s Anthropic timeout) |
 | T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | M0 | T0.01 | Completed (2026-11-05; write-back only, Square count overwrite left to T1.18 by the owner) |
 | T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Blocked (owner accounts, OD-03) |
-| T0.10 | Structured logs and request ids | P1 | S | M0 | T0.01 | In review (PR open; CI evidence in the execution log) |
-| T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | M0 | — | Ready |
+| T0.10 | Structured logs and request ids | P1 | S | M0 | T0.01 | Completed (2026-11-06; JSON logs with request, tenant and user ids) |
+| T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | M0 | — | In review (PR open; CI evidence in the execution log) |
 | T1.01 | Schema hygiene: timestamptz, constraints, delete rules | P0 | M | M1 | T0.02, T0.05 | Not started |
 | T1.02 | Scoped data-access layer (C-33) | P0 | M | M1 | T1.01 | Not started |
 | T1.03 | Tenant-isolation test suite | P0 | M | M1 | T1.02 | Not started |

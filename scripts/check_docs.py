@@ -1,4 +1,4 @@
-"""Check that the product, audit and roadmap documents stay mutually consistent; exit 1 on any problem."""
+"""Check that the product, audit, roadmap and ADR documents stay mutually consistent; exit 1 on any problem."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCT, AUDIT, ROADMAP = ROOT / "docs/product", ROOT / "docs/audit", ROOT / "docs/roadmap"
+ADR = ROOT / "docs/adr"
 TASK = r"\bT(?:\d|4B)\.\d{2}\b"
 FR = r"[A-Z]{3}-FR-\d+[a-z]?"
 
@@ -243,11 +244,35 @@ def check_alignment(
     return problems
 
 
+def check_adrs() -> list[str]:
+    """Every approved ID-nn has exactly one ADR, numbers are unique, and the index lists them all."""
+    problems = []
+    approved = re.findall(r"^\| (ID-\d{2}) \|", read(ROADMAP / "IMPLEMENTATION_DECISIONS.md"), re.M)
+    records = sorted(
+        p for p in ADR.glob("[0-9][0-9][0-9][0-9]-*.md") if not p.name.startswith("0000")
+    )
+    numbers = collections.Counter(p.name[:4] for p in records)
+    problems += [f"adr: number {n} is used {c} times" for n, c in numbers.items() if c > 1]
+    owners: dict[str, list[str]] = collections.defaultdict(list)
+    for record in records:
+        for ident in re.findall(r"\*\*Decision ID:\*\* (ID-\d{2})", read(record)):
+            owners[ident].append(record.name)
+    for ident in approved:
+        if len(owners[ident]) != 1:
+            problems.append(f"adr: {ident} is recorded in {len(owners[ident])} ADRs, expected 1")
+    index = read(ADR / "README.md")
+    problems += [
+        f"adr: {p.name} is not in the index" for p in records if f"]({p.name})" not in index
+    ]
+    return problems
+
+
 def main() -> int:
     breakdown = read(ROADMAP / "DEVELOPMENT_TASK_BREAKDOWN.md")
     order, deps, milestones = task_index(breakdown)
     problems = (
-        check_links([PRODUCT, AUDIT, ROADMAP])
+        check_links([PRODUCT, AUDIT, ROADMAP, ADR])
+        + check_adrs()
         + check_product_ids()
         + check_traceability()
         + check_roadmap_references(breakdown, order, deps)
