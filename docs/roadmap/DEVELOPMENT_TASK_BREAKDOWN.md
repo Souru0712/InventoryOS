@@ -44,7 +44,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | M0 | T0.01 | Completed (2026-11-05; probe R7 retired) |
 | T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | Completed (2026-11-05; no async routes, 60 s Anthropic timeout) |
 | T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | M0 | T0.01 | Completed (2026-11-05; write-back only, Square count overwrite left to T1.18 by the owner) |
-| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Blocked (owner accounts, OD-03) |
+| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | In progress (render.yaml in review; C-48 photo storage to build) |
 | T0.10 | Structured logs and request ids | P1 | S | M0 | T0.01 | Completed (2026-11-06; JSON logs with request, tenant and user ids) |
 | T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | M0 | — | In review (PR open; CI evidence in the execution log) |
 | T1.01 | Schema hygiene: timestamptz, constraints, delete rules | P0 | M | M1 | T0.02, T0.05 | Not started |
@@ -244,7 +244,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Objective:** a staging environment deployed automatically from `main` (ID-02).
 - **Business reason:** nothing has ever been deployed (TR-26); live integration runs (Square sandbox, Stripe test mode) need a public HTTPS endpoint.
 - **Requirements:** NFR §8 gates 4–8 (prepared, not passed here).
-- **Technical:** web service (2 instances), worker (1), managed Postgres 16 with PITR, object storage bucket (ID-12), Sentry project, uptime check on `/readyz`; deploy on green CI; secrets only in host environment; staging protected from indexing.
+- **Technical:** web service (2 instances), worker (1), managed Postgres 16 with PITR, invoice photos in Postgres kept until received plus 7 days (C-48, ADR-0024; replaces the ID-12 bucket), Sentry project, uptime check on `/readyz`; deploy on green CI; secrets only in host environment; staging protected from indexing.
 - **Existing code:** `Dockerfile`, `compose.yaml` process model, `/healthz` `/readyz` (`app/web/ops.py:18-24`), startup guards (`app/config.py`), advisory-lock scheduler.
 - **DB:** migrations at startup under the existing lock. **API · UI:** none.
 - **Security:** HTTPS only; no secrets in the repository; Square sandbox and Stripe test keys only.

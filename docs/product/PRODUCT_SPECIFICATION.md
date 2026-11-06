@@ -249,7 +249,7 @@ inventory). Rejected = arrived − accepted, with reason.
 | ID | Requirement | Rel | Src |
 |---|---|---|---|
 | RCV-FR-01 | Manual receiving without PO or invoice: supplier, lines (item, quantity, unit, cost, expiry, lot) | R1 | B S J |
-| RCV-FR-02 | Invoice upload (photo/PDF), stored as the record, deduplicated by content hash | R1 | B S O |
+| RCV-FR-02 | Invoice upload (photo/PDF), deduplicated by content hash; the photo is kept until the delivery is received plus 7 days, then deleted, and the extracted lines are the record (C-48) | R1 | B S O |
 | RCV-FR-03 | Invoice lines entered manually or proposed by assisted extraction; every proposed line reviewed before posting | R1 | B S O |
 | RCV-FR-04 | Item matching: supplier item code/name → inventory item, learned from confirmed matches; unmatched lines require a choice (match, create item, ignore as non-inventory) | R1 | B S |
 | RCV-FR-05 | Quantity verification: arrived and accepted entered per line (default = invoiced) | R1 | B |
