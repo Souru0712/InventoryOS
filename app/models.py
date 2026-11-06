@@ -8,8 +8,8 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
-    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -20,12 +20,45 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db import Base, Qty
+from app.db import Base, Qty, UTCDateTime
 from app.units import Dimension
 
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+# Where a row may come from. The database refuses anything else (DB1).
+COUNT_SOURCES = ("manual", "opening", "receipt", "scan")
+IDENTIFIER_SOURCES = ("manual", "square", "scan")
+BATCH_SOURCES = ("receipt", "label", "scan")
+SUPPRESSION_SOURCES = ("bounce", "complaint", "manual")
+
+
+def ref(target: str) -> ForeignKey:
+    """A reference that blocks deleting what it points at: master data is deactivated (DR-24)."""
+    return ForeignKey(target, ondelete="RESTRICT")
+
+
+def owned_by(target: str) -> ForeignKey:
+    """A part of its parent row, deleted with it (a document's lines, a sold item's recipe)."""
+    return ForeignKey(target, ondelete="CASCADE")
+
+
+def not_negative(table: str, column: str) -> CheckConstraint:
+    # Qty is text on SQLite: compare it as a number there, or "-0.0000" would read as negative.
+    return CheckConstraint(
+        f"CAST({column} AS NUMERIC) >= 0", name=f"ck_{table}_{column}_not_negative"
+    )
+
+
+def positive(table: str, column: str) -> CheckConstraint:
+    return CheckConstraint(f"CAST({column} AS NUMERIC) > 0", name=f"ck_{table}_{column}_positive")
+
+
+def one_of(table: str, column: str, values: tuple[str, ...]) -> CheckConstraint:
+    allowed = ", ".join(f"'{value}'" for value in values)
+    return CheckConstraint(f"{column} IN ({allowed})", name=f"ck_{table}_{column}")
 
 
 class Plan(str, enum.Enum):
@@ -102,21 +135,21 @@ class Tenant(Base):
     subscription_status: Mapped[SubscriptionStatus] = mapped_column(
         Enum(SubscriptionStatus), default=SubscriptionStatus.TRIALING
     )
-    trial_started_at: Mapped[datetime | None] = mapped_column(DateTime)
-    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime)
-    current_period_start: Mapped[datetime | None] = mapped_column(DateTime)
-    current_period_end: Mapped[datetime | None] = mapped_column(DateTime)
+    trial_started_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    trial_ends_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    current_period_start: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    current_period_end: Mapped[datetime | None] = mapped_column(UTCDateTime)
     # When a payment first failed, which is where the grace period counts from.
-    past_due_since: Mapped[datetime | None] = mapped_column(DateTime)
+    past_due_since: Mapped[datetime | None] = mapped_column(UTCDateTime)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(80))
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(80))
     # When the newest Stripe event we applied was created, so an older one arriving late
     # cannot undo a newer state.
-    stripe_event_at: Mapped[datetime | None] = mapped_column(DateTime)
+    stripe_event_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     report_day: Mapped[int] = mapped_column(Integer, default=0)  # 0 = Monday
     report_hour: Mapped[int] = mapped_column(Integer, default=7)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     users: Mapped[list[User]] = relationship(back_populates="tenant")
 
@@ -126,11 +159,11 @@ class User(Base):
     __table_args__ = (UniqueConstraint("email"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     email: Mapped[str] = mapped_column(String(255))
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     # What this person wants sent. Sign-in links and receipts ignore these: they were asked for.
     wants_stock_alerts: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -145,14 +178,14 @@ class ProviderConnection(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "provider", "merchant_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="square")
     merchant_id: Mapped[str] = mapped_column(String(120))
     access_token_enc: Mapped[str] = mapped_column(Text)
     refresh_token_enc: Mapped[str | None] = mapped_column(Text)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     status: Mapped[str] = mapped_column(String(32), default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class Location(Base):
@@ -160,7 +193,7 @@ class Location(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "provider", "provider_location_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="square")
     provider_location_id: Mapped[str] = mapped_column(String(120))
     name: Mapped[str] = mapped_column(String(200))
@@ -176,7 +209,7 @@ class SoldItem(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "provider", "provider_item_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="square")
     provider_item_id: Mapped[str] = mapped_column(String(120))
     name: Mapped[str] = mapped_column(String(300))
@@ -200,11 +233,16 @@ class StockItem(Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "location_id", "slug"),
         Index("ix_stock_items_tenant_location", "tenant_id", "location_id"),
+        # No check on qty_base: a recorded balance may go negative from sales (DR-08).
+        not_negative("stock_items", "reorder_point_base"),
+        not_negative("stock_items", "par_level_base"),
+        positive("stock_items", "pack_size_base"),
+        not_negative("stock_items", "lead_time_days"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
     slug: Mapped[str] = mapped_column(String(160))
     name: Mapped[str] = mapped_column(String(300))
     category: Mapped[str | None] = mapped_column(String(200))
@@ -233,8 +271,8 @@ class StockItem(Base):
     # which is what keeps the coverage figure honest rather than counting cups and bags.
     tracks_expiry: Mapped[bool | None] = mapped_column(Boolean)
 
-    last_counted_at: Mapped[datetime | None] = mapped_column(DateTime)
-    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_counted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -242,12 +280,15 @@ class RecipeComponent(Base):
     """How much base-unit stock one sold unit consumes."""
 
     __tablename__ = "recipe_components"
-    __table_args__ = (UniqueConstraint("sold_item_id", "stock_item_id"),)
+    __table_args__ = (
+        UniqueConstraint("sold_item_id", "stock_item_id"),
+        positive("recipe_components", "qty_base_per_sale"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    sold_item_id: Mapped[int] = mapped_column(ForeignKey("sold_items.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    sold_item_id: Mapped[int] = mapped_column(owned_by("sold_items.id"), index=True)
+    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
     qty_base_per_sale: Mapped[Decimal] = mapped_column(Qty)
 
     sold_item: Mapped[SoldItem] = relationship(back_populates="components")
@@ -257,15 +298,19 @@ class InventoryCount(Base):
     """Point-in-time quantity: a physical count or a POS snapshot."""
 
     __tablename__ = "inventory_counts"
-    __table_args__ = (Index("ix_counts_item_time", "stock_item_id", "counted_at"),)
+    __table_args__ = (
+        Index("ix_counts_item_time", "stock_item_id", "counted_at"),
+        # No check on qty_base: a receipt re-anchors a balance that may be negative (DR-08).
+        one_of("inventory_counts", "source", COUNT_SOURCES),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
     qty_base: Mapped[Decimal] = mapped_column(Qty)
     source: Mapped[str] = mapped_column(String(32), default="manual")
     note: Mapped[str | None] = mapped_column(String(500))
-    counted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    counted_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class SalesDaily(Base):
@@ -278,9 +323,9 @@ class SalesDaily(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    sold_item_id: Mapped[int] = mapped_column(ForeignKey("sold_items.id"), index=True)
-    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    sold_item_id: Mapped[int] = mapped_column(ref("sold_items.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
     dt: Mapped[date] = mapped_column(Date)
     units: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
     gross_cents: Mapped[int] = mapped_column(Integer, default=0)
@@ -292,8 +337,8 @@ class Alert(Base):
     __table_args__ = (Index("ix_alerts_tenant_open", "tenant_id", "resolved_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
     kind: Mapped[AlertKind] = mapped_column(Enum(AlertKind))
     message: Mapped[str] = mapped_column(String(500))
     qty_base: Mapped[Decimal] = mapped_column(Qty)
@@ -301,22 +346,22 @@ class Alert(Base):
     days_of_cover: Mapped[Decimal | None] = mapped_column(Qty)
     # Money at stake, at cost; set for expiry alerts so the digest can lead with the loss.
     value_cents: Mapped[int | None] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    notified_at: Mapped[datetime | None] = mapped_column(DateTime)
-    resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class SyncRun(Base):
     __tablename__ = "sync_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="square")
     # full: the hourly reconciliation. catalog: a catalog change, pulled on its own.
     kind: Mapped[str] = mapped_column(String(16), default="full")
     status: Mapped[SyncStatus] = mapped_column(Enum(SyncStatus), default=SyncStatus.RUNNING)
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     stats_json: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)
 
@@ -329,27 +374,29 @@ class EmailSuppression(Base):
     """
 
     __tablename__ = "email_suppressions"
-    __table_args__ = (UniqueConstraint("email"),)
+    __table_args__ = (
+        UniqueConstraint("email"),
+        one_of("email_suppressions", "source", SUPPRESSION_SOURCES),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), index=True)
-    # bounce | complaint | manual
     source: Mapped[str] = mapped_column(String(20), default="bounce")
     reason: Mapped[str | None] = mapped_column(String(300))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class EmailLog(Base):
     __tablename__ = "email_log"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     to_email: Mapped[str] = mapped_column(String(255))
     subject: Mapped[str] = mapped_column(String(300))
     kind: Mapped[str] = mapped_column(String(40))
     status: Mapped[str] = mapped_column(String(20), default="sent")
     error: Mapped[str | None] = mapped_column(Text)
-    sent_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    sent_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class DocumentStatus(str, enum.Enum):
@@ -374,9 +421,9 @@ class Document(Base):
     __table_args__ = (Index("ix_documents_tenant_status", "tenant_id", "status"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), index=True)
-    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
+    uploaded_by: Mapped[int | None] = mapped_column(ref("users.id"))
     kind: Mapped[str] = mapped_column(String(32), default="invoice")
     supplier: Mapped[str | None] = mapped_column(String(200))
     invoice_number: Mapped[str | None] = mapped_column(String(120))
@@ -397,8 +444,8 @@ class Document(Base):
     raw_extract_json: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)
 
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    applied_at: Mapped[datetime | None] = mapped_column(DateTime)
+    uploaded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    applied_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     lines: Mapped[list[DocumentLine]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
@@ -411,8 +458,8 @@ class DocumentLine(Base):
     __tablename__ = "document_lines"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    document_id: Mapped[int] = mapped_column(owned_by("documents.id"), index=True)
     line_no: Mapped[int] = mapped_column(Integer, default=0)
 
     raw_text: Mapped[str] = mapped_column(String(500))
@@ -424,7 +471,7 @@ class DocumentLine(Base):
     line_total_cents: Mapped[int | None] = mapped_column(Integer)
     expires_on: Mapped[date | None] = mapped_column(Date)
 
-    stock_item_id: Mapped[int | None] = mapped_column(ForeignKey("stock_items.id"), index=True)
+    stock_item_id: Mapped[int | None] = mapped_column(ref("stock_items.id"), index=True)
     match_confidence: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
     match_reason: Mapped[str | None] = mapped_column(String(200))
     received_qty_base: Mapped[Decimal | None] = mapped_column(Qty)
@@ -441,18 +488,21 @@ class ProductIdentifier(Base):
     """
 
     __tablename__ = "product_identifiers"
-    __table_args__ = (UniqueConstraint("tenant_id", "value"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "value"),
+        one_of("product_identifiers", "source", IDENTIFIER_SOURCES),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
     identifier_type: Mapped[IdentifierType] = mapped_column(
         Enum(IdentifierType), default=IdentifierType.OTHER
     )
     # Stored as text: a leading zero is the difference between two products.
     value: Mapped[str] = mapped_column(String(64))
-    source: Mapped[str] = mapped_column(String(32), default="manual")  # manual | square | scan
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    source: Mapped[str] = mapped_column(String(32), default="manual")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class InventoryEvent(Base):
@@ -462,30 +512,36 @@ class InventoryEvent(Base):
     """
 
     __tablename__ = "inventory_events"
+    # source is not checked: older rows carry a value written by a module that has left the
+    # product (T0.05), and the ledger's transactions replace this table (T1.16).
     __table_args__ = (Index("ix_events_tenant_time", "tenant_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
+    user_id: Mapped[int | None] = mapped_column(ref("users.id"))
     action: Mapped[str] = mapped_column(String(32))  # received | counted | adjusted
     source: Mapped[str] = mapped_column(String(32))  # barcode_scan | invoice | manual | square_sync
     delta_base: Mapped[Decimal | None] = mapped_column(Qty)
     qty_after_base: Mapped[Decimal] = mapped_column(Qty)
     detail: Mapped[str | None] = mapped_column(String(500))
     pushed_to_pos: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class StockBatch(Base):
     """A dated lot as it arrived. Remaining quantity is derived, never stored: transform/expiry."""
 
     __tablename__ = "stock_batches"
-    __table_args__ = (Index("ix_batches_item_expiry", "stock_item_id", "expires_on"),)
+    __table_args__ = (
+        Index("ix_batches_item_expiry", "stock_item_id", "expires_on"),
+        positive("stock_batches", "received_qty_base"),
+        one_of("stock_batches", "source", BATCH_SOURCES),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
     received_qty_base: Mapped[Decimal] = mapped_column(Qty)
     expires_on: Mapped[date] = mapped_column(Date)
     # What the packaging called it: best_before | use_by | sell_by | expiry | unknown.
@@ -494,10 +550,11 @@ class StockBatch(Base):
     # How sure we are of a date that was read by camera. None when a person typed it.
     date_confidence: Mapped[Decimal | None] = mapped_column(Qty)
     cost_per_base_cents: Mapped[Decimal | None] = mapped_column(Qty)
-    # "receipt" raised stock when it arrived; "label" dated stock that was already on the shelf.
+    # "receipt" raised stock when it arrived; "label" dated stock that was already on the shelf;
+    # "scan" was received by scanning its barcode.
     source: Mapped[str] = mapped_column(String(32), default="receipt")
-    document_line_id: Mapped[int | None] = mapped_column(ForeignKey("document_lines.id"))
-    received_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    document_line_id: Mapped[int | None] = mapped_column(ref("document_lines.id"))
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class Promotion(Base):
@@ -511,9 +568,9 @@ class Promotion(Base):
     __table_args__ = (Index("ix_promotions_tenant_status", "tenant_id", "status"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
-    stock_batch_id: Mapped[int | None] = mapped_column(ForeignKey("stock_batches.id"))
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
+    stock_batch_id: Mapped[int | None] = mapped_column(ref("stock_batches.id"))
 
     status: Mapped[PromotionStatus] = mapped_column(Enum(PromotionStatus))
     urgency: Mapped[str] = mapped_column(String(16), default="none")
@@ -538,9 +595,9 @@ class Promotion(Base):
     # The reasoning as it was shown, so a decision can be revisited on its own terms.
     reason: Mapped[str | None] = mapped_column(Text)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    decided_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    decided_by: Mapped[int | None] = mapped_column(ref("users.id"))
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class HealthSnapshot(Base):
@@ -553,13 +610,13 @@ class HealthSnapshot(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "dt"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     dt: Mapped[date] = mapped_column(Date)
     score: Mapped[int | None] = mapped_column(Integer)
     band: Mapped[str] = mapped_column(String(20))
     # Per-dimension scores and figures, exactly as HealthReport.to_snapshot() produces them.
     detail_json: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class ExtractionCorrection(Base):
@@ -573,16 +630,16 @@ class ExtractionCorrection(Base):
     __table_args__ = (Index("ix_extraction_corrections_tenant_field", "tenant_id", "field"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    document_id: Mapped[int] = mapped_column(owned_by("documents.id"), index=True)
     # Null for a document-level field such as the supplier.
-    document_line_id: Mapped[int | None] = mapped_column(ForeignKey("document_lines.id"))
+    document_line_id: Mapped[int | None] = mapped_column(owned_by("document_lines.id"))
     # quantity | product_match | cost | supplier | invoice_number | expiry
     field: Mapped[str] = mapped_column(String(24))
     ai_value: Mapped[str | None] = mapped_column(String(300))
     corrected_value: Mapped[str | None] = mapped_column(String(300))
-    corrected_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    corrected_by: Mapped[int | None] = mapped_column(ref("users.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class StockAlias(Base):
@@ -592,12 +649,12 @@ class StockAlias(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "alias"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ForeignKey("stock_items.id"), index=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
     alias: Mapped[str] = mapped_column(String(300))
     supplier: Mapped[str | None] = mapped_column(String(200))
     times_seen: Mapped[int] = mapped_column(Integer, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class WebhookEvent(Base):
@@ -610,5 +667,5 @@ class WebhookEvent(Base):
     provider: Mapped[str] = mapped_column(String(32))
     event_id: Mapped[str] = mapped_column(String(120))
     event_type: Mapped[str] = mapped_column(String(80))
-    tenant_id: Mapped[int | None] = mapped_column(ForeignKey("tenants.id"))
-    received_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    tenant_id: Mapped[int | None] = mapped_column(ref("tenants.id"))
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

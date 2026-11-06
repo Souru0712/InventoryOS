@@ -18,4 +18,4 @@ Fly.io (similar, more hands-on); AWS (ECS/RDS — most flexible, most operations
 
 ## Consequences
 
-Not built yet. T0.09 confirms Render's current plans and creates staging once the owner has the Render account (OD-03). The image and the web and scheduler process model already exist.
+Not built yet. `render.yaml` (web, scheduler worker, Postgres 16) is on `main` since T0.09 part 1. The owner deferred creating staging until a task needs a public URL, first T3.11 (C-49), so nothing is billed before then. The image and the web and scheduler process model already exist.

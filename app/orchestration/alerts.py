@@ -114,7 +114,7 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
     if (
         recently_notified
         and recently_notified.notified_at
-        and _aware(recently_notified.notified_at) > cooldown
+        and recently_notified.notified_at > cooldown
     ):
         log.info("tenant %s alert digest suppressed by cooldown", tenant_id)
         return False
@@ -203,10 +203,6 @@ def open_alerts(db: Session, tenant_id: int) -> list[Alert]:
 def proposals_for(db: Session, tenant_id: int, now: datetime | None = None) -> list[AlertProposal]:
     now = now or datetime.now(UTC)
     return evaluate_stock(stock_views(db, tenant_id), velocity_map(db, tenant_id, now.date()), now)
-
-
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 ZERO = Decimal("0")

@@ -263,7 +263,7 @@ def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None =
         if anchor is None:
             continue
         quantity = derived_quantity(
-            Decimal(anchor.qty_base), _aware(anchor.counted_at), daily.get(item.id, {}), today
+            Decimal(anchor.qty_base), anchor.counted_at, daily.get(item.id, {}), today
         )
         if item.qty_base != quantity:
             item.qty_base = quantity
@@ -271,12 +271,6 @@ def refresh_derived_quantities(db: Session, tenant_id: int, today: date | None =
         item.last_counted_at = anchor.counted_at
     db.flush()
     return updated
-
-
-def _aware(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def expiry_coverage(db: Session, tenant_id: int, location_id: int | None = None) -> Coverage:

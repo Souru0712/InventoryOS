@@ -351,6 +351,9 @@ def create_item(
             if retail_price.strip()
             else None
         )
+        _check_thresholds(reorder_base, par_base, lead_time_days)
+        if pack_base is not None and pack_base <= 0:
+            raise ValueError("A pack holds more than nothing: enter a pack size above zero.")
     except (UnitError, ValueError, ArithmeticError) as exc:
         return templates.TemplateResponse(
             request,
@@ -453,11 +456,25 @@ def update_thresholds(
     item = db.get(StockItem, item_id)
     if item is None or item.tenant_id != tenant.id:
         raise HTTPException(status_code=404, detail="stock item not found")
-    item.reorder_point_base = to_base(reorder_point or "0", item.stock_unit)
-    item.par_level_base = to_base(par_level, item.stock_unit) if par_level.strip() else None
+    try:
+        reorder_base = to_base(reorder_point or "0", item.stock_unit)
+        par_base = to_base(par_level, item.stock_unit) if par_level.strip() else None
+        _check_thresholds(reorder_base, par_base, lead_time_days)
+    except (UnitError, ValueError, ArithmeticError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    item.reorder_point_base = reorder_base
+    item.par_level_base = par_base
     item.lead_time_days = lead_time_days
     db.commit()
     return RedirectResponse("/app", status_code=303)
+
+
+def _check_thresholds(reorder_base: Decimal, par_base: Decimal | None, lead_time_days: int) -> None:
+    """The database refuses negative thresholds (T1.01); say so before it has to."""
+    if reorder_base < 0 or (par_base is not None and par_base < 0):
+        raise ValueError("Reorder point and par level cannot be negative.")
+    if lead_time_days < 0:
+        raise ValueError("Lead time cannot be negative.")
 
 
 @router.get("/app/report", response_class=HTMLResponse)

@@ -469,11 +469,15 @@ def cmd_demo(args: argparse.Namespace) -> int:
         for name, share, days in DEMO_LOTS:
             item = stock[name]
             step = Decimal("1") if item.dimension is Dimension.COUNT else Decimal("0.0001")
+            lot_base = (Decimal(item.qty_base) * Decimal(share)).quantize(step)
+            if lot_base <= 0:
+                # Random demo sales can empty an item; a lot of nothing is not a lot.
+                continue
             db.add(
                 StockBatch(
                     tenant_id=tenant.id,
                     stock_item_id=item.id,
-                    received_qty_base=(Decimal(item.qty_base) * Decimal(share)).quantize(step),
+                    received_qty_base=lot_base,
                     expires_on=today + timedelta(days=days),
                     source="label",
                 )

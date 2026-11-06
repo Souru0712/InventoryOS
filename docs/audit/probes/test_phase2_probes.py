@@ -1,6 +1,4 @@
 """Phase 2 audit probes: each asserts CURRENT behaviour against the InventoryOS blueprint; a pass confirms the finding."""
-from datetime import datetime, timezone
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
@@ -66,10 +64,5 @@ def test_PA4_one_square_merchant_can_attach_to_two_tenants(db, tenant):
     assert db.query(ProviderConnection).filter(ProviderConnection.merchant_id == "MERCHANT-1").count() == 2
 
 
-def test_PA5_timestamps_are_naive(db, tenant):
-    """DB3 still holds: stored datetimes come back without a time zone."""
-    db.refresh(tenant)
-    tenant.trial_started_at = datetime(2026, 11, 4, 12, 0, tzinfo=timezone.utc)
-    db.commit()
-    db.expire_all()
-    assert db.get(Tenant, tenant.id).trial_started_at.tzinfo is None
+# PA5 (stored datetimes come back naive, DB3) retired in T1.01: every instant is timestamptz and
+# tests/test_schema_hygiene.py::test_a_stored_instant_comes_back_aware_and_in_utc asserts it in CI.

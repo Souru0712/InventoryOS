@@ -1,16 +1,18 @@
-"""Engine, session factory, exact-decimal column type, and cross-process locks."""
+"""Engine, session factory, exact-decimal and UTC timestamp column types, cross-process locks."""
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Connection,
+    DateTime,
     Engine,
     Numeric,
     String,
@@ -58,9 +60,12 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 @event.listens_for(engine, "connect")
-def _utc_session(dbapi_connection, _record) -> None:
-    """Timestamps are stored without a zone and read back as UTC, whatever the server's default."""
-    if engine.dialect.name != "postgresql":
+def _session_defaults(dbapi_connection, _record) -> None:
+    """Postgres sessions speak UTC; SQLite enforces foreign keys, which it skips by default."""
+    if engine.dialect.name == "sqlite":
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
         return
     with dbapi_connection.cursor() as cursor:
         cursor.execute("SET TIME ZONE 'UTC'")
@@ -89,6 +94,33 @@ class Qty(TypeDecorator):
 
     def process_result_value(self, value, dialect):
         return None if value is None else Decimal(str(value))
+
+
+class UTCDateTime(TypeDecorator):
+    """An instant (DR-20): written and read as an aware UTC datetime on every database.
+
+    Postgres stores it as timestamptz. SQLite has no zone, so it keeps the UTC wall clock and the
+    zone is put back on read. A naive value is refused: its zone is unknown, and guessing hides
+    a local-time bug.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(f"naive datetime {value.isoformat()} has no time zone; pass UTC")
+        utc = value.astimezone(UTC)
+        return utc.replace(tzinfo=None) if dialect.name == "sqlite" else utc
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
 
 class Base(DeclarativeBase):

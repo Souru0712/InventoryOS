@@ -84,9 +84,6 @@ def active_connection(db: Session, tenant_id: int, provider: str = "square") -> 
 
 def _access_token(db: Session, connection: ProviderConnection) -> str:
     expires_at = connection.expires_at
-    if expires_at and expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=UTC)
-
     if expires_at and expires_at - REFRESH_MARGIN < datetime.now(UTC):
         if not connection.refresh_token_enc:
             raise NotConnected(

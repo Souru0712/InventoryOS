@@ -52,7 +52,7 @@ both.
 | Why first | The audit found a non-hermetic suite (T1), no CI, unpinned dependencies (O5), a stored-XSS hole (S3), blocking I/O (C8), a write-back that loses deliveries (C4) and tenant-specific snack-box code (C-37). Every later "verified" depends on fixing these |
 | Tasks | T0.01–T0.11 |
 | Reuse | Entire existing suite and probes; Dockerfile and compose; Sentry wiring |
-| Exit criteria (gate G0) | CI green on SQLite and Postgres 16 for every push; tests pass with a developer `.env` present; dependencies locked and audited (no critical CVEs); probes R3 and R7 retired and C8 fixed; Square write-back disabled with no swallowed failures; snack-box code and scopes gone from InventoryOS; staging deployed from `main` |
+| Exit criteria (gate G0) | CI green on SQLite and Postgres 16 for every push; tests pass with a developer `.env` present; dependencies locked and audited (no critical CVEs); probes R3 and R7 retired and C8 fixed; Square write-back disabled with no swallowed failures; snack-box code and scopes gone from InventoryOS; staging deployed from `main` (deferred by the owner until before T3.11, C-49) |
 
 ### Stage 1 — Core foundation (P0/P1) → M1, M2
 

@@ -109,7 +109,7 @@ together form a maintained contract, not planning notes to be rewritten casually
    DEVELOPMENT_TASK_BREAKDOWN.
 2. **First task:** **T0.01 Hermetic test configuration** (Ready). In parallel-safe order after it:
    T0.06, T0.07, T0.08, T0.10, T0.11 (Ready); then T0.02 → T0.03/T0.04. T0.05 waits for the owner's
-   snack-box repository and is on the critical path (§4.4); T0.09 waits for the owner's host, storage and Sentry accounts (OD-03).
+   snack-box repository and is on the critical path (§4.4); T0.09 is deferred by the owner until a task needs a public URL, first T3.11 (C-49).
 3. **Before changing a domain, read:** its module in PRODUCT_SPECIFICATION, its workflows in
    BUSINESS_WORKFLOWS, DOMAIN_MODEL (entities + DR rules), the matching acceptance criteria, and
    TARGET_DOMAIN_AND_DATA_ARCHITECTURE.

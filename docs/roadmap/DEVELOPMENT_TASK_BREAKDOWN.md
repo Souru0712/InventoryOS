@@ -40,14 +40,14 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T0.02 | CI on GitHub Actions (SQLite + Postgres 16) | P0 | S | M0 | T0.01 | Completed (2026-11-05; protection proven: direct push rejected, failing PR blocked) |
 | T0.03 | Lock dependencies, audit, Dependabot | P0 | S | M0 | T0.02 | Completed (2026-11-05; image installs the lock, pip-audit and lock-match checks required) |
 | T0.04 | Coding standards: ruff + mypy | P1 | S | M0 | T0.02 | Completed (2026-11-05; ruff and mypy required checks on main) |
-| T0.05 | Extract the snack-box module (C-37) | P0 | M | M0 | T0.02, owner repo | In review (PR open; CI evidence in the execution log) |
+| T0.05 | Extract the snack-box module (C-37) | P0 | M | M0 | T0.02, owner repo | Completed (2026-11-06; module in its own repository, 53 routes, five Square scopes) |
 | T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | M0 | T0.01 | Completed (2026-11-05; probe R7 retired) |
 | T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | Completed (2026-11-05; no async routes, 60 s Anthropic timeout) |
 | T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | M0 | T0.01 | Completed (2026-11-05; write-back only, Square count overwrite left to T1.18 by the owner) |
-| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | In progress (render.yaml on main, PR #17; Blueprint not created; C-48 photo storage to build) |
+| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Deferred (C-49: until T3.11 needs a public URL; render.yaml on main, Blueprint and C-48 photo storage to do) |
 | T0.10 | Structured logs and request ids | P1 | S | M0 | T0.01 | Completed (2026-11-06; JSON logs with request, tenant and user ids) |
-| T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | M0 | — | In review (PR open; CI evidence in the execution log) |
-| T1.01 | Schema hygiene: timestamptz, constraints, delete rules | P0 | M | M1 | T0.02, T0.05 | Not started |
+| T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | M0 | — | Completed (2026-11-06; one ADR per approved ID, enforced by the docs checker) |
+| T1.01 | Schema hygiene: timestamptz, constraints, delete rules | P0 | M | M1 | T0.02, T0.05 | In review (PR open; CI evidence in the execution log) |
 | T1.02 | Scoped data-access layer (C-33) | P0 | M | M1 | T1.01 | Not started |
 | T1.03 | Tenant-isolation test suite | P0 | M | M1 | T1.02 | Not started |
 | T1.04 | Organization and location model | P0 | M | M1 | T1.02 | Not started |
@@ -252,6 +252,9 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Acceptance:** staging `/readyz` returns 200; exactly one active scheduler; a forced error appears in Sentry; restore-from-PITR procedure written (drill in T4.09).
 - **Tests:** smoke check in the deploy pipeline.
 - **Done when:** URL recorded in the README of `docs/roadmap/`.
+- **Deferred (C-49, 2026-11-06):** `render.yaml` is on `main` (PR #17). The Blueprint, its
+  secrets, the C-48 photo storage and the acceptance checks wait until before T3.11, the first
+  task that needs a public HTTPS endpoint. G0 is met without this task.
 
 ### T0.10 Structured logs and request ids · P1 · S
 - **Objective:** JSON logs with request id, tenant id and user id; no personal payloads (OBS-01).
