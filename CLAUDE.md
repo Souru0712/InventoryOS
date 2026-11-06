@@ -34,6 +34,10 @@ implementation sessions; the detail lives in `docs/`.
 - Routes are plain `def` (FastAPI runs them in its threadpool); a route that needs the raw
   body or a dynamic form takes it from `app/web/inputs.py`. `async def` routes would run the
   synchronous database and API calls on the event loop and stall the worker (C8; a test enforces it).
+- Logs are JSON with `request_id`, `tenant_id`, `user_id` (`app/observability.py`). Never log
+  bodies, cookies, query strings, tokens, passwords or email addresses (log ids instead); emails
+  are masked as a last resort. A new scheduled job is registered through `scheduler._job`, and a
+  per-tenant loop wraps each tenant in `log_context(tenant_id=...)`.
 - An upload's type comes from its bytes (`detect_media_type`), never its name or Content-Type;
   uploads are served with an allow-listed type, `nosniff` and `Content-Disposition`.
 - JuJu (`C:\Users\oscar\.vscode\JuJu`) and the snack-box project are separate repositories: never
