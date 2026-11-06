@@ -5,6 +5,84 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.08 Disable Square write-back; no swallowed failures (C-34, C4)
+
+**Implemented**
+- `SQUARE_WRITE_BACK` setting, default off (`app/config.py`, `.env.example`).
+- The four flows that wrote to Square no longer call it: invoice apply
+  (`push_adjustments_to_square`), receiving by barcode scan (`adjust_stock_in_square`), the scan
+  count and the dashboard count (`push_counts_to_square`). Each changes InventoryOS only. With
+  the calls went the three `except Exception` blocks that logged a failed push and carried on
+  (C4).
+- `push_counts_to_square` and `push_adjustments_to_square` are kept for R1.1's outbox and raise
+  `WriteBackDisabled` while the setting is off, so a stray call fails loudly instead of skipping
+  a write its caller believes happened.
+- Copy no longer promises Square updates: the receiving page's "count(s) pushed back to Square"
+  notice and its "pushed back so your storefront matches" line are gone; after a scan of an item
+  Square tracks, the page says the number is saved here only and Square's next sync replaces it.
+  `pushed_to_pos` is gone from the scan JSON and the receiving redirect (the database column
+  stays; it is now always false).
+- Probe R3 retired (comment in `docs/audit/probes/test_audit_probes.py`). `NEEDS-YOU.md` item 1
+  says write-back is off until R1.1.
+- Remaining Square calls are reads. The syncs (catalog, counts, sales) already record a failure
+  on `sync_runs` with the exception and log it. The one read outside a sync, the scan lookup's
+  refresh of a single item, only logged a failure and showed the local number as if fresh: it now
+  records a failed `sync_runs` row (kind `item`, `record_square_failure`), which the dashboard's
+  sync status shows, and the scan page says Square could not be reached and the number is
+  InventoryOS's last count.
+- Also in this PR: C-45, C-46 in the extraction prompt (entry below).
+
+**Verified (locally)**
+- `tests/test_square_writeback.py` rewritten: invoice apply, scan receive, scan count and
+  dashboard count make zero Square calls and change InventoryOS stock (24 → 48, 30, 37, 40); the
+  setting is off by default; both push functions raise while it is off. With the old flows
+  restored all six fail. The R1.1 semantics (adjustment not count, idempotent receipt, derived
+  items never pushed) are kept as tests with write-back switched on. A failed Square read during
+  a scan lookup leaves a failed `item` sync run and `square_unreachable` in the response.
+- Full suite 605 passed, 6 skipped (598 + 7); ruff, ruff format, mypy (78 files) clean.
+
+**Acceptance point for the owner**
+- The acceptance reads "probe R3 scenario can no longer lose a delivery". R3's second half is the
+  hourly sync: `apply_provider_counts` sets a Square-tracked item to Square's count. With
+  write-back off, a delivery or count recorded in InventoryOS for such an item is now replaced at
+  the next sync every time, not only after a failed push. Stopping that is the inbound half of
+  C-34, which the roadmap gives to T1.18 ("`apply_provider_counts` stops touching stock").
+  Nothing is silent any more (no push is attempted or reported, and the scan page says Square's
+  sync will replace the number), but the delivery is not kept for those items until T1.18. No
+  tenant uses Square tracking today (the owner's store runs Toast; C-40 no pilots yet).
+  Recommendation: accept T0.08 as write-back only and leave the overwrite to T1.18.
+
+**Files changed**
+- `app/config.py`, `.env.example`, `app/orchestration/sync.py`, `receiving.py`, `scanning.py`,
+  `app/web/receiving.py`, `scanning.py`, `dashboard.py`, templates `receiving_review.html`,
+  `scan.html`; `tests/test_square_writeback.py`; `docs/audit/probes/test_audit_probes.py`;
+  `NEEDS-YOU.md`; task index (T0.08 → In review); this log.
+
+**Open issues**
+- The snack-box module (`app/orchestration/boxes.py`) still adjusts Square stock when a box is
+  packed, through its own client call. It leaves this repository in T0.05; left unchanged here.
+
+**Next task**
+- T0.10 structured logs and request ids; T0.11 governance scaffolding. T0.05 waits for the
+  snack-box repository (OD-02).
+
+---
+
+## 2026-11-05 — Owner decisions on the invoice gaps (C-45, C-46, C-47)
+
+- The owner's answers on the gaps recorded in the entry below: lines circled or marked "Return"
+  by hand are left out of a scan (C-45); shipped beats ordered, including shipped weight (C-46);
+  supplier item codes are not captured from invoices (C-47). The owner offered an invoice longer
+  than one page (OD-09).
+- `app/extract/invoice.py`: the system prompt carries C-45 and C-46;
+  `tests/test_invoice_ai.py` checks both rules reach the model. Whether the model follows them is
+  for the real-invoice trial (T4.15).
+- The pack-notation fix below was merged by the owner as PR #13 (`2cf167b`); CI on its head
+  `7b6fb4b` was green on all five jobs (SQLite 598 passed, 6 skipped; PostgreSQL 16 604 passed,
+  0 skipped), and the same five were green on `main` after the merge.
+
+---
+
 ## 2026-11-05 — Receiving: supplier pack notations from the owner's invoices (unplanned fix)
 
 Not a roadmap task. The owner shared the front pages of four suppliers' invoices (Central

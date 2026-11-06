@@ -162,6 +162,15 @@ def anthropic_client(monkeypatch):
     return build
 
 
+def test_the_model_is_told_the_owners_receiving_rules(anthropic_client):
+    """C-45: a line marked as returned by hand is left out. C-46: shipped beats ordered."""
+    client = anthropic_client(INVOICE)
+    ClaudeInvoiceExtractor().extract(photo(400, 300), "1/abc.jpg")
+    system = client.sent["system"]
+    assert "marked by hand as a return" in system
+    assert "use the shipped one" in system
+
+
 def test_the_client_gives_up_after_a_minute_of_silence(anthropic_client):
     """The SDK default of 600 s held a worker for ten minutes on a stalled call (C8)."""
     client = anthropic_client(INVOICE)

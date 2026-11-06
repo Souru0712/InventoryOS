@@ -67,7 +67,7 @@ provider).
 | OD-06 | Stripe account in test mode | T4.04 | Open |
 | OD-07 | Email provider account and domain DNS | T4.09 | Open |
 | OD-08 | Privacy policy, terms, refund policy content | T4.12 | Open |
-| OD-09 | Real invoices for the extraction trial (OA-4) | T4.15 | Partly met 2026-11-05: front pages of four suppliers' invoices (Central Boeki, USA Seafood, JFC, Hadson) shared in a session and kept out of this public repository; their pack wording fixed receiving bugs (execution log). The trial still needs complete multi-page invoices, kept privately |
+| OD-09 | Real invoices for the extraction trial (OA-4) | T4.15 | Partly met 2026-11-05: front pages of four suppliers' invoices (Central Boeki, USA Seafood, JFC, Hadson) shared in a session and kept out of this public repository; their pack wording fixed receiving bugs (execution log). The owner offered an invoice longer than one page (2026-11-05). The trial still needs complete multi-page invoices, kept privately |
 | OD-10 | Customer validation time and decisions O-1..O-7 in the validation plan | Track V, pilots | Open |
 | OD-11 | JuJu values not in JuJu's files (press yields, opening stock, costs) | T5.01 | Open |
 

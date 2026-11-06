@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.load.upsert import (
     apply_provider_counts,
     ensure_tracked_stock_items,
@@ -55,6 +56,17 @@ REFRESH_MARGIN = timedelta(days=7)
 
 class NotConnected(RuntimeError):
     pass
+
+
+class WriteBackDisabled(RuntimeError):
+    """Raised by the push functions while SQUARE_WRITE_BACK is off (C-34)."""
+
+
+def _require_write_back() -> None:
+    # Kept for R1.1's outbox. Until then a call is a bug, so it fails loudly rather than
+    # quietly skipping a write the caller believes happened.
+    if not get_settings().square_write_back:
+        raise WriteBackDisabled("writing to Square is off until R1.1 (C-34)")
 
 
 def active_connection(db: Session, tenant_id: int, provider: str = "square") -> ProviderConnection:
@@ -220,6 +232,7 @@ def push_counts_to_square(db: Session, tenant_id: int, stock_item_ids: list[int]
     push_adjustments_to_square instead. Sent as a count it would overwrite whatever Square
     holds, including sales Square knows about and we do not.
     """
+    _require_write_back()
     if not stock_item_ids:
         return 0
 
@@ -275,8 +288,9 @@ def push_adjustments_to_square(
     now holds 48. An adjustment lands on top of Square's own number, so a sale rung up between
     the delivery and this call survives instead of being overwritten.
 
-    Every receiving path - barcode scan and invoice photo alike - comes through here.
+    Every receiving path - barcode scan and invoice photo alike - came through here before C-34.
     """
+    _require_write_back()
     wanted = {
         item_id: Decimal(delta)
         for item_id, delta in deltas.items()
@@ -332,6 +346,24 @@ def adjust_stock_in_square(
 ) -> bool:
     """Add a delta for one item. Returns False when Square does not own that item's count."""
     return push_adjustments_to_square(db, tenant_id, {item.id: delta_base}) > 0
+
+
+def record_square_failure(db: Session, tenant_id: int, kind: str, exc: Exception) -> None:
+    """A Square call outside a sync failed: record it where the dashboard shows sync health.
+
+    The dashboard reads the newest sync run, so the failure is visible there, not only in logs.
+    """
+    now = datetime.now(UTC)
+    db.add(
+        SyncRun(
+            tenant_id=tenant_id,
+            kind=kind,
+            status=SyncStatus.FAILED,
+            started_at=now,
+            finished_at=now,
+            error=f"{type(exc).__name__}: {exc}"[:2000],
+        )
+    )
 
 
 def refresh_item_from_square(db: Session, tenant_id: int, item: StockItem) -> bool:

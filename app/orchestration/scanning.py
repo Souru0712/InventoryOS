@@ -23,7 +23,6 @@ from app.models import (
     ProductIdentifier,
     StockBatch,
     StockItem,
-    TrackMode,
 )
 from app.transform.barcodes import canonical, has_valid_check_digit, is_numeric, lookup_keys
 from app.transform.dates import parse_printed_date
@@ -263,7 +262,7 @@ def receive_scanned(
         )
         db.add(batch)
 
-    pushed = _push(db, item, Decimal(qty_base))
+    # Nothing is sent to Square (C-34).
     record_event(
         db,
         item,
@@ -273,25 +272,9 @@ def receive_scanned(
         delta_base=Decimal(qty_base),
         user_id=user_id,
         detail=f"best before {expires_on:%Y-%m-%d}" if expires_on else None,
-        pushed_to_pos=pushed,
     )
     db.flush()
-    return {"qty_after_base": item.qty_base, "pushed_to_pos": pushed, "dated": batch is not None}
-
-
-def _push(db: Session, item: StockItem, delta_base: Decimal) -> bool:
-    """Square owns the count for its own SKUs; anything else is ours alone."""
-    if item.track_mode is not TrackMode.PROVIDER:
-        return False
-    from app.orchestration.sync import NotConnected, adjust_stock_in_square
-
-    try:
-        return adjust_stock_in_square(db, item.tenant_id, item, delta_base)
-    except NotConnected:
-        log.info("tenant %s is not connected; scan kept locally", item.tenant_id)
-    except Exception:
-        log.exception("failed to adjust square stock for item %s", item.id)
-    return False
+    return {"qty_after_base": item.qty_base, "dated": batch is not None}
 
 
 def location_name(db: Session, item: StockItem) -> str:

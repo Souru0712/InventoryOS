@@ -276,7 +276,6 @@ def apply_receipt(
     result = apply_document(db, document.id, decisions, user_id=user.id)
     db.commit()
     return RedirectResponse(
-        f"/app/receiving/{document.id}?applied={result['applied']}&pushed={result['pushed_to_pos']}"
-        f"&batches={result['batches']}",
+        f"/app/receiving/{document.id}?applied={result['applied']}&batches={result['batches']}",
         status_code=303,
     )

@@ -32,7 +32,6 @@ from app.models import (
     StockAlias,
     StockBatch,
     StockItem,
-    TrackMode,
 )
 from app.storage import StorageError, get_storage
 from app.transform.receiving import (
@@ -412,30 +411,10 @@ def apply_document(
     document.applied_at = now
     db.flush()
 
-    pushed = 0
-    # What the delivery added, never what we think the shelf now holds: a sale between the
-    # invoice and this moment must survive. Same pathway as receiving by barcode scan.
-    provider_deltas = {
-        item_id: delta
-        for item_id, delta in received.items()
-        if items[item_id].track_mode == TrackMode.PROVIDER
-    }
-    if provider_deltas:
-        from app.orchestration.sync import NotConnected, push_adjustments_to_square
-
-        try:
-            pushed = push_adjustments_to_square(
-                db, document.tenant_id, provider_deltas, f"receipt-{document.id}"
-            )
-        except NotConnected:
-            log.warning("tenant %s is not connected; delivery not pushed", document.tenant_id)
-        except Exception:
-            log.exception("failed to adjust square stock for tenant %s", document.tenant_id)
-
+    # Nothing is sent to Square (C-34): a delivery changes InventoryOS stock only.
     return {
         "applied": applied,
         "batches": batches,
-        "pushed_to_pos": pushed,
         "document_id": document.id,
     }
 

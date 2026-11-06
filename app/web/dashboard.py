@@ -32,7 +32,7 @@ from app.orchestration.alerts import proposals_for
 from app.orchestration.health import current as current_health
 from app.orchestration.reporting import weekly_report
 from app.orchestration.scanning import CodeInUse, link_code
-from app.orchestration.sync import NotConnected, push_counts_to_square, run_sync
+from app.orchestration.sync import NotConnected, run_sync
 from app.orchestration.views import (
     expiry_coverage,
     expiry_positions,
@@ -435,15 +435,7 @@ def record_count(
             counted_at=now,
         )
     )
-    db.flush()
-
-    if item.track_mode == TrackMode.PROVIDER:
-        try:
-            push_counts_to_square(db, tenant.id, [item.id])
-        except NotConnected:
-            log.info("tenant %s not connected; count kept locally", tenant.id)
-        except Exception:
-            log.exception("count push failed for item %s", item.id)
+    # Nothing is sent to Square (C-34).
     db.commit()
     return RedirectResponse("/app", status_code=303)
 

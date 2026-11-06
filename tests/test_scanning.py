@@ -148,8 +148,8 @@ def test_receiving_raises_stock_and_leaves_a_trail(db, tenant, coke):
 
     assert coke.qty_base == Decimal("58")
     assert result["qty_after_base"] == Decimal("58")
-    # Square is not connected in a test, so nothing was pushed and nothing blew up.
-    assert result["pushed_to_pos"] is False
+    # Nothing is sent to Square (C-34), so there is no push to report.
+    assert "pushed_to_pos" not in result
 
     event = db.query(InventoryEvent).one()
     assert (event.action, event.source) == ("received", "barcode_scan")

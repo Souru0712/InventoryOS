@@ -115,19 +115,29 @@ def lookup(
         raise HTTPException(status_code=404, detail="stock item not found")
 
     # Square owns the quantity, so ask it for this one variation before showing a number.
+    square_unreachable = False
     if refresh:
-        from app.orchestration.sync import NotConnected, refresh_item_from_square
+        from app.orchestration.sync import (
+            NotConnected,
+            record_square_failure,
+            refresh_item_from_square,
+        )
 
         try:
             refresh_item_from_square(db, tenant.id, item)
             db.commit()
         except NotConnected:
             pass
-        except Exception:
-            log.exception("could not refresh item %s from square", item.id)
+        except Exception as exc:
             db.rollback()
+            log.exception("could not refresh item %s from square for tenant %s", item.id, tenant.id)
+            record_square_failure(db, tenant.id, "item", exc)
+            db.commit()
+            square_unreachable = True
 
-    return JSONResponse(_item_payload(db, tenant.id, item, value, identifier.identifier_type.value))
+    payload = _item_payload(db, tenant.id, item, value, identifier.identifier_type.value)
+    payload["square_unreachable"] = square_unreachable
+    return JSONResponse(payload)
 
 
 @router.post("/app/scan/link")
@@ -218,7 +228,6 @@ def receive(
             "received_text": format_amount(qty_base, item.stock_unit),
             "qty_label": format_qty(result["qty_after_base"], item.stock_unit),
             "qty_text": format_amount(result["qty_after_base"], item.stock_unit),
-            "pushed_to_pos": result["pushed_to_pos"],
             "pos_tracked": item.track_mode is TrackMode.PROVIDER,
             "dated": result["dated"],
         }
@@ -233,9 +242,8 @@ def count(
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
 ):
-    """Correct the count from the shelf. Square is told the absolute number, not a delta."""
+    """Correct the count from the shelf. Nothing is sent to Square (C-34)."""
     from app.models import InventoryCount
-    from app.orchestration.sync import NotConnected, push_counts_to_square
 
     item = db.get(StockItem, stock_item_id)
     if item is None or item.tenant_id != tenant.id:
@@ -260,15 +268,6 @@ def count(
     )
     db.flush()
 
-    pushed = False
-    if item.track_mode is TrackMode.PROVIDER:
-        try:
-            pushed = bool(push_counts_to_square(db, tenant.id, [item.id]))
-        except NotConnected:
-            log.info("tenant %s not connected; count kept locally", tenant.id)
-        except Exception:
-            log.exception("count push failed for item %s", item.id)
-
     record_event(
         db,
         item,
@@ -277,7 +276,6 @@ def count(
         qty_after_base=qty_base,
         delta_base=qty_base - before,
         user_id=user.id,
-        pushed_to_pos=pushed,
     )
     db.commit()
     return JSONResponse(
@@ -285,7 +283,6 @@ def count(
             "ok": True,
             "qty_label": format_qty(qty_base, item.stock_unit),
             "qty_text": format_amount(qty_base, item.stock_unit),
-            "pushed_to_pos": pushed,
             "pos_tracked": item.track_mode is TrackMode.PROVIDER,
         }
     )

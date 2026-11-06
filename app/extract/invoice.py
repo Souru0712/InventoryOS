@@ -93,7 +93,11 @@ SYSTEM_PROMPT = """You read supplier invoices and delivery notes for small food 
 
 Transcribe only what is printed. Never invent a product, quantity or price.
 - One entry per delivered line item. Skip subtotals, tax lines, delivery charges and notes.
-- quantity is the number of units delivered, as written on the line.
+- Leave out any line that is circled or marked by hand as a return ("Return", "RTN"): it was
+  not delivered. This is the only handwriting that changes what you report.
+- quantity is the number of units delivered, as written on the line. When the line shows both
+  an ordered and a shipped quantity, use the shipped one; for goods sold by weight that is the
+  shipped weight (for example 46.96 with unit lb, not 1 case).
 - unit is the unit as written (kg, g, lb, L, ml, case, box, each). Use null if absent.
 - pack_size is the size of a single pack when the line reads like "6 x 1L" (here: 1).
 - Money is in minor units: $12.50 becomes 1250. Use null when a price is not printed.
