@@ -18,9 +18,11 @@ Last updated: 2026-09-20, after the landing-page comps and the app redesign.
 
 Phase A, item by item, as you listed it:
 
-1. Invoice receiving → Square adjustment — ✅ `push_counts_to_square` is gone from receiving; a
-   delivery adjusts, only an observation counts. Regression test: 24 on hand, a sale takes it to
-   20, an invoice brings 24, Square ends at 44.
+1. Invoice receiving → Square adjustment — **superseded 2026-11-05 (C-34, T0.08): write-back is
+   off until R1.1.** InventoryOS writes nothing to Square; receiving and counts change InventoryOS
+   only, and the push functions refuse to run while `SQUARE_WRITE_BACK` is off. In R1.1 they come
+   back through the outbox, still sending a delivery as an adjustment and only an observation as a
+   count. Until T1.18, Square's next sync still replaces the count of an item Square tracks.
 2. PostgreSQL compatibility — ✅ driver installed, every migration runs, enum drops, FK-safe
    deletes; the whole suite passes on Postgres.
 3. Scheduler isolation — ✅ never embedded when deployed, plus a Postgres advisory leader lock;

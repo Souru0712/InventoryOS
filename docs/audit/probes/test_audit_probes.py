@@ -71,29 +71,8 @@ def _provider_item(db, tenant, location, qty="10"):
     return item
 
 
-def test_R3_failed_square_push_on_receipt_is_lost_at_next_sync(db, tenant, location, monkeypatch):
-    item = _provider_item(db, tenant, location)
-    doc = save_upload(db, tenant.id, location.id, "inv.jpg", b"x", "image/jpeg")
-    parse_document(db, doc.id, StubExtractor(INVOICE))
-    db.commit()
-
-    import app.orchestration.sync as sync_mod
-
-    def boom(*_a, **_k):
-        raise RuntimeError("square 503")
-
-    monkeypatch.setattr(sync_mod, "push_adjustments_to_square", boom)
-    line = doc.lines[0]
-    result = apply_document(db, doc.id, [LineDecision(line.id, item.id, Decimal("24"))])
-    db.commit()
-    assert result["pushed_to_pos"] == 0 and doc.status is DocumentStatus.APPLIED
-    assert item.qty_base == Decimal("34")
-    # Hourly reconciliation reads Square, which never heard of the delivery.
-    apply_provider_counts(db, tenant.id, [{"provider_item_id": "VAR1", "provider_location_id": "loc-1",
-                                           "quantity": Decimal("10")}])
-    db.commit()
-    assert item.qty_base == Decimal("10")  # the 24 received units are gone; nothing retries
-    assert db.query(InventoryEvent).count() == 0  # invoice receiving writes no audit event at all
+# R3 (failed Square push on receipt swallowed, then overwritten) retired in T0.08: nothing is
+# written to Square in R1 (C-34); tests/test_square_writeback.py asserts zero write calls.
 
 
 def test_R4_concurrent_apply_raises_stock_twice(db, tenant, location):
