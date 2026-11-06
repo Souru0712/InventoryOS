@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Customer, Tenant, User
+from app.observability import bind
 
 SESSION_USER_KEY = "uid"
 SESSION_STATE_KEY = "oauth_state"
@@ -45,7 +46,10 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User | None
     if not user_id:
         return None
     user = db.get(User, user_id)
-    return user if user and user.is_active else None
+    if user and user.is_active:
+        bind(tenant_id=user.tenant_id, user_id=user.id)
+        return user
+    return None
 
 
 def require_user(user: User | None = Depends(current_user)) -> User:

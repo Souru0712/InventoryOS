@@ -17,6 +17,7 @@ from app.config import get_settings, require_deployable
 from app.db import init_db
 from app.entitlements import NotEntitled
 from app.monitoring import init_monitoring
+from app.observability import RequestContext, configure_logging
 from app.orchestration import scheduler
 from app.web import (
     auth,
@@ -38,10 +39,7 @@ from app.web import (
 from app.web.headers import SecurityHeaders
 from app.web.templating import templates
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+configure_logging()
 log = logging.getLogger(__name__)
 settings = get_settings()
 # Deployed on SQLite or with a placeholder secret, stop now rather than lose data later.
@@ -67,8 +65,10 @@ app.add_middleware(
     https_only=settings.app_base_url.startswith("https"),
     same_site="lax",
 )
-# Added last, so it wraps everything else, static files included.
 app.add_middleware(SecurityHeaders)
+# Added last, so it wraps everything else: every line of a request, including the security
+# headers' and the access line, carries its request id.
+app.add_middleware(RequestContext)
 
 static_dir = Path(__file__).resolve().parent / "web" / "static"
 static_dir.mkdir(parents=True, exist_ok=True)

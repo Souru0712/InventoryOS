@@ -145,7 +145,7 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
         # One digest each, carrying only the categories that person still wants.
         theirs = [alert for alert in pending if wants(user, category_of(alert.kind))]
         if not theirs:
-            log.info("tenant %s: %s wants none of these alert categories", tenant_id, user.email)
+            log.info("tenant %s: user %s wants none of these alert categories", tenant_id, user.id)
             continue
 
         rows = [

@@ -79,5 +79,5 @@ def save_email_settings(
     for field, attribute, _label, _description in EMAIL_SETTINGS:
         setattr(user, attribute, form.get(field) is not None)
     db.commit()
-    log.info("email preferences updated for %s", user.email)
+    log.info("email preferences updated for user %s", user.id)
     return RedirectResponse("/app/settings?saved=1", status_code=303)

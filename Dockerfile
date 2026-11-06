@@ -32,4 +32,4 @@ USER stockpulse
 EXPOSE 8000
 
 # Behind a platform's TLS proxy, trust X-Forwarded-* so redirects and cookies see https.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port \"$PORT\" --workers \"$WEB_CONCURRENCY\" --proxy-headers --forwarded-allow-ips '*'"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port \"$PORT\" --workers \"$WEB_CONCURRENCY\" --proxy-headers --forwarded-allow-ips '*' --no-access-log"]
