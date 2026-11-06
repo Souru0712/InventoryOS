@@ -18,4 +18,4 @@ Keep it on a branch in this repository
 
 ## Consequences
 
-Not done yet (T0.05). The owner has not created the private repository (OD-02). On 2026-11-06 the owner shared a local Snack-box folder, which is a separate CSV command-line tool and not a git repository; T0.05 needs a repository before it copies the module.
+Done in T0.05 (2026-11-06). The owner created the private repository `Souru0712/Snack-box`; the module was copied there unchanged from InventoryOS commit `56d6e7c` (36 files plus verbatim excerpts of its parts in five shared files, and a README giving their source lines), then removed from InventoryOS with its 11 tables (DM-1). The owner's separate local CSV tool was not touched.
