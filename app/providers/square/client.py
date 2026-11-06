@@ -145,38 +145,6 @@ class SquareClient:
             json={"idempotency_key": idempotency_key, "changes": changes},
         )
 
-    def create_payment_link(
-        self,
-        *,
-        idempotency_key: str,
-        name: str,
-        amount_cents: int,
-        currency: str,
-        location_id: str,
-        redirect_url: str,
-        note: str,
-        buyer_email: str | None = None,
-    ) -> dict:
-        """A Square-hosted checkout for one amount. Its order_id is what the payment webhook carries."""
-        body: dict = {
-            "idempotency_key": idempotency_key,
-            "quick_pay": {
-                "name": name,
-                "price_money": {"amount": amount_cents, "currency": currency},
-                "location_id": location_id,
-            },
-            "checkout_options": {"redirect_url": redirect_url},
-            "payment_note": note[:500],
-        }
-        if buyer_email:
-            body["pre_populated_data"] = {"buyer_email": buyer_email}
-        return (
-            self._request("POST", "/v2/online-checkout/payment-links", json=body).get(
-                "payment_link"
-            )
-            or {}
-        )
-
 
 def physical_count_change(
     catalog_object_id: str, location_id: str, quantity: str, occurred_at: datetime

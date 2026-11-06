@@ -5,6 +5,57 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T0.05 Extract the snack-box module (C-37)
+
+**Implemented**
+- **Snack-box repository** (`Souru0712/Snack-box`, private, created by the owner): first commit
+  `ae99561` on `main` (the repository was empty, so there was no branch to open a pull request
+  against). It holds the module copied unchanged from InventoryOS commit `56d6e7c`: 36 files that
+  belonged only to it (orchestration `boxes`/`customers`/`referrals`, web `boxes`/`shop`, pure rules
+  `allocation`/`boxes`/`credits`/`taste`, templates, the customer sign-in email, the migration that
+  created its tables, seven test files), verbatim excerpts of its parts in five shared files
+  (models, entitlements, security, scheduler, Square client) headed with their source lines, and a
+  README with permalinks to the smaller references. The owner's local CSV tool was not touched.
+- **InventoryOS:** the 35 files removed; routers unmounted; the 11 models and five enums, the
+  `inventory_events.box_order_id` column, `SNACK_BOX_TENANT_IDS` and `CUSTOMER_LOGIN_TTL_MINUTES`,
+  `owns_snack_box`, shopper sign-in, the box housekeeping job, the Square payment and refund webhook
+  branch, `create_payment_link`, the shop's navigation, its email test, and the mypy override for
+  its modules. Square now asks merchants for five scopes (merchant profile, items read, inventory
+  read and write, orders read) instead of eight.
+- **DM-1:** migration `5c1d0f2a9b31` drops the 11 tables, their five Postgres enum types and
+  `inventory_events.box_order_id`; it is the reverse of `e7b19fdcb1ce`, generated from it, and keeps
+  `webhook_events`, which that migration also created and the product uses. Its downgrade recreates
+  the tables empty, so the chain still rolls back to base. Destructive, approved by C-37.
+- README, `.env.example`, `CLAUDE.md`, ADR-0004 and ADR-0016 updated; OD-02 done.
+
+**Verified (locally)**
+- Routes: 88 before, 35 of them the shop's; 53 after, as T0.05 specifies.
+- `tests/test_snack_box_removed.py`: 53 routes and none under `/shop` or `/app/boxes`; Square
+  scopes are exactly the five; no trace of the module in `app/` or `scripts/` (names, paths,
+  scopes). `tests/test_migrations.py`: the 11 tables and the column are gone after migrating,
+  `webhook_events` stays; the existing chain, downgrade-to-base and rows-survive tests pass on
+  SQLite (their Postgres runs are in CI).
+- ruff, mypy (70 files) clean; docs checker 0 problems. Full suite 544 passed, 7 skipped: 614
+  before, less the shop's 74 tests (its own files and one email test), plus the new tests; the
+  extra skip is the new migration test's Postgres run.
+
+**Files changed**
+- 35 files deleted; `migrations/versions/5c1d0f2a9b31_drop_snack_box_tables.py` (new);
+  `app/main.py`, `models.py`, `config.py`, `entitlements.py`, `security.py`,
+  `orchestration/scheduler.py`, `web/webhooks.py`, `web/templating.py`, `templates/base.html`,
+  `providers/square/oauth.py`, `client.py`, `webhooks.py`; tests `conftest.py`, `test_email.py`,
+  `test_migrations.py`, `test_snack_box_removed.py` (new); `pyproject.toml`, `.env.example`,
+  `README.md`, `CLAUDE.md`, ADR-0004, ADR-0016, task index (T0.05 → In review), OD-02, this log.
+
+**Open issues**
+- Existing Square connections were granted the three removed scopes; they keep them until the
+  merchant reconnects. No merchant is connected today.
+
+**Next task**
+- Stage 1 starts with T1.01 (schema hygiene), now unblocked.
+
+---
+
 ## 2026-11-06 — T0.09 Staging on Render, part 1: Blueprint and C-48
 
 **Implemented**

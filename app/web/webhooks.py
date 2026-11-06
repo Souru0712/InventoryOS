@@ -12,16 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.entitlements import owns_snack_box
 from app.load.upsert import apply_provider_counts
 from app.models import Location, ProviderConnection, StockItem, SyncRun, TrackMode
-from app.orchestration import boxes as box_orders
 from app.orchestration.sync import NotConnected, sync_catalog
 from app.providers.square.webhooks import (
     CATALOG_VERSION_UPDATED,
     INVENTORY_COUNT_UPDATED,
-    PAYMENT_UPDATED,
-    REFUND_EVENTS,
     inventory_counts,
     merchant_id,
     verify_signature,
@@ -128,22 +124,6 @@ def square_webhook(
         event = json.loads(body)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="body is not JSON") from exc
-
-    if event.get("type") in (PAYMENT_UPDATED, *REFUND_EVENTS):
-        tenant_id = _tenant_for(db, merchant_id(event))
-        if tenant_id is None:
-            log.info("square webhook for unknown merchant %s", merchant_id(event))
-            return {"ignored": "unknown merchant"}
-        if not owns_snack_box(tenant_id):
-            return {"ignored": "not a snack box merchant"}
-        handle = (
-            box_orders.handle_square_payment
-            if event["type"] == PAYMENT_UPDATED
-            else box_orders.handle_square_refund
-        )
-        result = handle(db, tenant_id, event)
-        db.commit()
-        return result
 
     if event.get("type") == CATALOG_VERSION_UPDATED:
         tenant_id = _tenant_for(db, merchant_id(event))

@@ -123,18 +123,6 @@ def test_the_weekly_report_is_readable_without_html(db, tenant, milk, mail):
     assert "best viewed as HTML" not in text
 
 
-def test_a_sign_in_link_is_readable_without_html(db, tenant, mail):
-    from app.orchestration.customers import find_or_create, issue_login_link
-
-    customer = find_or_create(db, tenant.id, "shopper@rosewood.test")
-    db.commit()
-    issue_login_link(db, customer)
-    db.commit()
-
-    text = plain(mail[0])
-    assert "/shop/" in text and "expires in" in text
-
-
 # --- what each person asked for ---------------------------------------------------------------
 
 

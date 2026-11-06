@@ -22,7 +22,6 @@ from app.orchestration import scheduler
 from app.web import (
     auth,
     billing,
-    boxes,
     dashboard,
     health,
     marketing,
@@ -30,7 +29,6 @@ from app.web import (
     promotions,
     receiving,
     scanning,
-    shop,
     webhooks,
 )
 from app.web import (
@@ -77,8 +75,6 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(ops.router)
 app.include_router(marketing.router)
 app.include_router(auth.router)
-app.include_router(boxes.router)
-app.include_router(shop.router)
 app.include_router(dashboard.router)
 app.include_router(receiving.router)
 app.include_router(health.router)

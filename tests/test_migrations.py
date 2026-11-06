@@ -77,6 +77,30 @@ def test_every_table_is_created(migrated):
     assert "alembic_version" in tables
 
 
+SNACK_BOX_TABLES = {
+    "box_settings",
+    "snack_profiles",
+    "customers",
+    "customer_login_tokens",
+    "customer_product_preferences",
+    "preference_changes",
+    "box_orders",
+    "box_lines",
+    "box_reviews",
+    "referrals",
+    "credit_transactions",
+}
+
+
+def test_the_snack_box_tables_are_dropped(migrated):
+    """DM-1 (T0.05): the module moved to its own repository; its tables and column go with it."""
+    inspector = inspect(migrated)
+    assert SNACK_BOX_TABLES.isdisjoint(inspector.get_table_names())
+    assert "webhook_events" in inspector.get_table_names()
+    columns = {c["name"] for c in inspector.get_columns("inventory_events")}
+    assert "box_order_id" not in columns
+
+
 def test_quantity_columns_survive_the_round_trip(migrated):
     """Qty must render as the decorator, not as one dialect's impl."""
     from decimal import Decimal

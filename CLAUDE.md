@@ -55,8 +55,7 @@ implementation sessions; the detail lives in `docs/`.
 - Postgres run: set `TEST_DATABASE_URL` to an empty Postgres 16 database.
 - Lint and format: `uv run ruff check .` and `uv run ruff format .` (line length 100, bandit
   security rules on). Types: `uv run mypy`, strict for `app/transform/` and the coming
-  `app/access/` and `app/ledger/`, gradual elsewhere; the snack-box modules are skipped until
-  T0.05 removes them. Settings in `pyproject.toml`. Keep formatting-only changes in their own
+  `app/access/` and `app/ledger/`, gradual elsewhere. Settings in `pyproject.toml`. Keep formatting-only changes in their own
   commit and list it in `.git-blame-ignore-revs`.
 - CI: `.github/workflows/ci.yml` runs the docs checker and the suite on SQLite, and the suite on
   PostgreSQL 16 (no skips allowed), plus lint and types (ruff, mypy), a dependency audit

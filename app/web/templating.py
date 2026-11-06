@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
-from app.entitlements import allows, owns_snack_box
+from app.entitlements import allows
 from app.entitlements import state as entitlement_state
 from app.units import (
     UNITS,
@@ -31,7 +31,6 @@ class PublicSettings:
 
     app_base_url: str
     support_email: str
-    customer_login_ttl_minutes: int
 
 
 def public_settings() -> PublicSettings:
@@ -39,7 +38,6 @@ def public_settings() -> PublicSettings:
     return PublicSettings(
         app_base_url=settings.app_base_url,
         support_email=settings.support_email,
-        customer_login_ttl_minutes=settings.customer_login_ttl_minutes,
     )
 
 
@@ -85,7 +83,6 @@ templates.env.globals.update(
     # Every signed-in page can say where the account stands, without each route passing it.
     subscription=entitlement_state,
     entitled=allows,
-    owns_snack_box=owns_snack_box,
     Dimension=Dimension,
     UNITS=UNITS,
     UNITS_BY_DIMENSION=UNITS_BY_DIMENSION,

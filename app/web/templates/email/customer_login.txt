@@ -1,6 +1,0 @@
-Here is your sign-in link for {{ store }}:
-
-{{ url }}
-
-The link works once and expires in {{ minutes }} minutes. If you did not ask for it, ignore this
-email and nothing happens.

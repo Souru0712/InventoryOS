@@ -18,4 +18,4 @@ flake8 + black; no type checking
 
 ## Consequences
 
-Implemented in T0.04: ruff with line length 100 and bandit's security rules; mypy strict for `app/transform/` and the future `app/access/` and `app/ledger/`, gradual elsewhere, snack-box modules skipped until T0.05. "Lint and types" is a required check. Formatting-only commits are listed in `.git-blame-ignore-revs`.
+Implemented in T0.04: ruff with line length 100 and bandit's security rules; mypy strict for `app/transform/` and the future `app/access/` and `app/ledger/`, gradual elsewhere (the snack-box modules it skipped left with T0.05). "Lint and types" is a required check. Formatting-only commits are listed in `.git-blame-ignore-revs`.

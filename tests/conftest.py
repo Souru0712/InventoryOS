@@ -82,12 +82,3 @@ def tenant(db):
 @pytest.fixture
 def location(db, tenant):
     return db.query(Location).filter(Location.tenant_id == tenant.id).one()
-
-
-@pytest.fixture(autouse=True)
-def private_modules_off():
-    """Snack boxes stay off unless a test turns them on, exactly as they are off for a customer."""
-    from app.config import get_settings
-
-    get_settings().snack_box_tenant_ids = ""
-    yield
