@@ -32,6 +32,7 @@ from app.models import (
 )
 from app.monitoring import init_monitoring
 from app.notify.email import suppress, unsuppress
+from app.observability import configure_logging
 from app.orchestration import scheduler
 from app.orchestration.alerts import evaluate_and_store, send_alert_digest
 from app.orchestration.expiry_corpus import (
@@ -55,7 +56,7 @@ from app.transform.barcodes import check_digit
 from app.transform.reports import money
 from app.units import Dimension, to_base
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+configure_logging()
 log = logging.getLogger("stockpulse")
 
 # One café: things you count, things you weigh, things you pour.

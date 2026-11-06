@@ -67,7 +67,7 @@ def suppress(db: Session, email: str, reason: str, source: str = "bounce") -> Em
     entry = EmailSuppression(email=address, source=source, reason=reason[:300])
     db.add(entry)
     db.flush()
-    log.warning("suppressed email to %s: %s", address, reason)
+    log.warning("suppressed an address (%s): %s", source, reason)
     return entry
 
 
@@ -108,7 +108,7 @@ def send_email(
         return False
 
     if not settings.smtp_host:
-        log.info("SMTP not configured; would send %r to %s", subject, to_email)
+        log.info("SMTP not configured; would send %r", subject)
         entry.status = "skipped"
         entry.error = "SMTP_HOST is not configured"
         db.add(entry)
@@ -134,7 +134,7 @@ def send_email(
         entry.error = f"{type(exc).__name__}: {exc}"
         db.add(entry)
         db.flush()
-        log.exception("failed to send %r to %s", subject, to_email)
+        log.exception("failed to send %r", subject)
         raise
 
     db.add(entry)

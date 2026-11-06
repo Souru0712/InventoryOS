@@ -7,10 +7,12 @@ second scheduler, or old and new containers overlapping during a redeploy never 
 
 from __future__ import annotations
 
+import functools
 import logging
 import signal
 import threading
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -22,6 +24,7 @@ from app.config import get_settings
 from app.db import SCHEDULER_LOCK, LeaderLock, session_scope
 from app.entitlements import owns_snack_box
 from app.models import BoxSettings, Plan, ProviderConnection, Tenant
+from app.observability import log_context, new_request_id
 from app.orchestration.boxes import expire_unpaid, reconcile
 from app.orchestration.health import record_snapshot
 from app.orchestration.reporting import report_sent_recently, send_weekly_report
@@ -44,12 +47,13 @@ def sync_all_tenants() -> None:
             )
         ]
     for tenant_id in tenant_ids:
-        try:
-            with session_scope() as db:
-                stats = run_sync(db, tenant_id)
-            log.info("synced tenant %s: %s", tenant_id, stats)
-        except Exception:
-            log.exception("scheduled sync failed for tenant %s", tenant_id)
+        with log_context(tenant_id=tenant_id):
+            try:
+                with session_scope() as db:
+                    stats = run_sync(db, tenant_id)
+                log.info("synced tenant %s: %s", tenant_id, stats)
+            except Exception:
+                log.exception("scheduled sync failed for tenant %s", tenant_id)
 
 
 def send_due_reports(now: datetime | None = None) -> None:
@@ -62,16 +66,20 @@ def send_due_reports(now: datetime | None = None) -> None:
             if tenant.report_day == now.weekday() and tenant.report_hour == now.hour
         ]
     for tenant_id in due:
-        try:
-            with session_scope() as db:
-                # A retried or restarted job lands in the same hour; the email log says if it went.
-                if report_sent_recently(db, tenant_id, now):
-                    log.info("weekly report for tenant %s already went out this week", tenant_id)
-                    continue
-                send_weekly_report(db, tenant_id)
-            log.info("weekly report sent for tenant %s", tenant_id)
-        except Exception:
-            log.exception("weekly report failed for tenant %s", tenant_id)
+        with log_context(tenant_id=tenant_id):
+            try:
+                with session_scope() as db:
+                    # A retried or restarted job lands in the same hour; the email log says if
+                    # it went.
+                    if report_sent_recently(db, tenant_id, now):
+                        log.info(
+                            "weekly report for tenant %s already went out this week", tenant_id
+                        )
+                        continue
+                    send_weekly_report(db, tenant_id)
+                log.info("weekly report sent for tenant %s", tenant_id)
+            except Exception:
+                log.exception("weekly report failed for tenant %s", tenant_id)
 
 
 def close_finished_trials() -> None:
@@ -90,12 +98,13 @@ def record_health_snapshots() -> None:
     with session_scope() as db:
         tenant_ids = [t.id for t in db.scalars(select(Tenant).where(Tenant.plan != Plan.CANCELED))]
     for tenant_id in tenant_ids:
-        try:
-            with session_scope() as db:
-                row = record_snapshot(db, tenant_id)
-            log.info("health snapshot for tenant %s: %s", tenant_id, row.score)
-        except Exception:
-            log.exception("health snapshot failed for tenant %s", tenant_id)
+        with log_context(tenant_id=tenant_id):
+            try:
+                with session_scope() as db:
+                    row = record_snapshot(db, tenant_id)
+                log.info("health snapshot for tenant %s: %s", tenant_id, row.score)
+            except Exception:
+                log.exception("health snapshot failed for tenant %s", tenant_id)
 
 
 def box_housekeeping() -> None:
@@ -121,10 +130,21 @@ def box_housekeeping() -> None:
             log.exception("box housekeeping failed for tenant %s", tenant_id)
 
 
+def _job(func: Callable[[], None]) -> Callable[[], None]:
+    """Each run of a job gets its own id on every line it logs, as a web request does."""
+
+    @functools.wraps(func)
+    def run() -> None:
+        with log_context(request_id=f"job-{new_request_id()}", job=func.__name__):
+            func()
+
+    return run
+
+
 def _add_jobs(scheduler: BaseScheduler) -> None:
     settings = get_settings()
     scheduler.add_job(
-        sync_all_tenants,
+        _job(sync_all_tenants),
         "interval",
         minutes=settings.sync_interval_minutes,
         id="sync_all_tenants",
@@ -132,7 +152,7 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         coalesce=True,
     )
     scheduler.add_job(
-        send_due_reports,
+        _job(send_due_reports),
         "cron",
         minute=5,
         id="send_due_reports",
@@ -140,7 +160,7 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         coalesce=True,
     )
     scheduler.add_job(
-        close_finished_trials,
+        _job(close_finished_trials),
         "cron",
         hour=1,
         minute=5,
@@ -149,7 +169,7 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         coalesce=True,
     )
     scheduler.add_job(
-        record_health_snapshots,
+        _job(record_health_snapshots),
         "cron",
         hour=2,
         minute=15,
@@ -158,7 +178,7 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         coalesce=True,
     )
     scheduler.add_job(
-        box_housekeeping,
+        _job(box_housekeeping),
         "interval",
         minutes=10,
         id="box_housekeeping",

@@ -5,6 +5,70 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-05 — T0.10 Structured logs and request ids (OBS-01)
+
+**Implemented** (`app/observability.py`)
+- `JsonFormatter`: one JSON object per line with `ts`, `level`, `logger`, `message`,
+  `request_id`, and `job`, `tenant_id`, `user_id` when known; the exception text for errors.
+  Anything shaped like an email address is masked (`[email]`) in messages and exceptions, as a
+  last resort behind the rule below.
+- `RequestContext`, the outermost middleware: a request id per request (a caller's
+  `X-Request-ID` is kept if it is 8–64 plain characters, otherwise replaced), returned as
+  `X-Request-ID`, and one access line per request with method, path without the query string,
+  status and duration. The context is one dict shared with FastAPI's threadpool copies, so
+  `current_user` attaches `tenant_id` and `user_id` and every later line of the request,
+  including the access line, carries them.
+- Scheduled jobs: each run gets `request_id` `job-…` and `job` (`scheduler._job`); the per-tenant
+  loops (sync, weekly reports, health snapshots) wrap each tenant in `log_context(tenant_id=…)`.
+  Lines outside any request or job carry the process's own id (`process-…`).
+- `configure_logging()` in the web process and the CLI (which also runs the scheduler). uvicorn's
+  own lines go through the JSON handler; its access log is off (also `--no-access-log` in the
+  Dockerfile) because it prints query strings, and customer sign-in links carry their token in
+  one. `httpx`/`httpcore` drop to WARNING: they log every outgoing URL at INFO.
+- Five log calls printed email addresses (email suppression, SMTP skipped, send failure, alert
+  preferences, email settings); they now name the user id or nothing. The snack-box modules rely
+  on the masking until T0.05 removes them.
+- Sentry scrubbing (`app/monitoring.py`) unchanged. `CLAUDE.md`: the logging rules.
+
+**Verified (locally)**
+- `tests/test_observability.py` (9): sign-up, a wrong and a right sign-in leave neither the
+  password nor the email anywhere in the captured JSON, and every line has a `request_id`; the
+  response's `X-Request-ID` matches its access line; a signed-in request's line names its tenant
+  and user; a caller's id is kept and a hostile one replaced; a token in a query string never
+  reaches the log; an email in a message is masked; a job run has its own id and names the
+  tenant; uvicorn's access log is off and `httpx` is at WARNING; a start-up line has the process
+  id. The first run of these tests caught two real leaks (an `httpx` line with the full URL and
+  lines without any id), fixed above.
+- Full suite 614 passed, 6 skipped (605 + 9); ruff, ruff format, mypy (79 files) clean.
+
+**Files changed**
+- `app/observability.py` (new), `app/main.py`, `app/cli.py`, `app/security.py`,
+  `app/orchestration/scheduler.py`, `app/notify/email.py`, `app/orchestration/alerts.py`,
+  `app/web/settings.py`, `Dockerfile`; `tests/test_observability.py` (new); `CLAUDE.md`; task
+  index (T0.08 → Completed, T0.10 → In review); this log.
+
+**Open issues**
+- Not checked on a deployed host (T0.09): what the platform's log viewer does with JSON lines.
+
+**Next task**
+- T0.11 governance scaffolding. T0.05 and T0.09 wait for the owner (OD-02, OD-03).
+
+---
+
+## 2026-11-05 — T0.08 completed
+
+**Verified**
+- The owner accepted T0.08 as write-back only, leaving the Square count overwrite to T1.18
+  ("Accept, merge it"), and asked for the merge. PR #14 merged with a merge commit (`6918ee5`).
+  CI on its head `4f0c777`, all five required jobs green: SQLite 605 passed, 6 skipped;
+  PostgreSQL 16 611 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five
+  green on `main` after the merge.
+
+**Files changed**
+- Task index (T0.08 → Completed), this log.
+
+---
+
 ## 2026-11-05 — T0.08 Disable Square write-back; no swallowed failures (C-34, C4)
 
 **Implemented**
