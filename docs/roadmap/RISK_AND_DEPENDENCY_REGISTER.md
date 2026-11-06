@@ -60,7 +60,7 @@ provider).
 | ID | Dependency | Blocks | Status |
 |---|---|---|---|
 | OD-01 | Approve implementation decisions ID-01..ID-23 ([IMPLEMENTATION_DECISIONS](IMPLEMENTATION_DECISIONS.md)) | T0.09 (ID-02), T0.11, T1.11 (ID-23), T2.13 (ID-23), T2.21 (ID-07), T4.03 (ID-14), Stage 1 tasks touching ID-09/ID-10 | Done 2026-11-05 (C-43, C-44) |
-| OD-02 | Create the snack-box project repository | T0.05, and through it T1.01 and all of Stage 1 (critical path) | Open |
+| OD-02 | Create the snack-box project repository | T0.05, and through it T1.01 and all of Stage 1 (critical path) | Open. 2026-11-06: the owner shared a local `Snack-box` folder, a separate CSV command-line tool that is not a git repository; the private repository for the extracted module (ADR-0016) is still to be created |
 | OD-03 | Host, object storage and Sentry accounts | T0.09 | Open |
 | OD-04 | Enable branch protection (required CI check) on GitHub | T0.02 done-definition | Open — checked 2026-11-05: no classic rule and no ruleset exist; GitHub says rulesets are not enforced on this private repository without a paid plan. Plan upgrade declined by the owner (2026-11-05). A ruleset "Protect main" (required checks Tests (SQLite) and Tests (PostgreSQL 16), block force pushes, restrict deletions) was submitted through the settings page and not saved. **Done 2026-11-05:** the owner made the repository public; ruleset "Protect main" is Active on the default branch with required checks Tests (SQLite) and Tests (PostgreSQL 16), branch up to date, no force pushes, no deletion, empty bypass list |
 | OD-05 | Square developer account with sandbox seller (OA-2) | T3.11 | Open |

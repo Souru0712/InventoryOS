@@ -5,6 +5,60 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T0.11 Governance scaffolding (ADRs, status tracking)
+
+**Implemented**
+- `docs/adr/`: `README.md` (when to write an ADR, numbering, statuses Proposed / Accepted /
+  Superseded, the index, and a pointer to the roadmap's governance for task status and the
+  execution log), `0000-template.md`, and ADR-0001..0023, one per approved implementation
+  decision ID-01..ID-23. Each states status (Accepted 2026-11-05, C-43), the ID with a link to its
+  row, the tasks it shapes, context, decision, alternatives, and consequences, including where
+  Stage 0 already stands (for example ADR-0005 records Dependabot's lockfile-only setting, ADR-0007
+  that `hx-on` cannot run under the CSP from T0.06, ADR-0016 that the snack-box repository does not
+  exist yet).
+- `scripts/check_docs.py` checks links under `docs/adr/` and fails when an approved ID has no ADR
+  or more than one, when two ADRs share a number, or when an ADR is missing from the index.
+- `CLAUDE.md` points to the ADR index (reading list item 4; new ADRs from the template, indexed);
+  the roadmap README and IMPLEMENTATION_DECISIONS link to it.
+- Task status workflow: already defined in the roadmap README §4.2–4.3 and in use since T0.01
+  (index status, one log entry per task, owner merges each task's pull request); the ADR README
+  points to it rather than repeating it.
+- `RISK_AND_DEPENDENCY_REGISTER.md` OD-02: the owner's local `Snack-box` folder is a separate CSV
+  command-line tool, not a git repository; the private repository for T0.05 is still to be created.
+
+**Verified (locally)**
+- Docs checker 0 problems. Negative runs: with ADR-0017 removed it reports "ID-17 is recorded in
+  0 ADRs" (and the index's broken link); with a stray `0024` copy of ADR-0009 carrying a bad link
+  it reports the broken link, "ID-09 is recorded in 2 ADRs" and "0024-extra.md is not in the
+  index".
+- ruff, ruff format, mypy clean; `tests/test_docs_contract.py` passes. Only documents and the
+  checker changed, so the full suite was left to CI.
+
+**Files changed**
+- `docs/adr/` (25 new files), `scripts/check_docs.py`, `CLAUDE.md`, `docs/roadmap/README.md`,
+  `docs/roadmap/IMPLEMENTATION_DECISIONS.md`, `docs/roadmap/RISK_AND_DEPENDENCY_REGISTER.md`, task
+  index (T0.10 → Completed, T0.11 → In review), this log.
+
+**Next task**
+- Stage 0's remaining tasks wait for the owner: T0.05 (snack-box repository, OD-02) and T0.09
+  (Render, AWS and Sentry accounts, OD-03).
+
+---
+
+## 2026-11-06 — T0.10 completed
+
+**Verified**
+- At the owner's request PR #15 was merged with a merge commit (`497db30`). CI on its head
+  `fe5023c`, all five required jobs green: SQLite 614 passed, 6 skipped; PostgreSQL 16 620 passed,
+  0 skipped; lint and types; dependency audit; Docker image. Same five green on `main` after the
+  merge. Acceptance met: every log line is JSON with `request_id`; a request with a password field
+  leaves no trace of it.
+
+**Files changed**
+- Task index (T0.10 → Completed), this log.
+
+---
+
 ## 2026-11-05 — T0.10 Structured logs and request ids (OBS-01)
 
 **Implemented** (`app/observability.py`)

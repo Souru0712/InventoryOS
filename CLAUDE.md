@@ -10,6 +10,8 @@ implementation sessions; the detail lives in `docs/`.
 3. For any domain change: its module in `docs/product/PRODUCT_SPECIFICATION.md`, workflows in
    `BUSINESS_WORKFLOWS.md`, rules DR-01..36 in `DOMAIN_MODEL.md`, criteria in
    `PRODUCT_ACCEPTANCE_CRITERIA.md`. `docs/product/PRODUCT_DECISIONS.md` wins any conflict.
+4. For any technical choice: `docs/adr/README.md` (index of architecture decision records
+   ADR-0001..0023, one per approved implementation decision ID-01..ID-23).
 
 ## How to work
 - One task at a time, only if its dependencies are Completed. Small, reviewable commits.
@@ -19,7 +21,8 @@ implementation sessions; the detail lives in `docs/`.
 - Read the requirement before coding; no unrelated refactoring; preserve working behaviour.
 - Add or update tests with every change; run the full suite; CI must be green on SQLite and Postgres.
 - Record completion: task status in the index + an entry in `docs/EXECUTION-LOG.md`.
-- Update any affected doc in the same change. Technical decisions → ADR in `docs/adr/`.
+- Update any affected doc in the same change. Technical decisions → a new ADR in `docs/adr/` from
+  `0000-template.md`, added to its index (the docs checker enforces the index and one ADR per ID).
 - Never change product scope silently: stop, record the finding, propose a decision.
 
 ## Architecture rules (do not break)
