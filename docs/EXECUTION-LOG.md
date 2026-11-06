@@ -5,6 +5,65 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T1.01 Schema hygiene: timestamptz, constraints, delete rules (DM-2)
+
+**Implemented**
+- `app.db.UTCDateTime`: an instant is written and read as an aware UTC datetime on both databases
+  (`timestamptz` on Postgres); a naive value is refused rather than guessed. All 31 timestamp
+  columns use it. The `_aware()` helpers (entitlements, alerts, views, Square webhooks) and the
+  zone patches in Stripe events, subscriptions and sync are gone. The two places that parse
+  Square's text stamps (webhook counts, OAuth token expiry) read a stamp without an offset as UTC.
+- Delete rules on all 44 foreign keys: `ON DELETE RESTRICT` by default (`ref()`); `CASCADE`
+  (`owned_by()`) only for a document's lines and extraction corrections and a sold item's recipe
+  components.
+- Ten named CHECK constraints: an item's reorder point, par level and lead time are not negative
+  and its pack size is above zero; a batch and a recipe component hold more than nothing; the
+  `source` of counts, product codes, batches and email suppressions is one the code writes. Not
+  checked, on purpose (ADR-0025): balances, which DR-08 lets go negative, and
+  `inventory_events.source`, which holds legacy values and is replaced by the ledger (T1.16).
+- SQLite connections enforce foreign keys, so the suite fails there as it would on Postgres.
+- Migration `68c6fdbc31a7` (DM-2): converts the columns `AT TIME ZONE 'UTC'` on Postgres, rebuilds
+  the foreign keys with their rules and adds the CHECKs (table rebuilds on SQLite); its downgrade
+  restores the previous schema.
+- The add-item and thresholds forms answer 400 with a reason to a negative threshold or an empty
+  pack instead of hitting the database; the thresholds form now also answers 400, not 500, to a
+  malformed number. The demo seeder skips a lot that its random sales emptied.
+- Probe PA5 retired. ADR-0025 (schema conventions, Proposed until this pull request is merged);
+  `CLAUDE.md` states the rule for new tables.
+
+**Verified (locally, SQLite)**
+- `tests/test_schema_hygiene.py` (27): instants come back aware in UTC, also when written from
+  another zone, and compare correctly in queries; a naive value is refused; every timestamp column
+  is `UTCDateTime`; each of the eleven impossible rows is refused; negative balances, minus zero
+  and nulls are accepted; a reference to a missing row is refused; deleting an item with history
+  or a tenant is refused; deleting a document takes its lines and corrections, a sold item its
+  recipe; the forms refuse negative thresholds and an empty pack; Square expiries are aware.
+- `tests/test_migrations.py`: a migrated database has every CHECK and delete rule the models
+  declare (and `timestamptz` on Postgres); with rows present, DM-2 reads a stored naive
+  `2026-11-04 12:00:00` as 12:00 UTC, the downgrade gives back the same wall clock, and no row is
+  lost either way. Existing chain, model-drift and rows-survive tests pass.
+- Full suite 573 passed, 9 skipped (544 and 7 before; the two new skips are the new migration tests' Postgres runs); ruff and mypy clean; docs checker 0 problems. The demo seeder ran through the
+  whole migration chain on a scratch database (7 lots, 9 counts, aware timestamps).
+- Postgres 16 runs in CI only: Docker is not running on this machine.
+
+**Files changed**
+- `app/db.py`, `app/models.py`, `migrations/versions/68c6fdbc31a7_schema_hygiene.py` (new),
+  `app/entitlements.py`, `app/orchestration/{alerts,stripe_events,subscriptions,sync,views}.py`,
+  `app/web/{dashboard,webhooks}.py`, `app/providers/square/oauth.py`, `app/cli.py`; tests
+  `test_schema_hygiene.py` (new), `test_migrations.py`; probe file (PA5 retired);
+  `docs/adr/0025-schema-integrity-conventions.md` (new) and the ADR index, `CLAUDE.md`, task index
+  (T1.01 → In review), this log.
+
+**Open issues**
+- A local database holding a value the new CHECKs refuse (a negative threshold typed before this
+  change) stops the upgrade with the constraint's name; fix the row and rerun. Only development
+  databases exist.
+
+**Next task**
+- T1.02 Scoped data-access layer (C-33).
+
+---
+
 ## 2026-11-06 — T0.05 and T0.11 completed; staging deferred (C-49); gate G0
 
 **Verified**
