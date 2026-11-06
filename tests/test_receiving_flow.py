@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.access import OrgContext
 from app.extract.invoice import StubExtractor
 from app.models import (
     Document,
@@ -116,7 +117,12 @@ def stock(db, tenant, location):
 
 def upload(db, tenant, location) -> Document:
     document = save_upload(
-        db, tenant.id, location.id, "delivery.jpg", jpeg("delivery"), "image/jpeg"
+        db,
+        OrgContext.system(tenant.id),
+        location.id,
+        "delivery.jpg",
+        jpeg("delivery"),
+        "image/jpeg",
     )
     db.commit()
     return document
@@ -131,7 +137,7 @@ def test_upload_is_deduplicated_by_content(db, tenant, location):
 
 def test_parse_matches_what_it_recognises_and_flags_the_rest(db, tenant, location, stock):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(INVOICE))
     db.commit()
 
     assert document.supplier == "Northside Supply"
@@ -152,7 +158,7 @@ def test_parse_matches_what_it_recognises_and_flags_the_rest(db, tenant, locatio
 
 def test_applying_a_delivery_raises_stock_and_files_the_record(db, tenant, location, stock):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(INVOICE))
     db.commit()
 
     decisions = []
@@ -165,7 +171,13 @@ def test_applying_a_delivery_raises_stock_and_files_the_record(db, tenant, locat
         else:
             decisions.append(LineDecision(line.id, None, None, apply=False))
 
-    result = apply_document(db, document.id, decisions, now=datetime(2026, 9, 4, tzinfo=UTC))
+    result = apply_document(
+        db,
+        OrgContext.system(document.tenant_id),
+        document.id,
+        decisions,
+        now=datetime(2026, 9, 4, tzinfo=UTC),
+    )
     db.commit()
 
     assert result["applied"] == 3
@@ -182,11 +194,14 @@ def test_applying_a_delivery_raises_stock_and_files_the_record(db, tenant, locat
 
 def test_supplier_wording_is_learned_so_the_next_invoice_is_automatic(db, tenant, location, stock):
     first = upload(db, tenant, location)
-    parse_document(db, first.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(first.tenant_id), first.id, StubExtractor(INVOICE))
     db.commit()
     milk_line = next(line for line in first.lines if "Milk" in line.parsed_name)
     apply_document(
-        db, first.id, [LineDecision(milk_line.id, stock["whole-milk"].id, to_base(24, "l"))]
+        db,
+        OrgContext.system(first.tenant_id),
+        first.id,
+        [LineDecision(milk_line.id, stock["whole-milk"].id, to_base(24, "l"))],
     )
     db.commit()
 
@@ -195,9 +210,11 @@ def test_supplier_wording_is_learned_so_the_next_invoice_is_automatic(db, tenant
     assert alias.stock_item_id == stock["whole-milk"].id
     assert alias.supplier == "Northside Supply"
 
-    second = save_upload(db, tenant.id, location.id, "next.jpg", jpeg("another"), "image/jpeg")
+    second = save_upload(
+        db, OrgContext.system(tenant.id), location.id, "next.jpg", jpeg("another"), "image/jpeg"
+    )
     db.commit()
-    parse_document(db, second.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(second.tenant_id), second.id, StubExtractor(INVOICE))
     db.commit()
 
     milk_again = next(line for line in second.lines if "Milk" in line.parsed_name)
@@ -209,27 +226,35 @@ def test_supplier_wording_is_learned_so_the_next_invoice_is_automatic(db, tenant
 def test_an_applied_delivery_is_never_re_read_over_its_record(db, tenant, location, stock):
     """Its lines are what the stock went up by; Postgres would refuse deleting them anyway."""
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(INVOICE))
     db.commit()
     flour = next(line for line in document.lines if line.parsed_name == "Pastry Flour")
     apply_document(
-        db, document.id, [LineDecision(flour.id, stock["pastry-flour"].id, to_base(50, "kg"))]
+        db,
+        OrgContext.system(document.tenant_id),
+        document.id,
+        [LineDecision(flour.id, stock["pastry-flour"].id, to_base(50, "kg"))],
     )
     db.commit()
 
     with pytest.raises(ValueError, match="already applied"):
-        parse_document(db, document.id, StubExtractor({"lines": []}))
+        parse_document(
+            db, OrgContext.system(document.tenant_id), document.id, StubExtractor({"lines": []})
+        )
     assert len(document.lines) == len(INVOICE["lines"])
 
 
 def test_unchecked_lines_are_skipped_not_applied(db, tenant, location, stock):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(INVOICE))
     db.commit()
     before = stock["whole-milk"].qty_base
 
     apply_document(
-        db, document.id, [LineDecision(line.id, None, None, apply=False) for line in document.lines]
+        db,
+        OrgContext.system(document.tenant_id),
+        document.id,
+        [LineDecision(line.id, None, None, apply=False) for line in document.lines],
     )
     db.commit()
 
@@ -239,7 +264,9 @@ def test_unchecked_lines_are_skipped_not_applied(db, tenant, location, stock):
 
 def test_an_unreadable_photo_leaves_the_document_for_a_human(db, tenant, location, stock):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor({"lines": []}))
+    parse_document(
+        db, OrgContext.system(document.tenant_id), document.id, StubExtractor({"lines": []})
+    )
     db.commit()
     assert document.status is DocumentStatus.NEEDS_REVIEW
     assert document.lines == []
@@ -295,21 +322,27 @@ def receive(db, document, decisions=None):
     decisions = decisions or [
         LineDecision(line.id, line.stock_item_id, line.received_qty_base) for line in document.lines
     ]
-    result = apply_document(db, document.id, decisions, now=datetime(2026, 9, 6, tzinfo=UTC))
+    result = apply_document(
+        db,
+        OrgContext.system(document.tenant_id),
+        document.id,
+        decisions,
+        now=datetime(2026, 9, 6, tzinfo=UTC),
+    )
     db.commit()
     return result
 
 
 def test_the_printed_best_before_is_read_off_the_invoice(db, tenant, location, oat_milk):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(DATED))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(DATED))
     db.commit()
     assert document.lines[0].expires_on == date(2026, 9, 20)
 
 
 def test_a_dated_line_becomes_one_batch_for_the_whole_quantity(db, tenant, location, oat_milk):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(DATED))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(DATED))
     db.commit()
 
     result = receive(db, document)
@@ -329,7 +362,7 @@ def test_a_dated_line_becomes_one_batch_for_the_whole_quantity(db, tenant, locat
 
 def test_the_invoice_price_becomes_the_items_cost(db, tenant, location, oat_milk):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(DATED))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(DATED))
     db.commit()
     receive(db, document)
     assert oat_milk.cost_per_base_cents == Decimal("0.1850")
@@ -337,7 +370,7 @@ def test_the_invoice_price_becomes_the_items_cost(db, tenant, location, oat_milk
 
 def test_the_reviewer_can_correct_the_date(db, tenant, location, oat_milk):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(DATED))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(DATED))
     db.commit()
     line = document.lines[0]
     receive(
@@ -350,7 +383,7 @@ def test_the_reviewer_can_correct_the_date(db, tenant, location, oat_milk):
 
 def test_an_undated_delivery_creates_no_batch(db, tenant, location, stock):
     document = upload(db, tenant, location)
-    parse_document(db, document.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(INVOICE))
     db.commit()
     result = receive(
         db,

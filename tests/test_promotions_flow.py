@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
+from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
 from app.main import app
 from app.models import (
@@ -71,7 +72,7 @@ def gatorade(db, tenant, location):
 
 
 def test_a_lot_that_will_not_sell_in_time_is_suggested(db, tenant, gatorade):
-    [suggestion] = suggestions_for(db, tenant.id, TODAY)
+    [suggestion] = suggestions_for(db, OrgContext.system(tenant.id), TODAY)
     assert suggestion.item.name == "Gatorade Lemon-Lime 28oz"
     assert suggestion.urgency == "medium"
     assert suggestion.suggested_price_cents < 199
@@ -81,18 +82,18 @@ def test_a_lot_that_will_not_sell_in_time_is_suggested(db, tenant, gatorade):
 def test_an_item_with_no_selling_price_is_never_suggested(db, tenant, gatorade):
     gatorade.retail_per_base_cents = None
     db.commit()
-    assert suggestions_for(db, tenant.id, TODAY) == []
+    assert suggestions_for(db, OrgContext.system(tenant.id), TODAY) == []
 
 
 def test_stock_that_clears_in_time_is_not_suggested(db, tenant, gatorade):
     gatorade.qty_base = Decimal("4")
     db.commit()
-    assert suggestions_for(db, tenant.id, TODAY) == []
+    assert suggestions_for(db, OrgContext.system(tenant.id), TODAY) == []
 
 
 def test_accepting_records_the_decision_and_stops_the_nagging(db, tenant, gatorade):
-    [suggestion] = suggestions_for(db, tenant.id, TODAY)
-    promotion = accept(db, tenant.id, suggestion, 149, user_id=None, today=TODAY)
+    [suggestion] = suggestions_for(db, OrgContext.system(tenant.id), TODAY)
+    promotion = accept(db, OrgContext.system(tenant.id), suggestion, 149, user_id=None, today=TODAY)
     db.commit()
 
     assert promotion.status is PromotionStatus.ACTIVE
@@ -102,29 +103,29 @@ def test_accepting_records_the_decision_and_stops_the_nagging(db, tenant, gatora
     assert promotion.units_before_base == Decimal("24")
     assert promotion.ends_on == TODAY + timedelta(days=9)
     assert promotion.reason  # the explanation is kept with the decision
-    assert suggestions_for(db, tenant.id, TODAY) == []
+    assert suggestions_for(db, OrgContext.system(tenant.id), TODAY) == []
 
 
 def test_dismissing_stops_it_coming_back(db, tenant, gatorade):
-    [suggestion] = suggestions_for(db, tenant.id, TODAY)
-    dismiss(db, tenant.id, suggestion)
+    [suggestion] = suggestions_for(db, OrgContext.system(tenant.id), TODAY)
+    dismiss(db, OrgContext.system(tenant.id), suggestion)
     db.commit()
-    assert suggestions_for(db, tenant.id, TODAY) == []
+    assert suggestions_for(db, OrgContext.system(tenant.id), TODAY) == []
 
 
 def test_a_snooze_wears_off(db, tenant, gatorade):
-    [suggestion] = suggestions_for(db, tenant.id, TODAY)
-    snooze(db, tenant.id, suggestion, days=1, today=TODAY)
+    [suggestion] = suggestions_for(db, OrgContext.system(tenant.id), TODAY)
+    snooze(db, OrgContext.system(tenant.id), suggestion, days=1, today=TODAY)
     db.commit()
 
-    assert suggestions_for(db, tenant.id, TODAY) == []
+    assert suggestions_for(db, OrgContext.system(tenant.id), TODAY) == []
     # Tomorrow it is worked out again from whatever the shelf holds then.
-    assert len(suggestions_for(db, tenant.id, TODAY + timedelta(days=1))) == 1
+    assert len(suggestions_for(db, OrgContext.system(tenant.id), TODAY + timedelta(days=1))) == 1
 
 
 def test_a_running_markdown_reports_what_sales_did(db, tenant, location, gatorade):
-    [suggestion] = suggestions_for(db, tenant.id, TODAY)
-    accept(db, tenant.id, suggestion, 149, today=TODAY - timedelta(days=2))
+    [suggestion] = suggestions_for(db, OrgContext.system(tenant.id), TODAY)
+    accept(db, OrgContext.system(tenant.id), suggestion, 149, today=TODAY - timedelta(days=2))
     sold = db.query(SoldItem).one()
     for back in range(3):
         day = TODAY - timedelta(days=back)
@@ -137,19 +138,19 @@ def test_a_running_markdown_reports_what_sales_did(db, tenant, location, gatorad
         row.units = Decimal("6")  # four times the usual rate since the markdown started
     db.commit()
 
-    [live] = running(db, tenant.id, TODAY)
+    [live] = running(db, OrgContext.system(tenant.id), TODAY)
     assert live.days_running == 2
     assert live.velocity_during > live.promotion.velocity_before
     assert live.lift > Decimal("1")
 
 
 def test_ending_a_markdown_records_where_the_stock_finished(db, tenant, gatorade):
-    [suggestion] = suggestions_for(db, tenant.id, TODAY)
-    promotion = accept(db, tenant.id, suggestion, 149, today=TODAY)
+    [suggestion] = suggestions_for(db, OrgContext.system(tenant.id), TODAY)
+    promotion = accept(db, OrgContext.system(tenant.id), suggestion, 149, today=TODAY)
     gatorade.qty_base = Decimal("3")
     db.commit()
 
-    end(db, promotion)
+    end(db, OrgContext.system(promotion.tenant_id), promotion)
     db.commit()
     assert promotion.status is PromotionStatus.ENDED
     assert promotion.units_after_base == Decimal("3")

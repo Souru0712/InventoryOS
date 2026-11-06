@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
+from app.access import OrgContext
 from app.config import get_settings
 from app.extract.invoice import StubExtractor
 from app.models import ProviderConnection, StockItem, TrackMode
@@ -124,17 +125,22 @@ def shelf(fake: FakeSquare, location) -> Decimal:
 def receive_by_invoice(db, tenant, location, item, quantity: str) -> dict:
     document = save_upload(
         db,
-        tenant.id,
+        OrgContext.system(tenant.id),
         location.id,
         f"note-{quantity}.jpg",
         jpeg(f"delivery of {quantity}"),
         "image/jpeg",
     )
     db.commit()
-    parse_document(db, document.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(INVOICE))
     db.commit()
     line = document.lines[0]
-    result = apply_document(db, document.id, [LineDecision(line.id, item.id, Decimal(quantity))])
+    result = apply_document(
+        db,
+        OrgContext.system(document.tenant_id),
+        document.id,
+        [LineDecision(line.id, item.id, Decimal(quantity))],
+    )
     db.commit()
     return result
 
@@ -199,9 +205,9 @@ def test_the_push_functions_refuse_while_write_back_is_off(db, tenant, square):
     """A call before R1.1 is a bug: it fails loudly instead of quietly not writing."""
     fake, item = square
     with pytest.raises(sync.WriteBackDisabled):
-        sync.push_counts_to_square(db, tenant.id, [item.id])
+        sync.push_counts_to_square(db, OrgContext.system(tenant.id), [item.id])
     with pytest.raises(sync.WriteBackDisabled):
-        sync.push_adjustments_to_square(db, tenant.id, {item.id: Decimal("24")})
+        sync.push_adjustments_to_square(db, OrgContext.system(tenant.id), {item.id: Decimal("24")})
     assert fake.calls == 0
 
 
@@ -215,7 +221,10 @@ def test_an_adjustment_cannot_erase_a_sale_that_happened_just_before_it(
     fake, item = square
     fake.ledger[("VAR-COKE", location.provider_location_id)] = Decimal("20")
 
-    assert sync.push_adjustments_to_square(db, tenant.id, {item.id: Decimal("24")}) == 1
+    assert (
+        sync.push_adjustments_to_square(db, OrgContext.system(tenant.id), {item.id: Decimal("24")})
+        == 1
+    )
 
     assert [change["type"] for change in fake.changes] == ["ADJUSTMENT"]
     assert fake.changes[0]["adjustment"]["quantity"] == "24"
@@ -230,7 +239,7 @@ def test_a_physical_count_sends_the_number_someone_read_off_the_shelf(
     item.qty_base = Decimal("37")
     db.flush()
 
-    assert sync.push_counts_to_square(db, tenant.id, [item.id]) == 1
+    assert sync.push_counts_to_square(db, OrgContext.system(tenant.id), [item.id]) == 1
     assert fake.changes[0]["type"] == "PHYSICAL_COUNT"
     assert fake.changes[0]["physical_count"]["quantity"] == "37"
     assert shelf(fake, location) == Decimal("37")
@@ -242,7 +251,9 @@ def test_the_same_receipt_pushed_twice_is_only_counted_once(
     """The idempotency key is the receipt, so a retried push is Square's to drop."""
     fake, item = square
     for _attempt in range(2):
-        sync.push_adjustments_to_square(db, tenant.id, {item.id: Decimal("24")}, "receipt-7")
+        sync.push_adjustments_to_square(
+            db, OrgContext.system(tenant.id), {item.id: Decimal("24")}, "receipt-7"
+        )
     assert shelf(fake, location) == Decimal("48")
 
 
@@ -265,8 +276,13 @@ def test_a_derived_weight_is_never_pushed_to_square_at_all(
     db.add(flour)
     db.flush()
 
-    assert sync.push_counts_to_square(db, tenant.id, [flour.id]) == 0
-    assert sync.push_adjustments_to_square(db, tenant.id, {flour.id: Decimal("25000")}) == 0
+    assert sync.push_counts_to_square(db, OrgContext.system(tenant.id), [flour.id]) == 0
+    assert (
+        sync.push_adjustments_to_square(
+            db, OrgContext.system(tenant.id), {flour.id: Decimal("25000")}
+        )
+        == 0
+    )
     assert fake.changes == []
 
 

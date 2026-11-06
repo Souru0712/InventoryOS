@@ -6,9 +6,9 @@ import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, get_scoped, select_scoped
 from app.config import get_settings
 from app.entitlements import allows
 from app.models import Alert, AlertKind, StockItem, Tenant, User
@@ -28,27 +28,25 @@ def category_of(kind: AlertKind) -> str:
     return "expiry_alerts" if kind in EXPIRY_KINDS else "stock_alerts"
 
 
-def all_proposals(db: Session, tenant_id: int, now: datetime) -> list[AlertProposal]:
+def all_proposals(db: Session, org: OrgContext, now: datetime) -> list[AlertProposal]:
     """Stock-level alerts and expiry alerts, from one velocity computation."""
-    velocity = velocity_map(db, tenant_id, now.date())
-    stock = evaluate_stock(stock_views(db, tenant_id), velocity, now)
+    velocity = velocity_map(db, org, now.date())
+    stock = evaluate_stock(stock_views(db, org), velocity, now)
     expiry = evaluate_expiries(
-        expiry_positions(db, tenant_id, now.date(), velocity=velocity),
+        expiry_positions(db, org, now.date(), velocity=velocity),
         get_settings().expiry_horizon_days,
     )
     return stock + expiry
 
 
-def evaluate_and_store(db: Session, tenant_id: int, now: datetime | None = None) -> dict:
+def evaluate_and_store(db: Session, org: OrgContext, now: datetime | None = None) -> dict:
     """Open new alerts, resolve fixed ones. Returns a small stats dict."""
     now = now or datetime.now(UTC)
-    proposals = all_proposals(db, tenant_id, now)
+    proposals = all_proposals(db, org, now)
 
     open_alerts = {
         (alert.stock_item_id, alert.kind.value): alert
-        for alert in db.scalars(
-            select(Alert).where(Alert.tenant_id == tenant_id, Alert.resolved_at.is_(None))
-        )
+        for alert in db.scalars(select_scoped(org, Alert).where(Alert.resolved_at.is_(None)))
     }
     seen: set[tuple[int, str]] = set()
     opened = 0
@@ -60,7 +58,7 @@ def evaluate_and_store(db: Session, tenant_id: int, now: datetime | None = None)
         if current is None:
             db.add(
                 Alert(
-                    tenant_id=tenant_id,
+                    tenant_id=org.tenant_id,
                     stock_item_id=proposal.stock_item_id,
                     kind=AlertKind(proposal.kind),
                     message=proposal.message,
@@ -87,7 +85,7 @@ def evaluate_and_store(db: Session, tenant_id: int, now: datetime | None = None)
     return {"open": len(proposals), "opened": opened, "resolved": resolved}
 
 
-def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) -> bool:
+def send_alert_digest(db: Session, org: OrgContext, now: datetime | None = None) -> bool:
     """Email un-notified alerts, at most one digest per cooldown window."""
     settings = get_settings()
     now = now or datetime.now(UTC)
@@ -95,8 +93,7 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
 
     pending = list(
         db.scalars(
-            select(Alert).where(
-                Alert.tenant_id == tenant_id,
+            select_scoped(org, Alert).where(
                 Alert.resolved_at.is_(None),
                 Alert.notified_at.is_(None),
             )
@@ -106,8 +103,8 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
         return False
 
     recently_notified = db.scalars(
-        select(Alert)
-        .where(Alert.tenant_id == tenant_id, Alert.notified_at.is_not(None))
+        select_scoped(org, Alert)
+        .where(Alert.notified_at.is_not(None))
         .order_by(Alert.notified_at.desc())
         .limit(1)
     ).first()
@@ -116,36 +113,33 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
         and recently_notified.notified_at
         and recently_notified.notified_at > cooldown
     ):
-        log.info("tenant %s alert digest suppressed by cooldown", tenant_id)
+        log.info("tenant %s alert digest suppressed by cooldown", org.tenant_id)
         return False
 
-    tenant = db.get(Tenant, tenant_id)
+    tenant = get_scoped(db, org, Tenant, org.tenant_id)
     if tenant is None:
-        raise LookupError(f"tenant {tenant_id} has pending alerts but no tenant row")
+        raise LookupError(f"tenant {org.tenant_id} has pending alerts but no tenant row")
     if not allows(tenant, "notifications"):
-        log.info("tenant %s is not entitled to alerts; digest held", tenant_id)
+        log.info("tenant %s is not entitled to alerts; digest held", org.tenant_id)
         return False
-    users = list(
-        db.scalars(select(User).where(User.tenant_id == tenant_id, User.is_active.is_(True)))
-    )
+    users = list(db.scalars(select_scoped(org, User).where(User.is_active.is_(True))))
     if not users:
-        log.warning("tenant %s has no active users to alert", tenant_id)
+        log.warning("tenant %s has no active users to alert", org.tenant_id)
         return False
 
-    items = {
-        item.id: item
-        for item in db.scalars(select(StockItem).where(StockItem.tenant_id == tenant_id))
-    }
+    items = {item.id: item for item in db.scalars(select_scoped(org, StockItem))}
     # Money first: "$286 may expire" gets the owner to open the app; "7 alerts" does not.
     pending.sort(key=lambda a: (a.kind not in EXPIRY_KINDS, -(a.value_cents or 0)))
-    currency = tenant_currency(db, tenant_id)
+    currency = tenant_currency(db, org)
 
     sent = False
     for user in users:
         # One digest each, carrying only the categories that person still wants.
         theirs = [alert for alert in pending if wants(user, category_of(alert.kind))]
         if not theirs:
-            log.info("tenant %s: user %s wants none of these alert categories", tenant_id, user.id)
+            log.info(
+                "tenant %s: user %s wants none of these alert categories", org.tenant_id, user.id
+            )
             continue
 
         rows = [
@@ -180,7 +174,9 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
             money=money,
             base_url=settings.app_base_url,
         )
-        sent = send_email(db, tenant_id, user.email, subject, html, "alert_digest", text) or sent
+        sent = (
+            send_email(db, org.tenant_id, user.email, subject, html, "alert_digest", text) or sent
+        )
 
     # Every alert this run considered is marked, whoever ended up receiving it, so the next run
     # raises only what is new.
@@ -190,19 +186,19 @@ def send_alert_digest(db: Session, tenant_id: int, now: datetime | None = None) 
     return sent
 
 
-def open_alerts(db: Session, tenant_id: int) -> list[Alert]:
+def open_alerts(db: Session, org: OrgContext) -> list[Alert]:
     return list(
         db.scalars(
-            select(Alert)
-            .where(Alert.tenant_id == tenant_id, Alert.resolved_at.is_(None))
+            select_scoped(org, Alert)
+            .where(Alert.resolved_at.is_(None))
             .order_by(Alert.created_at.desc())
         )
     )
 
 
-def proposals_for(db: Session, tenant_id: int, now: datetime | None = None) -> list[AlertProposal]:
+def proposals_for(db: Session, org: OrgContext, now: datetime | None = None) -> list[AlertProposal]:
     now = now or datetime.now(UTC)
-    return evaluate_stock(stock_views(db, tenant_id), velocity_map(db, tenant_id, now.date()), now)
+    return evaluate_stock(stock_views(db, org), velocity_map(db, org, now.date()), now)
 
 
 ZERO = Decimal("0")

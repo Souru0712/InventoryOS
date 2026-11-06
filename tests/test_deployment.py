@@ -182,11 +182,11 @@ def test_a_rerun_report_job_does_not_send_the_weekly_report_twice(db, tenant, mo
 
     sent = []
 
-    def fake_send(session, tenant_id):
-        sent.append(tenant_id)
+    def fake_send(session, org):
+        sent.append(org.tenant_id)
         session.add(
             EmailLog(
-                tenant_id=tenant_id,
+                tenant_id=org.tenant_id,
                 to_email="owner@rosewood.test",
                 subject="Your week",
                 kind="weekly_report",

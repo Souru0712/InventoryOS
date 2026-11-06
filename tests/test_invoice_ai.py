@@ -10,6 +10,7 @@ from decimal import Decimal
 import pytest
 from PIL import Image
 
+from app.access import OrgContext
 from app.config import get_settings
 from app.extract.images import MAX_EDGE, prepare_for_model
 from app.extract.invoice import (
@@ -203,14 +204,26 @@ def test_a_reply_that_does_not_match_the_schema_fails_the_document(anthropic_cli
 def test_a_file_type_we_cannot_read_is_refused_at_upload(db, tenant, location):
     with pytest.raises(UploadRejected, match="cannot be read"):
         save_upload(
-            db, tenant.id, location.id, "invoice.docx", b"not a photo", "application/msword"
+            db,
+            OrgContext.system(tenant.id),
+            location.id,
+            "invoice.docx",
+            b"not a photo",
+            "application/msword",
         )
 
 
 def test_a_file_over_the_size_limit_is_refused(db, tenant, location, monkeypatch):
     monkeypatch.setattr(get_settings(), "max_upload_mb", 1, raising=False)
     with pytest.raises(UploadRejected, match="larger than"):
-        save_upload(db, tenant.id, location.id, "invoice.jpg", b"x" * 1_200_000, "image/jpeg")
+        save_upload(
+            db,
+            OrgContext.system(tenant.id),
+            location.id,
+            "invoice.jpg",
+            b"x" * 1_200_000,
+            "image/jpeg",
+        )
 
 
 # --- what the reviewer changed -----------------------------------------------------------------
@@ -238,17 +251,27 @@ def flour(db, tenant, location) -> StockItem:
 @pytest.fixture
 def parsed(db, tenant, location, flour):
     document = save_upload(
-        db, tenant.id, location.id, "note.jpg", jpeg("a delivery note"), "image/jpeg"
+        db,
+        OrgContext.system(tenant.id),
+        location.id,
+        "note.jpg",
+        jpeg("a delivery note"),
+        "image/jpeg",
     )
     db.commit()
-    parse_document(db, document.id, StubExtractor(INVOICE))
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(INVOICE))
     db.commit()
     return document
 
 
 def test_accepting_what_the_reader_proposed_records_no_corrections(db, tenant, parsed, flour):
     line = parsed.lines[0]
-    apply_document(db, parsed.id, [LineDecision(line.id, flour.id, line.received_qty_base)])
+    apply_document(
+        db,
+        OrgContext.system(parsed.tenant_id),
+        parsed.id,
+        [LineDecision(line.id, flour.id, line.received_qty_base)],
+    )
     db.commit()
 
     assert db.query(ExtractionCorrection).count() == 0
@@ -272,6 +295,7 @@ def test_every_change_the_reviewer_makes_is_recorded_with_both_values(db, tenant
 
     apply_document(
         db,
+        OrgContext.system(parsed.tenant_id),
         parsed.id,
         [
             LineDecision(
@@ -302,7 +326,10 @@ def test_every_change_the_reviewer_makes_is_recorded_with_both_values(db, tenant
 def test_a_corrected_line_total_is_what_the_stock_is_costed_at(db, tenant, parsed, flour):
     line = parsed.lines[0]
     apply_document(
-        db, parsed.id, [LineDecision(line.id, flour.id, to_base(50, "kg"), line_total_cents=10000)]
+        db,
+        OrgContext.system(parsed.tenant_id),
+        parsed.id,
+        [LineDecision(line.id, flour.id, to_base(50, "kg"), line_total_cents=10000)],
     )
     db.commit()
 
@@ -312,10 +339,15 @@ def test_a_corrected_line_total_is_what_the_stock_is_costed_at(db, tenant, parse
 
 def test_the_statistics_say_how_much_was_left_to_fix(db, tenant, parsed, flour):
     line = parsed.lines[0]
-    apply_document(db, parsed.id, [LineDecision(line.id, flour.id, to_base(45, "kg"))])
+    apply_document(
+        db,
+        OrgContext.system(parsed.tenant_id),
+        parsed.id,
+        [LineDecision(line.id, flour.id, to_base(45, "kg"))],
+    )
     db.commit()
 
-    stats = correction_stats(db, tenant.id)
+    stats = correction_stats(db, OrgContext.system(tenant.id))
     assert stats["documents"] == 1 and stats["lines"] == 1
     assert stats["by_field"]["quantity"]["count"] == 1
     assert stats["clean_rate"] == 0.0, "the only line was corrected"
@@ -323,4 +355,4 @@ def test_the_statistics_say_how_much_was_left_to_fix(db, tenant, parsed, flour):
 
 
 def test_statistics_are_empty_before_anything_is_received(db, tenant):
-    assert correction_stats(db, tenant.id)["documents"] == 0
+    assert correction_stats(db, OrgContext.system(tenant.id))["documents"] == 0

@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access.system import user_by_email
 from app.db import get_db
 from app.entitlements import PLAN_IDS, start_trial
 from app.models import Tenant, User
-from app.security import email_taken, hash_password, login_user, logout_user, verify_password
+from app.security import (
+    email_taken,
+    hash_password,
+    login_user,
+    logout_user,
+    verify_password,
+)
 from app.web.templating import templates
 
 router = APIRouter()
@@ -94,7 +100,7 @@ def login(
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = db.scalars(select(User).where(User.email == email.strip().lower())).first()
+    user = user_by_email(db, email)
     if user is None or not user.is_active or not verify_password(password, user.password_hash):
         return templates.TemplateResponse(
             request,

@@ -9,10 +9,10 @@ from pathlib import PurePosixPath
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
+from app.access import OrgContext, get_scoped, select_scoped
 from app.db import get_db
 from app.extract.invoice import SUPPORTED_MEDIA, ExtractionError
 from app.models import Document, DocumentStatus, Location, StockItem, Tenant, User
@@ -25,7 +25,7 @@ from app.orchestration.receiving import (
     record_correction,
     save_upload,
 )
-from app.security import require_tenant, require_user, require_writable
+from app.security import require_org, require_tenant, require_user, require_writable
 from app.storage import StorageError, get_storage
 from app.units import UnitError, to_base
 from app.web.inputs import posted_form
@@ -35,9 +35,9 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _owned(db: Session, tenant_id: int, document_id: int) -> Document:
-    document = db.get(Document, document_id)
-    if document is None or document.tenant_id != tenant_id:
+def _owned(db: Session, org: OrgContext, document_id: int) -> Document:
+    document = get_scoped(db, org, Document, document_id)
+    if document is None:
         raise HTTPException(status_code=404, detail="document not found")
     return document
 
@@ -61,21 +61,15 @@ def _cents(raw: object) -> int | None:
 
 @router.get("/app/receiving", response_class=HTMLResponse)
 def receiving_index(
-    request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     documents = list(
-        db.scalars(
-            select(Document)
-            .where(Document.tenant_id == tenant.id)
-            .order_by(Document.uploaded_at.desc())
-            .limit(50)
-        )
+        db.scalars(select_scoped(org, Document).order_by(Document.uploaded_at.desc()).limit(50))
     )
-    locations = list(
-        db.scalars(
-            select(Location).where(Location.tenant_id == tenant.id, Location.is_active.is_(True))
-        )
-    )
+    locations = list(db.scalars(select_scoped(org, Location).where(Location.is_active.is_(True))))
     return templates.TemplateResponse(
         request,
         "app/receiving.html",
@@ -84,7 +78,7 @@ def receiving_index(
             "tenant": tenant,
             "documents": documents,
             "locations": locations,
-            "quality": correction_stats(db, tenant.id),
+            "quality": correction_stats(db, org),
         },
     )
 
@@ -97,15 +91,16 @@ def upload_invoice(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_org),
 ):
-    location = db.get(Location, location_id)
-    if location is None or location.tenant_id != tenant.id:
+    location = get_scoped(db, org, Location, location_id)
+    if location is None:
         raise HTTPException(status_code=404, detail="location not found")
 
     try:
         document = save_upload(
             db,
-            tenant.id,
+            org,
             location.id,
             photo.filename or "invoice.jpg",
             photo.file.read(),
@@ -118,7 +113,7 @@ def upload_invoice(
     db.commit()
 
     try:
-        parse_document(db, document.id)
+        parse_document(db, org, document.id)
         db.commit()
     except ExtractionError as exc:
         db.commit()
@@ -136,12 +131,12 @@ def review_document(
     request: Request,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
-    document = _owned(db, tenant.id, document_id)
+    document = _owned(db, org, document_id)
     items = list(
         db.scalars(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant.id,
+            select_scoped(org, StockItem).where(
                 StockItem.location_id == document.location_id,
                 StockItem.is_active.is_(True),
             )
@@ -163,9 +158,12 @@ def review_document(
 
 @router.get("/app/receiving/{document_id}/image")
 def document_image(
-    document_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    document_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
-    document = _owned(db, tenant.id, document_id)
+    document = _owned(db, org, document_id)
     try:
         content = get_storage().get(document.storage_key)
     except StorageError:
@@ -191,15 +189,18 @@ def document_image(
 
 @router.post("/app/receiving/{document_id}/reparse")
 def reparse(
-    document_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_writable)
+    document_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
-    document = _owned(db, tenant.id, document_id)
+    document = _owned(db, org, document_id)
     if document.status == DocumentStatus.APPLIED:
         return RedirectResponse(
             f"/app/receiving/{document.id}?error=already_applied", status_code=303
         )
     try:
-        parse_document(db, document.id)
+        parse_document(db, org, document.id)
         db.commit()
     except ExtractionError:
         db.commit()
@@ -214,18 +215,16 @@ def apply_receipt(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_org),
 ):
     """Apply the reviewed lines. The form posts one field group per line."""
-    document = _owned(db, tenant.id, document_id)
+    document = _owned(db, org, document_id)
     if document.status == DocumentStatus.APPLIED:
         return RedirectResponse(
             f"/app/receiving/{document.id}?error=already_applied", status_code=303
         )
 
-    items = {
-        item.id: item
-        for item in db.scalars(select(StockItem).where(StockItem.tenant_id == tenant.id))
-    }
+    items = {item.id: item for item in db.scalars(select_scoped(org, StockItem))}
 
     decisions: list[LineDecision] = []
     for line in document.lines:
@@ -273,7 +272,7 @@ def apply_receipt(
     )
     document.supplier, document.invoice_number = supplier, invoice_number
 
-    result = apply_document(db, document.id, decisions, user_id=user.id)
+    result = apply_document(db, org, document.id, decisions, user_id=user.id)
     db.commit()
     return RedirectResponse(
         f"/app/receiving/{document.id}?applied={result['applied']}&batches={result['batches']}",

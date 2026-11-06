@@ -87,7 +87,7 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
-# Strict from the first line: the pure transform layer, and the access and ledger modules to come.
+# Strict from the first line: the pure transform layer, the access layer, and the ledger to come.
 module = ["app.transform.*", "app.access.*", "app.ledger.*"]
 check_untyped_defs = true
 disallow_any_generics = true

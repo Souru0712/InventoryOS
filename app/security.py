@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext
 from app.db import get_db
 from app.models import Tenant, User
 from app.observability import bind
@@ -66,6 +67,11 @@ def require_tenant(user: User = Depends(require_user), db: Session = Depends(get
     if tenant is None:
         raise HTTPException(status_code=403, detail="no workspace for this account")
     return tenant
+
+
+def require_org(user: User = Depends(require_user)) -> OrgContext:
+    """The signed-in user's scope; every product query in the request runs in it (C-33)."""
+    return OrgContext.for_user(user)
 
 
 def require_writable(

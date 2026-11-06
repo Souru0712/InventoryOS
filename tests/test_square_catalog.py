@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.access import OrgContext
 from app.load.upsert import sync_catalog_presence
 from app.models import (
     InventoryCount,
@@ -105,7 +106,7 @@ def stock_for(db, variation: str) -> StockItem | None:
 
 
 def test_a_catalog_pull_creates_the_stock_item_its_sku_and_its_sold_item(db, tenant, connected):
-    stats = sync.sync_catalog(db, tenant.id)
+    stats = sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()
 
     assert stats["stock_items_created"] == 1
@@ -118,7 +119,7 @@ def test_a_catalog_pull_creates_the_stock_item_its_sku_and_its_sold_item(db, ten
 
 
 def test_a_variation_deleted_in_square_is_hidden_and_its_history_is_kept(db, tenant, connected):
-    sync.sync_catalog(db, tenant.id)
+    sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()
     item = stock_for(db, "VAR-COKE")
     db.add(
@@ -133,7 +134,7 @@ def test_a_variation_deleted_in_square_is_hidden_and_its_history_is_kept(db, ten
     db.commit()
 
     connected.objects = []  # the merchant deleted it in Square
-    sync.sync_catalog(db, tenant.id)
+    sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()
 
     db.refresh(item)
@@ -144,11 +145,11 @@ def test_a_variation_deleted_in_square_is_hidden_and_its_history_is_kept(db, ten
 
 
 def test_restoring_it_in_square_brings_it_back(db, tenant, connected):
-    sync.sync_catalog(db, tenant.id)
+    sync.sync_catalog(db, OrgContext.system(tenant.id))
     connected.objects = []
-    sync.sync_catalog(db, tenant.id)
+    sync.sync_catalog(db, OrgContext.system(tenant.id))
     connected.objects = [catalog_object("VAR-COKE", "Coca-Cola")]
-    sync.sync_catalog(db, tenant.id)
+    sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()
 
     assert stock_for(db, "VAR-COKE").is_active is True
@@ -177,14 +178,14 @@ def test_stock_the_operator_defined_is_not_touched_by_a_catalog_change(db, tenan
 
 def test_the_hourly_sync_recovers_a_sale_whose_webhook_never_arrived(db, tenant, connected):
     """Webhooks are the fast path; this run is what makes the numbers right when one is lost."""
-    sync.sync_catalog(db, tenant.id)
+    sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()
     item = stock_for(db, "VAR-COKE")
     item.qty_base = Decimal("24")  # what we hold; Square has since sold four
     db.commit()
 
     connected.counts = {"VAR-COKE": 20}
-    stats = sync.run_sync(db, tenant.id)
+    stats = sync.run_sync(db, OrgContext.system(tenant.id))
     db.commit()
 
     db.refresh(item)
@@ -197,12 +198,12 @@ def test_a_catalog_event_re_reads_the_catalog_once_for_a_burst(db, tenant, conne
     """Square sends an event per change; a burst of edits must not mean a pull per edit."""
     from app.web.webhooks import _catalog_read_recently
 
-    sync.sync_catalog(db, tenant.id)
+    sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()
     assert connected.pulls == 1
-    assert _catalog_read_recently(db, tenant.id) is True
+    assert _catalog_read_recently(db, OrgContext.system(tenant.id)) is True
 
     run = db.query(SyncRun).order_by(SyncRun.started_at.desc()).first()
     run.started_at = datetime.now(UTC) - timedelta(minutes=5)
     db.commit()
-    assert _catalog_read_recently(db, tenant.id) is False
+    assert _catalog_read_recently(db, OrgContext.system(tenant.id)) is False

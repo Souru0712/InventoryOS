@@ -7,13 +7,14 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, select_scoped
+from app.access.system import connection_for_merchant
 from app.config import get_settings
 from app.db import get_db
 from app.load.upsert import apply_provider_counts
-from app.models import Location, ProviderConnection, StockItem, SyncRun, TrackMode
+from app.models import Location, StockItem, SyncRun, TrackMode
 from app.orchestration.sync import NotConnected, sync_catalog
 from app.providers.square.webhooks import (
     CATALOG_VERSION_UPDATED,
@@ -34,32 +35,23 @@ CATALOG_DEBOUNCE = timedelta(seconds=60)
 
 
 def _tenant_for(db: Session, merchant: str) -> int | None:
-    connection = db.scalars(
-        select(ProviderConnection).where(
-            ProviderConnection.provider == "square",
-            ProviderConnection.merchant_id == merchant,
-            ProviderConnection.status == "active",
-        )
-    ).first()
+    connection = connection_for_merchant(db, "square", merchant)
     return connection.tenant_id if connection else None
 
 
-def _drop_stale(db: Session, tenant_id: int, rows: list[dict]) -> list[dict]:
+def _drop_stale(db: Session, org: OrgContext, rows: list[dict]) -> list[dict]:
     """Square warns that offline tills deliver counts out of order; older news never wins.
 
     last_synced_at is when we last read this item, so a count calculated before that is
     already reflected in what we hold.
     """
     locations = {
-        loc.provider_location_id: loc.id
-        for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
+        loc.provider_location_id: loc.id for loc in db.scalars(select_scoped(org, Location))
     }
     items = {
         (item.location_id, item.provider_variation_id): item
         for item in db.scalars(
-            select(StockItem).where(
-                StockItem.tenant_id == tenant_id, StockItem.track_mode == TrackMode.PROVIDER
-            )
+            select_scoped(org, StockItem).where(StockItem.track_mode == TrackMode.PROVIDER)
         )
         if item.provider_variation_id
     }
@@ -90,10 +82,10 @@ def _parse(stamp: str | None) -> datetime | None:
     return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
-def _catalog_read_recently(db: Session, tenant_id: int) -> bool:
+def _catalog_read_recently(db: Session, org: OrgContext) -> bool:
     last = db.scalars(
-        select(SyncRun)
-        .where(SyncRun.tenant_id == tenant_id, SyncRun.kind == "catalog")
+        select_scoped(org, SyncRun)
+        .where(SyncRun.kind == "catalog")
         .order_by(SyncRun.started_at.desc())
         .limit(1)
     ).first()
@@ -126,11 +118,13 @@ def square_webhook(
         if tenant_id is None:
             log.info("square webhook for unknown merchant %s", merchant_id(event))
             return {"ignored": "unknown merchant"}
+        # A signed event for a known merchant acts for that organization only.
+        org = OrgContext.system(tenant_id)
         # The event carries only a version number, so the catalog itself has to be re-read.
-        if _catalog_read_recently(db, tenant_id):
+        if _catalog_read_recently(db, org):
             return {"ignored": "catalog was just read"}
         try:
-            stats = sync_catalog(db, tenant_id)
+            stats = sync_catalog(db, org)
         except NotConnected:
             log.info("catalog event for tenant %s, which is not connected", tenant_id)
             return {"ignored": "not connected"}
@@ -147,7 +141,8 @@ def square_webhook(
         log.info("square webhook for unknown merchant %s", merchant_id(event))
         return {"ignored": "unknown merchant"}
 
-    rows = _drop_stale(db, tenant_id, normalize_counts(inventory_counts(event)))
+    org = OrgContext.system(tenant_id)
+    rows = _drop_stale(db, org, normalize_counts(inventory_counts(event)))
     updated = apply_provider_counts(db, tenant_id, rows) if rows else 0
     db.commit()
     log.info("square webhook updated %s counts for tenant %s", updated, tenant_id)

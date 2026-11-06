@@ -9,9 +9,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext, get_scoped, select_scoped, update_scoped
 from app.config import get_settings
 from app.db import get_db
 from app.entitlements import require
@@ -45,6 +45,7 @@ from app.providers.square import oauth
 from app.security import (
     SESSION_STATE_KEY,
     new_state,
+    require_org,
     require_tenant,
     require_user,
     require_writable,
@@ -59,11 +60,11 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _rows(db: Session, tenant_id: int, location_id: int | None = None) -> list[dict]:
+def _rows(db: Session, org: OrgContext, location_id: int | None = None) -> list[dict]:
     """One display row per stock item, with the numbers the owner needs."""
-    items = stock_views(db, tenant_id, location_id)
-    velocity = velocity_map(db, tenant_id)
-    alerts = {a.stock_item_id: a for a in proposals_for(db, tenant_id)}
+    items = stock_views(db, org, location_id)
+    velocity = velocity_map(db, org)
+    alerts = {a.stock_item_id: a for a in proposals_for(db, org)}
 
     rows = []
     for item in items:
@@ -114,12 +115,10 @@ def _expiry_summary(expiries: list[ItemExpiry], horizon_days: int) -> dict:
     }
 
 
-def _locations(db: Session, tenant_id: int) -> list[Location]:
+def _locations(db: Session, org: OrgContext) -> list[Location]:
     return list(
         db.scalars(
-            select(Location)
-            .where(Location.tenant_id == tenant_id, Location.is_active.is_(True))
-            .order_by(Location.name)
+            select_scoped(org, Location).where(Location.is_active.is_(True)).order_by(Location.name)
         )
     )
 
@@ -130,20 +129,16 @@ def dashboard(
     location: int | None = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
-    rows = _rows(db, tenant.id, location)
+    rows = _rows(db, org, location)
     connection = db.scalars(
-        select(ProviderConnection).where(
-            ProviderConnection.tenant_id == tenant.id, ProviderConnection.status == "active"
-        )
+        select_scoped(org, ProviderConnection).where(ProviderConnection.status == "active")
     ).first()
     last_run = db.scalars(
-        select(SyncRun)
-        .where(SyncRun.tenant_id == tenant.id)
-        .order_by(SyncRun.started_at.desc())
-        .limit(1)
+        select_scoped(org, SyncRun).order_by(SyncRun.started_at.desc()).limit(1)
     ).first()
-    sync = _sync_status(db, tenant.id, connection, last_run)
+    sync = _sync_status(db, org, connection, last_run)
 
     by_dimension: dict[str, dict] = {}
     for row in rows:
@@ -154,7 +149,7 @@ def dashboard(
         if row["status"] != "ok":
             bucket["at_risk"] += 1
 
-    expiries = expiry_positions(db, tenant.id, location_id=location)
+    expiries = expiry_positions(db, org, location_id=location)
     expiry = _expiry_summary(expiries, get_settings().expiry_horizon_days) if expiries else None
 
     return templates.TemplateResponse(
@@ -164,7 +159,7 @@ def dashboard(
             "title": "Inventory",
             "tenant": tenant,
             "rows": rows,
-            "locations": _locations(db, tenant.id),
+            "locations": _locations(db, org),
             "selected_location": location,
             "connection": connection,
             "last_run": last_run,
@@ -173,22 +168,22 @@ def dashboard(
             "total_value": sum(row["value_cents"] for row in rows),
             "at_risk": sum(1 for row in rows if row["status"] != "ok"),
             "expiry": expiry,
-            "currency": tenant_currency(db, tenant.id),
-            "health": current_health(db, tenant.id, location),
+            "currency": tenant_currency(db, org),
+            "health": current_health(db, org, location),
         },
     )
 
 
 def _sync_status(
-    db: Session, tenant_id: int, connection: ProviderConnection | None, last_run: SyncRun | None
+    db: Session, org: OrgContext, connection: ProviderConnection | None, last_run: SyncRun | None
 ) -> dict:
     """What the merchant needs to know: is it connected, when did it last work, what broke.
 
     A failure is only worth showing while it is still the latest word; a later success clears it.
     """
     last_success = db.scalars(
-        select(SyncRun)
-        .where(SyncRun.tenant_id == tenant_id, SyncRun.status == SyncStatus.SUCCESS)
+        select_scoped(org, SyncRun)
+        .where(SyncRun.status == SyncStatus.SUCCESS)
         .order_by(SyncRun.started_at.desc())
         .limit(1)
     ).first()
@@ -207,9 +202,10 @@ def expiring(
     location: int | None = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     horizon = get_settings().expiry_horizon_days
-    summary = _expiry_summary(expiry_positions(db, tenant.id, location_id=location), horizon)
+    summary = _expiry_summary(expiry_positions(db, org, location_id=location), horizon)
     return templates.TemplateResponse(
         request,
         "app/expiring.html",
@@ -217,12 +213,12 @@ def expiring(
             "title": "Expiring",
             "tenant": tenant,
             "horizon": horizon,
-            "items": stock_views(db, tenant.id, location),
-            "currency": tenant_currency(db, tenant.id),
-            "locations": _locations(db, tenant.id),
+            "items": stock_views(db, org, location),
+            "currency": tenant_currency(db, org),
+            "locations": _locations(db, org),
             "selected_location": location,
             "today": datetime.now(UTC).date(),
-            "coverage": expiry_coverage(db, tenant.id, location),
+            "coverage": expiry_coverage(db, org, location),
             **summary,
         },
     )
@@ -235,10 +231,11 @@ def label_stock(
     expires_on: str = Form(...),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
     """Date stock that is already on the shelf. The quantity does not change; it gains a date."""
-    item = db.get(StockItem, stock_item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, stock_item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
     try:
         qty_base = to_base(quantity, item.stock_unit)
@@ -267,10 +264,11 @@ def set_perishable(
     perishable: str = Form("no"),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
     """Say whether an item can expire at all, so the coverage figure counts the right things."""
-    item = db.get(StockItem, stock_item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, stock_item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
     item.tracks_expiry = perishable.lower() in ("yes", "true", "1")
     db.commit()
@@ -279,15 +277,20 @@ def set_perishable(
 
 @router.post("/app/expiring/{batch_id}/remove")
 def remove_batch(
-    batch_id: int, db: Session = Depends(get_db), tenant: Tenant = Depends(require_writable)
+    batch_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
     """Undo a wrongly entered date. Stock is untouched: a batch is only a date on it."""
-    batch = db.get(StockBatch, batch_id)
-    if batch is None or batch.tenant_id != tenant.id:
+    batch = get_scoped(db, org, StockBatch, batch_id)
+    if batch is None:
         raise HTTPException(status_code=404, detail="batch not found")
     # A markdown decided against this lot stays on record; it keeps its own end date.
     db.execute(
-        update(Promotion).where(Promotion.stock_batch_id == batch.id).values(stock_batch_id=None)
+        update_scoped(org, Promotion)
+        .where(Promotion.stock_batch_id == batch.id)
+        .values(stock_batch_id=None)
     )
     db.delete(batch)
     db.commit()
@@ -296,7 +299,10 @@ def remove_batch(
 
 @router.get("/app/items/new", response_class=HTMLResponse)
 def new_item_form(
-    request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
     return templates.TemplateResponse(
         request,
@@ -304,7 +310,7 @@ def new_item_form(
         {
             "title": "Add stock item",
             "tenant": tenant,
-            "locations": _locations(db, tenant.id),
+            "locations": _locations(db, org),
             "item": None,
         },
     )
@@ -331,11 +337,12 @@ def create_item(
     upc: str = Form(""),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
     from app.load.upsert import slugify
 
-    location = db.get(Location, location_id)
-    if location is None or location.tenant_id != tenant.id:
+    location = get_scoped(db, org, Location, location_id)
+    if location is None:
         raise HTTPException(status_code=404, detail="location not found")
 
     try:
@@ -361,7 +368,7 @@ def create_item(
             {
                 "title": "Add stock item",
                 "tenant": tenant,
-                "locations": _locations(db, tenant.id),
+                "locations": _locations(db, org),
                 "item": None,
                 "error": str(exc),
             },
@@ -394,7 +401,7 @@ def create_item(
     for raw in (upc, sku):
         if raw.strip():
             try:
-                link_code(db, tenant.id, item.id, raw, source="manual")
+                link_code(db, org, item.id, raw, source="manual")
             except CodeInUse:
                 log.info("code %r already identifies another item for tenant %s", raw, tenant.id)
     db.add(
@@ -418,10 +425,11 @@ def record_count(
     note: str = Form(""),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
     """A physical count re-anchors the item; derived quantities restart from here."""
-    item = db.get(StockItem, item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
 
     qty_base = to_base(quantity, item.stock_unit)
@@ -451,10 +459,11 @@ def update_thresholds(
     lead_time_days: int = Form(2),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_org),
 ):
     require(tenant, "custom_thresholds")
-    item = db.get(StockItem, item_id)
-    if item is None or item.tenant_id != tenant.id:
+    item = get_scoped(db, org, StockItem, item_id)
+    if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
     try:
         reorder_base = to_base(reorder_point or "0", item.stock_unit)
@@ -479,25 +488,32 @@ def _check_thresholds(reorder_base: Decimal, par_base: Decimal | None, lead_time
 
 @router.get("/app/report", response_class=HTMLResponse)
 def report(
-    request: Request, db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
 ):
-    items = {item.id: item for item in stock_views(db, tenant.id)}
+    items = {item.id: item for item in stock_views(db, org)}
     return templates.TemplateResponse(
         request,
         "app/report.html",
         {
             "title": "Weekly report",
             "tenant": tenant,
-            "report": weekly_report(db, tenant.id),
+            "report": weekly_report(db, org),
             "items": items,
         },
     )
 
 
 @router.post("/app/sync")
-def manual_sync(db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
+def manual_sync(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
+):
     try:
-        run_sync(db, tenant.id)
+        run_sync(db, org)
     except NotConnected:
         return RedirectResponse("/app?error=not_connected", status_code=303)
     except Exception:
@@ -507,8 +523,12 @@ def manual_sync(db: Session = Depends(get_db), tenant: Tenant = Depends(require_
 
 
 @router.post("/app/recalculate")
-def recalculate(db: Session = Depends(get_db), tenant: Tenant = Depends(require_tenant)):
-    refresh_derived_quantities(db, tenant.id)
+def recalculate(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_org),
+):
+    refresh_derived_quantities(db, org)
     db.commit()
     return RedirectResponse("/app", status_code=303)
 
@@ -528,6 +548,7 @@ def square_callback(
     error: str | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_org),
 ):
     expected = request.session.pop(SESSION_STATE_KEY, None)
     if error:
@@ -537,8 +558,7 @@ def square_callback(
 
     token = oauth.exchange_code(code)
     existing = db.scalars(
-        select(ProviderConnection).where(
-            ProviderConnection.tenant_id == user.tenant_id,
+        select_scoped(org, ProviderConnection).where(
             ProviderConnection.provider == "square",
             ProviderConnection.merchant_id == token["merchant_id"],
         )
@@ -556,7 +576,7 @@ def square_callback(
     db.commit()
 
     try:
-        run_sync(db, user.tenant_id)
+        run_sync(db, org)
     except Exception:
         log.exception("first sync after connect failed for tenant %s", user.tenant_id)
         return RedirectResponse("/app?error=first_sync_failed", status_code=303)

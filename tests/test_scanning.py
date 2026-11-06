@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
+from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
 from app.main import app
 from app.models import (
@@ -65,27 +66,27 @@ def coke(db, tenant, location):
 
 
 def test_a_scanned_code_finds_its_item(db, tenant, coke):
-    assert find_by_code(db, tenant.id, COKE).stock_item_id == coke.id
+    assert find_by_code(db, OrgContext.system(tenant.id), COKE).stock_item_id == coke.id
 
 
 def test_the_thirteen_digit_spelling_of_the_same_product_also_finds_it(db, tenant, coke):
     # The phone reports EAN-13 with a leading zero; Square stored the 12-digit UPC.
-    assert find_by_code(db, tenant.id, "0" + COKE).stock_item_id == coke.id
+    assert find_by_code(db, OrgContext.system(tenant.id), "0" + COKE).stock_item_id == coke.id
 
 
 def test_whitespace_from_the_scanner_does_not_stop_a_match(db, tenant, coke):
-    assert find_by_code(db, tenant.id, f"  {COKE}\n").stock_item_id == coke.id
+    assert find_by_code(db, OrgContext.system(tenant.id), f"  {COKE}\n").stock_item_id == coke.id
 
 
 def test_an_unknown_code_finds_nothing(db, tenant, coke):
-    assert find_by_code(db, tenant.id, "5012345678900") is None
+    assert find_by_code(db, OrgContext.system(tenant.id), "5012345678900") is None
 
 
 def test_one_tenants_codes_are_invisible_to_another(db, tenant, coke):
     other = Tenant(name="Someone else")
     db.add(other)
     db.commit()
-    assert find_by_code(db, other.id, COKE) is None
+    assert find_by_code(db, OrgContext.system(other.id), COKE) is None
 
 
 def test_a_misread_code_is_flagged_before_it_is_linked():
@@ -110,15 +111,15 @@ def test_linking_teaches_the_scanner(db, tenant, location, coke):
     )
     db.add(water)
     db.flush()
-    identifier = link_code(db, tenant.id, water.id, " 5012345678900 ", "ean_13")
+    identifier = link_code(db, OrgContext.system(tenant.id), water.id, " 5012345678900 ", "ean_13")
     db.commit()
     assert identifier.value == "5012345678900"
     assert identifier.identifier_type is IdentifierType.EAN
-    assert find_by_code(db, tenant.id, "5012345678900").stock_item_id == water.id
+    assert find_by_code(db, OrgContext.system(tenant.id), "5012345678900").stock_item_id == water.id
 
 
 def test_linking_the_same_code_to_the_same_item_twice_is_harmless(db, tenant, coke):
-    first = link_code(db, tenant.id, coke.id, COKE)
+    first = link_code(db, OrgContext.system(tenant.id), coke.id, COKE)
     assert first.stock_item_id == coke.id
     assert db.query(ProductIdentifier).count() == 1
 
@@ -136,7 +137,7 @@ def test_one_code_cannot_point_at_two_products(db, tenant, location, coke):
     db.add(other)
     db.flush()
     with pytest.raises(CodeInUse):
-        link_code(db, tenant.id, other.id, COKE)
+        link_code(db, OrgContext.system(tenant.id), other.id, COKE)
 
 
 # --- receiving ------------------------------------------------------------------------------

@@ -59,7 +59,7 @@ web/            routes, forms, templates            (no business rules, no raw q
    ▼
 orchestration/  services: one per workflow            (transactions, calls posting service)
    │
-   ├── access/ (proposed)   scoped repositories: every query carries OrgContext(org, locations)
+   ├── access/              scoped data access: every query carries OrgContext(org, locations)
    ├── ledger posting service (proposed: orchestration/ledger.py) — the ONLY writer of movements
    ▼
 transform/      pure domain rules: units, conversions, recipe resolution, consumption, costing,
