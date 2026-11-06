@@ -1,6 +1,6 @@
 # ADR-0026: Scoped data access: OrgContext, scoped helpers, named system lookups
 
-- **Status:** Proposed, 2026-11-06 (in the T1.02 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-06 (the owner merged the T1.02 pull request, #20: "Yes, merge it")
 - **Decision ID:** none (implements C-33 in T1.02; DR-09, DR-35, SAAS-T-04)
 - **Tasks:** T1.02; shapes T1.03 (isolation suite), T1.05 (memberships), T1.06 (permissions)
 
@@ -50,4 +50,8 @@ and a field nothing could check would be dead weight.
 - The scan covers routes and services. `app/load` (provider writers, replaced through the ledger in
   T1.16–T1.18), `app/notify`, `app/security`, `app/entitlements` and the command line keep their own
   tenant filters until those tasks.
-- Built in T1.02. The isolation suite (T1.03) exercises it from the route table.
+- A page narrowed by `?location=` takes it through `location_filter` (`app/security.py`), which
+  answers 404 for a location outside the organization (added in T1.03; before, such a page
+  answered 200 and showed nothing).
+- Built in T1.02. The isolation suite (T1.03, `tests/test_isolation.py`) exercises it from the
+  route table.

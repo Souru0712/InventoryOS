@@ -15,7 +15,7 @@ from app.db import get_db
 from app.entitlements import history_days, require
 from app.models import Tenant
 from app.orchestration.health import current, over_time
-from app.security import require_org, require_tenant
+from app.security import location_filter, require_org, require_tenant
 from app.transform.health import reorder_lines
 from app.units import format_approx, format_qty
 from app.web.templating import templates
@@ -26,7 +26,7 @@ router = APIRouter()
 @router.get("/app/health", response_class=HTMLResponse)
 def health_page(
     request: Request,
-    location: int | None = None,
+    location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_org),
@@ -53,7 +53,7 @@ def health_page(
 @router.get("/app/reorder", response_class=HTMLResponse)
 def reorder_page(
     request: Request,
-    location: int | None = None,
+    location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_org),
@@ -78,7 +78,7 @@ def _cell(value: str) -> str:
 
 @router.get("/app/reorder.csv")
 def reorder_csv(
-    location: int | None = None,
+    location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_org),

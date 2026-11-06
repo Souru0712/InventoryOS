@@ -5,6 +5,62 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T1.03 Tenant-isolation test suite
+
+**Implemented**
+- `tests/test_isolation.py`, generated from the app's route table. A route takes an identifier
+  when it has a path parameter, a query or form field named `id` or `*_id`, or any integer
+  parameter not listed as a quantity (only `lead_time_days` is). That finds 27 routes: reads, writes,
+  the invoice photo download and the six pages narrowed by `?location=`.
+- Two businesses, each with a location, an item with a lot about to expire, a running markdown, a
+  product code and a stored delivery photo with a parsed line. Signed in as A, each route is
+  called with B's identifiers: it must answer 404 or 403, the answer must not mention B, and every
+  row B owns (every table, every column) must be unchanged. The same call with A's identifiers
+  must succeed (200 or 303), so a route that refuses everything cannot pass.
+- A coverage test fails when a route takes an identifier and has no case (or a case outlives its
+  route). Two cases the route table cannot generate: B's barcode looked up by A's scanner finds
+  nothing, and A's own invoice with a line pointed at B's item receives nothing into it. A guard
+  test proves the snapshot notices a change.
+- **Defect found and fixed:** the six pages narrowed by `?location=` (inventory, expiring,
+  health, reorder, reorder CSV, promotions) answered 200 with an empty page for another business's
+  location. Nothing leaked, but AC-SAAS-01 asks for 404/403. A shared `location_filter` dependency
+  now answers 404 for a location outside the organization.
+
+**Verified (locally, SQLite)**
+- The suite (29 tests) passes. Without the `location_filter` fix the six location cases fail; with
+  an unscoped lookup planted in the count route its case fails (303 where 404 is required), and
+  the planted lookup was removed again.
+- Full suite 612 passed, 9 skipped (583 before); ruff, mypy and the docs checker clean.
+- Postgres 16 runs in CI (Docker is not running on this machine); the suite is in both required
+  test jobs.
+
+**Files changed**
+- `tests/test_isolation.py` (new); `app/security.py` (`location_filter`), `app/web/dashboard.py`,
+  `health.py`, `promotions.py`; ADR-0026 (Accepted; the location rule), the ADR index,
+  `CLAUDE.md`, `TESTING_AND_QUALITY_STRATEGY.md`, task index (T1.02 → Completed, T1.03 → In
+  review), this log.
+
+**Next task**
+- T1.04 Organization and location model (and T1.05 memberships, both unblocked by T1.02).
+
+---
+
+## 2026-11-06 — T1.02 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #20 was merged with a merge commit (`039ad45`). CI
+  on its head `d929de3`, all five required jobs green: SQLite 583 passed, 9 skipped; PostgreSQL 16
+  592 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: the static test passes and the existing cross-tenant tests pass.
+
+**Decisions**
+- ADR-0026 accepted with the merge.
+
+**Files changed**
+- Task index (T1.02 → Completed), ADR-0026 status and index, this log.
+
+---
+
 ## 2026-11-06 — T1.02 Scoped data-access layer (C-33)
 
 **Implemented**

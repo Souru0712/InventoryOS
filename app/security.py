@@ -9,9 +9,9 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext
+from app.access import OrgContext, get_scoped
 from app.db import get_db
-from app.models import Tenant, User
+from app.models import Location, Tenant, User
 from app.observability import bind
 
 SESSION_USER_KEY = "uid"
@@ -72,6 +72,17 @@ def require_tenant(user: User = Depends(require_user), db: Session = Depends(get
 def require_org(user: User = Depends(require_user)) -> OrgContext:
     """The signed-in user's scope; every product query in the request runs in it (C-33)."""
     return OrgContext.for_user(user)
+
+
+def location_filter(
+    location: int | None = None,
+    db: Session = Depends(get_db),
+    org: OrgContext = Depends(require_org),
+) -> int | None:
+    """An optional ?location= narrowing a page; a location outside the organization is not found."""
+    if location is not None and get_scoped(db, org, Location, location) is None:
+        raise HTTPException(status_code=404, detail="location not found")
+    return location
 
 
 def require_writable(

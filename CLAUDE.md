@@ -31,6 +31,8 @@ implementation sessions; the detail lives in `docs/`.
   routes take `org: OrgContext = Depends(require_org)`, services take `org`, queries use
   `select_scoped`/`get_scoped`/`update_scoped`; a lookup across organizations is a named function
   in `app/access/system.py`. A test fails on raw queries in `app/web` and `app/orchestration`.
+  A new route that takes an identifier needs a case in `tests/test_isolation.py` (a test fails
+  until it has one); an optional `?location=` goes through `location_filter`.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Schema (ADR-0025): instants are `UTCDateTime` (aware UTC; naive values refused); every foreign
