@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 720px;">
+<h1>{{ "Edit location" if location else "Add location" }}</h1>
+{% set from_pos = location and location.provider_location_id %}
+<p class="lede">
+  {% if from_pos %}Name, time zone and currency come from Square and update when it syncs.
+  {% else %}Where the stock is. The time zone and the hour the business day starts decide what "today" means here.{% endif %}
+</p>
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<form class="card" method="post" action="{{ '/app/locations/%d'|format(location.id) if location else '/app/locations/new' }}">
+  <div class="row">
+    <div class="field" style="flex: 2 1 260px;">
+      <label for="name">Name</label>
+      <input id="name" name="name" required value="{{ values.name }}" placeholder="Main street" {% if from_pos %}readonly{% endif %}>
+    </div>
+    <div class="field">
+      <label for="currency">Currency</label>
+      <input id="currency" name="currency" required maxlength="3" value="{{ values.currency }}" {% if from_pos %}readonly{% endif %}>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="address">Address (optional)</label>
+    <input id="address" name="address" value="{{ values.address }}" placeholder="12 Main St, Springfield">
+  </div>
+
+  <div class="row">
+    <div class="field" style="flex: 2 1 260px;">
+      <label for="timezone">Time zone</label>
+      <input id="timezone" name="timezone" required list="time-zones" value="{{ values.timezone }}"
+             placeholder="America/New_York" {% if from_pos %}readonly{% endif %}>
+      <datalist id="time-zones">
+        {% for zone in time_zones %}<option value="{{ zone }}">{% endfor %}
+      </datalist>
+    </div>
+    <div class="field">
+      <label for="business_day_cutoff_hour">Business day starts at</label>
+      <select id="business_day_cutoff_hour" name="business_day_cutoff_hour">
+        {% for hour in range(24) %}
+          <option value="{{ hour }}" {% if hour == values.business_day_cutoff_hour|int %}selected{% endif %}>
+            {{ "%02d:00"|format(hour) }}{{ " (midnight)" if hour == 0 else "" }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <p class="small muted" style="margin-top:0;">Open late? A 4:00 start keeps a sale at 1:30 a.m. on the evening it belongs to.</p>
+
+  <fieldset style="border:0; padding:0; margin:12px 0;">
+    <legend class="small" style="font-weight:600;">Open on</legend>
+    {% for day in weekdays %}
+      <label style="display:inline-flex; gap:6px; align-items:center; margin-right:14px;">
+        <input type="checkbox" name="open_days" value="{{ day }}" {% if day in values.open_days %}checked{% endif %}>
+        {{ day|capitalize }}
+      </label>
+    {% endfor %}
+  </fieldset>
+
+  <p style="margin:16px 0 0;">
+    <button class="btn" type="submit">Save</button>
+    <a class="btn secondary" href="/app/locations">Cancel</a>
+  </p>
+</form>
+</div>
+{% endblock %}

@@ -8,29 +8,9 @@ from app.models import Location, Plan, ProviderConnection, SubscriptionStatus, T
 from app.security import hash_password
 
 
-def test_PA1_a_tenant_without_square_cannot_create_any_stock_item(db):
-    """Standalone blocker: signup creates no location, and stock items require one."""
-    from app.main import app
-
-    with TestClient(app) as client:
-        r = client.post(
-            "/signup",
-            data={"business_name": "Corner Smoothies", "email": "owner@corner.test", "password": "a-good-password"},
-            follow_redirects=False,
-        )
-        assert r.status_code in (200, 303)
-        tenant = db.query(Tenant).filter(Tenant.name == "Corner Smoothies").one()
-        assert db.query(Location).filter(Location.tenant_id == tenant.id).count() == 0
-
-        r = client.post(
-            "/app/items/new",
-            data={"name": "Mango", "location_id": "1", "dimension": "weight", "stock_unit": "g"},
-            follow_redirects=False,
-        )
-        assert r.status_code == 404  # no location this tenant owns, and no route creates one
-
-        assert "Square is not connected" in client.get("/app").text
-
+# PA1 (a tenant without Square cannot create any stock item) retired in T1.04: owners add
+# locations themselves; tests/test_locations.py::test_a_business_without_square_adds_a_location_then_its_stock
+# asserts it in CI.
 
 def test_PA2_starter_plan_gates_core_features(db, tenant):
     """Phase 1 E-05 says core is never gated; Starter withholds the reorder CSV and custom thresholds."""

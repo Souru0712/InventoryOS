@@ -33,7 +33,7 @@ def all_proposals(db: Session, org: OrgContext, now: datetime) -> list[AlertProp
     velocity = velocity_map(db, org, now.date())
     stock = evaluate_stock(stock_views(db, org), velocity, now)
     expiry = evaluate_expiries(
-        expiry_positions(db, org, now.date(), velocity=velocity),
+        expiry_positions(db, org, velocity=velocity, now=now),
         get_settings().expiry_horizon_days,
     )
     return stock + expiry

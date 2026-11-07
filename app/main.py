@@ -24,6 +24,7 @@ from app.web import (
     billing,
     dashboard,
     health,
+    locations,
     marketing,
     ops,
     promotions,
@@ -78,6 +79,7 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(receiving.router)
 app.include_router(health.router)
+app.include_router(locations.router)
 app.include_router(promotions.router)
 app.include_router(scanning.router)
 app.include_router(settings_page.router)

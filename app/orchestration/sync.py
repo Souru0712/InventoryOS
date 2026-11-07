@@ -69,6 +69,21 @@ def _require_write_back() -> None:
         raise WriteBackDisabled("writing to Square is off until R1.1 (C-34)")
 
 
+def _square_locations(
+    db: Session, org: OrgContext, active_only: bool = False
+) -> dict[int, tuple[str, str]]:
+    """Locations the POS knows about: id -> (its location id, time zone). Owner-added
+    locations have no POS id and are never sent to Square."""
+    query = select_scoped(org, Location).where(Location.provider_location_id.is_not(None))
+    if active_only:
+        query = query.where(Location.is_active.is_(True))
+    return {
+        location.id: (location.provider_location_id, location.timezone)
+        for location in db.scalars(query)
+        if location.provider_location_id
+    }
+
+
 def active_connection(db: Session, org: OrgContext, provider: str = "square") -> ProviderConnection:
     connection = db.scalars(
         select_scoped(org, ProviderConnection).where(
@@ -159,11 +174,9 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
             catalog_rows, catalog_stats = _pull_catalog(db, org, client)
             stats.update(catalog_stats)
 
-            locations = list(
-                db.scalars(select_scoped(org, Location).where(Location.is_active.is_(True)))
-            )
-            provider_location_ids = [loc.provider_location_id for loc in locations]
-            timezones = {loc.provider_location_id: loc.timezone for loc in locations}
+            locations = _square_locations(db, org, active_only=True)
+            provider_location_ids = [square_id for square_id, _ in locations.values()]
+            timezones = dict(locations.values())
 
             if provider_location_ids:
                 tracked_ids = [
@@ -230,7 +243,7 @@ def push_counts_to_square(db: Session, org: OrgContext, stock_item_ids: list[int
 
     connection = active_connection(db, org)
     locations = {
-        loc.id: loc.provider_location_id for loc in db.scalars(select_scoped(org, Location))
+        location_id: square_id for location_id, (square_id, _) in _square_locations(db, org).items()
     }
     items = [
         item
@@ -289,7 +302,7 @@ def push_adjustments_to_square(
         return 0
 
     locations = {
-        loc.id: loc.provider_location_id for loc in db.scalars(select_scoped(org, Location))
+        location_id: square_id for location_id, (square_id, _) in _square_locations(db, org).items()
     }
     occurred_at = datetime.now(UTC)
     pushing: list[tuple[StockItem, dict]] = []
@@ -357,7 +370,7 @@ def refresh_item_from_square(db: Session, org: OrgContext, item: StockItem) -> b
     if item.track_mode is not TrackMode.PROVIDER or not item.provider_variation_id:
         return False
     location = get_scoped(db, org, Location, item.location_id)
-    if location is None:
+    if location is None or not location.provider_location_id:
         return False
 
     connection = active_connection(db, org)

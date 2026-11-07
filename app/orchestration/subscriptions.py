@@ -46,7 +46,11 @@ def apply_location_limit(db: Session, tenant: Tenant) -> int:
     """
     allowance = location_allowance(tenant)
     locations = list(
-        db.scalars(select_scoped(OrgContext.system(tenant.id), Location).order_by(Location.id))
+        db.scalars(
+            select_scoped(OrgContext.system(tenant.id), Location)
+            .where(Location.archived_at.is_(None))
+            .order_by(Location.id)
+        )
     )
     changed = 0
     for index, location in enumerate(locations):

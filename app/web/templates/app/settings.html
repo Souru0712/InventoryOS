@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-{% if request.query_params.get("saved") %}
+{% if request.query_params.get("saved") == "1" %}
   <div class="notice ok">Saved. This applies to {{ user.email }}.</div>
 {% endif %}
 
@@ -34,6 +34,27 @@
 <p class="small muted" style="max-width:620px;">
   Sign-in links and anything else you asked for are always sent, whatever is ticked here.
 </p>
+
+<h2>Business</h2>
+{% if request.query_params.get("saved") == "business" %}<div class="notice ok">Business details saved.</div>{% endif %}
+{% if request.query_params.get("error") == "name" %}<div class="notice error">The business needs a name.</div>{% endif %}
+{% if request.query_params.get("error") == "email" %}<div class="notice error">That contact email does not look right.</div>{% endif %}
+<form method="post" action="/app/settings/business" class="card" style="max-width:620px;">
+  <div class="field">
+    <label for="business_name">Business name</label>
+    <input id="business_name" name="business_name" required value="{{ tenant.name }}">
+  </div>
+  <div class="field">
+    <label for="business_address">Address (optional)</label>
+    <input id="business_address" name="address" value="{{ tenant.address or '' }}">
+  </div>
+  <div class="field">
+    <label for="contact_email">Contact email for the account (optional)</label>
+    <input id="contact_email" name="contact_email" type="email" value="{{ tenant.contact_email or '' }}">
+  </div>
+  <p style="margin:12px 0 0;"><button class="btn" type="submit">Save</button>
+     <a class="btn secondary" href="/app/locations">Locations</a></p>
+</form>
 
 <h2>Billing</h2>
 <div class="card" style="max-width:620px;">

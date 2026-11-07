@@ -70,8 +70,9 @@ def expiry_figures(expiries: list[ItemExpiry], horizon_days: int) -> ExpiryFigur
 
 
 def health_input(
-    db: Session, org: OrgContext, today: date, location_id: int | None = None
+    db: Session, org: OrgContext, now: datetime, location_id: int | None = None
 ) -> HealthInput:
+    today = now.date()
     velocity = velocity_map(db, org, today)
     signal = sales_signal(db, org)
     items = [
@@ -79,9 +80,10 @@ def health_input(
         for view in stock_views(db, org, location_id)
     ]
 
-    expiries = expiry_positions(db, org, today, location_id, velocity=velocity)
+    # Expiry is judged on each location's business day, not UTC's (AC-ADM-01).
+    expiries = expiry_positions(db, org, location_id=location_id, velocity=velocity, now=now)
     coverage = expiry_coverage(db, org, location_id)
-    suggestions = suggestions_for(db, org, today, location_id)
+    suggestions = suggestions_for(db, org, location_id=location_id, now=now)
     return HealthInput(
         items=items,
         expiry=expiry_figures(expiries, get_settings().expiry_horizon_days),
@@ -104,7 +106,7 @@ def current(
     db: Session, org: OrgContext, location_id: int | None = None, now: datetime | None = None
 ) -> Health:
     now = now or datetime.now(UTC)
-    inputs = health_input(db, org, now.date(), location_id)
+    inputs = health_input(db, org, now, location_id)
     return Health(score_inventory(inputs, now), build_actions(inputs), inputs)
 
 
