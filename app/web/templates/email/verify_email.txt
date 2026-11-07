@@ -1,0 +1,7 @@
+Confirm your email
+
+Confirm that {{ email }} is yours, and StockPulse can read invoices and connect your POS:
+
+{{ link }}
+
+The link works for 48 hours. If you did not create an account, ignore this email.

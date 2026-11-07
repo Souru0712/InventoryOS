@@ -33,6 +33,7 @@ from app.security import (
     require_permission,
     require_tenant,
     require_user,
+    require_verified,
     require_writable,
 )
 from app.transform.barcodes import canonical
@@ -339,6 +340,7 @@ def scan_expiry(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_permission("count.record")),
+    _verified: User = Depends(require_verified),
 ):
     """Read the date off a photo of the packaging. The product is already known, so this
     only has to answer 'which date', which is a far smaller question than 'which product'."""

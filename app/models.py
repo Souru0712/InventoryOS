@@ -37,6 +37,7 @@ SUPPRESSION_SOURCES = ("bounce", "complaint", "manual")
 # R1 role presets (USER_ROLES_AND_PERMISSIONS §2, PD-11); their permissions arrive in T1.06.
 MEMBERSHIP_ROLES = ("owner", "administrator", "manager", "employee", "read_only")
 MEMBERSHIP_STATUSES = ("active", "revoked")
+AUTH_TOKEN_PURPOSES = ("verify_email", "reset_password")
 
 
 def ref(target: str) -> ForeignKey:
@@ -170,6 +171,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255))
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Set when the person proved the address is theirs; POS, invoice reading and invitations
+    # wait for it (SAAS-A-02).
+    email_verified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     # What this person wants sent. Sign-in links and receipts ignore these: they were asked for.
@@ -216,6 +220,24 @@ class MembershipLocation(Base):
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     membership_id: Mapped[int] = mapped_column(owned_by("memberships.id"), index=True)
     location_id: Mapped[int] = mapped_column(ref("locations.id"))
+
+
+class AuthToken(Base):
+    """A single-use link emailed to a person: confirm the address, or reset the password.
+
+    Only the token's hash is stored, so a copy of the database opens nothing (SAAS-A-05).
+    """
+
+    __tablename__ = "auth_tokens"
+    __table_args__ = (one_of("auth_tokens", "purpose", AUTH_TOKEN_PURPOSES),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ref("users.id"), index=True)
+    purpose: Mapped[str] = mapped_column(String(24))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class UserSession(Base):

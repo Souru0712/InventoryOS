@@ -49,6 +49,7 @@ from app.security import (
     require_permission,
     require_tenant,
     require_user,
+    require_verified,
     require_writable,
 )
 from app.transform.alerts import counts_as_waste_risk
@@ -539,6 +540,7 @@ def connect_square(
     request: Request,
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_permission("pos.manage")),
+    _verified: User = Depends(require_verified),
 ):
     state = new_state()
     request.session[SESSION_STATE_KEY] = state
@@ -554,6 +556,7 @@ def square_callback(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
     org: OrgContext = Depends(require_permission("pos.manage")),
+    _verified: User = Depends(require_verified),
 ):
     expected = request.session.pop(SESSION_STATE_KEY, None)
     if error:

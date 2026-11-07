@@ -20,6 +20,7 @@ from app.monitoring import init_monitoring
 from app.observability import RequestContext, configure_logging
 from app.orchestration import scheduler
 from app.web import (
+    accounts,
     auth,
     billing,
     dashboard,
@@ -81,6 +82,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(ops.router)
 app.include_router(marketing.router)
 app.include_router(auth.router)
+app.include_router(accounts.router)
 app.include_router(dashboard.router)
 app.include_router(receiving.router)
 app.include_router(health.router)

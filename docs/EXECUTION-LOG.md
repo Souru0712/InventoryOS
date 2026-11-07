@@ -5,6 +5,77 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-07 — T1.08 Email verification, password reset and change
+
+**Implemented**
+- **Single-use emailed links** (`auth_tokens`, migration `6fbdcbb20640`): only the token's hash
+  is stored; a new link ends the earlier ones for the same purpose; confirmation links last 48
+  hours, reset links one hour. A link opens a page whose button posts the token, so a mail
+  scanner fetching links cannot use one up.
+- **Confirming the address** (SAAS-A-02): sign-up sends the link (`users.email_verified_at` is
+  set when it is used). Until then connecting Square, uploading or re-reading an invoice and
+  reading an expiry photo answer 403 (`require_verified`); a banner explains and offers to send
+  the link again. Inviting staff joins the gate in T1.10.
+- **Forgotten password** (SAAS-A-05): the request answers the same whether or not the account
+  exists; the new password ends every session and confirms the address; a password under 10
+  characters is refused without using the link up.
+- **Changing the password** in settings: the current one is required; every other device is
+  signed out and this one continues on a new session.
+- Login links to "Forgot your password?"; `python -m app.cli verify-email --email` confirms an
+  address by hand; the demo owner is created confirmed. Existing accounts start unconfirmed.
+- ADR-0031 (Proposed); ADR-0030 Accepted (the owner's merge approved its timeouts); `CLAUDE.md`
+  and README updated.
+
+**Verified (locally, SQLite)**
+- `tests/test_accounts.py` (13): sign-up sends a hashed, 48-hour link and leaves the address
+  unconfirmed; **AC-SAAS-02**: an unconfirmed account gets 403 for an invoice upload, an expiry
+  photo and connecting Square; the link page does not use the link, the post confirms once, a
+  second use fails; a new link replaces the old; an expired link does nothing; the reset request
+  reads the same for known and unknown addresses and mails only the known one; **AC-SAAS-04**: a
+  reset link works once within the hour, ends every session, and the old password stops working;
+  a short password keeps the link usable; an expired reset link points to a new one; a
+  confirmation link cannot reset a password; changing the password signs out every other device
+  and keeps this one; wrong or short changes are refused and change nothing.
+- Fixtures that sign up and then upload confirm the address first (`tests/accounts.py`); the
+  route declaration test lists the new public and personal routes.
+- Full suite 708 passed, 11 skipped (695 before); ruff, mypy and the docs checker clean. The demo
+  seeder and `verify-email` ran on a scratch database.
+
+**Open issues**
+- These forms are not rate-limited yet (T1.09).
+
+**Files changed**
+- `app/web/accounts.py`, migration `6fbdcbb20640`, templates `auth/verify_email.html`,
+  `auth/forgot_password.html`, `auth/reset_password.html`, `email/verify_email.{html,txt}`,
+  `email/reset_password.{html,txt}`, `tests/accounts.py`, `tests/test_accounts.py`, ADR-0031 (new);
+  `app/models.py`, `app/security.py`, `app/main.py`, `app/cli.py`, `app/web/{auth,dashboard,
+  receiving,scanning}.py`, templates `base.html`, `auth/login.html`, `app/settings.html`; seven
+  test files' fixtures; ADR-0030 (Accepted), the index, `CLAUDE.md`, `README.md`, task index (T1.07
+  → Completed, T1.08 → In review), this log.
+
+**Next task**
+- T1.09 Login throttling.
+
+---
+
+## 2026-11-07 — T1.07 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #25 was merged with a merge commit (`5805170`),
+  approving the 12-hour idle and 14-day session limits. CI on its head `199c78e`, all five
+  required jobs green: SQLite 695 passed, 11 skipped; PostgreSQL 16 706 passed, 0 skipped; lint
+  and types; dependency audit; Docker image. Same five green on `main` after the merge.
+  Acceptance met: a revoked member is blocked on the next request (AC-STF-04); a POST without the
+  token is refused; probe R8's CSRF half retired.
+
+**Decisions**
+- ADR-0030 accepted with the merge, timeouts included.
+
+**Files changed**
+- Task index (T1.07 → Completed), ADR-0030 status and index, this log.
+
+---
+
 ## 2026-11-07 — T1.07 Server-side sessions, CSRF, POST logout
 
 **Implemented**
