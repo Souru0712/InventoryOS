@@ -1,6 +1,6 @@
 # ADR-0030: Server-side sessions, CSRF tokens, POST logout
 
-- **Status:** Proposed, 2026-11-07 (in the T1.07 pull request; accepted when the owner merges it, which also approves the two timeouts below)
+- **Status:** Accepted, 2026-11-07 (the owner merged the T1.07 pull request, #25: "Yes, merge it", approving the two timeouts below)
 - **Decision ID:** none (implements T1.07 under C-32; SAAS-A-04, SAAS-A-06, STF-FR-06, SEC-05, AC-STF-04)
 - **Tasks:** T1.07; T1.08 (password change revokes sessions), T1.10 (revoking a member)
 

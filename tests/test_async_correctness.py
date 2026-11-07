@@ -14,6 +14,7 @@ from app.db import Base, SessionLocal, engine
 from app.extract.invoice import StubExtractor
 from app.main import app
 from app.models import Location, Tenant
+from tests.accounts import confirm_email
 from tests.sample_files import jpeg
 
 
@@ -77,6 +78,7 @@ async def test_a_slow_extraction_does_not_hold_up_other_requests(monkeypatch):
                 "csrf_token": await form_token("/signup"),
             },
         )
+        confirm_email("o@rosewood.test")
         with SessionLocal() as db:
             tenant = db.query(Tenant).one()
             location = Location(

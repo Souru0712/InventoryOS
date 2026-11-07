@@ -29,6 +29,7 @@ from app.security import (
     require_permission,
     require_tenant,
     require_user,
+    require_verified,
     require_writable,
 )
 from app.storage import StorageError, get_storage
@@ -97,6 +98,7 @@ def upload_invoice(
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
     org: OrgContext = Depends(require_permission("receiving.record")),
+    _verified: User = Depends(require_verified),
 ):
     location = get_scoped(db, org, Location, location_id)
     if location is None:
@@ -198,6 +200,7 @@ def reparse(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("receiving.record")),
+    _verified: User = Depends(require_verified),
 ):
     document = _owned(db, org, document_id)
     if document.status == DocumentStatus.APPLIED:

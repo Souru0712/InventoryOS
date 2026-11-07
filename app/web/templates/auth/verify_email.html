@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 440px; margin: 20px auto;">
+{% if live %}
+  <h1>Confirm your email</h1>
+  <p class="lede">One click and StockPulse can read invoices and connect your POS.</p>
+  <form class="card" method="post" action="/verify-email">{{ csrf_field(request) }}
+    <input type="hidden" name="token" value="{{ token }}">
+    <button class="btn" type="submit">Confirm my email</button>
+  </form>
+{% else %}
+  <h1>That link has expired</h1>
+  <p class="lede">Links work once and for 48 hours. Log in and ask for a new one from Settings.</p>
+  <p><a class="btn" href="/login">Log in</a></p>
+{% endif %}
+</div>
+{% endblock %}

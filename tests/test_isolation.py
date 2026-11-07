@@ -36,6 +36,7 @@ from app.models import (
 from app.security import hash_password
 from app.storage import get_storage
 from app.units import Dimension
+from tests.accounts import confirm_email
 from tests.sample_files import jpeg
 from tests.test_async_correctness import api_routes
 
@@ -293,6 +294,7 @@ def world():
                 "password": "a-good-password",
             },
         )
+        confirm_email("owner@rosewood.test")
         with SessionLocal() as db:
             rosewood = db.scalars(select(Tenant).where(Tenant.name == "Rosewood")).one()
             mine = _business(db, rosewood.id, "Rosewood", A_CODE)

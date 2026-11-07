@@ -13,6 +13,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.access import OrgContext
+from app.access.system import user_by_email
 from app.config import require_deployable
 from app.db import init_db, run_migrations, session_scope, stamp_migrations
 from app.entitlements import allows, state
@@ -210,6 +211,19 @@ def cmd_scheduler(_: argparse.Namespace) -> int:
     return scheduler.run_forever()
 
 
+def cmd_verify_email(args: argparse.Namespace) -> int:
+    """Mark an address confirmed by hand: support, or a machine with no email configured."""
+    with session_scope() as db:
+        user = user_by_email(db, args.email)
+        if user is None:
+            print("no account uses that address")
+            return 1
+        if user.email_verified_at is None:
+            user.email_verified_at = datetime.now(UTC)
+        print(f"user {user.id} is confirmed")
+    return 0
+
+
 def cmd_email(args: argparse.Namespace) -> int:
     """Stop or resume sending to an address, and see what is currently suppressed."""
     with session_scope() as db:
@@ -359,6 +373,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
             tenant_id=tenant.id,
             email=args.email.lower(),
             password_hash=hash_password(args.password),
+            email_verified_at=datetime.now(UTC),  # a demo has nobody to email
         )
         db.add(owner)
         db.flush()
@@ -530,6 +545,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser(
         "scheduler", help="run scheduled jobs; one holds the lock, any others stand by"
     ).set_defaults(func=cmd_scheduler)
+
+    p = sub.add_parser("verify-email", help="mark an account's email as confirmed")
+    p.add_argument("--email", required=True)
+    p.set_defaults(func=cmd_verify_email)
 
     p = sub.add_parser("email", help="see or change suppressed email addresses")
     p.add_argument("--suppress", help="stop sending to this address")

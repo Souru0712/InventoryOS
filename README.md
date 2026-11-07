@@ -30,6 +30,7 @@ ruff check . && ruff format --check .  # lint and formatting, as CI runs them
 mypy                                    # type check (settings in pyproject.toml)
 python -m app.cli report --tenant 1     # what the weekly email contains
 python -m app.cli alerts --tenant 1 --send
+python -m app.cli verify-email --email you@example.com  # confirm an address with no SMTP set up
 ```
 
 ## The three inventory use cases

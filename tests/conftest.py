@@ -36,6 +36,8 @@ os.environ.update(
     SQUARE_APP_SECRET="test-secret",
 )
 
+from datetime import UTC, datetime  # noqa: E402
+
 import pytest  # noqa: E402
 
 from app.db import Base, SessionLocal, engine  # noqa: E402
@@ -63,6 +65,7 @@ def tenant(db):
         tenant_id=tenant.id,
         email="owner@rosewood.test",
         password_hash=hash_password("a-good-password"),
+        email_verified_at=datetime.now(UTC),
     )
     db.add(owner)
     db.flush()
