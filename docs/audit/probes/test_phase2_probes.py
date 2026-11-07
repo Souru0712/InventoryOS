@@ -22,16 +22,8 @@ def test_PA2_starter_plan_gates_core_features(db, tenant):
     assert allows(tenant, "custom_thresholds") is False
 
 
-def test_PA3_one_person_cannot_belong_to_two_businesses(db, tenant):
-    """users.email is globally unique and users.tenant_id single-valued: no memberships."""
-    other = Tenant(name="Second Shop")
-    db.add(other)
-    db.flush()
-    db.add(User(tenant_id=other.id, email="owner@rosewood.test", password_hash=hash_password("a-good-password")))
-    with pytest.raises(IntegrityError):
-        db.commit()
-    db.rollback()
-
+# PA3 (one person cannot belong to two businesses) retired in T1.05: memberships; see
+# tests/test_memberships.py::test_one_person_can_belong_to_two_businesses_but_only_once_to_each.
 
 def test_PA4_one_square_merchant_can_attach_to_two_tenants(db, tenant):
     """S7: nothing stops two businesses connecting the same merchant; webhooks then route to .first()."""

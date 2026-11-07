@@ -58,4 +58,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0024](0024-invoice-photos-in-postgres.md) | Invoice photos kept briefly, in Postgres | C-48 | Accepted |
 | [ADR-0025](0025-schema-integrity-conventions.md) | Schema integrity conventions: UTC instants, delete rules, named CHECKs | T1.01 (DM-2) | Accepted |
 | [ADR-0026](0026-scoped-data-access.md) | Scoped data access: OrgContext, scoped helpers, named system lookups | C-33 (T1.02) | Accepted |
-| [ADR-0027](0027-locations-and-business-days.md) | Owner-managed locations, archiving, and business days | T1.04 (DM-3) | Proposed |
+| [ADR-0027](0027-locations-and-business-days.md) | Owner-managed locations, archiving, and business days | T1.04 (DM-3) | Accepted |
+| [ADR-0028](0028-memberships-and-the-active-business.md) | Memberships and the business a request acts for | T1.05 (DM-4) | Proposed |

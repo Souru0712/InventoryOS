@@ -10,12 +10,26 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Plan, ProviderConnection, SubscriptionStatus, Tenant, User
+from app.models import Membership, Plan, ProviderConnection, SubscriptionStatus, Tenant, User
 
 
 def user_by_email(db: Session, email: str) -> User | None:
     """The account an email signs in to."""
     return db.scalars(select(User).where(User.email == email.strip().lower())).first()
+
+
+def memberships_of(db: Session, user_id: int) -> list[tuple[Membership, str]]:
+    """The businesses a person may act for, oldest membership first, each with its name.
+
+    Crosses organizations by nature: it is how a signed-in person picks one (SAAS-A-09).
+    """
+    rows = db.execute(
+        select(Membership, Tenant.name)
+        .join(Tenant, Tenant.id == Membership.tenant_id)
+        .where(Membership.user_id == user_id, Membership.status == "active")
+        .order_by(Membership.id)
+    )
+    return [(membership, name) for membership, name in rows]
 
 
 def connection_for_merchant(

@@ -33,6 +33,9 @@ implementation sessions; the detail lives in `docs/`.
   in `app/access/system.py`. A test fails on raw queries in `app/web` and `app/orchestration`.
   A new route that takes an identifier needs a case in `tests/test_isolation.py` (a test fails
   until it has one); an optional `?location=` goes through `location_filter`.
+- A person reaches a business only through an active membership (ADR-0028): the request's
+  business is the session's membership, never `users.tenant_id`. Users are global; a business
+  reaches its people through `members(db, org)`.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`

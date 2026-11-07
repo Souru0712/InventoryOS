@@ -8,10 +8,10 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext, get_scoped, select_scoped
+from app.access import OrgContext, get_scoped, members, select_scoped
 from app.config import get_settings
 from app.entitlements import allows
-from app.models import Alert, AlertKind, StockItem, Tenant, User
+from app.models import Alert, AlertKind, StockItem, Tenant
 from app.notify.email import render_pair, send_email, wants
 from app.orchestration.views import expiry_positions, stock_views, tenant_currency, velocity_map
 from app.transform.alerts import AlertProposal, evaluate_expiries, evaluate_stock
@@ -122,7 +122,7 @@ def send_alert_digest(db: Session, org: OrgContext, now: datetime | None = None)
     if not allows(tenant, "notifications"):
         log.info("tenant %s is not entitled to alerts; digest held", org.tenant_id)
         return False
-    users = list(db.scalars(select_scoped(org, User).where(User.is_active.is_(True))))
+    users = members(db, org)
     if not users:
         log.warning("tenant %s has no active users to alert", org.tenant_id)
         return False

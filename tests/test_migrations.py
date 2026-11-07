@@ -160,6 +160,49 @@ def test_dm3_a_location_needs_no_pos_and_the_downgrade_gives_it_ids(fresh_url):
         engine.dispose()
 
 
+def test_dm4_every_existing_user_becomes_the_owner_of_its_business(fresh_url):
+    """DM-4 (T1.05): one active Owner membership per former user, in its former tenant."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, "912d17673f03")
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    try:
+        with engine.begin() as connection:
+            for name in ("Rosewood", "Juniper"):
+                connection.execute(
+                    text(
+                        "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                        " report_hour, timezone, created_at) VALUES (:name, 'PRO', 'TRIALING',"
+                        " 0, 7, 'UTC', '2026-11-06 12:00:00')"
+                    ),
+                    {"name": name},
+                )
+            for tenant_id, email in ((1, "a@rosewood.test"), (2, "b@juniper.test")):
+                connection.execute(
+                    text(
+                        "INSERT INTO users (tenant_id, email, password_hash, is_active,"
+                        " created_at, wants_stock_alerts, wants_expiry_alerts,"
+                        " wants_weekly_report) VALUES (:tenant_id, :email, 'x', true,"
+                        " '2026-11-06 12:00:00', true, true, true)"
+                    ),
+                    {"tenant_id": tenant_id, "email": email},
+                )
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT tenant_id, user_id, role, status, all_locations FROM memberships"
+                    " ORDER BY user_id"
+                )
+            ).all()
+        assert [tuple(row) for row in rows] == [
+            (1, 1, "owner", "active", True),
+            (2, 2, "owner", "active", True),
+        ]
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

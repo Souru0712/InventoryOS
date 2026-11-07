@@ -34,6 +34,9 @@ COUNT_SOURCES = ("manual", "opening", "receipt", "scan")
 IDENTIFIER_SOURCES = ("manual", "square", "scan")
 BATCH_SOURCES = ("receipt", "label", "scan")
 SUPPRESSION_SOURCES = ("bounce", "complaint", "manual")
+# R1 role presets (USER_ROLES_AND_PERMISSIONS §2, PD-11); their permissions arrive in T1.06.
+MEMBERSHIP_ROLES = ("owner", "administrator", "manager", "employee", "read_only")
+MEMBERSHIP_STATUSES = ("active", "revoked")
 
 
 def ref(target: str) -> ForeignKey:
@@ -175,6 +178,44 @@ class User(Base):
     wants_weekly_report: Mapped[bool] = mapped_column(Boolean, default=True)
 
     tenant: Mapped[Tenant] = relationship(back_populates="users")
+
+
+class Membership(Base):
+    """A person's access to one business: a role, and all of its locations or a list (SAAS-T-03).
+
+    Users are global identities; a user reaches a business only through an active membership.
+    users.tenant_id is the business they signed up with, kept until the contract step (DM-16).
+    """
+
+    __tablename__ = "memberships"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id"),
+        one_of("memberships", "role", MEMBERSHIP_ROLES),
+        one_of("memberships", "status", MEMBERSHIP_STATUSES),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ref("users.id"), index=True)
+    role: Mapped[str] = mapped_column(String(24))
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    # False limits the member to the locations in membership_locations (STF-FR-10).
+    all_locations: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    locations: Mapped[list[MembershipLocation]] = relationship(cascade="all, delete-orphan")
+
+
+class MembershipLocation(Base):
+    """One location a location-scoped member may work at."""
+
+    __tablename__ = "membership_locations"
+    __table_args__ = (UniqueConstraint("membership_id", "location_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    membership_id: Mapped[int] = mapped_column(owned_by("memberships.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
 
 
 class ProviderConnection(Base):

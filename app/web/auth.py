@@ -1,20 +1,22 @@
-"""Signup, login, logout. One workspace per signup."""
+"""Signup, login, logout, and switching between the businesses a person belongs to."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.access.system import user_by_email
+from app.access.system import memberships_of, user_by_email
 from app.db import get_db
 from app.entitlements import PLAN_IDS, start_trial
-from app.models import Tenant, User
+from app.models import Membership, Tenant, User
 from app.security import (
+    SESSION_MEMBERSHIP_KEY,
     email_taken,
     hash_password,
     login_user,
     logout_user,
+    require_user,
     verify_password,
 )
 from app.web.templating import templates
@@ -75,6 +77,9 @@ def signup(
     db.flush()
     user = User(tenant_id=tenant.id, email=email, password_hash=hash_password(password))
     db.add(user)
+    db.flush()
+    # Whoever creates a business owns it (WF-01).
+    db.add(Membership(tenant_id=tenant.id, user_id=user.id, role="owner"))
     db.commit()
 
     login_user(request, user)
@@ -116,3 +121,17 @@ def login(
 def logout(request: Request):
     logout_user(request)
     return RedirectResponse("/", status_code=303)
+
+
+@router.post("/app/organizations/switch")
+def switch_business(
+    request: Request,
+    membership_id: int = Form(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """Act for another business this person belongs to (SAAS-A-09); every page follows."""
+    if not any(membership.id == membership_id for membership, _ in memberships_of(db, user.id)):
+        raise HTTPException(status_code=404, detail="business not found")
+    request.session[SESSION_MEMBERSHIP_KEY] = membership_id
+    return RedirectResponse("/app", status_code=303)

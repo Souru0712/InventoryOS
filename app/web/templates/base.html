@@ -224,6 +224,18 @@
         {{ nav("/app/reorder", "Reorder") }}
         {{ nav("/app/report", "Report") }}
         {{ nav("/app/settings", "Settings") }}
+        {% set businesses = request.state.businesses or [] %}
+        {% if businesses|length > 1 %}
+          <form method="post" action="/app/organizations/switch" style="display:inline-flex; gap:6px; align-items:center; margin:0 6px;">
+            <label for="switch-business" class="small muted">Business</label>
+            <select id="switch-business" name="membership_id">
+              {% for id, name, current in businesses %}
+                <option value="{{ id }}"{% if current %} selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn small secondary" type="submit">Switch</button>
+          </form>
+        {% endif %}
         <a href="/logout">Log out</a>
       {% else %}
         <a href="/pricing">Pricing</a>

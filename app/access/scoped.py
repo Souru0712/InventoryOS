@@ -18,6 +18,7 @@ from app.models import (
     EmailSuppression,
     HealthSnapshot,
     Location,
+    Membership,
     ProviderConnection,
     SoldItem,
     SyncRun,
@@ -28,12 +29,13 @@ from app.models import (
 
 M = TypeVar("M", bound=Base)
 
-# Belong to no single organization; reached only by name through app.access.system.
-GLOBAL_MODELS: frozenset[type[Base]] = frozenset({EmailSuppression, WebhookEvent})
+# Belong to no single organization: users are global identities (SAAS-T-03), reached through
+# members() or by name through app.access.system.
+GLOBAL_MODELS: frozenset[type[Base]] = frozenset({EmailSuppression, WebhookEvent, User})
 
 # Belong to the organization as a whole, so a location scope does not narrow them.
 ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
-    {Tenant, User, ProviderConnection, SoldItem, SyncRun, EmailLog, HealthSnapshot}
+    {Tenant, Membership, ProviderConnection, SoldItem, SyncRun, EmailLog, HealthSnapshot}
 )
 
 
@@ -75,6 +77,22 @@ def select_scoped(org: OrgContext, model: type[M]) -> Select[M]:
 def get_scoped(db: Session, org: OrgContext, model: type[M], ident: int) -> M | None:
     """The row with this id, or None when it does not exist or lies outside org."""
     return db.scalars(select_scoped(org, model).where(model.__table__.c.id == ident)).first()
+
+
+def members(db: Session, org: OrgContext) -> list[User]:
+    """The people with an active membership in org whose accounts are active."""
+    return list(
+        db.scalars(
+            select(User)
+            .join(Membership, Membership.user_id == User.id)
+            .where(
+                Membership.tenant_id == org.tenant_id,
+                Membership.status == "active",
+                User.is_active.is_(True),
+            )
+            .order_by(User.id)
+        )
+    )
 
 
 def update_scoped(org: OrgContext, model: type[Base]) -> Update:

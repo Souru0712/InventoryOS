@@ -1,6 +1,6 @@
 # ADR-0027: Owner-managed locations, archiving, and business days
 
-- **Status:** Proposed, 2026-11-06 (in the T1.04 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-06 (the owner merged the T1.04 pull request, #22: "Yes, merge it")
 - **Decision ID:** none (implements T1.04, migration step DM-3; ADM-FR-01, ADM-FR-02, DR-20, AC-ADM-01)
 - **Tasks:** T1.04; shapes T1.05 (location scopes), T2.12–T2.16 (daily sales, reports), T3.03 (mapping)
 

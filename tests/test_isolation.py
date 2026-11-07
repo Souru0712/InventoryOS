@@ -23,6 +23,7 @@ from app.models import (
     DocumentLine,
     DocumentStatus,
     Location,
+    Membership,
     ProductIdentifier,
     Promotion,
     PromotionStatus,
@@ -149,6 +150,9 @@ CASES = {
         }
     },
     ("POST", "/app/locations/{location_id}/archive"): lambda ids: {},
+    ("POST", "/app/organizations/switch"): lambda ids: {
+        "data": {"membership_id": ids["membership"]}
+    },
     ("POST", "/app/locations/{location_id}/restore"): lambda ids: {},
 }
 
@@ -267,14 +271,18 @@ def world():
         juniper = Tenant(name="Juniper")
         db.add(juniper)
         db.flush()
-        db.add(
-            User(
-                tenant_id=juniper.id,
-                email="owner@juniper.test",
-                password_hash=hash_password("another-good-password"),
-            )
+        their_owner = User(
+            tenant_id=juniper.id,
+            email="owner@juniper.test",
+            password_hash=hash_password("another-good-password"),
         )
+        db.add(their_owner)
+        db.flush()
+        their_membership = Membership(tenant_id=juniper.id, user_id=their_owner.id, role="owner")
+        db.add(their_membership)
+        db.flush()
         theirs = _business(db, juniper.id, "Juniper", B_CODE)
+        theirs["membership"] = their_membership.id
         db.commit()
     with TestClient(app) as client:
         client.post(
@@ -288,6 +296,9 @@ def world():
         with SessionLocal() as db:
             rosewood = db.scalars(select(Tenant).where(Tenant.name == "Rosewood")).one()
             mine = _business(db, rosewood.id, "Rosewood", A_CODE)
+            mine["membership"] = db.scalars(
+                select(Membership.id).where(Membership.tenant_id == rosewood.id)
+            ).one()
             db.commit()
         yield client, mine, theirs
 

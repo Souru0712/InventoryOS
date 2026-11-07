@@ -14,9 +14,10 @@ layer, with unscoped access blocked by a test.
 ## Decision
 
 1. **`OrgContext`** (`app/access/context.py`): frozen; `tenant_id`, `user_id` (None for the
-   system), `location_ids` (None for every location). Built only by `OrgContext.for_user` (the
-   `require_org` dependency) or `OrgContext.system(tenant_id)` (scheduled jobs, signed webhooks,
-   the command line), never from request input.
+   system), `location_ids` (None for every location). Built only by `OrgContext.for_membership`
+   (the `require_org` dependency, from the session's active membership since T1.05, ADR-0028) or
+   `OrgContext.system(tenant_id)` (scheduled jobs, signed webhooks, the command line), never from
+   request input.
 2. **Every service takes `org: OrgContext`** where it took `tenant_id: int`, so memberships and
    location scopes (T1.05) reach every query without changing a signature again.
 3. **Queries go through `select_scoped`, `get_scoped`, `update_scoped`** (`app/access/scoped.py`).
