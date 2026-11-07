@@ -15,7 +15,7 @@ from app.db import get_db
 from app.entitlements import history_days, require
 from app.models import Tenant
 from app.orchestration.health import current, over_time
-from app.security import location_filter, require_org, require_tenant
+from app.security import location_filter, require_permission, require_tenant
 from app.transform.health import reorder_lines
 from app.units import format_approx, format_qty
 from app.web.templating import templates
@@ -29,7 +29,7 @@ def health_page(
     location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("reports.operational")),
 ):
     now = datetime.now(UTC)
     health = current(db, org, location, now)
@@ -56,7 +56,7 @@ def reorder_page(
     location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("reorder.view")),
 ):
     health = current(db, org, location)
     return templates.TemplateResponse(
@@ -81,7 +81,7 @@ def reorder_csv(
     location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("data.export")),
 ):
     require(tenant, "reorder_csv")
     health = current(db, org, location)

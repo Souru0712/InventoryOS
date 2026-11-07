@@ -216,13 +216,12 @@
           {% set on = path == href or (href != "/app" and path.startswith(href ~ "/")) %}
           <a href="{{ href }}"{% if on %} class="here" aria-current="page"{% endif %}>{{ label }}</a>
         {% endmacro %}
-        {{ nav("/app", "Inventory") }}
-        {{ nav("/app/scan", "Scan") }}
-        {{ nav("/app/receiving", "Receiving") }}
-        {{ nav("/app/expiring", "Expiring") }}
-        {{ nav("/app/promotions", "Promotions") }}
-        {{ nav("/app/reorder", "Reorder") }}
-        {{ nav("/app/report", "Report") }}
+        {% if can(request, "inventory.view") %}{{ nav("/app", "Inventory") }}{{ nav("/app/scan", "Scan") }}{% endif %}
+        {% if can(request, "receiving.record") %}{{ nav("/app/receiving", "Receiving") }}{% endif %}
+        {% if can(request, "inventory.view") %}{{ nav("/app/expiring", "Expiring") }}{% endif %}
+        {% if can(request, "reports.financial") %}{{ nav("/app/promotions", "Promotions") }}{% endif %}
+        {% if can(request, "reorder.view") %}{{ nav("/app/reorder", "Reorder") }}{% endif %}
+        {% if can(request, "reports.financial") %}{{ nav("/app/report", "Report") }}{% endif %}
         {{ nav("/app/settings", "Settings") }}
         {% set businesses = request.state.businesses or [] %}
         {% if businesses|length > 1 %}

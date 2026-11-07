@@ -18,7 +18,7 @@ from app.access import OrgContext, get_scoped, select_scoped
 from app.db import get_db
 from app.entitlements import location_allowance
 from app.models import Location, Tenant
-from app.security import require_org, require_tenant, require_writable
+from app.security import require_permission, require_tenant, require_writable
 from app.transform.business_days import (
     EVERY_DAY,
     WEEKDAYS,
@@ -135,7 +135,7 @@ def locations_page(
     request: Request,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("location.manage")),
 ):
     return templates.TemplateResponse(
         request,
@@ -152,7 +152,11 @@ def locations_page(
 
 
 @router.get("/app/locations/new", response_class=HTMLResponse)
-def new_location_form(request: Request, tenant: Tenant = Depends(require_tenant)):
+def new_location_form(
+    request: Request,
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_permission("location.manage")),
+):
     defaults = {
         "name": "",
         "address": "",
@@ -175,7 +179,7 @@ def create_location(
     open_days: list[str] = Form([]),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("location.manage")),
 ):
     raw = {
         "name": name,
@@ -205,7 +209,7 @@ def edit_location_form(
     location_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("location.manage")),
 ):
     location = _owned(db, org, location_id)
     return _render_form(request, tenant, location, _values(location))
@@ -223,7 +227,7 @@ def save_location(
     open_days: list[str] = Form([]),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("location.manage")),
 ):
     location = _owned(db, org, location_id)
     from_pos = location.provider_location_id is not None
@@ -253,7 +257,7 @@ def archive_location(
     location_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("location.manage")),
 ):
     """Stop tracking a location. Nothing is deleted: its items and history stay (DR-24)."""
     location = _owned(db, org, location_id)
@@ -270,7 +274,7 @@ def restore_location(
     location_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("location.manage")),
 ):
     location = _owned(db, org, location_id)
     if location.archived_at is None:
@@ -291,6 +295,7 @@ def save_business_profile(
     contact_email: str = Form(""),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("settings.manage")),
 ):
     """The business profile (ADM-FR-01): its name, address and account contact."""
     name = business_name.strip()

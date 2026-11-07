@@ -78,7 +78,15 @@ templates.env.filters["plain"] = plain
 templates.env.filters["approx"] = approx
 templates.env.filters["amount"] = amount
 templates.env.filters["approx_amount"] = approx_amount
+
+
+def can(request, key: str) -> bool:
+    """What the signed-in member's role allows, for menus and cost columns (set per request)."""
+    return key in getattr(request.state, "permissions", ())
+
+
 templates.env.globals.update(
+    can=can,
     settings=public_settings(),
     # Every signed-in page can say where the account stands, without each route passing it.
     subscription=entitlement_state,

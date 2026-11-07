@@ -35,6 +35,7 @@
   Sign-in links and anything else you asked for are always sent, whatever is ticked here.
 </p>
 
+{% if can(request, "settings.manage") %}
 <h2>Business</h2>
 {% if request.query_params.get("saved") == "business" %}<div class="notice ok">Business details saved.</div>{% endif %}
 {% if request.query_params.get("error") == "name" %}<div class="notice error">The business needs a name.</div>{% endif %}
@@ -53,8 +54,9 @@
     <input id="contact_email" name="contact_email" type="email" value="{{ tenant.contact_email or '' }}">
   </div>
   <p style="margin:12px 0 0;"><button class="btn" type="submit">Save</button>
-     <a class="btn secondary" href="/app/locations">Locations</a></p>
+     {% if can(request, "location.manage") %}<a class="btn secondary" href="/app/locations">Locations</a>{% endif %}</p>
 </form>
+{% endif %}
 
 <h2>Billing</h2>
 <div class="card" style="max-width:620px;">
@@ -76,7 +78,9 @@
     <p class="small muted" style="margin:0 0 12px;">{{ account.message or "" }}</p>
   {% endif %}
 
-  {% if tenant.stripe_customer_id and billing_configured %}
+  {% if not can(request, "subscription.manage") %}
+    <p class="small muted" style="margin:0;">The account owner manages the subscription.</p>
+  {% elif tenant.stripe_customer_id and billing_configured %}
     <form method="post" action="/billing/portal">
       <button class="btn small" type="submit">Manage or cancel subscription</button>
     </form>

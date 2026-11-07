@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
+from app.access.permissions import VIEW_COSTS, without_costs
 from app.config import get_settings
 from app.db import get_db
 from app.models import ProductIdentifier, StockItem, Tenant, TrackMode, User
@@ -28,7 +29,12 @@ from app.orchestration.scanning import (
     suspicious,
 )
 from app.orchestration.views import stock_views, tenant_currency, velocity_map
-from app.security import require_org, require_tenant, require_user, require_writable
+from app.security import (
+    require_permission,
+    require_tenant,
+    require_user,
+    require_writable,
+)
 from app.transform.barcodes import canonical
 from app.transform.dates import prefer_for_currency
 from app.transform.inventory import days_of_cover
@@ -44,7 +50,7 @@ def scan_page(
     request: Request,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("inventory.view")),
 ):
     return templates.TemplateResponse(
         request,
@@ -67,7 +73,7 @@ def _item_payload(db: Session, org: OrgContext, item: StockItem, code: str, kind
     from app.orchestration.scanning import location_name
 
     pack = Decimal(item.pack_size_base) if item.pack_size_base else None
-    return {
+    payload = {
         "found": True,
         "code": code,
         "identifier_type": kind,
@@ -87,6 +93,8 @@ def _item_payload(db: Session, org: OrgContext, item: StockItem, code: str, kind
             "receive_unit": item.receive_unit or "each",
         },
     }
+    # Roles without cost access never receive cost fields (USER_ROLES_AND_PERMISSIONS §5).
+    return payload if org.can(VIEW_COSTS) else without_costs(payload)
 
 
 @router.get("/app/scan/lookup")
@@ -96,7 +104,7 @@ def lookup(
     refresh: bool = True,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("inventory.view")),
 ):
     """Resolve a scanned code against this tenant's own identifier table first."""
     value, kind = canonical(code, symbology)
@@ -151,7 +159,7 @@ def link(
     symbology: str | None = Form(None),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("item.edit")),
 ):
     """Teach the scanner a code it did not know."""
     item = get_scoped(db, org, StockItem, stock_item_id)
@@ -198,7 +206,7 @@ def receive(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("receiving.post")),
 ):
     """Scan, then receive: stock rises, the lot is dated, Square gets the delta."""
     item = get_scoped(db, org, StockItem, stock_item_id)
@@ -247,7 +255,7 @@ def count(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("count.record")),
 ):
     """Correct the count from the shelf. Nothing is sent to Square (C-34)."""
     from app.models import InventoryCount
@@ -300,7 +308,7 @@ def codes_for_item(
     stock_item_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("inventory.view")),
 ):
     item = get_scoped(db, org, StockItem, stock_item_id)
     if item is None:
@@ -330,7 +338,7 @@ def scan_expiry(
     photo: UploadFile = File(...),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("count.record")),
 ):
     """Read the date off a photo of the packaging. The product is already known, so this
     only has to answer 'which date', which is a far smaller question than 'which product'."""

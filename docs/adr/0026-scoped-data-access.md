@@ -33,8 +33,9 @@ layer, with unscoped access blocked by a test.
    and any import of `select`, `update`, `delete`, `insert` or `text` from SQLAlchemy in `app/web`
    and `app/orchestration`; a second test proves it catches the old pattern.
 
-`OrgContext` carries no permissions yet: the permission catalogue and its keys arrive in T1.06,
-and a field nothing could check would be dead weight.
+`OrgContext` carried no permissions at first: T1.06 added them with the catalogue
+([ADR-0029](0029-permission-keys-and-role-presets.md)), and filters rows whose location is their
+parent's for a location-limited context instead of refusing them.
 
 ## Alternatives considered
 

@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.access import OrgContext, UnscopedAccess, get_scoped, select_scoped, update_scoped
+from app.access.permissions import ALL_PERMISSIONS
 from app.access.system import connection_for_merchant, user_by_email
 from app.models import (
     EmailSuppression,
@@ -157,9 +158,32 @@ def test_a_location_limited_context_narrows_location_rows_only(db):
     assert get_scoped(db, org, Location, first.id) is None
     # An organization-wide row is not narrowed by location.
     assert db.scalar(select(func.count()).select_from(select_scoped(org, SoldItem).subquery())) == 1
-    # A row whose location is known only through its item is refused, not shown unfiltered.
-    with pytest.raises(UnscopedAccess, match="InventoryCount"):
-        select_scoped(org, InventoryCount)
+    # A row whose location is known only through its item follows the item (T1.06).
+    for item in db.scalars(select(StockItem).where(StockItem.tenant_id == mine.id)):
+        db.add(InventoryCount(tenant_id=mine.id, stock_item_id=item.id, qty_base=Decimal("1")))
+    db.flush()
+    counted = [
+        db.get(StockItem, count.stock_item_id).location_id
+        for count in db.scalars(select_scoped(org, InventoryCount))
+    ]
+    assert counted == [second.id]
+
+
+def test_every_table_a_business_owns_can_be_read_under_a_location_limit():
+    """No tenant table is left without a location rule, so a limited member never hits a refusal."""
+    from app.access.scoped import GLOBAL_MODELS
+    from app.db import Base
+
+    org = OrgContext(tenant_id=1, location_ids=frozenset({1}))
+    owned = [
+        mapper.class_
+        for mapper in Base.registry.mappers
+        if mapper.class_ not in GLOBAL_MODELS
+        and ("tenant_id" in mapper.class_.__table__.c or mapper.class_ is Tenant)
+    ]
+    assert len(owned) > 20
+    for model in owned:
+        select_scoped(org, model)  # raises UnscopedAccess if a table has no rule
 
 
 @pytest.mark.parametrize("model", [EmailSuppression, User])
@@ -179,7 +203,11 @@ def test_a_context_is_built_from_a_membership_and_cannot_be_changed(db, tenant):
     )
     with pytest.raises(FrozenInstanceError):
         org.tenant_id = tenant.id + 1  # type: ignore[misc]
-    assert OrgContext.system(tenant.id) == OrgContext(tenant_id=tenant.id)
+    assert org.can("subscription.manage")  # an owner
+    system = OrgContext.system(tenant.id)
+    assert (system.user_id, system.location_ids) == (None, None)
+    assert system.permissions == ALL_PERMISSIONS  # scheduled jobs act for the whole business
+    assert OrgContext(tenant_id=tenant.id).permissions == frozenset()  # nothing unless granted
 
 
 # --- the named lookups that cross organizations ---------------------------------------------------

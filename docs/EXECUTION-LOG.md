@@ -5,6 +5,78 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T1.06 Permission keys and role presets
+
+**Implemented**
+- **Catalogue** (`app/access/permissions.py`, strict mypy): every R1 key from
+  USER_ROLES_AND_PERMISSIONS §3 and the five R1 presets. Owner holds every key; Employees post
+  receivings (PD-19) but do not enter sales (PD-37) and have no void rights until the undo window
+  exists; Manager, Administrator and Owner nest. An unknown key fails when the module loads.
+- **`require_permission(key)`** on every product route (46 route and method pairs): 403 for a role
+  without the key; it also gives the route its `OrgContext`, which now carries the role's
+  permissions (`org.can`). The public site, sign-in, signed webhooks and three personal routes are
+  listed as such. ruff is told that `require_permission(...)` in a parameter default is safe, as
+  for FastAPI's own markers.
+- **Costs** (CMD-FR-14, §5): the dashboard, expiring and receiving pages hide money for a role
+  without `inventory.view_costs` (the dashboard's health block, whose findings are stated in money,
+  with it); the scanner's JSON drops cost fields; a role without `receiving.edit_costs` cannot change
+  a line's cost when posting a delivery. Menus and buttons follow the role.
+- **Location scope everywhere** (DR-35): counts, lots, alerts, codes, aliases, events, markdowns,
+  recipe lines, invoice lines and corrections are filtered through their item's or document's
+  location for a location-limited member, replacing T1.02's refusal; every page works for one.
+- ADR-0029 (Proposed until this pull request is merged); ADR-0026 and ADR-0028 updated; ADR-0028
+  Accepted; `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_permissions.py` (13): the presets follow the matrix (owner holds all; nesting;
+  Employee and Read-only sets); a mistyped key fails; cost fields are removed at any depth; every
+  route declares a key or is listed as public or personal; **AC-STF-02**: each of the five roles
+  against every declared route, 403 exactly where the role lacks the key and never a 403 or 500
+  where it holds it; **AC-CMD-03**: an Employee's dashboard, expiring and receiving pages carry no
+  amount and the scanner's JSON no cost (the owner's do); the menu follows the role; an Employee's
+  cost override is ignored; **AC-STF-08**: a Manager of one location gets every page without the
+  other location's stock, and 404 for its items, codes, reorder page and CSV, while an owner sees
+  both.
+- `tests/test_scoped_access.py`: counts follow their item's location under a limit; every tenant
+  table resolves under a limit.
+- Full suite 676 passed, 11 skipped (662 before); ruff, mypy and the docs checker clean.
+
+**Open issues**
+- Keys without a route yet (production, waste, sales, exceptions, team, audit) are exercised when
+  their routes arrive; the declaration and matrix tests pick new routes up automatically.
+- The health score and its findings are hidden from roles without costs rather than restated
+  without money.
+
+**Files changed**
+- `app/access/permissions.py`, `tests/test_permissions.py`, ADR-0029 (new); `app/access/context.py`,
+  `scoped.py`, `app/security.py`, every module in `app/web/` with product routes,
+  `app/web/templating.py`, templates `base.html`, `dashboard.html`, `expiring.html`,
+  `receiving.html`, `receiving_review.html`, `settings.html`; `pyproject.toml` (ruff); tests
+  `test_scoped_access.py`; ADR-0026, ADR-0028 (Accepted), the index, `CLAUDE.md`, task index (T1.05
+  → Completed, T1.06 → In review), this log.
+
+**Next task**
+- T1.07 Server-side sessions, CSRF, POST logout.
+
+---
+
+## 2026-11-06 — T1.05 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #23 was merged with a merge commit (`35db5ee`). CI
+  on its head `7d6cea5`, all five required jobs green: SQLite 662 passed, 11 skipped; PostgreSQL 16
+  673 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: PA3 inverted and retired; a user in two businesses sees only the
+  selected one (AC-STF-07).
+
+**Decisions**
+- ADR-0028 accepted with the merge.
+
+**Files changed**
+- Task index (T1.05 → Completed), ADR-0028 status and index, this log.
+
+---
+
 ## 2026-11-06 — T1.05 Memberships and org switching (DM-4)
 
 **Implemented**

@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped
+from app.access.permissions import known, role_permissions
 from app.access.system import memberships_of
 from app.db import get_db
 from app.models import Location, Membership, Tenant, User
@@ -82,6 +83,8 @@ def require_membership(
     request.session[SESSION_MEMBERSHIP_KEY] = membership.id
     # For the switcher in the page header: (membership id, business name, is it this one).
     request.state.businesses = [(m.id, name, m.id == membership.id) for m, name in options]
+    # For templates: menus and cost columns follow the role (USER_ROLES_AND_PERMISSIONS §5).
+    request.state.permissions = role_permissions(membership.role)
     bind(tenant_id=membership.tenant_id)
     return membership
 
@@ -89,6 +92,20 @@ def require_membership(
 def require_org(membership: Membership = Depends(require_membership)) -> OrgContext:
     """The member's scope; every product query in the request runs in it (C-33)."""
     return OrgContext.for_membership(membership)
+
+
+def require_permission(key: str):
+    """A dependency that admits only members whose role holds key, and gives the route its
+    OrgContext. Every product route declares one (a test enforces it); deny by default."""
+    known(key)
+
+    def check(org: OrgContext = Depends(require_org)) -> OrgContext:
+        if not org.can(key):
+            raise HTTPException(status_code=403, detail="Your role does not allow this.")
+        return org
+
+    check.permission = key  # type: ignore[attr-defined]  # read by the declaration test
+    return check
 
 
 def require_tenant(org: OrgContext = Depends(require_org), db: Session = Depends(get_db)) -> Tenant:
