@@ -1,25 +1,29 @@
-"""Password hashing and session-backed auth. Tenant isolation starts here."""
+"""Password hashing and server-side sessions. Tenant isolation starts here."""
 
 from __future__ import annotations
 
+import hashlib
 import secrets
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped
 from app.access.permissions import known, role_permissions
 from app.access.system import memberships_of
+from app.config import get_settings
 from app.db import get_db
-from app.models import Location, Membership, Tenant, User
+from app.models import Location, Membership, Tenant, User, UserSession
 from app.observability import bind
 
-SESSION_USER_KEY = "uid"
-# The membership the person is acting through, so a switch survives across requests.
-SESSION_MEMBERSHIP_KEY = "mid"
+# The only sign-in state in the cookie: a random token naming a row in `sessions` (SAAS-A-06).
+SESSION_TOKEN_KEY = "sid"  # noqa: S105 (the name of a cookie field, not a secret)
 SESSION_STATE_KEY = "oauth_state"
+# Recording every request would write on every page; this often is enough for the idle timeout.
+TOUCH_EVERY = timedelta(minutes=5)
 
 
 def hash_password(password: str) -> str:
@@ -33,14 +37,65 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def login_user(request: Request, user: User) -> None:
-    request.session[SESSION_USER_KEY] = user.id
-    # A business chosen by whoever used this browser before is not this person's choice.
-    request.session.pop(SESSION_MEMBERSHIP_KEY, None)
+def _hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
-def logout_user(request: Request) -> None:
+def _session_for(db: Session, token: str | None) -> UserSession | None:
+    if not token:
+        return None
+    return db.scalars(select(UserSession).where(UserSession.token_hash == _hash(token))).first()
+
+
+def login_user(request: Request, db: Session, user: User) -> None:
+    """Start a new server-side session. The token is new at every sign-in (no fixation), and
+    whatever this browser held before, the earlier session and its form token, is ended."""
+    old = _session_for(db, request.session.get(SESSION_TOKEN_KEY))
+    now = datetime.now(UTC)
+    if old is not None and old.revoked_at is None:
+        old.revoked_at = now
+    token = secrets.token_urlsafe(32)
+    days = get_settings().session_max_days
+    db.add(
+        UserSession(
+            token_hash=_hash(token),
+            user_id=user.id,
+            created_at=now,
+            last_seen_at=now,
+            expires_at=now + timedelta(days=days),
+        )
+    )
     request.session.clear()
+    request.session[SESSION_TOKEN_KEY] = token
+
+
+def logout_user(request: Request, db: Session) -> None:
+    """End this browser's session on the server, then forget it in the cookie."""
+    row = _session_for(db, request.session.get(SESSION_TOKEN_KEY))
+    if row is not None and row.revoked_at is None:
+        row.revoked_at = datetime.now(UTC)
+    request.session.clear()
+
+
+def revoke_sessions(db: Session, user_id: int) -> int:
+    """End every session a person holds: "log out all devices", and a changed password (T1.08)."""
+    result = db.execute(
+        update(UserSession)
+        .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
+def revoke_membership(db: Session, membership: Membership) -> None:
+    """Take a member's access to one business away, ending the sessions acting for it now
+    (STF-FR-06). Their access ends on their next request either way; this ends the session too."""
+    membership.status = "revoked"
+    db.execute(
+        update(UserSession)
+        .where(UserSession.membership_id == membership.id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
 
 
 def new_state() -> str:
@@ -48,14 +103,28 @@ def new_state() -> str:
 
 
 def current_user(request: Request, db: Session = Depends(get_db)) -> User | None:
-    user_id = request.session.get(SESSION_USER_KEY)
-    if not user_id:
+    """The person this browser's session belongs to, if it is live: not revoked, not past its
+    absolute end, not idle too long, and the account still active."""
+    row = _session_for(db, request.session.get(SESSION_TOKEN_KEY))
+    now = datetime.now(UTC)
+    idle = timedelta(minutes=get_settings().session_idle_minutes)
+    if (
+        row is None
+        or row.revoked_at is not None
+        or now >= row.expires_at
+        or now - row.last_seen_at >= idle
+    ):
+        request.session.pop(SESSION_TOKEN_KEY, None)
         return None
-    user = db.get(User, user_id)
-    if user and user.is_active:
-        bind(user_id=user.id)
-        return user
-    return None
+    user = db.get(User, row.user_id)
+    if user is None or not user.is_active:
+        return None
+    if now - row.last_seen_at >= TOUCH_EVERY:
+        row.last_seen_at = now
+        db.commit()
+    request.state.auth_session = row
+    bind(user_id=user.id)
+    return user
 
 
 def require_user(user: User | None = Depends(current_user)) -> User:
@@ -78,9 +147,8 @@ def require_membership(
     options = memberships_of(db, user.id)
     if not options:
         raise HTTPException(status_code=403, detail="no workspace for this account")
-    chosen = request.session.get(SESSION_MEMBERSHIP_KEY)
+    chosen = request.state.auth_session.membership_id
     membership = next((m for m, _name in options if m.id == chosen), options[0][0])
-    request.session[SESSION_MEMBERSHIP_KEY] = membership.id
     # For the switcher in the page header: (membership id, business name, is it this one).
     request.state.businesses = [(m.id, name, m.id == membership.id) for m, name in options]
     # For templates: menus and cost columns follow the role (USER_ROLES_AND_PERMISSIONS §5).
@@ -137,6 +205,12 @@ def require_writable(
 
     require(tenant, "inventory_write")
     return tenant
+
+
+def choose_membership(request: Request, db: Session, membership_id: int) -> None:
+    """Remember on the server which business this session acts for."""
+    request.state.auth_session.membership_id = membership_id
+    db.commit()
 
 
 def email_taken(db: Session, email: str) -> bool:

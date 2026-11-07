@@ -40,6 +40,9 @@ implementation sessions; the detail lives in `docs/`.
   from `app/access/permissions.py` (ADR-0029; a test fails for a route without one). Money in a
   page sits behind `can(request, "inventory.view_costs")`; JSON for a role without it goes
   through `without_costs`.
+- Sessions are rows (ADR-0030): the cookie holds only a token. Every POST form carries
+  `{{ csrf_field(request) }}` and JavaScript posts send `X-CSRF-Token` (a test checks the
+  templates); logout is a POST. Tests post like a browser through `tests/browser.py`.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`

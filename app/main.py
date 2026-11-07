@@ -35,6 +35,7 @@ from app.web import (
 from app.web import (
     settings as settings_page,
 )
+from app.web.csrf import CSRFProtect
 from app.web.headers import SecurityHeaders
 from app.web.templating import templates
 
@@ -57,9 +58,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="StockPulse", lifespan=lifespan, docs_url=None, redoc_url=None)
+# Inside the session middleware, so the session's form token is already decoded.
+app.add_middleware(CSRFProtect)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
+    # The cookie never outlives the server-side session it names.
+    max_age=settings.session_max_days * 86400,
     # Secure cookies whenever the app is actually served over TLS.
     https_only=settings.app_base_url.startswith("https"),
     same_site="lax",

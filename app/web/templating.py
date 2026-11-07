@@ -20,6 +20,7 @@ from app.units import (
     format_qty,
     from_base,
 )
+from app.web.csrf import csrf_field, csrf_token
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -87,6 +88,8 @@ def can(request, key: str) -> bool:
 
 templates.env.globals.update(
     can=can,
+    csrf_field=csrf_field,
+    csrf_token=csrf_token,
     settings=public_settings(),
     # Every signed-in page can say where the account stands, without each route passing it.
     subscription=entitlement_state,

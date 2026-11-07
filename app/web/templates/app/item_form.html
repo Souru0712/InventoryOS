@@ -8,7 +8,7 @@
 <div class="notice error">Stock lives at a location. <a href="/app/locations/new">Add a location</a> first.</div>
 {% endif %}
 
-<form class="card" method="post" action="/app/items/new">
+<form class="card" method="post" action="/app/items/new">{{ csrf_field(request) }}
   <div class="row">
     <div class="field" style="flex: 2 1 260px;">
       <label for="name">Name</label>

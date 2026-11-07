@@ -15,7 +15,7 @@
 </div>
 {% endif %}
 
-<form method="post" action="/app/settings/email" class="card" style="max-width:620px;">
+<form method="post" action="/app/settings/email" class="card" style="max-width:620px;">{{ csrf_field(request) }}
   {% for field, attribute, label, description in email_settings %}
   <label style="display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--line, #eef2f0);">
     <input type="checkbox" name="{{ field }}" value="1" {% if user[attribute] %}checked{% endif %}
@@ -40,7 +40,7 @@
 {% if request.query_params.get("saved") == "business" %}<div class="notice ok">Business details saved.</div>{% endif %}
 {% if request.query_params.get("error") == "name" %}<div class="notice error">The business needs a name.</div>{% endif %}
 {% if request.query_params.get("error") == "email" %}<div class="notice error">That contact email does not look right.</div>{% endif %}
-<form method="post" action="/app/settings/business" class="card" style="max-width:620px;">
+<form method="post" action="/app/settings/business" class="card" style="max-width:620px;">{{ csrf_field(request) }}
   <div class="field">
     <label for="business_name">Business name</label>
     <input id="business_name" name="business_name" required value="{{ tenant.name }}">
@@ -57,6 +57,12 @@
      {% if can(request, "location.manage") %}<a class="btn secondary" href="/app/locations">Locations</a>{% endif %}</p>
 </form>
 {% endif %}
+
+<h2>Sessions</h2>
+<form method="post" action="/app/sessions/end-all" class="card" style="max-width:620px;">{{ csrf_field(request) }}
+  <p style="margin:0 0 10px;">Signed in on a shared or lost device? End every session you have, here included.</p>
+  <button class="btn secondary" type="submit">Log out all devices</button>
+</form>
 
 <h2>Billing</h2>
 <div class="card" style="max-width:620px;">
@@ -81,7 +87,7 @@
   {% if not can(request, "subscription.manage") %}
     <p class="small muted" style="margin:0;">The account owner manages the subscription.</p>
   {% elif tenant.stripe_customer_id and billing_configured %}
-    <form method="post" action="/billing/portal">
+    <form method="post" action="/billing/portal">{{ csrf_field(request) }}
       <button class="btn small" type="submit">Manage or cancel subscription</button>
     </form>
     <p class="small muted" style="margin:10px 0 0;">

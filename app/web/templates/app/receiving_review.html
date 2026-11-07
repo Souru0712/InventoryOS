@@ -37,7 +37,7 @@
       {% endif %}
     </div>
     {% if document.status.value != "applied" %}
-    <form method="post" action="/app/receiving/{{ document.id }}/reparse" style="margin-top:10px;">
+    <form method="post" action="/app/receiving/{{ document.id }}/reparse" style="margin-top:10px;">{{ csrf_field(request) }}
       <button class="btn small secondary" type="submit">Read it again</button>
     </form>
     {% endif %}
@@ -50,7 +50,7 @@
         <a href="/app/items/new">add the items</a> and record counts by hand.</p>
       </div>
     {% else %}
-    <form method="post" action="/app/receiving/{{ document.id }}/apply">
+    <form method="post" action="/app/receiving/{{ document.id }}/apply">{{ csrf_field(request) }}
       {% set applied = document.status.value == "applied" %}
       <div class="row" style="margin-bottom:12px;">
         <div class="field">

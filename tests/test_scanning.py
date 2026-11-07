@@ -297,7 +297,7 @@ def test_a_quantity_that_is_not_a_number_is_refused(client):
 
 def test_one_tenant_cannot_scan_into_another_tenants_stock(client):
     item_id = signed_up(client, "A", "a@rosewood.test")
-    client.get("/logout")
+    client.post("/logout")
     signed_up(client, "B", "b@rosewood.test")
     for path, payload in [
         ("/app/scan/link", {"code": COKE, "stock_item_id": item_id}),

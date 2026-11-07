@@ -83,3 +83,7 @@ def tenant(db):
 @pytest.fixture
 def location(db, tenant):
     return db.query(Location).filter(Location.tenant_id == tenant.id).one()
+
+
+# Tests post like a browser: with the session's form token (tests/browser.py, T1.07).
+import tests.browser  # noqa: E402, F401

@@ -38,7 +38,7 @@ confirm.</p>
     <p style="margin:0;">Connect Square (or add a location) before receiving deliveries.</p>
   </div>
 {% else %}
-<form class="card" method="post" action="/app/receiving" enctype="multipart/form-data">
+<form class="card" method="post" action="/app/receiving" enctype="multipart/form-data">{{ csrf_field(request) }}
   <div class="row">
     <div class="field">
       <label for="location_id">Delivered to</label>

@@ -218,6 +218,24 @@ class MembershipLocation(Base):
     location_id: Mapped[int] = mapped_column(ref("locations.id"))
 
 
+class UserSession(Base):
+    """A signed-in browser (SAAS-A-06). The cookie holds only a random token; this row, found by
+    the token's hash, says whose session it is, which business it acts for, and whether it is over.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[int] = mapped_column(ref("users.id"), index=True)
+    # The business the person switched to; None until they choose (their first is used).
+    membership_id: Mapped[int | None] = mapped_column(ref("memberships.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class ProviderConnection(Base):
     __tablename__ = "provider_connections"
     __table_args__ = (UniqueConstraint("tenant_id", "provider", "merchant_id"),)

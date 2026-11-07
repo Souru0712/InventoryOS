@@ -134,11 +134,12 @@ def test_R6_batch_removal_is_a_hard_delete(db, tenant, location):
 # safe behaviour in CI.
 
 
-def test_R8_forms_have_no_csrf_token_and_login_is_unthrottled(db, tenant):
+# R8's first half (forms carry no CSRF token) retired in T1.07: every POST form carries one and
+# tests/test_sessions.py::test_the_login_page_carries_a_form_token asserts it in CI. The second
+# half (login is not throttled) stays until T1.09.
+def test_R8_login_is_unthrottled(db, tenant):
     from app.main import app
     with TestClient(app) as client:
-        page = client.get("/login").text
-        assert "csrf" not in page.lower()
         codes = {client.post("/login", data={"email": "owner@rosewood.test", "password": f"wrong-{i}xxxxx"}).status_code
                  for i in range(30)}
         assert codes == {401}  # 30 bad attempts, never locked or throttled

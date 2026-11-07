@@ -43,9 +43,9 @@ dates and reports follow the location's clock.</p>
       </td>
       <td>
         {% if location.archived_at %}
-          <form method="post" action="/app/locations/{{ location.id }}/restore"><button class="btn small secondary" type="submit">Restore</button></form>
+          <form method="post" action="/app/locations/{{ location.id }}/restore">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Restore</button></form>
         {% else %}
-          <form method="post" action="/app/locations/{{ location.id }}/archive"><button class="btn small secondary" type="submit">Archive</button></form>
+          <form method="post" action="/app/locations/{{ location.id }}/archive">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Archive</button></form>
         {% endif %}
       </td>
     </tr>

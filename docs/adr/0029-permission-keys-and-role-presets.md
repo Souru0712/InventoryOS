@@ -1,6 +1,6 @@
 # ADR-0029: Permission keys, role presets, and what a role sees
 
-- **Status:** Proposed, 2026-11-06 (in the T1.06 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-07 (the owner merged the T1.06 pull request, #24: "Yes, merge it")
 - **Decision ID:** none (implements T1.06; STF-FR-02, STF-FR-03, CMD-FR-14, DR-35, AC-STF-02, AC-STF-08, AC-CMD-03)
 - **Tasks:** T1.06; every later task that adds a route or a cost figure
 

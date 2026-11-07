@@ -5,6 +5,80 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-07 — T1.07 Server-side sessions, CSRF, POST logout
+
+**Implemented**
+- **Sessions are rows** (`sessions`, migration `8fadf35f1453`): token hash, user, the business
+  chosen, created, last seen, absolute end, revoked. The signed cookie holds only the random
+  token and the form token; the chosen business moved from the cookie to the row.
+- **Timeouts** (proposed; merging approves them): 12 hours without a request, 14 days after
+  sign-in; both are settings (`SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS`). Last-seen is written at
+  most every 5 minutes. The cookie's lifetime matches the absolute end.
+- **Rotation and revocation**: a new token at every sign-in, ending the browser's previous
+  session; logout ends the row; "Log out all devices" on the settings page ends every row of the
+  person; `revoke_sessions` (for password changes, T1.08) and `revoke_membership` (revokes the
+  membership and ends the sessions acting for it).
+- **CSRF**: an ASGI middleware refuses a state-changing request without this session's token
+  (403, "reload the page"); all 25 POST forms carry it as a hidden field and the scanner's four
+  fetch calls as a header; Square and Stripe webhooks are exempt (signed). A new form token at
+  every sign-in.
+- **Logout is a POST** (a button in the header); `GET /logout` answers 405.
+- Tests post like a browser: `tests/browser.py` adds the session's token unless a test sends its
+  own; the async concurrency test reads the token from the page.
+- Probe R8's CSRF half retired (its throttling half stays for T1.09). ADR-0030 (Proposed);
+  ADR-0029 Accepted; `CLAUDE.md`, README and `.env.example` updated.
+
+**Verified (locally, SQLite)**
+- `tests/test_sessions.py` (19): the cookie holds only the token, the row only its hash; sign-in
+  rotates and ends the previous session; logout ends it for good (a copied cookie no longer
+  works); logout needs a POST; idle and absolute timeouts end a session, use keeps it alive;
+  logging out everywhere ends every device; the chosen business is kept on the server;
+  **AC-STF-04**: revoking a member blocks their very next request and ends their session, others
+  unaffected; every POST form in the templates carries the token; the login page carries one;
+  posts with no token, a forged one or another session's are refused and change nothing; the
+  token works as a form field in a multipart upload; sign-in issues a new token; webhooks need
+  none; the refusal says what to do.
+- Full suite 695 passed, 11 skipped (676 before); ruff, mypy and the docs checker clean. Existing suites run unchanged through
+  the browser shim, so every earlier POST now passes the CSRF check.
+
+**Decision for the owner**
+- The two timeouts (12 hours idle, 14 days absolute) are security configuration: merging this
+  pull request approves them; say if they should differ.
+
+**Open issues**
+- Everyone signs in again once after this deploys (older cookies carry no session token).
+
+**Files changed**
+- `app/web/csrf.py`, `migrations/versions/8fadf35f1453_server_side_sessions.py`,
+  `tests/browser.py`, `tests/test_sessions.py`, ADR-0030 (new); `app/models.py`, `app/config.py`,
+  `app/security.py`, `app/main.py`, `app/web/auth.py`, `app/web/templating.py`, 14 templates (the
+  form token, the logout button, the sessions section, the scanner's header); tests `conftest.py`,
+  `test_async_correctness.py`, `test_permissions.py`, five tests moved to POST logout; probe file
+  (R8's CSRF half); ADR-0029 (Accepted), the index, `CLAUDE.md`, `README.md`, `.env.example`, task
+  index (T1.06 → Completed, T1.07 → In review), this log.
+
+**Next task**
+- T1.08 Email verification, password reset and change.
+
+---
+
+## 2026-11-07 — T1.06 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #24 was merged with a merge commit (`e34146d`). CI
+  on its head `d1837cd`, all five required jobs green: SQLite 676 passed, 11 skipped; PostgreSQL 16
+  687 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: AC-STF-02 (every role against every declared route),
+  AC-STF-08, AC-CMD-03; no route without a permission declaration.
+
+**Decisions**
+- ADR-0029 accepted with the merge.
+
+**Files changed**
+- Task index (T1.06 → Completed), ADR-0029 status and index, this log.
+
+---
+
 ## 2026-11-06 — T1.06 Permission keys and role presets
 
 **Implemented**
