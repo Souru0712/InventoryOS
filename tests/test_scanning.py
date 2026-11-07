@@ -28,6 +28,7 @@ from app.orchestration.scanning import (
     suspicious,
 )
 from app.units import Dimension
+from tests.accounts import confirm_email
 
 COKE = "049000028911"  # a real-looking 12 digit UPC-A
 
@@ -201,6 +202,7 @@ def signed_up(client, name="Rosewood", email="owner@rosewood.test") -> int:
     client.post(
         "/signup", data={"business_name": name, "email": email, "password": "a-good-password"}
     )
+    confirm_email(email)
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.name == name).one()
         location = Location(

@@ -13,6 +13,7 @@ from app.db import Base, SessionLocal, engine
 from app.main import app
 from app.models import Location, Membership, Tenant, User, UserSession
 from app.security import hash_password, revoke_membership
+from tests.accounts import confirm_email
 from tests.browser import session_of
 from tests.sample_files import jpeg
 
@@ -28,6 +29,7 @@ def client():
         test_client.post(
             "/signup", data={"business_name": "Corner", **OWNER}, follow_redirects=False
         )
+        confirm_email(OWNER["email"])
         yield test_client
 
 

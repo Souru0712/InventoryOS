@@ -11,6 +11,7 @@ from app.db import get_db
 from app.entitlements import PLAN_IDS, start_trial
 from app.models import Membership, Tenant, User
 from app.security import (
+    MIN_PASSWORD_LENGTH,
     choose_membership,
     email_taken,
     hash_password,
@@ -20,11 +21,10 @@ from app.security import (
     revoke_sessions,
     verify_password,
 )
+from app.web.accounts import send_link
 from app.web.templating import templates
 
 router = APIRouter()
-
-MIN_PASSWORD_LENGTH = 10
 
 
 @router.get("/signup", response_class=HTMLResponse)
@@ -82,6 +82,8 @@ def signup(
     # Whoever creates a business owns it (WF-01).
     db.add(Membership(tenant_id=tenant.id, user_id=user.id, role="owner"))
     login_user(request, db, user)
+    db.flush()
+    send_link(db, user, "verify_email")
     db.commit()
     # Someone who picked a plan on the way in goes straight to paying for it; everyone else
     # starts their trial in the app. The account exists either way, so nothing is orphaned

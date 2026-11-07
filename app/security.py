@@ -16,7 +16,7 @@ from app.access.permissions import known, role_permissions
 from app.access.system import memberships_of
 from app.config import get_settings
 from app.db import get_db
-from app.models import Location, Membership, Tenant, User, UserSession
+from app.models import AuthToken, Location, Membership, Tenant, User, UserSession
 from app.observability import bind
 
 # The only sign-in state in the cookie: a random token naming a row in `sessions` (SAAS-A-06).
@@ -24,6 +24,9 @@ SESSION_TOKEN_KEY = "sid"  # noqa: S105 (the name of a cookie field, not a secre
 SESSION_STATE_KEY = "oauth_state"
 # Recording every request would write on every page; this often is enough for the idle timeout.
 TOUCH_EVERY = timedelta(minutes=5)
+# How long an emailed link works (SAAS-A-05: reset links expire within the hour).
+TOKEN_LIFETIME = {"verify_email": timedelta(hours=48), "reset_password": timedelta(hours=1)}
+MIN_PASSWORD_LENGTH = 10
 
 
 def hash_password(password: str) -> str:
@@ -98,6 +101,65 @@ def revoke_membership(db: Session, membership: Membership) -> None:
     )
 
 
+def issue_token(db: Session, user: User, purpose: str) -> str:
+    """A new single-use link token for user. Earlier unused links for the same purpose stop
+    working, so only the latest email opens anything."""
+    now = datetime.now(UTC)
+    db.execute(
+        update(AuthToken)
+        .where(
+            AuthToken.user_id == user.id,
+            AuthToken.purpose == purpose,
+            AuthToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    token = secrets.token_urlsafe(32)
+    db.add(
+        AuthToken(
+            user_id=user.id,
+            purpose=purpose,
+            token_hash=_hash(token),
+            created_at=now,
+            expires_at=now + TOKEN_LIFETIME[purpose],
+        )
+    )
+    return token
+
+
+def redeem_token(db: Session, token: str, purpose: str) -> User | None:
+    """The person a live link belongs to, marking the link used; None when the link is unknown,
+    used, expired or for something else. Found by hash, so nothing compares the token itself."""
+    row = db.scalars(select(AuthToken).where(AuthToken.token_hash == _hash(token))).first()
+    now = datetime.now(UTC)
+    if row is None or row.purpose != purpose or row.used_at is not None or now >= row.expires_at:
+        return None
+    user = db.get(User, row.user_id)
+    if user is None or not user.is_active:
+        return None
+    row.used_at = now
+    return user
+
+
+def token_is_live(db: Session, token: str, purpose: str) -> bool:
+    """Whether a link would still work, without using it (to show the form it leads to)."""
+    row = db.scalars(select(AuthToken).where(AuthToken.token_hash == _hash(token))).first()
+    return (
+        row is not None
+        and row.purpose == purpose
+        and row.used_at is None
+        and datetime.now(UTC) < row.expires_at
+    )
+
+
+def set_password(db: Session, user: User, password: str) -> None:
+    """Change the password and end every session the person has (AC-SAAS-04)."""
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Use at least {MIN_PASSWORD_LENGTH} characters for your password.")
+    user.password_hash = hash_password(password)
+    revoke_sessions(db, user.id)
+
+
 def new_state() -> str:
     return secrets.token_urlsafe(32)
 
@@ -123,6 +185,7 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User | None
         row.last_seen_at = now
         db.commit()
     request.state.auth_session = row
+    request.state.email_verified = user.email_verified_at is not None
     bind(user_id=user.id)
     return user
 
@@ -133,6 +196,18 @@ def require_user(user: User | None = Depends(current_user)) -> User:
             status_code=status.HTTP_303_SEE_OTHER,
             detail="login required",
             headers={"Location": "/login"},
+        )
+    return user
+
+
+def require_verified(user: User = Depends(require_user)) -> User:
+    """Admits only a person who confirmed their email: connecting a POS, reading invoices and
+    photos with AI, and inviting staff wait for it (SAAS-A-02, AC-SAAS-02)."""
+    if user.email_verified_at is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Confirm your email address first: use the link we sent, or ask for a new "
+            "one from Settings.",
         )
     return user
 

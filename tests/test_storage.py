@@ -13,6 +13,7 @@ from app.main import app
 from app.models import Document, DocumentStatus, Location, Tenant
 from app.orchestration.receiving import parse_document, save_upload
 from app.storage import LocalStorage, S3Storage, StorageError, get_storage
+from tests.accounts import confirm_email
 from tests.sample_files import jpeg
 
 
@@ -118,6 +119,7 @@ def test_an_invoice_photo_uploaded_through_the_app_is_served_back_from_storage(c
             "password": "a-good-password",
         },
     )
+    confirm_email("o@rosewood.test")
     with SessionLocal() as db:
         tenant = db.query(Tenant).one()
         location = Location(

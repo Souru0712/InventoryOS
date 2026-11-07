@@ -10,6 +10,7 @@ from app.db import Base, SessionLocal, engine
 from app.main import app
 from app.models import Document, Location, Tenant
 from app.storage import get_storage
+from tests.accounts import confirm_email
 from tests.sample_files import jpeg, pdf, png
 
 HTML = b"<script>alert(document.cookie)</script>"
@@ -28,6 +29,7 @@ def client():
                 "password": "a-good-password",
             },
         )
+        confirm_email("o@rosewood.test")
         yield test_client
 
 

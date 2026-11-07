@@ -43,6 +43,8 @@ implementation sessions; the detail lives in `docs/`.
 - Sessions are rows (ADR-0030): the cookie holds only a token. Every POST form carries
   `{{ csrf_field(request) }}` and JavaScript posts send `X-CSRF-Token` (a test checks the
   templates); logout is a POST. Tests post like a browser through `tests/browser.py`.
+- An action that costs AI or connects outside (POS, invoice and photo reading, invitations)
+  also takes `Depends(require_verified)` (ADR-0031). Emailed links open a page whose button posts.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`

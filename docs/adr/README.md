@@ -61,4 +61,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0027](0027-locations-and-business-days.md) | Owner-managed locations, archiving, and business days | T1.04 (DM-3) | Accepted |
 | [ADR-0028](0028-memberships-and-the-active-business.md) | Memberships and the business a request acts for | T1.05 (DM-4) | Accepted |
 | [ADR-0029](0029-permission-keys-and-role-presets.md) | Permission keys, role presets, and what a role sees | T1.06 | Accepted |
-| [ADR-0030](0030-server-side-sessions-and-csrf.md) | Server-side sessions, CSRF tokens, POST logout | T1.07 | Proposed |
+| [ADR-0030](0030-server-side-sessions-and-csrf.md) | Server-side sessions, CSRF tokens, POST logout | T1.07 | Accepted |
+| [ADR-0031](0031-email-verification-and-password-reset.md) | Email verification, password reset and change | T1.08 | Proposed |

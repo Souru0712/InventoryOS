@@ -1,6 +1,7 @@
 """T1.06: every operation checks a permission key; roles hold the keys the matrix gives them."""
 
 import re
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -46,6 +47,12 @@ PUBLIC = {
     ("POST", "/logout"),
     ("POST", "/webhooks/square"),
     ("POST", "/billing/webhook"),
+    ("GET", "/verify-email"),
+    ("POST", "/verify-email"),
+    ("GET", "/password/forgot"),
+    ("POST", "/password/forgot"),
+    ("GET", "/password/reset"),
+    ("POST", "/password/reset"),
 }
 # Routes about the signed-in person rather than the business: any active member.
 PERSONAL = {
@@ -53,6 +60,8 @@ PERSONAL = {
     ("POST", "/app/settings/email"),
     ("POST", "/app/organizations/switch"),
     ("POST", "/app/sessions/end-all"),
+    ("POST", "/app/verify-email/resend"),
+    ("POST", "/app/settings/password"),
 }
 ROLES = ("owner", "administrator", "manager", "employee", "read_only")
 
@@ -152,6 +161,7 @@ def client_factory():
                 tenant_id=tenant.id,
                 email=f"{role}@rosewood.test",
                 password_hash=hash_password("a-good-password"),
+                email_verified_at=datetime.now(UTC),
             )
             db.add(user)
             db.flush()
