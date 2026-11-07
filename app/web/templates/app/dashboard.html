@@ -32,12 +32,12 @@
   </div>
   <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
     {% if connection and can(request, "mapping.manage") %}
-      <form method="post" action="/app/sync"><button class="btn small" type="submit">Sync now</button></form>
+      <form method="post" action="/app/sync">{{ csrf_field(request) }}<button class="btn small" type="submit">Sync now</button></form>
     {% elif not connection and can(request, "pos.manage") %}
       <a class="btn small" href="/connect/square">Connect Square</a>
     {% endif %}
     {% if can(request, "mapping.manage") %}
-    <form method="post" action="/app/recalculate">
+    <form method="post" action="/app/recalculate">{{ csrf_field(request) }}
       <button class="btn small secondary" type="submit">Recalculate</button>
     </form>
     {% endif %}
@@ -139,7 +139,7 @@
       <td><span class="pill {{ row.status }}">{{ row.status.replace("_", " ") }}</span></td>
       {% if can(request, "count.record") %}
       <td>
-        <form method="post" action="/app/items/{{ item.id }}/count" style="display:flex; gap:6px;">
+        <form method="post" action="/app/items/{{ item.id }}/count" style="display:flex; gap:6px;">{{ csrf_field(request) }}
           <input name="quantity" type="text" inputmode="decimal" style="width:88px;"
                  placeholder="{{ item.qty_base|plain(item.stock_unit) }}" required>
           <button class="btn small secondary" type="submit">Save</button>

@@ -111,7 +111,7 @@ from the last four weeks of sales.</p>
       <td>
         {% if can(request, "count.record") %}
         <form method="post" action="/app/expiring/{{ p.batch.id }}/remove"
-              data-confirm="Remove this date? The stock itself is not changed.">
+              data-confirm="Remove this date? The stock itself is not changed.">{{ csrf_field(request) }}
           <button class="btn small secondary" type="submit" title="Remove a wrongly entered date">Remove</button>
         </form>
         {% endif %}
@@ -162,7 +162,7 @@ re-sets everything from what is actually there.</p>
         {% if costs %}<td>{{ row.undated_cents|money(currency) }}</td>{% endif %}
         <td>
           {% if can(request, "item.edit") %}
-          <form method="post" action="/app/expiring/perishable">
+          <form method="post" action="/app/expiring/perishable">{{ csrf_field(request) }}
             <input type="hidden" name="stock_item_id" value="{{ row.item.id }}">
             <input type="hidden" name="perishable" value="no">
             <button class="btn small secondary" type="submit">Never expires</button>
@@ -187,7 +187,7 @@ re-sets everything from what is actually there.</p>
 {% if can(request, "count.record") %}
 <h2>Date stock already on the shelf</h2>
 <div class="card">
-  <form method="post" action="/app/expiring/label" class="row">
+  <form method="post" action="/app/expiring/label" class="row">{{ csrf_field(request) }}
     <div>
       <label for="stock_item_id">Item</label>
       <select id="stock_item_id" name="stock_item_id" required>

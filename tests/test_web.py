@@ -61,7 +61,7 @@ def test_login_rejects_a_wrong_password(client):
             "password": "a-good-password",
         },
     )
-    client.get("/logout")
+    client.post("/logout")
     response = client.post(
         "/login", data={"email": "owner@rosewood.test", "password": "wrong-password-x"}
     )
@@ -73,7 +73,7 @@ def test_one_tenant_cannot_read_another_tenants_documents(client):
         "/signup",
         data={"business_name": "A", "email": "a@rosewood.test", "password": "a-good-password"},
     )
-    client.get("/logout")
+    client.post("/logout")
     client.post(
         "/signup",
         data={"business_name": "B", "email": "b@rosewood.test", "password": "a-good-password"},
@@ -210,7 +210,7 @@ def test_one_tenant_cannot_date_or_remove_another_tenants_stock(client):
     )
     with SessionLocal() as db:
         batch_id = db.query(StockBatch).one().id
-    client.get("/logout")
+    client.post("/logout")
     signed_up_with_stock(client, "B", "b@rosewood.test")
     assert (
         client.post(

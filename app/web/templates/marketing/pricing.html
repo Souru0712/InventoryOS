@@ -15,7 +15,7 @@
     {% if plan.one_time %}
       <a class="btn small" href="mailto:{{ settings.support_email }}?subject=Setup%20package">Book setup</a>
     {% elif tenant %}
-      <form method="post" action="/billing/checkout">
+      <form method="post" action="/billing/checkout">{{ csrf_field(request) }}
         <input type="hidden" name="plan" value="{{ plan.id }}">
         <button class="btn small" type="submit">Choose {{ plan.name }}</button>
       </form>

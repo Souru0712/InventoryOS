@@ -226,7 +226,7 @@ def test_a_revoked_membership_gives_no_access(two_businesses):
 def test_signing_in_does_not_inherit_the_last_persons_choice(two_businesses):
     client, ids = two_businesses
     client.post("/app/organizations/switch", data={"membership_id": ids["juniper_membership"]})
-    client.get("/logout")
+    client.post("/logout")
     client.post("/login", data={"email": "sam@rosewood.test", "password": "a-good-password"})
     assert "Rosewood beans" in client.get("/app").text  # the first business, not the last
 

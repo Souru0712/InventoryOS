@@ -9,7 +9,7 @@
 </p>
 {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
 
-<form class="card" method="post" action="{{ '/app/locations/%d'|format(location.id) if location else '/app/locations/new' }}">
+<form class="card" method="post" action="{{ '/app/locations/%d'|format(location.id) if location else '/app/locations/new' }}">{{ csrf_field(request) }}
   <div class="row">
     <div class="field" style="flex: 2 1 260px;">
       <label for="name">Name</label>

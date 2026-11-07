@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import re
 import threading
 import time
 
@@ -61,12 +62,19 @@ async def test_a_slow_extraction_does_not_hold_up_other_requests(monkeypatch):
     # One event loop for every request, as on a single uvicorn worker.
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+
+        async def form_token(page: str) -> str:
+            """What a browser posts back: the token in the page's form (T1.07)."""
+            html = (await client.get(page)).text
+            return re.search(r'name="csrf_token" value="([^"]+)"', html).group(1)
+
         await client.post(
             "/signup",
             data={
                 "business_name": "Rosewood",
                 "email": "o@rosewood.test",
                 "password": "a-good-password",
+                "csrf_token": await form_token("/signup"),
             },
         )
         with SessionLocal() as db:
@@ -78,10 +86,11 @@ async def test_a_slow_extraction_does_not_hold_up_other_requests(monkeypatch):
             db.commit()
             location_id = location.id
 
+        token = await form_token("/app/receiving")
         upload = asyncio.create_task(
             client.post(
                 "/app/receiving",
-                data={"location_id": location_id},
+                data={"location_id": location_id, "csrf_token": token},
                 files={"photo": ("note.jpg", jpeg("slow"), "image/jpeg")},
             )
         )

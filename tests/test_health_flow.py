@@ -346,7 +346,7 @@ def test_signed_out_visitors_cannot_see_health_or_reorders(client):
 
 def test_one_tenant_never_sees_another_tenants_reorder_list(client):
     workspace(client, "A", "a@rosewood.test", items=[item("secret", "0", name="Secret Item")])
-    client.get("/logout")
+    client.post("/logout")
     workspace(client, "B", "b@rosewood.test")
     assert "Secret Item" not in client.get("/app/reorder").text
     assert "Secret Item" not in client.get("/app/reorder.csv").text

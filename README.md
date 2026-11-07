@@ -279,6 +279,7 @@ Everything is env-driven; see `.env.example`. The ones that matter:
 |---|---|
 | `ENCRYPTION_KEY` | Fernet key for POS tokens. Rotating it orphans every stored token. |
 | `SECRET_KEY` | Session cookie signing. |
+| `SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS` | A session ends after this long without a request (720) and this many days after sign-in (14). |
 | `DATABASE_URL` | SQLite for dev, `postgresql+psycopg://…` for production. |
 | `ANTHROPIC_API_KEY` | Invoice photo reading. Unset → manual entry, everything else works. |
 | `SYNC_INTERVAL_MINUTES` | Background sync cadence (APScheduler). |

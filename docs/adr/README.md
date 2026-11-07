@@ -60,4 +60,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0026](0026-scoped-data-access.md) | Scoped data access: OrgContext, scoped helpers, named system lookups | C-33 (T1.02) | Accepted |
 | [ADR-0027](0027-locations-and-business-days.md) | Owner-managed locations, archiving, and business days | T1.04 (DM-3) | Accepted |
 | [ADR-0028](0028-memberships-and-the-active-business.md) | Memberships and the business a request acts for | T1.05 (DM-4) | Accepted |
-| [ADR-0029](0029-permission-keys-and-role-presets.md) | Permission keys, role presets, and what a role sees | T1.06 | Proposed |
+| [ADR-0029](0029-permission-keys-and-role-presets.md) | Permission keys, role presets, and what a role sees | T1.06 | Accepted |
+| [ADR-0030](0030-server-side-sessions-and-csrf.md) | Server-side sessions, CSRF tokens, POST logout | T1.07 | Proposed |

@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:8000"
     # Development placeholder; production refuses it (see the validator below).
     secret_key: str = "dev-insecure-secret-change-me"  # noqa: S105
+    # A signed-in session ends after this long without a request, and after this many days in
+    # any case (SAAS-A-06). Proposed in T1.07 for the owner to confirm.
+    session_idle_minutes: int = 720
+    session_max_days: int = 14
     encryption_key: str = ""
     # Attached to error reports, so a crash can be traced to the build that shipped it.
     release: str = ""

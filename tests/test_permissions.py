@@ -43,7 +43,7 @@ PUBLIC = {
     ("POST", "/signup"),
     ("GET", "/login"),
     ("POST", "/login"),
-    ("GET", "/logout"),
+    ("POST", "/logout"),
     ("POST", "/webhooks/square"),
     ("POST", "/billing/webhook"),
 }
@@ -52,6 +52,7 @@ PERSONAL = {
     ("GET", "/app/settings"),
     ("POST", "/app/settings/email"),
     ("POST", "/app/organizations/switch"),
+    ("POST", "/app/sessions/end-all"),
 }
 ROLES = ("owner", "administrator", "manager", "employee", "read_only")
 

@@ -59,6 +59,7 @@
 
 <script src="/static/vendor/zxing.min.js"></script>
 <script nonce="{{ request.state.csp_nonce }}">
+  const CSRF = "{{ csrf_token(request) }}";
 (function () {
   "use strict";
   const ITEMS = {{ item_options | tojson }};
@@ -246,7 +247,7 @@
       const body = new FormData();
       body.set("code", data.code);
       body.set("stock_item_id", panel.querySelector("#link-item").value);
-      const res = await fetch("/app/scan/link", { method: "POST", body: body });
+      const res = await fetch("/app/scan/link", { method: "POST", body: body, headers: { "X-CSRF-Token": CSRF } });
       const out = await res.json();
       if (!res.ok) { setStatus(out.detail || "Could not link that code.", "bad"); return; }
       setStatus("Linked. Scanning it again will find it straight away.", "good");
@@ -296,7 +297,7 @@
       const body = new FormData(ev.target);
       body.set("stock_item_id", it.id);
       body.set("as_packs", asPacks ? "true" : "false");
-      const res = await fetch("/app/scan/receive", { method: "POST", body: body });
+      const res = await fetch("/app/scan/receive", { method: "POST", body: body, headers: { "X-CSRF-Token": CSRF } });
       const out = await res.json();
       if (!res.ok) { setStatus(out.detail || "Could not receive that.", "bad"); return; }
       renderDone(it.name, "Received " + out.received_text + ". Now " + out.qty_text + " on hand.", out);
@@ -321,7 +322,7 @@
       ev.preventDefault();
       const body = new FormData(ev.target);
       body.set("stock_item_id", it.id);
-      const res = await fetch("/app/scan/count", { method: "POST", body: body });
+      const res = await fetch("/app/scan/count", { method: "POST", body: body, headers: { "X-CSRF-Token": CSRF } });
       const out = await res.json();
       if (!res.ok) { setStatus(out.detail || "Could not save that count.", "bad"); return; }
       renderDone(it.name, "Counted. Now " + out.qty_text + " on hand.", out);
@@ -387,7 +388,7 @@
     body.set("photo", blob, "date.jpg");
     let out;
     try {
-      const res = await fetch("/app/scan/expiry", { method: "POST", body: body });
+      const res = await fetch("/app/scan/expiry", { method: "POST", body: body, headers: { "X-CSRF-Token": CSRF } });
       out = await res.json();
       if (!res.ok) throw new Error(out.detail || "could not read the photo");
     } catch (err) {

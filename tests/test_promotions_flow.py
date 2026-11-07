@@ -254,7 +254,7 @@ def test_acting_on_a_suggestion_that_no_longer_applies_is_refused(client):
 
 def test_one_tenant_cannot_mark_down_another_tenants_stock(client):
     item_id = signed_up_with_risk(client, "A", "a@rosewood.test")
-    client.get("/logout")
+    client.post("/logout")
     signed_up_with_risk(client, "B", "b@rosewood.test")
     for path in ("accept", "dismiss", "snooze"):
         assert (

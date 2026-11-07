@@ -225,7 +225,7 @@
         {{ nav("/app/settings", "Settings") }}
         {% set businesses = request.state.businesses or [] %}
         {% if businesses|length > 1 %}
-          <form method="post" action="/app/organizations/switch" style="display:inline-flex; gap:6px; align-items:center; margin:0 6px;">
+          <form method="post" action="/app/organizations/switch" style="display:inline-flex; gap:6px; align-items:center; margin:0 6px;">{{ csrf_field(request) }}
             <label for="switch-business" class="small muted">Business</label>
             <select id="switch-business" name="membership_id">
               {% for id, name, current in businesses %}
@@ -235,7 +235,9 @@
             <button class="btn small secondary" type="submit">Switch</button>
           </form>
         {% endif %}
-        <a href="/logout">Log out</a>
+        <form method="post" action="/logout" style="display:inline; margin:0;">{{ csrf_field(request) }}
+          <button class="btn small secondary" type="submit">Log out</button>
+        </form>
       {% else %}
         <a href="/pricing">Pricing</a>
         <a href="/login">Log in</a>
