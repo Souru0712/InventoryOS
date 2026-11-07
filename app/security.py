@@ -10,11 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped
+from app.access.system import memberships_of
 from app.db import get_db
-from app.models import Location, Tenant, User
+from app.models import Location, Membership, Tenant, User
 from app.observability import bind
 
 SESSION_USER_KEY = "uid"
+# The membership the person is acting through, so a switch survives across requests.
+SESSION_MEMBERSHIP_KEY = "mid"
 SESSION_STATE_KEY = "oauth_state"
 
 
@@ -31,6 +34,8 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def login_user(request: Request, user: User) -> None:
     request.session[SESSION_USER_KEY] = user.id
+    # A business chosen by whoever used this browser before is not this person's choice.
+    request.session.pop(SESSION_MEMBERSHIP_KEY, None)
 
 
 def logout_user(request: Request) -> None:
@@ -47,7 +52,7 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User | None
         return None
     user = db.get(User, user_id)
     if user and user.is_active:
-        bind(tenant_id=user.tenant_id, user_id=user.id)
+        bind(user_id=user.id)
         return user
     return None
 
@@ -62,16 +67,35 @@ def require_user(user: User | None = Depends(current_user)) -> User:
     return user
 
 
-def require_tenant(user: User = Depends(require_user), db: Session = Depends(get_db)) -> Tenant:
-    tenant = db.get(Tenant, user.tenant_id)
+def require_membership(
+    request: Request, user: User = Depends(require_user), db: Session = Depends(get_db)
+) -> Membership:
+    """The business this request acts for: the one the person switched to, else their first.
+
+    Only an active membership counts (SAAS-T-03); a revoked one is as if it never existed.
+    """
+    options = memberships_of(db, user.id)
+    if not options:
+        raise HTTPException(status_code=403, detail="no workspace for this account")
+    chosen = request.session.get(SESSION_MEMBERSHIP_KEY)
+    membership = next((m for m, _name in options if m.id == chosen), options[0][0])
+    request.session[SESSION_MEMBERSHIP_KEY] = membership.id
+    # For the switcher in the page header: (membership id, business name, is it this one).
+    request.state.businesses = [(m.id, name, m.id == membership.id) for m, name in options]
+    bind(tenant_id=membership.tenant_id)
+    return membership
+
+
+def require_org(membership: Membership = Depends(require_membership)) -> OrgContext:
+    """The member's scope; every product query in the request runs in it (C-33)."""
+    return OrgContext.for_membership(membership)
+
+
+def require_tenant(org: OrgContext = Depends(require_org), db: Session = Depends(get_db)) -> Tenant:
+    tenant = get_scoped(db, org, Tenant, org.tenant_id)
     if tenant is None:
         raise HTTPException(status_code=403, detail="no workspace for this account")
     return tenant
-
-
-def require_org(user: User = Depends(require_user)) -> OrgContext:
-    """The signed-in user's scope; every product query in the request runs in it (C-33)."""
-    return OrgContext.for_user(user)
 
 
 def location_filter(

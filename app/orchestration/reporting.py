@@ -7,10 +7,10 @@ from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext, get_scoped, select_scoped
+from app.access import OrgContext, get_scoped, members, select_scoped
 from app.config import get_settings
 from app.entitlements import allows
-from app.models import EmailLog, Tenant, User
+from app.models import EmailLog, Tenant
 from app.notify.email import render_pair, send_email, wants
 from app.orchestration.alerts import proposals_for
 from app.orchestration.views import sale_rows, sold_item_names, stock_views
@@ -89,11 +89,7 @@ def send_weekly_report(db: Session, org: OrgContext, today: date | None = None) 
         f"{money(report.net_cents)} sales, {len(report.alerts)} stock alerts"
     )
 
-    recipients = [
-        user.email
-        for user in db.scalars(select_scoped(org, User).where(User.is_active.is_(True)))
-        if wants(user, "weekly_report")
-    ]
+    recipients = [user.email for user in members(db, org) if wants(user, "weekly_report")]
     if not recipients:
         log.info("tenant %s has nobody who wants the weekly report", org.tenant_id)
         return False

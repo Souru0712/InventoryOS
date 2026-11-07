@@ -39,7 +39,7 @@ os.environ.update(
 import pytest  # noqa: E402
 
 from app.db import Base, SessionLocal, engine  # noqa: E402
-from app.models import Location, Tenant, User  # noqa: E402
+from app.models import Location, Membership, Tenant, User  # noqa: E402
 from app.security import hash_password  # noqa: E402
 
 
@@ -59,13 +59,14 @@ def tenant(db):
     tenant = Tenant(name="Rosewood Coffee")
     db.add(tenant)
     db.flush()
-    db.add(
-        User(
-            tenant_id=tenant.id,
-            email="owner@rosewood.test",
-            password_hash=hash_password("a-good-password"),
-        )
+    owner = User(
+        tenant_id=tenant.id,
+        email="owner@rosewood.test",
+        password_hash=hash_password("a-good-password"),
     )
+    db.add(owner)
+    db.flush()
+    db.add(Membership(tenant_id=tenant.id, user_id=owner.id, role="owner"))
     db.add(
         Location(
             tenant_id=tenant.id,

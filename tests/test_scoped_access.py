@@ -14,6 +14,7 @@ from app.models import (
     EmailSuppression,
     InventoryCount,
     Location,
+    Membership,
     ProviderConnection,
     SoldItem,
     StockItem,
@@ -161,15 +162,21 @@ def test_a_location_limited_context_narrows_location_rows_only(db):
         select_scoped(org, InventoryCount)
 
 
-def test_tables_that_belong_to_no_organization_are_refused():
+@pytest.mark.parametrize("model", [EmailSuppression, User])
+def test_tables_that_belong_to_no_organization_are_refused(model):
+    """Users are global identities (SAAS-T-03): a business reaches them through memberships."""
     with pytest.raises(UnscopedAccess, match="app.access.system"):
-        select_scoped(OrgContext.system(1), EmailSuppression)
+        select_scoped(OrgContext.system(1), model)
 
 
-def test_a_context_is_built_from_the_user_and_cannot_be_changed(db, tenant):
-    user = db.scalars(select(User).where(User.tenant_id == tenant.id)).one()
-    org = OrgContext.for_user(user)
-    assert (org.tenant_id, org.user_id, org.location_ids) == (tenant.id, user.id, None)
+def test_a_context_is_built_from_a_membership_and_cannot_be_changed(db, tenant):
+    membership = db.scalars(select(Membership).where(Membership.tenant_id == tenant.id)).one()
+    org = OrgContext.for_membership(membership)
+    assert (org.tenant_id, org.user_id, org.location_ids) == (
+        tenant.id,
+        membership.user_id,
+        None,
+    )
     with pytest.raises(FrozenInstanceError):
         org.tenant_id = tenant.id + 1  # type: ignore[misc]
     assert OrgContext.system(tenant.id) == OrgContext(tenant_id=tenant.id)

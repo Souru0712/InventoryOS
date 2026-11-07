@@ -7,7 +7,7 @@ import pytest
 
 from app.access import OrgContext
 from app.config import get_settings
-from app.models import Alert, AlertKind, EmailLog, StockItem, TrackMode, User
+from app.models import Alert, AlertKind, EmailLog, Membership, StockItem, TrackMode, User
 from app.notify.email import suppress
 from app.orchestration.alerts import send_alert_digest
 from app.orchestration.reporting import send_weekly_report
@@ -98,6 +98,8 @@ def second_user(db, tenant, email: str, **preferences) -> User:
         **preferences,
     )
     db.add(user)
+    db.flush()
+    db.add(Membership(tenant_id=tenant.id, user_id=user.id, role="employee"))
     db.commit()
     return user
 

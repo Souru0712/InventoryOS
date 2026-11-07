@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from app.config import get_settings
 from app.db import Base, SessionLocal, engine
 from app.main import app
-from app.models import Location, ProviderConnection, StockItem, Tenant, TrackMode, User
+from app.models import Location, Membership, ProviderConnection, StockItem, Tenant, TrackMode, User
 from app.providers.square.webhooks import signature_for, verify_signature
 from app.security import hash_password
 from app.units import Dimension
@@ -37,13 +37,14 @@ def connected():
         tenant = Tenant(name="Rosewood")
         db.add(tenant)
         db.flush()
-        db.add(
-            User(
-                tenant_id=tenant.id,
-                email="o@rosewood.test",
-                password_hash=hash_password("a-good-password"),
-            )
+        owner = User(
+            tenant_id=tenant.id,
+            email="o@rosewood.test",
+            password_hash=hash_password("a-good-password"),
         )
+        db.add(owner)
+        db.flush()
+        db.add(Membership(tenant_id=tenant.id, user_id=owner.id, role="owner"))
         db.add(
             ProviderConnection(
                 tenant_id=tenant.id,

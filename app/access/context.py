@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.models import User
+from app.models import Membership
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -12,7 +12,7 @@ class OrgContext:
     """The scope every query runs in. Built here, never from a form or a URL.
 
     location_ids None means every location of the organization. A set limits location-scoped
-    rows to those locations (DR-35); memberships with a location scope set it (T1.05).
+    rows to those locations (DR-35); a membership scoped to some locations sets it.
     """
 
     tenant_id: int
@@ -20,9 +20,16 @@ class OrgContext:
     location_ids: frozenset[int] | None = None
 
     @classmethod
-    def for_user(cls, user: User) -> OrgContext:
-        """A signed-in user's scope. Until memberships (T1.05) every user owns one organization."""
-        return cls(tenant_id=user.tenant_id, user_id=user.id)
+    def for_membership(cls, membership: Membership) -> OrgContext:
+        """A signed-in member's scope: their business, and its locations they may work at."""
+        locations = (
+            None
+            if membership.all_locations
+            else frozenset(link.location_id for link in membership.locations)
+        )
+        return cls(
+            tenant_id=membership.tenant_id, user_id=membership.user_id, location_ids=locations
+        )
 
     @classmethod
     def system(cls, tenant_id: int) -> OrgContext:

@@ -21,6 +21,7 @@ from app.models import (
     IdentifierType,
     InventoryCount,
     Location,
+    Membership,
     ProductIdentifier,
     RecipeComponent,
     SalesDaily,
@@ -354,13 +355,14 @@ def cmd_demo(args: argparse.Namespace) -> int:
         tenant = Tenant(name=args.name)
         db.add(tenant)
         db.flush()
-        db.add(
-            User(
-                tenant_id=tenant.id,
-                email=args.email.lower(),
-                password_hash=hash_password(args.password),
-            )
+        owner = User(
+            tenant_id=tenant.id,
+            email=args.email.lower(),
+            password_hash=hash_password(args.password),
         )
+        db.add(owner)
+        db.flush()
+        db.add(Membership(tenant_id=tenant.id, user_id=owner.id, role="owner"))
         location = Location(
             tenant_id=tenant.id,
             provider="demo",

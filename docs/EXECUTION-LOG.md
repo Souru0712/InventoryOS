@@ -5,6 +5,81 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-06 — T1.05 Memberships and org switching (DM-4)
+
+**Implemented**
+- **Memberships** (`memberships`, `membership_locations`): a person's access to a business, with
+  a role (the R1 presets owner, administrator, manager, employee, read-only), active or revoked,
+  and all locations or a list. One per person and business; role and status are checked by the
+  database. Their permissions are T1.06's.
+- **The business a request acts for comes from an active membership only.** The session keeps
+  the chosen membership; without a valid choice the person's oldest active membership is used;
+  with none, 403. `OrgContext.for_membership` replaces `for_user` and carries the location scope.
+  Signing in clears the previous person's choice. `require_tenant` now follows the membership.
+- **Switching**: a business picker in the header when a person has more than one;
+  `/app/organizations/switch` accepts only a membership the person holds (404 otherwise).
+- **Users are global identities**: scoped selects refuse `User`; alerts and the weekly report go
+  to `members(db, org)` (active members with active accounts), so a manager of a second business
+  gets that business's emails. Square's connect callback files the connection under the active
+  business, not `users.tenant_id`.
+- Signup and the demo seeder make the creator the Owner.
+- **DM-4**, migration `545dd2eaa736`: the two tables, and every existing user as the active Owner
+  of the business it signed up with. `users.tenant_id` stays until DM-16; nothing decides access by
+  it any more.
+- Probe PA3 retired. ADR-0028 (Proposed until this pull request is merged); ADR-0026 updated;
+  `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_memberships.py` (12): PA3 inverted (one person in two businesses, once each); role
+  and status refused outside the presets; signing up makes the owner; after switching only the
+  selected business's stock shows, and back again (AC-STF-07); a new item lands in the selected
+  business; another person's business cannot be chosen; a revoked membership loses access on the
+  next request, and with none left the answer is 403; signing in does not inherit the last
+  choice; a location-scoped membership carries its locations into the context; members() returns
+  active members only.
+- Isolation suite: the coverage test required a case for the switch route; switching to another
+  business's membership answers 404 and changes nothing (34 cases pass). Users are now refused by
+  scoped selects (test).
+- DM-4 migration test: two existing users become the active owners of their own businesses.
+- Full suite 662 passed, 11 skipped (647 and 10 before; the new skip is the DM-4 migration test's Postgres run); ruff, mypy and the docs checker clean.
+
+**Open issues**
+- A location-limited membership is stored and carries its locations, but pages reading counts,
+  lots or alerts refuse it until T1.06 gives those rows a location path (fails closed). No screen
+  creates one before invitations (T1.10).
+- Roles do not yet limit anything: every member can do everything until T1.06.
+
+**Files changed**
+- `migrations/versions/545dd2eaa736_memberships.py`, `tests/test_memberships.py`, ADR-0028 (new);
+  `app/models.py`, `app/access/{__init__,context,scoped,system}.py`, `app/security.py`,
+  `app/web/auth.py`, `app/web/dashboard.py`, `app/web/templates/base.html`, `app/cli.py`,
+  `app/orchestration/{alerts,reporting}.py`; tests `conftest.py`, `test_email.py`,
+  `test_webhooks.py`, `test_isolation.py`, `test_scoped_access.py`, `test_migrations.py`; probe
+  file (PA3 retired); ADR-0026, ADR-0027 (Accepted), the index, `CLAUDE.md`, task index (T1.04 →
+  Completed, T1.05 → In review), this log.
+
+**Next task**
+- T1.06 Permission keys and role presets.
+
+---
+
+## 2026-11-06 — T1.04 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #22 was merged with a merge commit (`2f7055c`). CI
+  on its head `30ca62c`, all five required jobs green: SQLite 647 passed, 10 skipped; PostgreSQL 16
+  657 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: a business without Square creates a location and then a stock
+  item (PA1 retired); AC-ADM-01.
+
+**Decisions**
+- ADR-0027 accepted with the merge.
+
+**Files changed**
+- Task index (T1.04 → Completed), ADR-0027 status and index, this log.
+
+---
+
 ## 2026-11-06 — T1.04 Organization and location model (DM-3)
 
 **Implemented**

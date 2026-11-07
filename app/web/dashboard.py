@@ -565,7 +565,7 @@ def square_callback(
         )
     ).first()
     connection = existing or ProviderConnection(
-        tenant_id=user.tenant_id, provider="square", merchant_id=token["merchant_id"]
+        tenant_id=org.tenant_id, provider="square", merchant_id=token["merchant_id"]
     )
     connection.access_token_enc = oauth.encrypt(token["access_token"])
     connection.refresh_token_enc = (
@@ -579,6 +579,6 @@ def square_callback(
     try:
         run_sync(db, org)
     except Exception:
-        log.exception("first sync after connect failed for tenant %s", user.tenant_id)
+        log.exception("first sync after connect failed for tenant %s", org.tenant_id)
         return RedirectResponse("/app?error=first_sync_failed", status_code=303)
     return RedirectResponse("/app?connected=1", status_code=303)
