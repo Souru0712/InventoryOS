@@ -51,8 +51,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T1.02 | Scoped data-access layer (C-33) | P0 | M | M1 | T1.01 | Completed (2026-11-06; no raw query in routes or services, enforced by a test) |
 | T1.03 | Tenant-isolation test suite | P0 | M | M1 | T1.02 | Completed (2026-11-06; every id route refused across businesses, in both CI test jobs) |
 | T1.04 | Organization and location model | P0 | M | M1 | T1.02 | Completed (2026-11-06; locations without a POS, local business days, PA1 retired) |
-| T1.05 | Memberships and org switching | P0 | M | M1 | T1.02 | In review (PR open; CI evidence in the execution log) |
-| T1.06 | Permission keys and role presets | P0 | M | M1 | T1.05 | Not started |
+| T1.05 | Memberships and org switching | P0 | M | M1 | T1.02 | Completed (2026-11-06; one login, several businesses, PA3 retired) |
+| T1.06 | Permission keys and role presets | P0 | M | M1 | T1.05 | In review (PR open; CI evidence in the execution log) |
 | T1.07 | Server-side sessions, CSRF, POST logout | P1 | M | M1 | T1.05 | Not started |
 | T1.08 | Email verification, password reset and change | P1 | M | M1 | T1.07 | Not started |
 | T1.09 | Login throttling | P1 | S | M1 | T1.07 | Not started |

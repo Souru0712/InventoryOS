@@ -25,7 +25,7 @@ from app.orchestration.promotions import (
 from app.orchestration.views import tenant_currency
 from app.security import (
     location_filter,
-    require_org,
+    require_permission,
     require_tenant,
     require_user,
     require_writable,
@@ -43,7 +43,7 @@ def promotions_page(
     location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("reports.financial")),
 ):
     today = datetime.now(UTC).date()
     suggestions = suggestions_for(db, org, location_id=location)
@@ -75,7 +75,7 @@ def accept_promotion(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("product.edit")),
 ):
     """Start the markdown. An empty price means the suggested one was good enough."""
     item = get_scoped(db, org, StockItem, stock_item_id)
@@ -105,7 +105,7 @@ def dismiss_promotion(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("product.edit")),
 ):
     dismiss(db, org, _suggestion_or_404(db, org, stock_item_id), user_id=user.id)
     db.commit()
@@ -118,7 +118,7 @@ def snooze_promotion(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("product.edit")),
 ):
     snooze(db, org, _suggestion_or_404(db, org, stock_item_id), user_id=user.id)
     db.commit()
@@ -130,7 +130,7 @@ def end_promotion(
     promotion_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("product.edit")),
 ):
     promotion = get_scoped(db, org, Promotion, promotion_id)
     if promotion is None:

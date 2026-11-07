@@ -67,8 +67,10 @@ ignore = [
 "tests/**" = ["S101", "F811", "S105", "S106"]
 
 [tool.ruff.lint.flake8-bugbear]
-# FastAPI's dependency markers are meant to be called in parameter defaults.
+# FastAPI's dependency markers are meant to be called in parameter defaults, and so is
+# require_permission, which builds each route's dependency once, when the module loads.
 extend-immutable-calls = [
+    "app.security.require_permission",
     "fastapi.Body",
     "fastapi.Cookie",
     "fastapi.Depends",

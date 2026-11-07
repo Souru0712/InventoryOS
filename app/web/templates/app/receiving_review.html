@@ -19,8 +19,10 @@
 <h1>{{ document.supplier or "Delivery" }}</h1>
 <p class="lede">
   Invoice {{ document.invoice_number or document.id }} &middot;
-  {{ (document.invoice_date or document.uploaded_at).strftime("%d %b %Y") }} &middot;
-  {{ document.total_cents|money(document.currency) }}
+  {{ (document.invoice_date or document.uploaded_at).strftime("%d %b %Y") }}
+  {% set costs = can(request, "inventory.view_costs") %}
+  {% set edit_costs = can(request, "receiving.edit_costs") %}
+  {% if costs %}&middot; {{ document.total_cents|money(document.currency) }}{% endif %}
   {% if document.extractor %}<span class="small muted">&middot; read by {{ document.extractor }}</span>{% endif %}
 </p>
 
@@ -67,7 +69,7 @@
       <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>On the invoice</th><th>Matched to</th><th>Receive</th><th>Line total</th><th>Best before</th><th>Confidence</th><th>Apply</th></tr>
+          <tr><th>On the invoice</th><th>Matched to</th><th>Receive</th>{% if edit_costs %}<th>Line total</th>{% endif %}<th>Best before</th><th>Confidence</th><th>Apply</th></tr>
         </thead>
         <tbody>
         {% for line in lines %}
@@ -78,7 +80,7 @@
               <div class="small muted">{{ line.raw_text }}</div>
               <div class="small muted">
                 {{ line.parsed_qty }} {{ line.parsed_unit or "" }}
-                {% if line.line_total_cents %} &middot; {{ line.line_total_cents|money(document.currency) }}{% endif %}
+                {% if costs and line.line_total_cents %} &middot; {{ line.line_total_cents|money(document.currency) }}{% endif %}
               </div>
             </td>
             <td>
@@ -96,12 +98,14 @@
                      value="{{ line.received_qty_base|plain(matched.stock_unit) if matched else '' }}">
               <span class="small muted">{{ matched.stock_unit if matched else "" }}</span>
             </td>
+            {% if edit_costs %}
             <td style="white-space:nowrap;">
               <input name="line_{{ line.id }}_total" inputmode="decimal" style="width:90px;"
                      aria-label="Line total for {{ line.parsed_name }}"
                      value="{{ "%.2f"|format(line.line_total_cents / 100) if line.line_total_cents else "" }}"
                      {% if document.status.value == "applied" %}disabled{% endif %}>
             </td>
+            {% endif %}
             <td>
               <input type="date" name="line_{{ line.id }}_expires" style="width:auto;"
                      value="{{ line.expires_on.isoformat() if line.expires_on else '' }}"
@@ -122,7 +126,7 @@
         </tbody>
       </table>
       </div>
-      {% if document.status.value != "applied" %}
+      {% if document.status.value != "applied" and can(request, "receiving.post") %}
         <p style="margin-top:14px;">
           <button class="btn" type="submit">Receive checked lines</button>
           <a class="btn secondary" href="/app/receiving">Back</a>

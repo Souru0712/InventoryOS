@@ -46,7 +46,7 @@ from app.security import (
     SESSION_STATE_KEY,
     location_filter,
     new_state,
-    require_org,
+    require_permission,
     require_tenant,
     require_user,
     require_writable,
@@ -130,7 +130,7 @@ def dashboard(
     location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("inventory.view")),
 ):
     rows = _rows(db, org, location)
     connection = db.scalars(
@@ -203,7 +203,7 @@ def expiring(
     location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("inventory.view")),
 ):
     horizon = get_settings().expiry_horizon_days
     summary = _expiry_summary(expiry_positions(db, org, location_id=location), horizon)
@@ -232,7 +232,7 @@ def label_stock(
     expires_on: str = Form(...),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("count.record")),
 ):
     """Date stock that is already on the shelf. The quantity does not change; it gains a date."""
     item = get_scoped(db, org, StockItem, stock_item_id)
@@ -265,7 +265,7 @@ def set_perishable(
     perishable: str = Form("no"),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("item.edit")),
 ):
     """Say whether an item can expire at all, so the coverage figure counts the right things."""
     item = get_scoped(db, org, StockItem, stock_item_id)
@@ -281,7 +281,7 @@ def remove_batch(
     batch_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("count.record")),
 ):
     """Undo a wrongly entered date. Stock is untouched: a batch is only a date on it."""
     batch = get_scoped(db, org, StockBatch, batch_id)
@@ -303,7 +303,7 @@ def new_item_form(
     request: Request,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("item.edit")),
 ):
     return templates.TemplateResponse(
         request,
@@ -338,7 +338,7 @@ def create_item(
     upc: str = Form(""),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("item.edit")),
 ):
     from app.load.upsert import slugify
 
@@ -426,7 +426,7 @@ def record_count(
     note: str = Form(""),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("count.record")),
 ):
     """A physical count re-anchors the item; derived quantities restart from here."""
     item = get_scoped(db, org, StockItem, item_id)
@@ -460,7 +460,7 @@ def update_thresholds(
     lead_time_days: int = Form(2),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("item.edit")),
 ):
     require(tenant, "custom_thresholds")
     item = get_scoped(db, org, StockItem, item_id)
@@ -492,7 +492,7 @@ def report(
     request: Request,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("reports.financial")),
 ):
     items = {item.id: item for item in stock_views(db, org)}
     return templates.TemplateResponse(
@@ -511,7 +511,7 @@ def report(
 def manual_sync(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("mapping.manage")),
 ):
     try:
         run_sync(db, org)
@@ -527,7 +527,7 @@ def manual_sync(
 def recalculate(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("mapping.manage")),
 ):
     refresh_derived_quantities(db, org)
     db.commit()
@@ -535,7 +535,11 @@ def recalculate(
 
 
 @router.get("/connect/square")
-def connect_square(request: Request, tenant: Tenant = Depends(require_tenant)):
+def connect_square(
+    request: Request,
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_permission("pos.manage")),
+):
     state = new_state()
     request.session[SESSION_STATE_KEY] = state
     return RedirectResponse(oauth.authorize_url(state), status_code=303)
@@ -549,7 +553,7 @@ def square_callback(
     error: str | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("pos.manage")),
 ):
     expected = request.session.pop(SESSION_STATE_KEY, None)
     if error:

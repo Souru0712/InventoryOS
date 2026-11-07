@@ -71,7 +71,8 @@ confirm.</p>
 <div class="table-wrap">
 <table>
   <thead>
-    <tr><th>Date</th><th>Supplier</th><th>Invoice</th><th>Lines</th><th>Total</th><th>Status</th><th></th></tr>
+    {% set costs = can(request, "inventory.view_costs") %}
+    <tr><th>Date</th><th>Supplier</th><th>Invoice</th><th>Lines</th>{% if costs %}<th>Total</th>{% endif %}<th>Status</th><th></th></tr>
   </thead>
   <tbody>
   {% for document in documents %}
@@ -80,7 +81,7 @@ confirm.</p>
       <td>{{ document.supplier or "-" }}</td>
       <td class="small">{{ document.invoice_number or "-" }}</td>
       <td>{{ document.lines|length }}</td>
-      <td>{{ document.total_cents|money(document.currency) }}</td>
+      {% if costs %}<td>{{ document.total_cents|money(document.currency) }}</td>{% endif %}
       <td>
         <span class="pill {{ 'ok' if document.status.value == 'applied' else 'low_stock' if document.status.value == 'needs_review' else 'stale_count' }}">
           {{ document.status.value.replace("_", " ") }}

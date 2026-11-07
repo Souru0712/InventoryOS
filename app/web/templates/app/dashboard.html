@@ -31,31 +31,36 @@
     {% endif %}
   </div>
   <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
-    {% if connection %}
+    {% if connection and can(request, "mapping.manage") %}
       <form method="post" action="/app/sync"><button class="btn small" type="submit">Sync now</button></form>
-    {% else %}
+    {% elif not connection and can(request, "pos.manage") %}
       <a class="btn small" href="/connect/square">Connect Square</a>
     {% endif %}
+    {% if can(request, "mapping.manage") %}
     <form method="post" action="/app/recalculate">
       <button class="btn small secondary" type="submit">Recalculate</button>
     </form>
-    <a class="btn small secondary" href="/app/receiving">Receive delivery</a>
-    <a class="btn small secondary" href="/app/items/new">Add item</a>
+    {% endif %}
+    {% if can(request, "receiving.record") %}<a class="btn small secondary" href="/app/receiving">Receive delivery</a>{% endif %}
+    {% if can(request, "item.edit") %}<a class="btn small secondary" href="/app/items/new">Add item</a>{% endif %}
   </div>
 </div>
 
-{% if rows %}{% include "app/_health_block.html" %}{% endif %}
+{% set costs = can(request, "inventory.view_costs") %}
+{% if rows and costs %}{% include "app/_health_block.html" %}{% endif %}
 
 <div class="grid cols-4" style="margin: 18px 0 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
   <div class="card">
     <div class="stat-label">Needs attention</div>
     <div class="stat">{{ at_risk }}</div>
   </div>
+  {% if costs %}
   <div class="card">
     <div class="stat-label">Stock on hand</div>
     <div class="stat">{{ total_value|money(currency) }}</div>
   </div>
-  {% if expiry %}
+  {% endif %}
+  {% if expiry and costs %}
   <a class="card" href="/app/expiring" style="text-decoration:none; color:inherit;">
     <div class="stat-label">May expire unsold</div>
     <div class="stat"{% if expiry.at_risk_cents %} style="color: var(--warn);"{% endif %}>{{ expiry.at_risk_cents|money(currency) }}</div>
@@ -69,7 +74,7 @@
   <div class="card">
     <div class="stat-label"><span class="pill {{ name }}">{{ name }}</span></div>
     <div class="stat">{{ bucket.count }}</div>
-    <div class="small muted">{{ bucket.value_cents|money(currency) }} &middot; {{ bucket.at_risk }} at risk</div>
+    <div class="small muted">{% if costs %}{{ bucket.value_cents|money(currency) }} &middot; {% endif %}{{ bucket.at_risk }} at risk</div>
   </div>
   {% endfor %}
 </div>
@@ -90,9 +95,9 @@
   <p class="small muted">Connect Square to pull in the items it already counts, then add the things
   it does not &mdash; the milk, the flour, the beans you weigh out. No Square? Add your location
   and your stock by hand.</p>
-  <p><a class="btn small" href="/connect/square">Connect Square</a>
-     {% if locations %}<a class="btn small secondary" href="/app/items/new">Add a stock item</a>
-     {% else %}<a class="btn small secondary" href="/app/locations/new">Add a location</a>{% endif %}</p>
+  <p>{% if can(request, "pos.manage") %}<a class="btn small" href="/connect/square">Connect Square</a>{% endif %}
+     {% if locations and can(request, "item.edit") %}<a class="btn small secondary" href="/app/items/new">Add a stock item</a>
+     {% elif not locations and can(request, "location.manage") %}<a class="btn small secondary" href="/app/locations/new">Add a location</a>{% endif %}</p>
 </div>
 {% else %}
 <div class="table-wrap">
@@ -105,10 +110,10 @@
       <th>Reorder at</th>
       <th>Cover</th>
       <th>Uses / day</th>
-      <th>Value</th>
+      {% if costs %}<th>Value</th>{% endif %}
       <th>Order</th>
       <th>Status</th>
-      <th>Record count</th>
+      {% if can(request, "count.record") %}<th>Record count</th>{% endif %}
     </tr>
   </thead>
   <tbody>
@@ -127,11 +132,12 @@
       <td>{{ item.reorder_point_base|qty(item.stock_unit) }}</td>
       <td>{% if row.cover is not none %}{{ row.cover }} d{% else %}<span class="muted">&ndash;</span>{% endif %}</td>
       <td class="small">{{ row.velocity|qty(item.stock_unit) }}</td>
-      <td>{{ row.value_cents|money(currency) }}</td>
+      {% if costs %}<td>{{ row.value_cents|money(currency) }}</td>{% endif %}
       <td class="small">
         {% if row.suggested > 0 %}{{ row.suggested|qty(item.stock_unit) }}{% else %}<span class="muted">&ndash;</span>{% endif %}
       </td>
       <td><span class="pill {{ row.status }}">{{ row.status.replace("_", " ") }}</span></td>
+      {% if can(request, "count.record") %}
       <td>
         <form method="post" action="/app/items/{{ item.id }}/count" style="display:flex; gap:6px;">
           <input name="quantity" type="text" inputmode="decimal" style="width:88px;"
@@ -139,6 +145,7 @@
           <button class="btn small secondary" type="submit">Save</button>
         </form>
       </td>
+      {% endif %}
     </tr>
   {% endfor %}
   </tbody>

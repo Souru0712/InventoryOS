@@ -36,6 +36,10 @@ implementation sessions; the detail lives in `docs/`.
 - A person reaches a business only through an active membership (ADR-0028): the request's
   business is the session's membership, never `users.tenant_id`. Users are global; a business
   reaches its people through `members(db, org)`.
+- Every product route takes `org: OrgContext = Depends(require_permission("key"))` with a key
+  from `app/access/permissions.py` (ADR-0029; a test fails for a route without one). Money in a
+  page sits behind `can(request, "inventory.view_costs")`; JSON for a role without it goes
+  through `without_costs`.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`

@@ -1,6 +1,6 @@
 # ADR-0028: Memberships and the business a request acts for
 
-- **Status:** Proposed, 2026-11-06 (in the T1.05 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-06 (the owner merged the T1.05 pull request, #23: "Yes, merge it")
 - **Decision ID:** none (implements T1.05, migration step DM-4; SAAS-T-03, SAAS-A-09, STF-FR-10, AC-STF-07)
 - **Tasks:** T1.05; shapes T1.06 (permissions), T1.07 (sessions), T1.10 (invitations), T4.16 (contract)
 
@@ -40,8 +40,8 @@ need one login with access to several, each with its own role and locations.
 ## Consequences
 
 - A revoked membership loses access on the person's next request.
-- A location-limited membership can be stored and carries its locations into `OrgContext`, but
-  pages that read rows whose location is known only through their item (counts, lots, alerts)
-  refuse it (`UnscopedAccess`) until T1.06 gives those rows a location path. It fails closed; no
-  screen creates such a membership before T1.10.
+- A location-limited membership carries its locations into `OrgContext`. At first, pages that
+  read rows whose location is known only through their item refused it; T1.06 gave those rows a
+  location path (ADR-0029), so every page works for such a member. No screen creates one before
+  invitations (T1.10).
 - Built in T1.05 with migration `545dd2eaa736`.

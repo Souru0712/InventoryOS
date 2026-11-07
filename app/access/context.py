@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.access.permissions import ALL_PERMISSIONS, role_permissions
 from app.models import Membership
 
 
@@ -18,6 +19,11 @@ class OrgContext:
     tenant_id: int
     user_id: int | None = None
     location_ids: frozenset[int] | None = None
+    # What this member's role allows (app/access/permissions.py). Empty unless granted.
+    permissions: frozenset[str] = frozenset()
+
+    def can(self, key: str) -> bool:
+        return key in self.permissions
 
     @classmethod
     def for_membership(cls, membership: Membership) -> OrgContext:
@@ -28,10 +34,13 @@ class OrgContext:
             else frozenset(link.location_id for link in membership.locations)
         )
         return cls(
-            tenant_id=membership.tenant_id, user_id=membership.user_id, location_ids=locations
+            tenant_id=membership.tenant_id,
+            user_id=membership.user_id,
+            location_ids=locations,
+            permissions=role_permissions(membership.role),
         )
 
     @classmethod
     def system(cls, tenant_id: int) -> OrgContext:
         """The product acting for one organization: scheduled jobs, webhooks, the command line."""
-        return cls(tenant_id=tenant_id)
+        return cls(tenant_id=tenant_id, permissions=ALL_PERMISSIONS)

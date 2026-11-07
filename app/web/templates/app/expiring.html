@@ -14,15 +14,16 @@
 <p class="lede">Dated stock, sold first-expired-first-out. What will not sell in time is projected
 from the last four weeks of sales.</p>
 
+{% set costs = can(request, "inventory.view_costs") %}
 <div class="grid cols-3" style="margin: 18px 0 8px;">
   <div class="card">
     <div class="stat-label">May expire unsold &middot; next {{ horizon }} days</div>
-    <div class="stat" style="color: var(--warn);">{{ at_risk_cents|money(currency) }}</div>
-    <div class="small muted">{{ at_risk_products }} product{{ "s" if at_risk_products != 1 else "" }}, at cost</div>
+    {% if costs %}<div class="stat" style="color: var(--warn);">{{ at_risk_cents|money(currency) }}</div>{% endif %}
+    <div class="small muted">{{ at_risk_products }} product{{ "s" if at_risk_products != 1 else "" }}{% if costs %}, at cost{% endif %}</div>
   </div>
   <div class="card">
     <div class="stat-label">Past its date, still counted</div>
-    <div class="stat" style="color: var(--danger);">{{ expired_cents|money(currency) }}</div>
+    {% if costs %}<div class="stat" style="color: var(--danger);">{{ expired_cents|money(currency) }}</div>{% endif %}
     <div class="small muted">{{ expired_products }} product{{ "s" if expired_products != 1 else "" }}</div>
   </div>
   <div class="card">
@@ -58,7 +59,7 @@ from the last four weeks of sales.</p>
       <th>Best before</th>
       <th>On shelf</th>
       <th>Won&rsquo;t sell in time</th>
-      <th>At cost</th>
+      {% if costs %}<th>At cost</th>{% endif %}
       <th>Do this</th>
       <th></th>
     </tr>
@@ -89,10 +90,12 @@ from the last four weeks of sales.</p>
         {% elif p.projected_leftover_base > 0 %}{{ p.projected_leftover_base|approx(item.stock_unit) }}
         {% else %}<span class="muted">&ndash;</span>{% endif %}
       </td>
+      {% if costs %}
       <td>
         {% if row.status in ("expired", "at_risk") %}{{ p.at_risk_cents|money(currency) }}
         {% else %}<span class="muted">&ndash;</span>{% endif %}
       </td>
+      {% endif %}
       <td>
         <span class="pill {{ row.status }}">
           {% if row.status == "expired" %}Take off sale
@@ -106,10 +109,12 @@ from the last four weeks of sales.</p>
         {% endif %}
       </td>
       <td>
+        {% if can(request, "count.record") %}
         <form method="post" action="/app/expiring/{{ p.batch.id }}/remove"
               data-confirm="Remove this date? The stock itself is not changed.">
           <button class="btn small secondary" type="submit" title="Remove a wrongly entered date">Remove</button>
         </form>
+        {% endif %}
       </td>
     </tr>
   {% endfor %}
@@ -148,19 +153,21 @@ re-sets everything from what is actually there.</p>
   off can be taken out of this figure, so the percentage means something.</p>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Item</th><th>Undated</th><th>At cost</th><th></th></tr></thead>
+    <thead><tr><th>Item</th><th>Undated</th>{% if costs %}<th>At cost</th>{% endif %}<th></th></tr></thead>
     <tbody>
     {% for row in coverage.needs_dates[:12] %}
       <tr>
         <td><strong>{{ row.item.name }}</strong></td>
         <td>{{ row.undated_base|approx(row.item.stock_unit) }}</td>
-        <td>{{ row.undated_cents|money(currency) }}</td>
+        {% if costs %}<td>{{ row.undated_cents|money(currency) }}</td>{% endif %}
         <td>
+          {% if can(request, "item.edit") %}
           <form method="post" action="/app/expiring/perishable">
             <input type="hidden" name="stock_item_id" value="{{ row.item.id }}">
             <input type="hidden" name="perishable" value="no">
             <button class="btn small secondary" type="submit">Never expires</button>
           </form>
+          {% endif %}
         </td>
       </tr>
     {% endfor %}
@@ -177,6 +184,7 @@ re-sets everything from what is actually there.</p>
   {% endif %}
 </div>
 
+{% if can(request, "count.record") %}
 <h2>Date stock already on the shelf</h2>
 <div class="card">
   <form method="post" action="/app/expiring/label" class="row">
@@ -203,4 +211,5 @@ re-sets everything from what is actually there.</p>
   <p class="small muted" style="margin:10px 0 0;">Check one pack and enter the date for all of them.
   The quantity is in the item&rsquo;s own unit, and your stock level does not change.</p>
 </div>
+{% endif %}
 {% endblock %}

@@ -13,12 +13,13 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext
 from app.config import get_settings
 from app.db import get_db
 from app.entitlements import PLAN_IDS
 from app.models import Tenant, User
 from app.orchestration.stripe_events import handle_event, price_for_plan
-from app.security import require_tenant, require_user
+from app.security import require_permission, require_tenant, require_user
 from app.web.inputs import raw_body
 from app.web.templating import templates
 
@@ -42,6 +43,7 @@ def checkout(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     user: User = Depends(require_user),
+    org: OrgContext = Depends(require_permission("subscription.manage")),
 ):
     """Start a Stripe checkout for this account. Signing up comes first, so there is an account
     to attach the subscription to and nobody types their details twice."""
@@ -69,7 +71,11 @@ def checkout(
 
 
 @router.get("/billing/success", response_class=HTMLResponse)
-def success(request: Request, tenant: Tenant = Depends(require_tenant)):
+def success(
+    request: Request,
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_permission("subscription.manage")),
+):
     """Stripe sends them back here. The webhook is what actually grants the plan, and it may
     arrive a second either side of this page, so the page does not promise anything it cannot see."""
     return templates.TemplateResponse(
@@ -81,6 +87,7 @@ def success(request: Request, tenant: Tenant = Depends(require_tenant)):
 def portal(
     tenant: Tenant = Depends(require_tenant),
     _user: User = Depends(require_user),
+    org: OrgContext = Depends(require_permission("subscription.manage")),
 ):
     """Stripe's own portal: change card, switch plan, cancel. No email to us required."""
     settings = get_settings()

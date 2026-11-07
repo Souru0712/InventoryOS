@@ -14,13 +14,25 @@ from sqlalchemy.orm import Session
 from app.access.context import OrgContext
 from app.db import Base
 from app.models import (
+    Alert,
+    Document,
+    DocumentLine,
     EmailLog,
     EmailSuppression,
+    ExtractionCorrection,
     HealthSnapshot,
+    InventoryCount,
+    InventoryEvent,
     Location,
     Membership,
+    ProductIdentifier,
+    Promotion,
     ProviderConnection,
+    RecipeComponent,
     SoldItem,
+    StockAlias,
+    StockBatch,
+    StockItem,
     SyncRun,
     Tenant,
     User,
@@ -37,6 +49,25 @@ GLOBAL_MODELS: frozenset[type[Base]] = frozenset({EmailSuppression, WebhookEvent
 ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
     {Tenant, Membership, ProviderConnection, SoldItem, SyncRun, EmailLog, HealthSnapshot}
 )
+
+# Rows whose location is their parent's: (the column naming the parent, the parent model).
+LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
+    **{
+        model: ("stock_item_id", StockItem)
+        for model in (
+            Alert,
+            InventoryCount,
+            InventoryEvent,
+            ProductIdentifier,
+            Promotion,
+            RecipeComponent,
+            StockAlias,
+            StockBatch,
+        )
+    },
+    DocumentLine: ("document_id", Document),
+    ExtractionCorrection: ("document_id", Document),
+}
 
 
 class UnscopedAccess(Exception):
@@ -63,6 +94,16 @@ def scope_filter(org: OrgContext, model: type[Base]) -> list[ColumnElement[bool]
         clauses.append(columns.id.in_(allowed))
     elif "location_id" in columns:
         clauses.append(columns.location_id.in_(allowed))
+    elif model in LOCATION_PATHS:
+        column, parent = LOCATION_PATHS[model]
+        parents = parent.__table__.c
+        clauses.append(
+            columns[column].in_(
+                select(parents.id).where(
+                    parents.tenant_id == org.tenant_id, parents.location_id.in_(allowed)
+                )
+            )
+        )
     else:
         # Deny by default: a location-limited reader gets no rows whose location is not known.
         raise UnscopedAccess(f"{name} has no location path for a location-limited context")

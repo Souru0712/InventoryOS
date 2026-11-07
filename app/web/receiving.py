@@ -25,7 +25,12 @@ from app.orchestration.receiving import (
     record_correction,
     save_upload,
 )
-from app.security import require_org, require_tenant, require_user, require_writable
+from app.security import (
+    require_permission,
+    require_tenant,
+    require_user,
+    require_writable,
+)
 from app.storage import StorageError, get_storage
 from app.units import UnitError, to_base
 from app.web.inputs import posted_form
@@ -64,7 +69,7 @@ def receiving_index(
     request: Request,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("receiving.record")),
 ):
     documents = list(
         db.scalars(select_scoped(org, Document).order_by(Document.uploaded_at.desc()).limit(50))
@@ -91,7 +96,7 @@ def upload_invoice(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("receiving.record")),
 ):
     location = get_scoped(db, org, Location, location_id)
     if location is None:
@@ -131,7 +136,7 @@ def review_document(
     request: Request,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("receiving.record")),
 ):
     document = _owned(db, org, document_id)
     items = list(
@@ -161,7 +166,7 @@ def document_image(
     document_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("receiving.record")),
 ):
     document = _owned(db, org, document_id)
     try:
@@ -192,7 +197,7 @@ def reparse(
     document_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("receiving.record")),
 ):
     document = _owned(db, org, document_id)
     if document.status == DocumentStatus.APPLIED:
@@ -215,7 +220,7 @@ def apply_receipt(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     user: User = Depends(require_user),
-    org: OrgContext = Depends(require_org),
+    org: OrgContext = Depends(require_permission("receiving.post")),
 ):
     """Apply the reviewed lines. The form posts one field group per line."""
     document = _owned(db, org, document_id)
@@ -259,7 +264,10 @@ def apply_receipt(
                 qty_base,
                 apply=True,
                 expires_on=expires_on,
-                line_total_cents=_cents(form.get(f"{prefix}_total")),
+                # Only a role that may set costs changes what the invoice says a line cost.
+                line_total_cents=(
+                    _cents(form.get(f"{prefix}_total")) if org.can("receiving.edit_costs") else None
+                ),
             )
         )
 
