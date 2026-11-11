@@ -10,12 +10,26 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Membership, Plan, ProviderConnection, SubscriptionStatus, Tenant, User
+from app.models import (
+    Invitation,
+    Membership,
+    Plan,
+    ProviderConnection,
+    SubscriptionStatus,
+    Tenant,
+    User,
+)
 
 
 def user_by_email(db: Session, email: str) -> User | None:
     """The account an email signs in to."""
     return db.scalars(select(User).where(User.email == email.strip().lower())).first()
+
+
+def invitation_by_token_hash(db: Session, token_hash: str) -> Invitation | None:
+    """The invitation an emailed link names. Crosses organizations: the person following the
+    link has no membership yet, so nothing else can say which business it is for."""
+    return db.scalars(select(Invitation).where(Invitation.token_hash == token_hash)).first()
 
 
 def memberships_of(db: Session, user_id: int) -> list[tuple[Membership, str]]:

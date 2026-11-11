@@ -42,6 +42,8 @@ RESET_IP = Rule("reset-ip", 10, HOUR, HOUR, HOUR)
 RESEND_ACCOUNT = Rule("resend-account", 3, HOUR, HOUR, HOUR)
 # Links that did not work: tokens are unguessable, but nobody gets to keep trying.
 LINK_IP = Rule("link-ip", 10, 15 * MINUTE, MINUTE, HOUR)
+# Invitations a person sends (T1.10): each one emails someone outside the business.
+INVITE_ACCOUNT = Rule("invite-account", 20, HOUR, HOUR, HOUR)
 
 # A row whose window and lock are this long over is history; the nightly job removes it.
 KEEP_FOR = timedelta(days=1)

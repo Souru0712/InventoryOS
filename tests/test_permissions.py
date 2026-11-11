@@ -30,7 +30,7 @@ from app.models import (
 from app.security import hash_password
 from app.units import Dimension
 from tests.test_async_correctness import api_routes
-from tests.test_isolation import CASES, PATH_ROWS, _business
+from tests.test_isolation import CASES, PATH_ROWS, _business, invitation
 
 # Routes anyone may call: the public site, signing in and out, and signed provider webhooks.
 PUBLIC = {
@@ -53,6 +53,8 @@ PUBLIC = {
     ("POST", "/password/forgot"),
     ("GET", "/password/reset"),
     ("POST", "/password/reset"),
+    ("GET", "/invitations/accept"),
+    ("POST", "/invitations/accept"),
 }
 # Routes about the signed-in person rather than the business: any active member.
 PERSONAL = {
@@ -169,6 +171,8 @@ def client_factory():
             db.add(membership)
             db.flush()
             people[role] = membership.id
+        owner = db.get(Membership, people["owner"])
+        ids["invitation"] = invitation(db, tenant.id, owner.user_id)
         db.commit()
         ids["membership"] = people["owner"]
 

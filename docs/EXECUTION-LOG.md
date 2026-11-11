@@ -5,6 +5,78 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-11 — T1.10 Invitations and team management
+
+**Implemented**
+- **Invitations** (`invitations`, `invitation_locations`, migration `a3c7d133e37d`; `app/team.py`):
+  email, role, all locations or a list, inviter, the SHA-256 of a random token, 7-day expiry,
+  accepted or withdrawn. Inviting an address again withdraws its earlier link. The email links
+  to a page whose button posts the token.
+- **Accepting** (`/invitations/accept`): only as the invited address. Signed in as it: one click.
+  Signed in as someone else: refused. Signed out with an account: its password (throttled like
+  sign-in). No account: a new password creates one, already confirmed. Joining switches the
+  browser to that business; a removed member invited back gets the new role.
+- **Team page** (`/app/team`, `team.manage`, linked from Settings): members with role and
+  locations, change role and scope, remove; pending and lapsed invitations with send again and
+  withdraw. Rules in `app/transform/team.py`: only `owner.manage` touches an Owner; the last active
+  Owner cannot be demoted or removed; nobody changes their own access there; Owners and
+  Administrators always cover every location.
+- **Removal** revokes the membership and ends that business's sessions at once. Inviting needs a
+  confirmed address and is throttled at 20 an hour per person (proposed; merging approves it).
+  Removing and withdrawing work even when the subscription is read-only.
+- ADR-0033 (Proposed); ADR-0032 Accepted; `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_team.py` (21): **AC-STF-01**: an invitation creates the membership with its role,
+  confirms the address, stores only the hash, and works once; it lasts 7 days and is dead after;
+  only the invited address can use it; an existing account joins with its password and keeps its
+  other business; a signed-in invitee joins in one click; a location-limited invitation gives
+  exactly that location; inviting again or withdrawing kills the earlier link; an existing member
+  is not invited; inviting waits for a confirmed address; 20 invitations an hour then a wait;
+  guessed links are stopped. **STF-FR-06**: a new role applies on the member's next request.
+  **AC-STF-04**: removal ends access and every session at once; a removed member invited back
+  gets the new role. **AC-STF-05**: the last Owner cannot be demoted or removed, whoever asks; an
+  Administrator cannot add, change or remove an Owner; an Owner can add a second Owner who can
+  then step the first down; nobody changes their own access; the pure rules.
+- Isolation suite: the four team routes refuse another business's members, invitations and
+  locations (404) and change nothing; permission suite: each route needs `team.manage`.
+- In the browser (local server, test data): invited a Manager limited to one location, accepted
+  as a new account, landed in the business with the Manager menu; the team page answered 403.
+- Full suite 747 passed, 11 skipped (722 before); ruff, mypy and the docs checker clean.
+
+**Decision for the owner**
+- The invitation limit (20 an hour per person) is security configuration: merging this pull
+  request approves it.
+
+**Files changed**
+- `app/team.py`, `app/transform/team.py`, `app/web/team.py`, migration `a3c7d133e37d`, templates
+  (`app/team.html`, `auth/accept_invitation.html`, `email/invitation.*`), `tests/test_team.py`,
+  ADR-0033 (new); `app/models.py`, `app/access/` (scoped, system), `app/security.py` (`login_user`
+  returns the session), `app/throttle.py`, `app/main.py`, `app/web/templates/app/settings.html`,
+  `tests/test_isolation.py`, `tests/test_permissions.py`; ADR-0032 (Accepted), the index,
+  `CLAUDE.md`, task index (T1.09 → Completed, T1.10 → In review), this log.
+
+**Next task**
+- T1.11 TOTP MFA (needs a new dependency: owner approval, ID-23).
+
+---
+
+## 2026-11-11 — T1.09 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #27 was merged with a merge commit (`4394192`). CI
+  on its head `96f2faa`, all five required jobs green: SQLite 722 passed, 11 skipped; PostgreSQL 16
+  733 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: AC-SAAS-03; probe R8 retired.
+
+**Decisions**
+- ADR-0032 accepted with the merge, approving its limits.
+
+**Files changed**
+- Task index (T1.09 → Completed), ADR-0032 status and index, this log.
+
+---
+
 ## 2026-11-11 — T1.09 Login throttling
 
 **Implemented**

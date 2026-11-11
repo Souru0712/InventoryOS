@@ -31,6 +31,7 @@ from app.web import (
     promotions,
     receiving,
     scanning,
+    team,
     webhooks,
 )
 from app.web import (
@@ -90,6 +91,7 @@ app.include_router(locations.router)
 app.include_router(promotions.router)
 app.include_router(scanning.router)
 app.include_router(settings_page.router)
+app.include_router(team.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

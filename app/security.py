@@ -50,7 +50,7 @@ def _session_for(db: Session, token: str | None) -> UserSession | None:
     return db.scalars(select(UserSession).where(UserSession.token_hash == _hash(token))).first()
 
 
-def login_user(request: Request, db: Session, user: User) -> None:
+def login_user(request: Request, db: Session, user: User) -> UserSession:
     """Start a new server-side session. The token is new at every sign-in (no fixation), and
     whatever this browser held before, the earlier session and its form token, is ended."""
     old = _session_for(db, request.session.get(SESSION_TOKEN_KEY))
@@ -59,17 +59,17 @@ def login_user(request: Request, db: Session, user: User) -> None:
         old.revoked_at = now
     token = secrets.token_urlsafe(32)
     days = get_settings().session_max_days
-    db.add(
-        UserSession(
-            token_hash=_hash(token),
-            user_id=user.id,
-            created_at=now,
-            last_seen_at=now,
-            expires_at=now + timedelta(days=days),
-        )
+    session = UserSession(
+        token_hash=_hash(token),
+        user_id=user.id,
+        created_at=now,
+        last_seen_at=now,
+        expires_at=now + timedelta(days=days),
     )
+    db.add(session)
     request.session.clear()
     request.session[SESSION_TOKEN_KEY] = token
+    return session
 
 
 def logout_user(request: Request, db: Session) -> None:

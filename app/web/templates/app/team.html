@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% macro scope_fields(all_locations, chosen) %}
+  {% if locations|length > 1 %}
+  <fieldset class="field" style="border:0; padding:0; margin:8px 0 0;">
+    <legend class="small muted">Locations (Owners and Administrators always have all)</legend>
+    <label><input type="radio" name="scope" value="all"{% if all_locations %} checked{% endif %}> All locations</label>
+    <label><input type="radio" name="scope" value="some"{% if not all_locations %} checked{% endif %}> Only these:</label>
+    {% for location in locations %}
+      <label class="small"><input type="checkbox" name="location_ids" value="{{ location.id }}"{% if location.id in chosen %} checked{% endif %}> {{ location.name }}</label>
+    {% endfor %}
+  </fieldset>
+  {% endif %}
+{% endmacro %}
+{% macro scope_text(all_locations, links) %}
+  {% if all_locations %}All locations{% else %}{% for link in links %}{{ location_names.get(link.location_id, "Archived location") }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+{% endmacro %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+
+<h1>Team</h1>
+<p class="lede">Invite the people who work here. Each person gets a role, which decides what they
+can see and change, and the locations they work at.</p>
+
+<h2>Invite someone</h2>
+{% if request.state.email_verified is sameas false %}
+  <div class="notice error">Confirm your email address first: use the link we sent, or ask for a new one from Settings.</div>
+{% else %}
+<form method="post" action="/app/team/invite" class="card" style="max-width:620px;">{{ csrf_field(request) }}
+  <div class="field">
+    <label for="invite_email">Email</label>
+    <input id="invite_email" name="email" type="email" required autocomplete="off">
+  </div>
+  <div class="field">
+    <label for="invite_role">Role</label>
+    <select id="invite_role" name="role">
+      {% for key, label in roles.items() %}<option value="{{ key }}"{% if key == default_role %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  {{ scope_fields(true, []) }}
+  <p style="margin:12px 0 0;"><button class="btn" type="submit">Send invitation</button>
+  <span class="small muted">The link works once, for 7 days, and only for this address.</span></p>
+</form>
+{% endif %}
+
+<h2>Members</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Person</th><th>Role</th><th>Locations</th><th></th></tr></thead>
+  <tbody>
+  {% for membership, person in members %}
+    {% set editable = person.id != user.id and (membership.role != "owner" or can_manage_owners) %}
+    <tr>
+      <td>{{ person.email }}{% if person.id == user.id %} <span class="small muted">(you)</span>{% endif %}</td>
+      <td>{{ role_labels[membership.role] }}</td>
+      <td class="small">{{ scope_text(membership.all_locations, membership.locations) }}</td>
+      <td>
+        {% if editable %}
+        <details>
+          <summary class="small">Change</summary>
+          <form method="post" action="/app/team/{{ membership.id }}/role" style="margin:8px 0;">{{ csrf_field(request) }}
+            <label class="small" for="role_{{ membership.id }}">Role</label>
+            <select id="role_{{ membership.id }}" name="role">
+              {% for key, label in roles.items() %}<option value="{{ key }}"{% if key == membership.role %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            {{ scope_fields(membership.all_locations, membership.locations|map(attribute="location_id")|list) }}
+            <button class="btn small" type="submit">Save</button>
+          </form>
+          <form method="post" action="/app/team/{{ membership.id }}/remove" style="margin:0;">{{ csrf_field(request) }}
+            <button class="btn small secondary" type="submit">Remove from team</button>
+          </form>
+        </details>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if invitations %}
+<h2>Invitations</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Email</th><th>Role</th><th>Locations</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for invitation, status in invitations %}
+    <tr>
+      <td>{{ invitation.email }}</td>
+      <td>{{ role_labels[invitation.role] }}</td>
+      <td class="small">{{ scope_text(invitation.all_locations, invitation.locations) }}</td>
+      <td>
+        {% if status == "pending" %}<span class="pill ok">pending</span>
+          <div class="small muted">until {{ invitation.expires_at.strftime("%b %d") }}</div>
+        {% else %}<span class="pill expired">expired</span>{% endif %}
+      </td>
+      <td>
+        {% if invitation.role != "owner" or can_manage_owners %}
+        <form method="post" action="/app/team/invite" style="display:inline; margin:0;">{{ csrf_field(request) }}
+          <input type="hidden" name="email" value="{{ invitation.email }}">
+          <input type="hidden" name="role" value="{{ invitation.role }}">
+          <input type="hidden" name="scope" value="{{ 'all' if invitation.all_locations else 'some' }}">
+          {% for link in invitation.locations %}<input type="hidden" name="location_ids" value="{{ link.location_id }}">{% endfor %}
+          <button class="btn small secondary" type="submit">Send again</button>
+        </form>
+        {% endif %}
+        {% if status == "pending" %}
+        <form method="post" action="/app/team/invitations/{{ invitation.id }}/withdraw" style="display:inline; margin:0;">{{ csrf_field(request) }}
+          <button class="btn small secondary" type="submit">Withdraw</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
