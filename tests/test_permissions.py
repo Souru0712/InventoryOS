@@ -179,6 +179,7 @@ def client_factory():
             people[role] = membership.id
         owner = db.get(Membership, people["owner"])
         ids["invitation"] = invitation(db, tenant.id, owner.user_id)
+        ids["user"] = owner.user_id
         db.commit()
         ids["membership"] = people["owner"]
 

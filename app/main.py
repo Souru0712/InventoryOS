@@ -21,6 +21,7 @@ from app.observability import RequestContext, configure_logging
 from app.orchestration import scheduler
 from app.web import (
     accounts,
+    audit,
     auth,
     billing,
     dashboard,
@@ -94,6 +95,7 @@ app.include_router(scanning.router)
 app.include_router(settings_page.router)
 app.include_router(team.router)
 app.include_router(mfa.router)
+app.include_router(audit.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

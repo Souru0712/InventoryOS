@@ -5,6 +5,72 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-11 — T1.12 Audit events
+
+**Implemented**
+- **`audit_events`** (migration `d8a2b6e4f1c3`): business, location (empty for business-wide
+  changes), time, actor kind (user, system, support) and actor, action, subject, a one-line
+  summary, the changed fields before and after, client address; indexed by (business, time).
+- **`record_audit()`** (`app/audit.py`), called for: the business profile; locations added,
+  changed, archived, restored; invitations sent and withdrawn, people joining (recorded as
+  themselves), role or scope changes, removals; Square connected or reconnected; plan or status
+  changes from Stripe (recorded as the product). A save that changes nothing records nothing.
+- **Append-only**: only `record_audit()` inserts; `update_scoped` refuses the table; a test fails
+  if any other module names `AuditEvent`. Nothing deletes events (SEC-14: kept at least a year).
+- **History screen** (`/app/audit`, `audit.view`, linked from Settings): newest first, filter by
+  kind of change and person, 100 at a time with older pages. Owners and Administrators see
+  everything; Managers only their locations' changes, never business-wide ones.
+- ADR-0035 (Proposed); ADR-0034 Accepted; `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_audit.py` (10): each audited service writes one event: the business profile
+  (with before and after, actor and address; an unchanged save writes nothing), each location
+  change against its location, each team change by who made it (the person joining for a join),
+  Square connecting, a Stripe plan change as the product (a repeat writes nothing).
+  **AC-ADM-04**: settings, role and connection changes appear in the history, with filters by
+  kind and person; Managers see only their locations (a location-limited one only theirs) and
+  no business-wide changes; Employees get 403; older pages work. Append-only: the scoped layer
+  refuses updates; no other module names the table.
+- Isolation suite: `?person=` from another business answers 404; permission suite:
+  `audit.view`.
+- In the browser (local server, test data): changed the business name in Settings, opened the
+  history from Settings, and saw the change with its old and new name.
+- Full suite 774 passed, 11 skipped (763 before); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- `app/audit.py`, `app/web/audit.py`, `app/web/templates/app/audit.html`, migration
+  `d8a2b6e4f1c3`, `tests/test_audit.py`, ADR-0035 (new); `app/models.py`, `app/access/scoped.py`,
+  `app/web/locations.py`, `app/team.py`, `app/web/team.py`, `app/web/dashboard.py`,
+  `app/orchestration/stripe_events.py`, `app/main.py`, `app/web/templates/app/settings.html`,
+  `tests/test_isolation.py`, `tests/test_permissions.py`; ADR-0034 (Accepted), the index,
+  `CLAUDE.md`, task index (T1.11 → Completed, T1.12 → In review), this log.
+
+**Next task**
+- With this merged, every M1 task (T1.01–T1.12) is complete; gate G1's sign-off is the owner's.
+  Next: T1.13 Item model split (M2).
+
+---
+
+## 2026-11-11 — T1.11 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #29 was merged with a merge commit (`f0c5cd6`). CI
+  on its head `1701244`, all five required jobs green: SQLite 763 passed, 11 skipped; PostgreSQL 16
+  774 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: an enrolled person cannot sign in without a code or recovery
+  code; a recovery code works once.
+- The PR's first run was lost in a GitHub Actions incident (queued, could not be cancelled). A
+  manual run passed on the same commit; with the owner's approval the PR was closed and reopened
+  to start a fresh PR run, which passed and satisfied the required checks.
+
+**Decisions**
+- ADR-0034 accepted with the merge, approving the code limit.
+
+**Files changed**
+- Task index (T1.11 → Completed), ADR-0034 status and index, this log.
+
+---
+
 ## 2026-11-11 — T1.11 TOTP MFA
 
 **Implemented**

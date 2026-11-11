@@ -93,6 +93,14 @@
   <button class="btn secondary" type="submit">Log out all devices</button>
 </form>
 
+{% if can(request, "audit.view") %}
+<h2>Business history</h2>
+<div class="card" style="max-width:620px;">
+  <p style="margin:0 0 10px;">Who changed the business settings, locations, team, connections and plan, and when.</p>
+  <a class="btn secondary" href="/app/audit">Open the history</a>
+</div>
+{% endif %}
+
 <h2>Billing</h2>
 <div class="card" style="max-width:620px;">
   <p style="margin:0 0 4px;">

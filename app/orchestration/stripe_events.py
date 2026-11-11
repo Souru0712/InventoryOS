@@ -16,7 +16,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext
 from app.access.system import tenant_by_id, tenant_by_stripe_id
+from app.audit import record_audit
 from app.config import get_settings
 from app.entitlements import PLAN_IDS, STARTER
 from app.models import SubscriptionStatus, Tenant
@@ -170,6 +172,13 @@ def apply_subscription(db: Session, tenant: Tenant, subscription: dict) -> str:
     return status.value
 
 
+def _plan_state(tenant: Tenant) -> dict:
+    return {
+        "plan": getattr(tenant.plan, "value", tenant.plan),
+        "status": getattr(tenant.subscription_status, "value", tenant.subscription_status),
+    }
+
+
 def handle_event(db: Session, event: dict) -> dict:
     """Apply one Stripe event. Returns what was done, for the log and for the tests."""
     kind = event.get("type") or ""
@@ -187,6 +196,7 @@ def handle_event(db: Session, event: dict) -> dict:
         return {"ignored": "stale event", "tenant_id": tenant.id}
 
     result: dict = {"tenant_id": tenant.id, "event": kind}
+    was = _plan_state(tenant)
 
     if kind == "checkout.session.completed":
         # The session carries who they are; the subscription events carry what they bought.
@@ -241,6 +251,19 @@ def handle_event(db: Session, event: dict) -> dict:
         tenant.current_period_end = _moment(payload.get("period_end")) or tenant.current_period_end
         result["status"] = tenant.subscription_status.value
 
+    now = _plan_state(tenant)
+    if now != was:
+        # Stripe acted, not a member: the product records it as the system (SEC-14).
+        record_audit(
+            db,
+            OrgContext.system(tenant.id),
+            "billing.subscription_changed",
+            f"Plan {was['plan']} ({was['status']}) became {now['plan']} ({now['status']})",
+            subject_type="subscription",
+            subject_id=tenant.id,
+            before=was,
+            after=now,
+        )
     _mark_seen(tenant, event)
     db.flush()
     log.info("stripe %s applied to tenant %s: %s", kind, tenant.id, result.get("status"))

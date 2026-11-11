@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     Date,
@@ -38,6 +39,8 @@ SUPPRESSION_SOURCES = ("bounce", "complaint", "manual")
 MEMBERSHIP_ROLES = ("owner", "administrator", "manager", "employee", "read_only")
 MEMBERSHIP_STATUSES = ("active", "revoked")
 AUTH_TOKEN_PURPOSES = ("verify_email", "reset_password")
+# Who made an audited change: a member, the product itself (webhooks, jobs), or support (T4.07).
+AUDIT_ACTORS = ("user", "system", "support")
 
 
 def ref(target: str) -> ForeignKey:
@@ -293,6 +296,35 @@ class RecoveryCode(Base):
     code_hash: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     used_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class AuditEvent(Base):
+    """One change to a business's settings, team, connections or plan (DR-23, SEC-14).
+
+    Append-only: written by app/audit.py and never updated or deleted. location_id is set for a
+    change at one location; business-wide changes leave it empty.
+    """
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        one_of("audit_events", "actor_kind", AUDIT_ACTORS),
+        Index("ix_audit_events_tenant_at", "tenant_id", "at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    location_id: Mapped[int | None] = mapped_column(ref("locations.id"))
+    at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    actor_kind: Mapped[str] = mapped_column(String(16), default="user")
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    action: Mapped[str] = mapped_column(String(60))
+    subject_type: Mapped[str] = mapped_column(String(40))
+    subject_id: Mapped[int | None] = mapped_column(Integer)
+    summary: Mapped[str] = mapped_column(String(500))
+    # Only the fields that changed, as they were and as they became.
+    before: Mapped[dict | None] = mapped_column(JSON)
+    after: Mapped[dict | None] = mapped_column(JSON)
+    ip: Mapped[str | None] = mapped_column(String(45))
 
 
 class Throttle(Base):

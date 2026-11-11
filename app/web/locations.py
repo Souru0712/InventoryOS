@@ -15,10 +15,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
+from app.audit import changes, record_audit
 from app.db import get_db
 from app.entitlements import location_allowance
 from app.models import Location, Tenant
 from app.security import require_permission, require_tenant, require_writable
+from app.throttle import client_ip
 from app.transform.business_days import (
     EVERY_DAY,
     WEEKDAYS,
@@ -119,6 +121,18 @@ def _render_form(
     )
 
 
+# How a location's fields read in the audit history.
+LABELS = {
+    "timezone": "time zone",
+    "business_day_cutoff_hour": "day start",
+    "open_days": "open days",
+}
+
+
+def _profile(tenant: Tenant) -> dict:
+    return {"name": tenant.name, "address": tenant.address, "contact email": tenant.contact_email}
+
+
 def _values(location: Location) -> dict:
     return {
         "name": location.name,
@@ -198,6 +212,18 @@ def create_location(
 
     location = Location(tenant_id=org.tenant_id, provider=None, provider_location_id=None, **values)
     db.add(location)
+    db.flush()
+    record_audit(
+        db,
+        org,
+        "location.created",
+        f"Added the location {location.name}",
+        subject_type="location",
+        subject_id=location.id,
+        location_id=location.id,
+        after=_values(location),
+        ip=client_ip(request),
+    )
     db.commit()
     log.info("location %s added", location.id)
     return RedirectResponse("/app/locations?saved=1", status_code=303)
@@ -246,14 +272,30 @@ def save_location(
             raw |= {"name": name, "timezone": timezone, "currency": currency}
         return _render_form(request, tenant, location, raw, str(exc), status_code=400)
 
+    was = _values(location)
     for key, value in values.items():
         setattr(location, key, value)
+    before, after = changes(was, _values(location))
+    if after:
+        record_audit(
+            db,
+            org,
+            "location.updated",
+            f"Changed {', '.join(LABELS.get(key, key) for key in after)} for {location.name}",
+            subject_type="location",
+            subject_id=location.id,
+            location_id=location.id,
+            before=before,
+            after=after,
+            ip=client_ip(request),
+        )
     db.commit()
     return RedirectResponse("/app/locations?saved=1", status_code=303)
 
 
 @router.post("/app/locations/{location_id}/archive")
 def archive_location(
+    request: Request,
     location_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
@@ -264,6 +306,16 @@ def archive_location(
     if location.archived_at is None:
         location.archived_at = datetime.now(UTC)
         location.is_active = False
+        record_audit(
+            db,
+            org,
+            "location.archived",
+            f"Archived the location {location.name}",
+            subject_type="location",
+            subject_id=location.id,
+            location_id=location.id,
+            ip=client_ip(request),
+        )
         db.commit()
         log.info("location %s archived", location.id)
     return RedirectResponse("/app/locations?archived=1", status_code=303)
@@ -271,6 +323,7 @@ def archive_location(
 
 @router.post("/app/locations/{location_id}/restore")
 def restore_location(
+    request: Request,
     location_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
@@ -283,6 +336,16 @@ def restore_location(
         return RedirectResponse("/app/locations?error=limit", status_code=303)
     location.archived_at = None
     location.is_active = True
+    record_audit(
+        db,
+        org,
+        "location.restored",
+        f"Restored the location {location.name}",
+        subject_type="location",
+        subject_id=location.id,
+        location_id=location.id,
+        ip=client_ip(request),
+    )
     db.commit()
     log.info("location %s restored", location.id)
     return RedirectResponse("/app/locations?restored=1", status_code=303)
@@ -290,6 +353,7 @@ def restore_location(
 
 @router.post("/app/settings/business")
 def save_business_profile(
+    request: Request,
     business_name: str = Form(""),
     address: str = Form(""),
     contact_email: str = Form(""),
@@ -304,8 +368,22 @@ def save_business_profile(
         return RedirectResponse("/app/settings?error=name", status_code=303)
     if email and not EMAIL.match(email):
         return RedirectResponse("/app/settings?error=email", status_code=303)
+    was = _profile(tenant)
     tenant.name = name[:200]
     tenant.address = address.strip()[:300] or None
     tenant.contact_email = email[:255] or None
+    before, after = changes(was, _profile(tenant))
+    if after:
+        record_audit(
+            db,
+            org,
+            "settings.business_updated",
+            f"Changed the business {', '.join(after)}",
+            subject_type="business",
+            subject_id=tenant.id,
+            before=before,
+            after=after,
+            ip=client_ip(request),
+        )
     db.commit()
     return RedirectResponse("/app/settings?saved=business", status_code=303)

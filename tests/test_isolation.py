@@ -169,6 +169,7 @@ CASES = {
     },
     ("POST", "/app/team/{membership_id}/remove"): lambda ids: {},
     ("POST", "/app/team/invitations/{invitation_id}/withdraw"): lambda ids: {},
+    ("GET", "/app/audit"): lambda ids: {"params": {"person": ids["user"]}},
 }
 
 PATH_ROWS = {
@@ -316,6 +317,7 @@ def world():
         theirs = _business(db, juniper.id, "Juniper", B_CODE)
         theirs["membership"] = their_membership.id
         theirs["invitation"] = invitation(db, juniper.id, their_owner.id)
+        theirs["user"] = their_owner.id
         db.commit()
     with TestClient(app) as client:
         client.post(
@@ -333,6 +335,7 @@ def world():
             own = db.scalars(select(Membership).where(Membership.tenant_id == rosewood.id)).one()
             mine["membership"] = own.id
             mine["invitation"] = invitation(db, rosewood.id, own.user_id)
+            mine["user"] = own.user_id
             db.commit()
         yield client, mine, theirs
 

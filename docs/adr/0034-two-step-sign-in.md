@@ -1,6 +1,6 @@
 # ADR-0034: Two-step sign-in with an authenticator app
 
-- **Status:** Proposed, 2026-11-11 (in the T1.11 pull request; accepted when the owner merges it, which also approves the code limit below)
+- **Status:** Accepted, 2026-11-11 (the owner merged the T1.11 pull request, #29, approving the code limit below: "Yes, merge it")
 - **Decision ID:** none (implements T1.11 under ID-23 and PD-20 → C-44; SAAS-A-07)
 - **Tasks:** T1.11
 

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.access.system import invitation_by_token_hash, user_by_email
+from app.audit import record_audit
 from app.config import get_settings
 from app.models import (
     Invitation,
@@ -87,11 +88,32 @@ def _active_owners(db: Session, org: OrgContext) -> int:
     return int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
 
 
+def _email(db: Session, membership: Membership) -> str:
+    person = db.get(User, membership.user_id)
+    return person.email if person is not None else "a former member"
+
+
 def _member(db: Session, org: OrgContext, membership_id: int) -> Membership:
     membership = get_scoped(db, org, Membership, membership_id)
     if membership is None:
         raise NotFound("member not found")
     return membership
+
+
+def _scope_text(db: Session, org: OrgContext, row: Membership | Invitation) -> str:
+    if row.all_locations:
+        return "all locations"
+    names = [
+        location.name
+        for link in row.locations
+        if (location := get_scoped(db, org, Location, link.location_id)) is not None
+    ]
+    return ", ".join(sorted(names)) or "no locations"
+
+
+def _access(db: Session, org: OrgContext, row: Membership | Invitation) -> dict:
+    """A member's or invitation's access as the audit history records it."""
+    return {"role": ROLE_LABELS[row.role], "locations": _scope_text(db, org, row)}
 
 
 def _set_scope(row: Membership | Invitation, scope: frozenset[int]) -> None:
@@ -118,6 +140,7 @@ def invite(
     role: str,
     all_locations: bool,
     location_ids: list[int],
+    ip: str | None = None,
 ) -> tuple[Invitation, str]:
     """A new pending invitation and its token (to email once). Re-inviting an address replaces
     its earlier pending invitation, so only the latest link works."""
@@ -151,6 +174,17 @@ def invite(
     _set_scope(invitation, scope)
     db.add(invitation)
     db.flush()
+    access = _access(db, org, invitation)
+    record_audit(
+        db,
+        org,
+        "team.invited",
+        f"Invited {email} as {access['role']} ({access['locations']})",
+        subject_type="invitation",
+        subject_id=invitation.id,
+        after=access,
+        ip=ip,
+    )
     log.info("invitation %s created as %s", invitation.id, role)
     return invitation, token
 
@@ -168,12 +202,21 @@ def send_invitation(db: Session, invitation: Invitation, token: str, business: s
     return send_email(db, invitation.tenant_id, invitation.email, subject, html, "invitation", text)
 
 
-def withdraw(db: Session, org: OrgContext, invitation_id: int) -> None:
+def withdraw(db: Session, org: OrgContext, invitation_id: int, ip: str | None = None) -> None:
     invitation = get_scoped(db, org, Invitation, invitation_id)
     if invitation is None:
         raise NotFound("invitation not found")
     if invitation.accepted_at is None and invitation.revoked_at is None:
         invitation.revoked_at = datetime.now(UTC)
+        record_audit(
+            db,
+            org,
+            "team.invitation_withdrawn",
+            f"Withdrew the invitation for {invitation.email}",
+            subject_type="invitation",
+            subject_id=invitation.id,
+            ip=ip,
+        )
         log.info("invitation %s withdrawn", invitation.id)
 
 
@@ -193,7 +236,7 @@ def business_name(db: Session, invitation: Invitation) -> str:
     return tenant.name if tenant is not None else ""
 
 
-def accept(db: Session, invitation: Invitation, user: User) -> Membership:
+def accept(db: Session, invitation: Invitation, user: User, ip: str | None = None) -> Membership:
     """Give user the invitation's access, using the invitation up. The address must be the one
     invited: the link was sent there, which also proves the address is theirs (AC-STF-01)."""
     if user.email != invitation.email or status_of(invitation) != "pending":
@@ -216,6 +259,18 @@ def accept(db: Session, invitation: Invitation, user: User) -> Membership:
     if user.email_verified_at is None:
         user.email_verified_at = now
     db.flush()
+    access = _access(db, org, membership)
+    record_audit(
+        db,
+        org,
+        "team.joined",
+        f"{user.email} joined as {access['role']} ({access['locations']})",
+        subject_type="membership",
+        subject_id=membership.id,
+        after=access,
+        ip=ip,
+        actor_user_id=user.id,
+    )
     log.info("invitation %s accepted by user %s", invitation.id, user.id)
     return membership
 
@@ -230,6 +285,7 @@ def change_role(
     role: str,
     all_locations: bool,
     location_ids: list[int],
+    ip: str | None = None,
 ) -> Membership:
     """A member's new role and scope; they apply from the member's next request."""
     membership = _member(db, org, membership_id)
@@ -244,13 +300,29 @@ def change_role(
         can_manage_owners=org.can("owner.manage"),
         active_owners=_active_owners(db, org),
     )
+    was = _access(db, org, membership)
     membership.role = role
     _set_scope(membership, scope_for(role, all_locations, scope))
+    db.flush()
+    now = _access(db, org, membership)
+    if now != was:
+        record_audit(
+            db,
+            org,
+            "team.role_changed",
+            f"Changed {_email(db, membership)} from {was['role']} ({was['locations']}) "
+            f"to {now['role']} ({now['locations']})",
+            subject_type="membership",
+            subject_id=membership.id,
+            before=was,
+            after=now,
+            ip=ip,
+        )
     log.info("membership %s is now %s", membership.id, role)
     return membership
 
 
-def remove(db: Session, org: OrgContext, membership_id: int) -> None:
+def remove(db: Session, org: OrgContext, membership_id: int, ip: str | None = None) -> None:
     """Take a member's access away; their sessions for this business end now (STF-FR-06)."""
     membership = _member(db, org, membership_id)
     if membership.status != "active":
@@ -263,4 +335,14 @@ def remove(db: Session, org: OrgContext, membership_id: int) -> None:
         active_owners=_active_owners(db, org),
     )
     revoke_membership(db, membership)
+    record_audit(
+        db,
+        org,
+        "team.removed",
+        f"Removed {_email(db, membership)} ({ROLE_LABELS[membership.role]}) from the team",
+        subject_type="membership",
+        subject_id=membership.id,
+        before=_access(db, org, membership),
+        ip=ip,
+    )
     log.info("membership %s revoked", membership.id)
