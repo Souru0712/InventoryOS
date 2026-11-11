@@ -27,6 +27,16 @@ from app.security import (
     token_is_live,
     verify_password,
 )
+from app.throttle import (
+    LINK_IP,
+    RESEND_ACCOUNT,
+    RESET_ACCOUNT,
+    RESET_IP,
+    client_ip,
+    hit,
+    locked_for,
+    retry_after,
+)
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -62,13 +72,19 @@ def verify_email_page(request: Request, token: str = "", db: Session = Depends(g
 
 @router.post("/verify-email")
 def verify_email(request: Request, token: str = Form(""), db: Session = Depends(get_db)):
-    user = redeem_token(db, token, "verify_email") if token else None
+    ip = client_ip(request)
+    wait = locked_for(db, LINK_IP, ip)
+    user = None if wait else (redeem_token(db, token, "verify_email") if token else None)
     if user is None:
+        if wait is None:
+            hit(db, LINK_IP, ip)
+            db.commit()
         return templates.TemplateResponse(
             request,
             "auth/verify_email.html",
             {"title": "Confirm your email", "live": False, "token": ""},
-            status_code=400,
+            status_code=429 if wait else 400,
+            headers=retry_after(wait) if wait else None,
         )
     if user.email_verified_at is None:
         user.email_verified_at = datetime.now(UTC)
@@ -79,9 +95,13 @@ def verify_email(request: Request, token: str = Form(""), db: Session = Depends(
 
 @router.post("/app/verify-email/resend")
 def resend_verification(db: Session = Depends(get_db), user: User = Depends(require_user)):
-    if user.email_verified_at is None:
-        send_link(db, user, "verify_email")
-        db.commit()
+    if user.email_verified_at is not None:
+        return RedirectResponse("/app/settings", status_code=303)
+    if locked_for(db, RESEND_ACCOUNT, user.email):
+        return RedirectResponse("/app/settings?verification=wait", status_code=303)
+    hit(db, RESEND_ACCOUNT, user.email)
+    send_link(db, user, "verify_email")
+    db.commit()
     return RedirectResponse("/app/settings?verification=sent", status_code=303)
 
 
@@ -97,9 +117,16 @@ def forgot_password_page(request: Request):
 
 @router.post("/password/forgot", response_class=HTMLResponse)
 def forgot_password(request: Request, email: str = Form(""), db: Session = Depends(get_db)):
-    user = user_by_email(db, email) if email.strip() else None
-    if user is not None and user.is_active:
-        send_link(db, user, "reset_password")
+    ip = client_ip(request)
+    # A few emails an hour per address asking and per account asked about; past that, nothing
+    # is sent, and the page still reads the same.
+    if email.strip() and not locked_for(db, RESET_IP, ip):
+        hit(db, RESET_IP, ip)
+        if not locked_for(db, RESET_ACCOUNT, email):
+            hit(db, RESET_ACCOUNT, email)
+            user = user_by_email(db, email)
+            if user is not None and user.is_active:
+                send_link(db, user, "reset_password")
         db.commit()
     # The same answer either way: the page must not tell anyone which emails have accounts.
     return templates.TemplateResponse(
@@ -127,10 +154,19 @@ def reset_password(
     db: Session = Depends(get_db),
 ):
     context = {"title": "Choose a new password", "live": True, "token": token}
-    if not token or not token_is_live(db, token, "reset_password"):
+    ip = client_ip(request)
+    wait = locked_for(db, LINK_IP, ip)
+    if wait or not token or not token_is_live(db, token, "reset_password"):
         context["live"] = False
+        if wait is None:
+            hit(db, LINK_IP, ip)
+            db.commit()
         return templates.TemplateResponse(
-            request, "auth/reset_password.html", context, status_code=400
+            request,
+            "auth/reset_password.html",
+            context,
+            status_code=429 if wait else 400,
+            headers=retry_after(wait) if wait else None,
         )
     try:
         user = redeem_token(db, token, "reset_password")

@@ -249,7 +249,7 @@
 <main class="wrap" id="content">
 {% if request.state.email_verified is sameas false %}
   <div class="notice" style="margin-bottom:16px;">
-    {% if request.query_params.get("verification") == "sent" %}A new link is on its way.{% else %}Confirm your email to read invoices and connect your POS: use the link we sent.{% endif %}
+    {% if request.query_params.get("verification") == "sent" %}A new link is on its way.{% elif request.query_params.get("verification") == "wait" %}Links went out recently: check your inbox, or ask again in an hour.{% else %}Confirm your email to read invoices and connect your POS: use the link we sent.{% endif %}
     <form method="post" action="/app/verify-email/resend" style="display:inline; margin:0 0 0 6px;">{{ csrf_field(request) }}
       <button class="btn small secondary" type="submit">Send the link again</button>
     </form>

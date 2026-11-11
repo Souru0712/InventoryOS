@@ -21,10 +21,13 @@ from app.security import (
     revoke_sessions,
     verify_password,
 )
+from app.throttle import LOGIN_ACCOUNT, LOGIN_IP, clear, client_ip, hit, locked_for, retry_after
 from app.web.accounts import send_link
 from app.web.templating import templates
 
 router = APIRouter()
+
+TOO_MANY = "Too many attempts. Wait a few minutes and try again, or reset your password."
 
 
 @router.get("/signup", response_class=HTMLResponse)
@@ -107,14 +110,32 @@ def login(
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
+    ip = client_ip(request)
+    waits = [locked_for(db, LOGIN_ACCOUNT, email), locked_for(db, LOGIN_IP, ip)]
+    wait = max((w for w in waits if w is not None), default=None)
+    if wait is not None:
+        # The same answer whether or not the account exists, so it reveals nothing (SAAS-A-03).
+        return templates.TemplateResponse(
+            request,
+            "auth/login.html",
+            {"title": "Log in", "error": TOO_MANY, "email": email},
+            status_code=429,
+            headers=retry_after(wait),
+        )
     user = user_by_email(db, email)
     if user is None or not user.is_active or not verify_password(password, user.password_hash):
+        hit(db, LOGIN_ACCOUNT, email)
+        hit(db, LOGIN_IP, ip)
+        db.commit()
         return templates.TemplateResponse(
             request,
             "auth/login.html",
             {"title": "Log in", "error": "Email or password is not right.", "email": email},
             status_code=401,
         )
+    # The account's count starts again; the address's does not, or one good login from an
+    # attacker's own account would wipe the guesses made at everyone else's.
+    clear(db, LOGIN_ACCOUNT, email)
     login_user(request, db, user)
     db.commit()
     return RedirectResponse("/app", status_code=303)
