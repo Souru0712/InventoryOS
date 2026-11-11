@@ -222,6 +222,43 @@ class MembershipLocation(Base):
     location_id: Mapped[int] = mapped_column(ref("locations.id"))
 
 
+class Invitation(Base):
+    """An emailed offer to join a business with a role and a location scope (SAAS-A-08).
+
+    Bound to one email address, single use, seven days. Only the token's hash is stored. Pending
+    until accepted or revoked; past expires_at it opens nothing.
+    """
+
+    __tablename__ = "invitations"
+    __table_args__ = (one_of("invitations", "role", MEMBERSHIP_ROLES),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    email: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(24))
+    all_locations: Mapped[bool] = mapped_column(Boolean, default=True)
+    invited_by_user_id: Mapped[int] = mapped_column(ref("users.id"))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    accepted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    locations: Mapped[list[InvitationLocation]] = relationship(cascade="all, delete-orphan")
+
+
+class InvitationLocation(Base):
+    """One location a location-scoped invitation grants."""
+
+    __tablename__ = "invitation_locations"
+    __table_args__ = (UniqueConstraint("invitation_id", "location_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    invitation_id: Mapped[int] = mapped_column(owned_by("invitations.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+
+
 class AuthToken(Base):
     """A single-use link emailed to a person: confirm the address, or reset the password.
 

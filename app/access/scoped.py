@@ -23,6 +23,7 @@ from app.models import (
     HealthSnapshot,
     InventoryCount,
     InventoryEvent,
+    Invitation,
     Location,
     Membership,
     ProductIdentifier,
@@ -47,7 +48,16 @@ GLOBAL_MODELS: frozenset[type[Base]] = frozenset({EmailSuppression, WebhookEvent
 
 # Belong to the organization as a whole, so a location scope does not narrow them.
 ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
-    {Tenant, Membership, ProviderConnection, SoldItem, SyncRun, EmailLog, HealthSnapshot}
+    {
+        Tenant,
+        Membership,
+        Invitation,
+        ProviderConnection,
+        SoldItem,
+        SyncRun,
+        EmailLog,
+        HealthSnapshot,
+    }
 )
 
 # Rows whose location is their parent's: (the column naming the parent, the parent model).
@@ -134,6 +144,17 @@ def members(db: Session, org: OrgContext) -> list[User]:
             .order_by(User.id)
         )
     )
+
+
+def team(db: Session, org: OrgContext) -> list[tuple[Membership, User]]:
+    """Every membership of org, active or revoked, with its person, oldest first (T1.10)."""
+    rows = db.execute(
+        select(Membership, User)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.tenant_id == org.tenant_id)
+        .order_by(Membership.id)
+    )
+    return [(membership, user) for membership, user in rows]
 
 
 def update_scoped(org: OrgContext, model: type[Base]) -> Update:

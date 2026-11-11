@@ -9,7 +9,7 @@ route that takes an identifier fails the coverage test until it has a case here.
 
 import hashlib
 import typing
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -22,6 +22,7 @@ from app.models import (
     Document,
     DocumentLine,
     DocumentStatus,
+    Invitation,
     Location,
     Membership,
     ProductIdentifier,
@@ -155,6 +156,19 @@ CASES = {
         "data": {"membership_id": ids["membership"]}
     },
     ("POST", "/app/locations/{location_id}/restore"): lambda ids: {},
+    ("POST", "/app/team/invite"): lambda ids: {
+        "data": {
+            "email": "new.hire@example.test",
+            "role": "employee",
+            "scope": "some",
+            "location_ids": [ids["location"]],
+        }
+    },
+    ("POST", "/app/team/{membership_id}/role"): lambda ids: {
+        "data": {"role": "manager", "scope": "some", "location_ids": [ids["location"]]}
+    },
+    ("POST", "/app/team/{membership_id}/remove"): lambda ids: {},
+    ("POST", "/app/team/invitations/{invitation_id}/withdraw"): lambda ids: {},
 }
 
 PATH_ROWS = {
@@ -164,6 +178,8 @@ PATH_ROWS = {
     "stock_item_id": "item",
     "document_id": "document",
     "promotion_id": "promotion",
+    "membership_id": "membership",
+    "invitation_id": "invitation",
 }
 
 
@@ -260,6 +276,21 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     }
 
 
+def invitation(db, tenant_id: int, inviter_id: int) -> int:
+    """A pending invitation to the business, sent by inviter_id."""
+    row = Invitation(
+        tenant_id=tenant_id,
+        email=f"invited-{tenant_id}@example.test",
+        role="employee",
+        invited_by_user_id=inviter_id,
+        token_hash=hashlib.sha256(f"invitation-{tenant_id}".encode()).hexdigest(),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
+    )
+    db.add(row)
+    db.flush()
+    return row.id
+
+
 B_CODE, A_CODE = "990000000017", "110000000014"
 
 
@@ -284,6 +315,7 @@ def world():
         db.flush()
         theirs = _business(db, juniper.id, "Juniper", B_CODE)
         theirs["membership"] = their_membership.id
+        theirs["invitation"] = invitation(db, juniper.id, their_owner.id)
         db.commit()
     with TestClient(app) as client:
         client.post(
@@ -298,9 +330,9 @@ def world():
         with SessionLocal() as db:
             rosewood = db.scalars(select(Tenant).where(Tenant.name == "Rosewood")).one()
             mine = _business(db, rosewood.id, "Rosewood", A_CODE)
-            mine["membership"] = db.scalars(
-                select(Membership.id).where(Membership.tenant_id == rosewood.id)
-            ).one()
+            own = db.scalars(select(Membership).where(Membership.tenant_id == rosewood.id)).one()
+            mine["membership"] = own.id
+            mine["invitation"] = invitation(db, rosewood.id, own.user_id)
             db.commit()
         yield client, mine, theirs
 

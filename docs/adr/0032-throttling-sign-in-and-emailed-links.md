@@ -1,6 +1,6 @@
 # ADR-0032: Throttling sign-in and emailed links
 
-- **Status:** Proposed, 2026-11-11 (in the T1.09 pull request; accepted when the owner merges it, which also approves the limits below)
+- **Status:** Accepted, 2026-11-11 (the owner merged the T1.09 pull request, #27, approving the limits below: "Yes, merge it")
 - **Decision ID:** none (implements T1.09 under C-31 and C-32; SAAS-A-03, SEC-12, AC-SAAS-03)
 - **Tasks:** T1.09; T1.10 (invitations take the same mechanism)
 

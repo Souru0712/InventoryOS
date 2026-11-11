@@ -36,6 +36,9 @@ implementation sessions; the detail lives in `docs/`.
 - A person reaches a business only through an active membership (ADR-0028): the request's
   business is the session's membership, never `users.tenant_id`. Users are global; a business
   reaches its people through `members(db, org)`.
+- Team changes go through `app/team.py` (rules in `app/transform/team.py`, ADR-0033): a
+  business always keeps one active Owner (DR-27), only `owner.manage` touches an Owner, and
+  removing a member revokes the membership and its sessions.
 - Every product route takes `org: OrgContext = Depends(require_permission("key"))` with a key
   from `app/access/permissions.py` (ADR-0029; a test fails for a route without one). Money in a
   page sits behind `can(request, "inventory.view_costs")`; JSON for a role without it goes

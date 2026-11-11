@@ -54,7 +54,8 @@
     <input id="contact_email" name="contact_email" type="email" value="{{ tenant.contact_email or '' }}">
   </div>
   <p style="margin:12px 0 0;"><button class="btn" type="submit">Save</button>
-     {% if can(request, "location.manage") %}<a class="btn secondary" href="/app/locations">Locations</a>{% endif %}</p>
+     {% if can(request, "location.manage") %}<a class="btn secondary" href="/app/locations">Locations</a>{% endif %}
+     {% if can(request, "team.manage") %}<a class="btn secondary" href="/app/team">Team</a>{% endif %}</p>
 </form>
 {% endif %}
 

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 460px; margin: 20px auto;">
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+{% if state == "gone" %}
+  <h1>That invitation has expired</h1>
+  <p class="lede">Invitation links work once and for 7 days. Ask whoever invited you to send a new one.</p>
+{% else %}
+  <h1>Join {{ business }}</h1>
+  <p class="lede">You're invited as <strong>{{ role }}</strong>. This invitation is for {{ email }}.</p>
+  {% if state == "other" %}
+    <div class="card">
+      <p style="margin:0 0 12px;">You're signed in with another account. Log out, then open the link from the email again.</p>
+      <form method="post" action="/logout" style="margin:0;">{{ csrf_field(request) }}
+        <button class="btn secondary" type="submit">Log out</button>
+      </form>
+    </div>
+  {% else %}
+    <form class="card" method="post" action="/invitations/accept">{{ csrf_field(request) }}
+      <input type="hidden" name="token" value="{{ token }}">
+      {% if state == "sign_in" %}
+        <div class="field">
+          <label for="password">Your StockPulse password</label>
+          <input id="password" name="password" type="password" required autocomplete="current-password">
+        </div>
+        <p class="small muted" style="margin:0 0 12px;">Forgot it? <a href="/password/forgot">Reset your password</a>, then open this link again.</p>
+      {% elif state == "create" %}
+        <div class="field">
+          <label for="password">Choose a password</label>
+          <input id="password" name="password" type="password" required minlength="{{ min_password }}" autocomplete="new-password">
+          <div class="small muted">At least {{ min_password }} characters.</div>
+        </div>
+      {% endif %}
+      <button class="btn" type="submit">Join {{ business }}</button>
+    </form>
+  {% endif %}
+{% endif %}
+</div>
+{% endblock %}

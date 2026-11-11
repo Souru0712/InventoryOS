@@ -63,4 +63,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0029](0029-permission-keys-and-role-presets.md) | Permission keys, role presets, and what a role sees | T1.06 | Accepted |
 | [ADR-0030](0030-server-side-sessions-and-csrf.md) | Server-side sessions, CSRF tokens, POST logout | T1.07 | Accepted |
 | [ADR-0031](0031-email-verification-and-password-reset.md) | Email verification, password reset and change | T1.08 | Accepted |
-| [ADR-0032](0032-throttling-sign-in-and-emailed-links.md) | Throttling sign-in and emailed links | T1.09 | Proposed |
+| [ADR-0032](0032-throttling-sign-in-and-emailed-links.md) | Throttling sign-in and emailed links | T1.09 | Accepted |
+| [ADR-0033](0033-invitations-and-team-management.md) | Invitations and team management | T1.10 | Proposed |
