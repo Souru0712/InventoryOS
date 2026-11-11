@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.access.system import memberships_of, user_by_email
 from app.db import get_db
 from app.entitlements import PLAN_IDS, start_trial
+from app.mfa import start_challenge
 from app.models import Membership, Tenant, User
 from app.security import (
     MIN_PASSWORD_LENGTH,
@@ -133,6 +134,13 @@ def login(
             {"title": "Log in", "error": "Email or password is not right.", "email": email},
             status_code=401,
         )
+    if user.mfa_enabled_at is not None:
+        # Half signed in: whatever this browser held before ends, and a code finishes it
+        # (SAAS-A-07). The account's count clears only then.
+        logout_user(request, db)
+        start_challenge(request, user)
+        db.commit()
+        return RedirectResponse("/login/code", status_code=303)
     # The account's count starts again; the address's does not, or one good login from an
     # attacker's own account would wipe the guesses made at everyone else's.
     clear(db, LOGIN_ACCOUNT, email)

@@ -175,6 +175,12 @@ class User(Base):
     # wait for it (SAAS-A-02).
     email_verified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Two-step sign-in (SAAS-A-07): the authenticator secret, encrypted with the application key;
+    # set while enrolling, in force once mfa_enabled_at is set. mfa_last_step stops a code from
+    # being used twice.
+    mfa_secret_enc: Mapped[str | None] = mapped_column(String(255))
+    mfa_enabled_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    mfa_last_step: Mapped[int | None] = mapped_column(Integer)
 
     # What this person wants sent. Sign-in links and receipts ignore these: they were asked for.
     wants_stock_alerts: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -274,6 +280,18 @@ class AuthToken(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class RecoveryCode(Base):
+    """A single-use code that stands in for an authenticator code (SAAS-A-07). Hash only."""
+
+    __tablename__ = "recovery_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(owned_by("users.id"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     used_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 

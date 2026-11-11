@@ -27,6 +27,7 @@ from app.web import (
     health,
     locations,
     marketing,
+    mfa,
     ops,
     promotions,
     receiving,
@@ -92,6 +93,7 @@ app.include_router(promotions.router)
 app.include_router(scanning.router)
 app.include_router(settings_page.router)
 app.include_router(team.router)
+app.include_router(mfa.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

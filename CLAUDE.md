@@ -46,6 +46,9 @@ implementation sessions; the detail lives in `docs/`.
 - Sessions are rows (ADR-0030): the cookie holds only a token. Every POST form carries
   `{{ csrf_field(request) }}` and JavaScript posts send `X-CSRF-Token` (a test checks the
   templates); logout is a POST. Tests post like a browser through `tests/browser.py`.
+- A person with two-step sign-in is signed in only after a code (`/login/code`, `app/mfa.py`,
+  ADR-0034): no other path may call `login_user` for them on a password alone. Secrets kept at
+  rest are encrypted through `app/crypto.py` (`ENCRYPTION_KEY`).
 - An action that costs AI or connects outside (POS, invoice and photo reading, invitations)
   also takes `Depends(require_verified)` (ADR-0031). Emailed links open a page whose button posts.
 - A form that guesses at a secret or sends email on request is throttled through

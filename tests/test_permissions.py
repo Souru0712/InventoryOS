@@ -55,6 +55,8 @@ PUBLIC = {
     ("POST", "/password/reset"),
     ("GET", "/invitations/accept"),
     ("POST", "/invitations/accept"),
+    ("GET", "/login/code"),
+    ("POST", "/login/code"),
 }
 # Routes about the signed-in person rather than the business: any active member.
 PERSONAL = {
@@ -64,6 +66,10 @@ PERSONAL = {
     ("POST", "/app/sessions/end-all"),
     ("POST", "/app/verify-email/resend"),
     ("POST", "/app/settings/password"),
+    ("GET", "/app/settings/mfa"),
+    ("POST", "/app/settings/mfa/enable"),
+    ("POST", "/app/settings/mfa/recovery-codes"),
+    ("POST", "/app/settings/mfa/disable"),
 }
 ROLES = ("owner", "administrator", "manager", "employee", "read_only")
 

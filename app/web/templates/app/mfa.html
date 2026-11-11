@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="small"><a href="/app/settings">&larr; Settings</a></p>
+<h1>Two-step sign-in</h1>
+<p class="lede">After your password, StockPulse also asks for a code from an authenticator app on
+your phone, so a stolen password alone can't open your account.</p>
+
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+{% if request.query_params.get("off") %}<div class="notice ok">Two-step sign-in is off.</div>{% endif %}
+{% if request.query_params.get("used") == "recovery" %}<div class="notice error">You signed in with a recovery code. It won't work again{% if codes_left is defined %}: {{ codes_left }} left{% endif %}. Make new ones below if you're running low.</div>{% endif %}
+
+{% if codes %}
+  <div class="card" style="max-width:620px;">
+    <h2 style="margin-top:0;">Save your recovery codes</h2>
+    <p>Each code works once, in place of a code from your phone. Keep them somewhere safe, away
+    from your phone. This is the only time they're shown.</p>
+    <ul style="columns:2; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:16px; line-height:1.9;">
+      {% for code in codes %}<li>{{ code }}</li>{% endfor %}
+    </ul>
+    <p class="small muted" style="margin:0;">Earlier recovery codes no longer work.</p>
+  </div>
+{% endif %}
+
+{% if enabled %}
+  <div class="notice ok">Two-step sign-in is on. {{ codes_left }} recovery code{{ "s" if codes_left != 1 else "" }} left.</div>
+
+  <h2>New recovery codes</h2>
+  <form method="post" action="/app/settings/mfa/recovery-codes" class="card" style="max-width:620px;">{{ csrf_field(request) }}
+    <div class="field">
+      <label for="regen_code">Code from your authenticator app</label>
+      <input id="regen_code" name="code" required autocomplete="one-time-code" spellcheck="false">
+    </div>
+    <button class="btn secondary" type="submit">Make new recovery codes</button>
+  </form>
+
+  <h2>Turn it off</h2>
+  <form method="post" action="/app/settings/mfa/disable" class="card" style="max-width:620px;">{{ csrf_field(request) }}
+    <div class="field">
+      <label for="off_password">Password</label>
+      <input id="off_password" name="password" type="password" required autocomplete="current-password">
+    </div>
+    <div class="field">
+      <label for="off_code">Code from your authenticator app, or a recovery code</label>
+      <input id="off_code" name="code" required autocomplete="one-time-code" spellcheck="false">
+    </div>
+    <button class="btn secondary" type="submit">Turn off two-step sign-in</button>
+  </form>
+{% elif unavailable %}
+  <div class="notice error">Two-step sign-in can't be set up on this server yet: it needs an encryption key. Contact support.</div>
+{% else %}
+  <div class="card" style="max-width:620px;">
+    <h2 style="margin-top:0;">1. Scan this with your authenticator app</h2>
+    <p class="small muted">Google Authenticator, Microsoft Authenticator, 1Password and others all work.</p>
+    <div style="display:inline-block; background:#fff; padding:6px; border-radius:8px;">{{ qr }}</div>
+    <p class="small">Can't scan it? Enter this setup key instead:<br>
+      <code style="font-size:15px; letter-spacing:1px;">{{ setup_key }}</code></p>
+    <h2>2. Enter the code it shows</h2>
+    <form method="post" action="/app/settings/mfa/enable" style="margin:0;">{{ csrf_field(request) }}
+      <div class="field">
+        <label for="enable_code">6-digit code</label>
+        <input id="enable_code" name="code" required inputmode="numeric" autocomplete="one-time-code" maxlength="7">
+      </div>
+      <button class="btn" type="submit">Turn on two-step sign-in</button>
+      <p class="small muted" style="margin:10px 0 0;">Turning it on signs you out on every other device.</p>
+    </form>
+  </div>
+{% endif %}
+{% endblock %}

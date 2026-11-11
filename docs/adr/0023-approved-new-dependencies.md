@@ -18,4 +18,4 @@ Build TOTP/XLSX in-house
 
 ## Consequences
 
-Partly in effect: ruff and mypy are dev dependencies (T0.04); pip-audit runs from a pinned version in CI without being a project dependency (T0.03). The TOTP library, XLSX reader, HTMX, Playwright and axe arrive with their tasks. Any other new dependency still needs the owner's approval.
+Partly in effect: ruff and mypy are dev dependencies (T0.04); pip-audit runs from a pinned version in CI without being a project dependency (T0.03). The TOTP library (`pyotp`) arrived with T1.11, together with `segno` for the enrolment QR code, which the owner approved separately on 2026-11-11 (ADR-0034). The XLSX reader, HTMX, Playwright and axe arrive with their tasks. Any other new dependency still needs the owner's approval.

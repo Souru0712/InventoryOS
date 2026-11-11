@@ -8,7 +8,12 @@
 {% else %}
   <h1>Join {{ business }}</h1>
   <p class="lede">You're invited as <strong>{{ role }}</strong>. This invitation is for {{ email }}.</p>
-  {% if state == "other" %}
+  {% if state == "log_in_first" %}
+    <div class="card">
+      <p style="margin:0 0 12px;">Your account uses two-step sign-in. Log in first, then open the link from the email again.</p>
+      <a class="btn" href="/login">Log in</a>
+    </div>
+  {% elif state == "other" %}
     <div class="card">
       <p style="margin:0 0 12px;">You're signed in with another account. Log out, then open the link from the email again.</p>
       <form method="post" action="/logout" style="margin:0;">{{ csrf_field(request) }}

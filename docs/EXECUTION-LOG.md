@@ -5,6 +5,74 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-11 — T1.11 TOTP MFA
+
+**Implemented**
+- **Enrolling** (`/app/settings/mfa`, linked from Settings): a QR code (`segno`, inline SVG) and
+  setup key for an authenticator app; one matching code turns it on, shows ten recovery codes once,
+  and ends every other session. The secret is encrypted with the application key (`app/crypto.py`);
+  recovery codes are stored as SHA-256 hashes (migration `c5e1f0a94b2d`).
+- **Signing in**: after a correct password, an enrolled person gets only a five-minute signed mark
+  and the code page (`/login/code`); the session starts when an authenticator or recovery code
+  matches. Codes are good for their 30-second step and one either side, never twice; a recovery
+  code works once. 5 wrong codes in 15 minutes lock the step (1 minute, doubling to an hour).
+- **Managing**: new recovery codes need a code; turning it off needs the password and a code;
+  `python -m app.cli reset-mfa --email` turns it off for a locked-out person and ends their
+  sessions. Owners and Administrators without it see a prompt on every page (PD-20); it is not
+  required. An enrolled account can join an invitation only while signed in.
+- Dependencies `pyotp` 2.10.0 (ID-23) and `segno` 1.6.6 (owner approved 2026-11-11), locked in
+  `uv.lock`. ADR-0034 (Proposed); ADR-0033 Accepted; ADR-0023 notes the arrival; `CLAUDE.md`
+  states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_mfa.py` (16), acceptance: an enrolled person cannot sign in without a code (no
+  session row after the password alone); a recovery code works once. Also: enrolling takes a code
+  and shows ten codes once, with the secret encrypted and only hashes stored; the setup key stays
+  the same across reloads until confirmed; turning it on signs out other devices; no encryption
+  key, no enrolment; a code works only once (replay refused); guessing is stopped (429); the code
+  step needs a fresh password step; turning it off needs password and code; new recovery codes
+  replace the old; the Owner prompt shows until it is on and never on its own pages; support can
+  reset it; an invitation never signs in an enrolled account by password; the step window and
+  replay rules at fixed times; recovery code format and hashing.
+- In the browser (local server, test data): the Owner prompt, the QR code and setup key,
+  enrolling with a computed code, the recovery codes, then signing out and in: the password led
+  to the code page with `/app` still closed, and a code finished the sign-in.
+- Full suite 763 passed, 11 skipped (747 before); ruff, mypy and the docs checker clean.
+
+**Decision for the owner**
+- The code limit (5 wrong codes in 15 minutes, 1 minute doubling to an hour) is security
+  configuration: merging this pull request approves it.
+
+**Files changed**
+- `app/crypto.py`, `app/mfa.py`, `app/transform/mfa.py`, `app/web/mfa.py`, templates
+  (`app/mfa.html`, `auth/mfa_challenge.html`), migration `c5e1f0a94b2d`, `tests/test_mfa.py`,
+  ADR-0034 (new); `app/models.py`, `app/web/auth.py`, `app/web/team.py`, `app/security.py`,
+  `app/throttle.py`, `app/config.py`, `app/cli.py`, `app/main.py`, templates (`base.html`,
+  `app/settings.html`, `auth/accept_invitation.html`), `pyproject.toml`, `uv.lock`,
+  `tests/test_permissions.py`; ADR-0033 (Accepted), ADR-0023, the index, `CLAUDE.md`, task index
+  (T1.10 → Completed, T1.11 → In review), this log.
+
+**Next task**
+- T1.12 Audit events.
+
+---
+
+## 2026-11-11 — T1.10 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #28 was merged with a merge commit (`f954294`). CI
+  on its head `427f8da`, all five required jobs green: SQLite 747 passed, 11 skipped; PostgreSQL 16
+  758 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: AC-STF-01, AC-STF-04, AC-STF-05.
+
+**Decisions**
+- ADR-0033 accepted with the merge, approving the invitation limit.
+
+**Files changed**
+- Task index (T1.10 → Completed), ADR-0033 status and index, this log.
+
+---
+
 ## 2026-11-11 — T1.10 Invitations and team management
 
 **Implemented**

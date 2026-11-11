@@ -76,6 +76,17 @@
   <p class="small muted" style="margin:10px 0 0;">Changing it signs you out on every other device.</p>
 </form>
 
+<h2>Two-step sign-in</h2>
+<div class="card" style="max-width:620px;">
+  {% if user.mfa_enabled_at %}
+    <p style="margin:0 0 10px;">On. Signing in asks for a code from your authenticator app.</p>
+    <a class="btn secondary" href="/app/settings/mfa">Manage</a>
+  {% else %}
+    <p style="margin:0 0 10px;">Off. Add a code from your phone to your password, so a stolen password alone can't open your account.</p>
+    <a class="btn" href="/app/settings/mfa">Turn on two-step sign-in</a>
+  {% endif %}
+</div>
+
 <h2>Sessions</h2>
 <form method="post" action="/app/sessions/end-all" class="card" style="max-width:620px;">{{ csrf_field(request) }}
   <p style="margin:0 0 10px;">Signed in on a shared or lost device? End every session you have, here included.</p>

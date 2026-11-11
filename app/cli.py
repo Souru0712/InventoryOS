@@ -54,7 +54,7 @@ from app.orchestration.receiving import parse_document
 from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
 from app.orchestration.views import refresh_derived_quantities
-from app.security import hash_password
+from app.security import hash_password, revoke_sessions
 from app.transform.barcodes import check_digit
 from app.transform.reports import money
 from app.units import Dimension, to_base
@@ -221,6 +221,22 @@ def cmd_verify_email(args: argparse.Namespace) -> int:
         if user.email_verified_at is None:
             user.email_verified_at = datetime.now(UTC)
         print(f"user {user.id} is confirmed")
+    return 0
+
+
+def cmd_reset_mfa(args: argparse.Namespace) -> int:
+    """Turn two-step sign-in off for someone who lost their phone and recovery codes. Support
+    only, after confirming who is asking; they set it up again after signing in."""
+    from app.mfa import disable
+
+    with session_scope() as db:
+        user = user_by_email(db, args.email)
+        if user is None:
+            print("no account uses that address")
+            return 1
+        disable(db, user)
+        revoke_sessions(db, user.id)
+        print(f"user {user.id}: two-step sign-in is off and every session ended")
     return 0
 
 
@@ -549,6 +565,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("verify-email", help="mark an account's email as confirmed")
     p.add_argument("--email", required=True)
     p.set_defaults(func=cmd_verify_email)
+
+    p = sub.add_parser("reset-mfa", help="turn two-step sign-in off for a locked-out person")
+    p.add_argument("--email", required=True)
+    p.set_defaults(func=cmd_reset_mfa)
 
     p = sub.add_parser("email", help="see or change suppressed email addresses")
     p.add_argument("--suppress", help="stop sending to this address")
