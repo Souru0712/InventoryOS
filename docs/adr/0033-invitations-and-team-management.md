@@ -1,6 +1,6 @@
 # ADR-0033: Invitations and team management
 
-- **Status:** Proposed, 2026-11-11 (in the T1.10 pull request; accepted when the owner merges it, which also approves the invitation limit below)
+- **Status:** Accepted, 2026-11-11 (the owner merged the T1.10 pull request, #28, approving the invitation limit below: "Yes, merge it")
 - **Decision ID:** none (implements T1.10; STF-FR-01, STF-FR-06, STF-FR-07, SAAS-A-08, DR-27, AC-STF-01, AC-STF-04, AC-STF-05)
 - **Tasks:** T1.10; T1.12 (audit events will record these changes)
 

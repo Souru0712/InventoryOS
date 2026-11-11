@@ -256,6 +256,12 @@
   </div>
 {% endif %}
 {% if request.query_params.get("verified") %}<div class="notice ok" style="margin-bottom:16px;">Your email is confirmed.</div>{% endif %}
+{% if request.state.mfa_prompt is sameas true and not request.url.path.startswith("/app/settings/mfa") %}
+  <div class="notice" style="margin-bottom:16px;">
+    You run this business's account: protect it with two-step sign-in, so a stolen password alone can't open it.
+    <a class="btn small" href="/app/settings/mfa" style="margin-left:6px;">Turn it on</a>
+  </div>
+{% endif %}
 {% if tenant is defined and tenant %}
   {% set account = subscription(tenant) %}
   {% if account.message %}

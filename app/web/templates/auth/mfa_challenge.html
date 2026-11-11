@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 440px; margin: 20px auto;">
+  <h1>Enter your code</h1>
+  <p class="lede">Open your authenticator app and type the 6-digit code for StockPulse. Lost your phone? Use one of your recovery codes.</p>
+  {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+  <form class="card" method="post" action="/login/code">{{ csrf_field(request) }}
+    <div class="field">
+      <label for="code">Code</label>
+      <input id="code" name="code" required autofocus autocomplete="one-time-code" inputmode="text" spellcheck="false">
+    </div>
+    <button class="btn" type="submit">Sign in</button>
+  </form>
+  <p class="small muted">No phone and no recovery codes? Contact support from your account email.</p>
+</div>
+{% endblock %}

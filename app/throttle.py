@@ -44,6 +44,8 @@ RESEND_ACCOUNT = Rule("resend-account", 3, HOUR, HOUR, HOUR)
 LINK_IP = Rule("link-ip", 10, 15 * MINUTE, MINUTE, HOUR)
 # Invitations a person sends (T1.10): each one emails someone outside the business.
 INVITE_ACCOUNT = Rule("invite-account", 20, HOUR, HOUR, HOUR)
+# Two-step sign-in codes (T1.11): a million codes, so a handful of guesses, as with passwords.
+MFA_ACCOUNT = Rule("mfa-account", 5, 15 * MINUTE, MINUTE, HOUR)
 
 # A row whose window and lock are this long over is history; the nightly job removes it.
 KEEP_FOR = timedelta(days=1)

@@ -216,7 +216,11 @@ def _accept_page(
         if user is not None:
             state = "join" if user.email == invitation.email else "other"
         else:
-            state = "sign_in" if user_by_email(db, invitation.email) else "create"
+            account = user_by_email(db, invitation.email)
+            if account is None:
+                state = "create"
+            else:
+                state = "log_in_first" if account.mfa_enabled_at else "sign_in"
         context |= {
             "state": state,
             "business": business_name(db, invitation),
@@ -274,6 +278,9 @@ def accept_invitation(
         return RedirectResponse("/app?joined=1", status_code=303)
 
     account = user_by_email(db, invitation.email)
+    if account is not None and account.mfa_enabled_at is not None:
+        # A password alone never signs in an account with two-step sign-in (SAAS-A-07).
+        return _accept_page(request, db, invitation, None, token, status_code=403)
     if account is not None:
         # Signing in, so it counts like the sign-in form (SAAS-A-03).
         waits = [locked_for(db, LOGIN_ACCOUNT, account.email), locked_for(db, LOGIN_IP, ip)]

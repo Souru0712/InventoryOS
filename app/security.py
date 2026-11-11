@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.models import AuthToken, Location, Membership, Tenant, User, UserSession
 from app.observability import bind
+from app.transform.mfa import PROMPTED_ROLES
 
 # The only sign-in state in the cookie: a random token naming a row in `sessions` (SAAS-A-06).
 SESSION_TOKEN_KEY = "sid"  # noqa: S105 (the name of a cookie field, not a secret)
@@ -228,6 +229,8 @@ def require_membership(
     request.state.businesses = [(m.id, name, m.id == membership.id) for m, name in options]
     # For templates: menus and cost columns follow the role (USER_ROLES_AND_PERMISSIONS §5).
     request.state.permissions = role_permissions(membership.role)
+    # Owners and Administrators without two-step sign-in see a prompt on every page (PD-20).
+    request.state.mfa_prompt = membership.role in PROMPTED_ROLES and user.mfa_enabled_at is None
     bind(tenant_id=membership.tenant_id)
     return membership
 

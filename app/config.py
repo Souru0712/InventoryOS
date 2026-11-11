@@ -146,7 +146,10 @@ class Settings(BaseSettings):
         if self.secret_key in PLACEHOLDER_SECRET_KEYS or len(self.secret_key) < 32:
             problems.append("SECRET_KEY is a placeholder or shorter than 32 characters")
         if not self.encryption_key:
-            problems.append("ENCRYPTION_KEY is not set, so Square tokens cannot be stored")
+            problems.append(
+                "ENCRYPTION_KEY is not set, so Square tokens and two-step sign-in secrets "
+                "cannot be stored"
+            )
         if self.app_env == "production" and not self.app_base_url.startswith("https://"):
             problems.append(
                 "APP_BASE_URL must be https in production, or session cookies travel in clear"
