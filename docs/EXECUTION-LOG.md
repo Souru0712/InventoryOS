@@ -5,6 +5,68 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-11 — T1.09 Login throttling
+
+**Implemented**
+- **Counters in the database** (`throttles`, migration `60bee21fefbd`; `app/throttle.py`): one row
+  per rule and subject, keyed by the rule and the SHA-256 of the email or IP address, so every
+  server counts the same attempts and neither is stored. A nightly job prunes counters untouched
+  for a day.
+- **Rules** (proposed; merging approves them): sign-in 5 wrong passwords per account and 20 per
+  address in 15 minutes; reset emails 3 an hour per account and 10 per address; confirmation
+  resends 3 an hour per account; links that did not work 10 per address in 15 minutes. Past the
+  limit the lock starts at the rule's first lock and doubles with every further attempt (sign-in
+  and links: 1 minute up to an hour). Refused attempts are not counted.
+- **Replies reveal nothing**: a locked sign-in answers 429 with Retry-After and one sentence for
+  every account, real or not; a throttled reset request shows the usual page and sends nothing; a
+  throttled resend says to check the inbox. A good sign-in clears the account's count, not the
+  address's.
+- Probe R8 retired (its CSRF half went in T1.07). ADR-0032 (Proposed); ADR-0031 Accepted;
+  `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_throttling.py` (14): **AC-SAAS-03**: five wrong passwords lock the account even
+  against the right one (429, Retry-After); counters hold no email or address; the lock ends and a
+  good sign-in starts the count again; each guess past the limit doubles the lock; one address
+  guessing at many accounts is stopped while another address is not; guesses from many addresses
+  add up for one account (the count is shared, not per server); a locked unknown account reads the
+  same as a real one; a good sign-in does not wipe the address's count; reset emails stop after
+  three an hour without the page changing; one address cannot send resets to everyone;
+  confirmation resends stop after three; guessing at links is stopped, while a real link still
+  works from another address; old counters are pruned and live ones kept.
+- Full suite 722 passed, 11 skipped (708 before); ruff, mypy and the docs checker clean.
+
+**Decision for the owner**
+- The limits are security configuration: merging this pull request approves them; say if any
+  should differ.
+
+**Files changed**
+- `app/throttle.py`, migration `60bee21fefbd`, `tests/test_throttling.py`, ADR-0032 (new);
+  `app/models.py`, `app/web/auth.py`, `app/web/accounts.py`, `app/orchestration/scheduler.py`,
+  `app/web/templates/base.html`; probe file (R8 retired); ADR-0031 (Accepted), the index,
+  `CLAUDE.md`, task index (T1.08 → Completed, T1.09 → In review), this log.
+
+**Next task**
+- T1.10 Invitations and team management.
+
+---
+
+## 2026-11-07 — T1.08 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #26 was merged with a merge commit (`664fb5d`). CI
+  on its head `ba0bab7`, all five required jobs green: SQLite 708 passed, 11 skipped; PostgreSQL 16
+  719 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: AC-SAAS-02, AC-SAAS-04.
+
+**Decisions**
+- ADR-0031 accepted with the merge.
+
+**Files changed**
+- Task index (T1.08 → Completed), ADR-0031 status and index, this log.
+
+---
+
 ## 2026-11-07 — T1.08 Email verification, password reset and change
 
 **Implemented**

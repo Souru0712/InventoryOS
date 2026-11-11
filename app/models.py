@@ -240,6 +240,24 @@ class AuthToken(Base):
     used_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
+class Throttle(Base):
+    """Recent attempts at one guarded action by one account or address (SAAS-A-03).
+
+    The key is the rule's name and a hash of the email or IP address, so neither is stored.
+    Rows live in the database, so every app server counts the same attempts.
+    """
+
+    __tablename__ = "throttles"
+    __table_args__ = (not_negative("throttles", "attempts"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    window_started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+
+
 class UserSession(Base):
     """A signed-in browser (SAAS-A-06). The cookie holds only a random token; this row, found by
     the token's hash, says whose session it is, which business it acts for, and whether it is over.

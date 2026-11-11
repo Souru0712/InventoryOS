@@ -45,6 +45,9 @@ implementation sessions; the detail lives in `docs/`.
   templates); logout is a POST. Tests post like a browser through `tests/browser.py`.
 - An action that costs AI or connects outside (POS, invoice and photo reading, invitations)
   also takes `Depends(require_verified)` (ADR-0031). Emailed links open a page whose button posts.
+- A form that guesses at a secret or sends email on request is throttled through
+  `app/throttle.py` (`locked_for`, `hit`, `clear`; ADR-0032); a refusal reveals nothing more
+  than a success would.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`

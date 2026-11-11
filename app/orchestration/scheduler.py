@@ -28,6 +28,7 @@ from app.orchestration.health import record_snapshot
 from app.orchestration.reporting import report_sent_recently, send_weekly_report
 from app.orchestration.subscriptions import expire_due_trials
 from app.orchestration.sync import run_sync
+from app.throttle import prune
 
 log = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
@@ -100,6 +101,17 @@ def record_health_snapshots() -> None:
                 log.exception("health snapshot failed for tenant %s", tenant_id)
 
 
+def prune_throttles() -> None:
+    """Throttle counters whose windows and locks are long over are only history."""
+    try:
+        with session_scope() as db:
+            removed = prune(db)
+        if removed:
+            log.info("pruned %s throttle counters", removed)
+    except Exception:
+        log.exception("could not prune throttle counters")
+
+
 def _job(func: Callable[[], None]) -> Callable[[], None]:
     """Each run of a job gets its own id on every line it logs, as a web request does."""
 
@@ -135,6 +147,15 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         hour=1,
         minute=5,
         id="close_finished_trials",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        _job(prune_throttles),
+        "cron",
+        hour=3,
+        minute=25,
+        id="prune_throttles",
         max_instances=1,
         coalesce=True,
     )

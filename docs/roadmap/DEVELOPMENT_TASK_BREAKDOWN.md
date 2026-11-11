@@ -54,8 +54,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T1.05 | Memberships and org switching | P0 | M | M1 | T1.02 | Completed (2026-11-06; one login, several businesses, PA3 retired) |
 | T1.06 | Permission keys and role presets | P0 | M | M1 | T1.05 | Completed (2026-11-07; every route declares a key, costs follow the role) |
 | T1.07 | Server-side sessions, CSRF, POST logout | P1 | M | M1 | T1.05 | Completed (2026-11-07; revocable sessions, CSRF on every form, timeouts approved) |
-| T1.08 | Email verification, password reset and change | P1 | M | M1 | T1.07 | In review (PR open; CI evidence in the execution log) |
-| T1.09 | Login throttling | P1 | S | M1 | T1.07 | Not started |
+| T1.08 | Email verification, password reset and change | P1 | M | M1 | T1.07 | Completed (2026-11-07; confirmation gates, single-use reset, password change) |
+| T1.09 | Login throttling | P1 | S | M1 | T1.07 | In review (PR open; CI evidence in the execution log) |
 | T1.10 | Invitations and team management | P1 | M | M1 | T1.06, T1.08 | Not started |
 | T1.11 | TOTP MFA | P1 | M | M1 | T1.07 | Not started |
 | T1.12 | Audit events | P1 | S | M1 | T1.05 | Not started |

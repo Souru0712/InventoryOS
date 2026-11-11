@@ -1,6 +1,6 @@
 # ADR-0031: Email verification, password reset and change
 
-- **Status:** Proposed, 2026-11-07 (in the T1.08 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-07 (the owner merged the T1.08 pull request, #26: "Yes, merge it")
 - **Decision ID:** none (implements T1.08 under C-31 and C-32; SAAS-A-02, SAAS-A-05, AC-SAAS-02, AC-SAAS-04)
 - **Tasks:** T1.08; T1.09 (rate limits on these forms), T1.10 (invitations join the gate)
 
