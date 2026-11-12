@@ -5,6 +5,59 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.17 Opening-balance migration
+
+**Implemented**
+- **Data migration** `a6eec9216078` (DM-6 backfill): for every stock row with a non-zero quantity,
+  one `opening` transaction with one `opening_balance` movement of exactly that quantity
+  (negative stays negative). It is costed at the row's current cost, posted by the system at
+  migration time, and keyed `migration:opening:<item>:<location>`. Every pair gets its
+  `stock_balances` row, zeros included.
+- Re-runnable (existing keys and balances are skipped); written in SQL, not through
+  `app/ledger`; downgrade clears the opening postings and balances and leaves stock rows alone.
+- Until T1.18 the screens and old writers still use `stock_items.qty_base`; ADR-0041 records that
+  T1.18 must catch the ledger up before readers switch.
+- ADR-0041 (Proposed).
+
+**Verified (locally, SQLite)**
+- `tests/test_opening_balances.py` (3), over the demo business with one item below zero and one
+  at zero:
+  - **acceptance**: for every item × location, the balance and the sum of movements equal the
+    previous quantity;
+  - one opening per non-zero pair, each with its key, the system as actor and the row's cost;
+  - zeros get a balance row and no movement;
+  - running the backfill again posts nothing;
+  - the ledger carries on from the opening balance.
+- `tests/test_migrations.py`: through Alembic from pre-ledger rows (a shared item at two
+  locations, one negative, and a zero), the expected movements and balances; the downgrade
+  empties the ledger and keeps the stock rows. The upgrade over populated data still passes.
+- Full suite 867 passed, 19 skipped (863 passed, 18 skipped before; the new skip is the Postgres half of the DM-6 migration test, run in CI); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- Migration `a6eec9216078`, `tests/test_opening_balances.py`, ADR-0041 (new);
+  `tests/test_migrations.py`; the ADR index, task index (T1.16 → Completed, T1.17 → In review),
+  this log.
+
+**Next task**
+- T1.18 Route existing writers through the ledger.
+
+---
+
+## 2026-11-12 — T1.16 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #36 (T1.16-b) was merged with a merge commit
+  (`264c203`). CI on its head `4c06f3d`, all five required jobs green: SQLite 863 passed, 18
+  skipped; PostgreSQL 16 881 passed, 0 skipped. The concurrency tests ran and passed there,
+  AC-INV-07 included. Lint and types, dependency audit and Docker image also passed. Same five
+  green on `main` after the merge.
+- With T1.16-a (#35): AC-INV-04, -05, -06 and -07 met.
+
+**Files changed**
+- Task index (T1.16 → Completed), this log.
+
+---
+
 ## 2026-11-12 — T1.16-b Ledger concurrency and reversal hardening
 
 **Implemented**
