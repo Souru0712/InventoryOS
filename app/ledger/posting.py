@@ -31,9 +31,11 @@ from app.models import (
     StockItem,
 )
 from app.transform.ledger import (
+    BelowZero,
     LedgerRuleError,
     Line,
     check_transaction,
+    crosses_zero,
     places,
     reversal_of,
 )
@@ -139,8 +141,13 @@ def post_transaction(
     reason: str | None = None,
     revision: int = 0,
     reverses_transaction_id: int | None = None,
+    refuse_below_zero: bool = False,
 ) -> InventoryTransaction:
-    """Post one business event's movements, or return the earlier posting of the same key."""
+    """Post one business event's movements, or return the earlier posting of the same key.
+
+    A manual movement passes refuse_below_zero: it is refused with BelowZero if it would take
+    a balance below zero, checked while the balance is locked (DR-08). Movements the system
+    observed (a sale, a count) post in full even when stock goes negative."""
     key = idempotency_key.strip()
     accepted = check_transaction(kind, lines, key)
     if occurred_at.tzinfo is None or occurred_at.utcoffset() is None:
@@ -159,6 +166,10 @@ def post_transaction(
     try:
         with db.begin_nested():
             balances = {pair: _locked_balance(db, org, *pair) for pair in pairs}
+            if refuse_below_zero:
+                held = {pair: Decimal(row.qty_base) for pair, row in balances.items()}
+                if crosses_zero(held, accepted):
+                    raise BelowZero("That would take recorded stock below zero.")
             transaction = InventoryTransaction(
                 tenant_id=org.tenant_id,
                 location_id=accepted[0].location_id,

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
+from app.transform.adjustments import ADJUSTMENT_REASONS
 from app.transform.exceptions import EXCEPTION_TYPES, RESOLUTIONS, SEVERITIES, STATUSES
 from app.transform.jobs import JOB_KINDS
 from app.transform.jobs import STATUSES as JOB_STATUSES
@@ -789,6 +790,38 @@ class Alert(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class InventoryAdjustment(Base):
+    """A deliberate correction with its reason (T1.22; INV-FR-19, WF-10): the source record of
+    one `adjustment` transaction, keyed `adjustment:<id>`. Written only by app/adjustments.py."""
+
+    __tablename__ = "inventory_adjustments"
+    __table_args__ = (
+        one_of("inventory_adjustments", "reason", ADJUSTMENT_REASONS),
+        CheckConstraint(
+            "CAST(qty_base AS NUMERIC) <> 0", name="ck_inventory_adjustments_qty_base_not_zero"
+        ),
+        CheckConstraint(
+            "reason <> 'other' OR note IS NOT NULL",
+            name="ck_inventory_adjustments_other_has_note",
+        ),
+        Index("ix_inventory_adjustments_item", "tenant_id", "inventory_item_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    qty_base: Mapped[Decimal] = mapped_column(Qty)
+    reason: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str | None] = mapped_column(String(300))
+    # Set only when the person let it take stock below zero, saying why (DR-08).
+    override_reason: Mapped[str | None] = mapped_column(String(300))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+    value_cents: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 _OPEN = "status IN ('open', 'acknowledged')"

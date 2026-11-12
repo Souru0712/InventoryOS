@@ -1,6 +1,6 @@
 # ADR-0045: Nightly ledger verification
 
-- **Status:** Proposed, 2026-11-12 (in the T1.21 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (owner: "Yes, merge it"; PR #43)
 - **Decision ID:** none (implements T1.21; DR-03, REL-08, AC-INV-11, OBS-06)
 - **Tasks:** T1.21; T4.07 and T4.10 (founder console and incident thresholds read the same signal)
 

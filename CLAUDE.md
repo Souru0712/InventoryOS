@@ -30,7 +30,10 @@ implementation sessions; the detail lives in `docs/`.
   `post_transaction()` / `reverse_transaction()` in `app/ledger/posting.py` (ADR-0040); nothing
   else names the ledger models (a test enforces it). A nightly job (`app/ledger/verify.py`,
   ADR-0045) checks balance = Σ movements = stock row and raises `balance_drift`; it never
-  corrects either figure. It is also the only writer of
+  corrects either figure. A manual movement (an adjustment, waste) posts with
+  `refuse_below_zero=True`: below zero only with `adjustment.override_negative` and a reason
+  (DR-08). Adjustments go through `app/adjustments.py` (ADR-0046); history is read through
+  `app/ledger/history.py`. It is also the only writer of
   `stock_items.qty_base`, the balance's projection that screens read (ADR-0042): a count posts
   through `post_count()`, a new item's quantity through `post_opening()`, a receipt as a
   `receipt`; a test fails on any other assignment. Square's counts never change stock (C-34).

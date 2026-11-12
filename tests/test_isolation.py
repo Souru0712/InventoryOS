@@ -199,6 +199,17 @@ CASES = {
     ("POST", "/app/team/{membership_id}/remove"): lambda ids: {},
     ("POST", "/app/team/invitations/{invitation_id}/withdraw"): lambda ids: {},
     ("GET", "/app/audit"): lambda ids: {"params": {"person": ids["user"]}},
+    ("GET", "/app/catalog/{inventory_item_id}/history"): lambda ids: {},
+    ("GET", "/app/catalog/{inventory_item_id}/adjust"): lambda ids: {},
+    ("POST", "/app/catalog/{inventory_item_id}/adjust"): lambda ids: {
+        "data": {
+            "location_id": ids["location"],
+            "direction": "add",
+            "quantity": "1",
+            "unit": "each",
+            "reason": "found",
+        }
+    },
     ("POST", "/app/exceptions/{exception_id}/acknowledge"): lambda ids: {},
     ("POST", "/app/exceptions/{exception_id}/dismiss"): lambda ids: {
         "data": {"reason": "Counted it myself"}
