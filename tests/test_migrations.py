@@ -366,6 +366,84 @@ def test_dm5_pack_sizes_become_packages_and_the_first_is_how_deliveries_arrive(f
         engine.dispose()
 
 
+BEFORE_DM6 = "4166ed9858d6"
+
+
+def test_dm6_the_ledger_opens_at_every_quantity_and_the_downgrade_clears_it(fresh_url):
+    """DM-6 (T1.17): Σ movements = previous qty_base for every item × location."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    stock = (
+        "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension, stock_unit,"
+        " track_mode, qty_base, reorder_point_base, cost_per_base_cents, lead_time_days,"
+        " receive_unit, is_active) VALUES (1, :location, :slug, :slug, 'COUNT', 'each',"
+        " 'MANUAL', :qty, '0.0000', :cost, 2, 'each', true)"
+    )
+    rows = [
+        (1, "bars", "24.0000", "80.0000"),
+        (2, "bars", "-3.5000", "80.0000"),
+        (1, "cups", "0.0000", "5.0000"),
+    ]
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            for name in ("Main", "Harbor"):
+                connection.execute(
+                    text(
+                        "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                        " VALUES (1, :name, 'UTC', 'USD', true)"
+                    ),
+                    {"name": name},
+                )
+            for location, slug, qty, cost in rows:
+                connection.execute(
+                    text(stock), {"location": location, "slug": slug, "qty": qty, "cost": cost}
+                )
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            totals = connection.execute(
+                text(
+                    "SELECT s.slug, s.location_id, b.qty_base,"
+                    " (SELECT count(*) FROM inventory_movements m"
+                    "   WHERE m.location_id = s.location_id"
+                    "   AND m.inventory_item_id = s.inventory_item_id)"
+                    " FROM stock_items s JOIN stock_balances b"
+                    " ON b.location_id = s.location_id"
+                    " AND b.inventory_item_id = s.inventory_item_id ORDER BY s.id"
+                )
+            ).all()
+            moved = connection.execute(
+                text(
+                    "SELECT m.qty_base, m.movement_type, m.unit_cost_snapshot, t.idempotency_key"
+                    " FROM inventory_movements m JOIN inventory_transactions t"
+                    " ON t.id = m.transaction_id ORDER BY m.id"
+                )
+            ).all()
+        tidy = [(slug, loc, str(qty).rstrip("0").rstrip("."), n) for slug, loc, qty, n in totals]
+        assert tidy == [("bars", 1, "24", 1), ("bars", 2, "-3.5", 1), ("cups", 1, "0", 0)]
+        assert [(str(q).rstrip("0").rstrip("."), kind) for q, kind, _, _ in moved] == [
+            ("24", "opening_balance"),
+            ("-3.5", "opening_balance"),
+        ]
+        assert all(key.startswith("migration:opening:") for *_, key in moved)
+
+        command.downgrade(config, BEFORE_DM6)
+        with engine.connect() as connection:
+            for table in ("inventory_movements", "inventory_transactions", "stock_balances"):
+                assert connection.execute(text(f"SELECT count(*) FROM {table}")).scalar() == 0  # noqa: S608
+            assert connection.execute(text("SELECT count(*) FROM stock_items")).scalar() == 3
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both
