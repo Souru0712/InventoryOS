@@ -1,6 +1,6 @@
 # ADR-0037: Reading stock items' definitions and settings from the split tables
 
-- **Status:** Proposed, 2026-11-12 (in the T1.13-b pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (the owner merged the T1.13-b pull request, #32: "merged manually")
 - **Decision ID:** none (completes T1.13 under ID-10 / ADR-0010 and ADR-0036; C-38)
 - **Tasks:** T1.13-b; T1.14 (item screens write the split tables); DM-16 (drops the legacy columns)
 

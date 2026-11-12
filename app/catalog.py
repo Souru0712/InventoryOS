@@ -13,14 +13,50 @@ from sqlalchemy import Select, event, select
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
-from app.models import InventoryItem, ItemLocation, StockItem
+from app.models import InventoryCategory, InventoryItem, ItemLocation, StockItem
 from app.transform.items import base_unit, item_slug, item_type
+
+
+def category_named(
+    session: Session | None, tenant_id: int, name: str | None
+) -> InventoryCategory | None:
+    """The business's category with this name in any case, created if it has none; an
+    archived one comes back into use. None for a blank name."""
+    name = " ".join((name or "").split())[:120]
+    if not name:
+        return None
+    if session is None:
+        raise RuntimeError("add the item to a session before naming its category")
+    wanted = name.casefold()
+    for pending in session.new:
+        if (
+            isinstance(pending, InventoryCategory)
+            and pending.tenant_id == tenant_id
+            and pending.name.casefold() == wanted
+        ):
+            return pending
+    with session.no_autoflush:
+        found = next(
+            (
+                category
+                for category in session.scalars(
+                    select(InventoryCategory).where(InventoryCategory.tenant_id == tenant_id)
+                )
+                if category.name.casefold() == wanted
+            ),
+            None,
+        )
+    if found is not None:
+        found.archived_at = None
+        return found
+    category = InventoryCategory(tenant_id=tenant_id, name=name)
+    session.add(category)
+    return category
 
 
 def _item_values(stock: StockItem) -> dict:
     return {
         "name": stock.name,
-        "category": stock.category,
         "dimension": stock.dimension,
         "base_unit": base_unit(stock.dimension),
         "display_unit": stock.stock_unit,
@@ -68,6 +104,7 @@ def _find_item(
         **_item_values(stock),
     )
     session.add(item)
+    item.category_ref = category_named(session, stock.tenant_id, stock.category)
     pending[(stock.tenant_id, slug)] = item
     return item
 
@@ -114,16 +151,15 @@ def item_locations(db: Session, org: OrgContext, inventory_item_id: int) -> list
 
 
 def active_stock(org: OrgContext) -> Select[StockItem]:
-    """Stock items whose settings at their location are active, within org."""
+    """Stock items whose item, and whose settings at their location, are active, within org."""
     return (
         select_scoped(org, StockItem)
         .join(ItemLocation, ItemLocation.id == StockItem.item_location_id)
-        .where(ItemLocation.is_active.is_(True))
+        .join(InventoryItem, InventoryItem.id == StockItem.inventory_item_id)
+        .where(ItemLocation.is_active.is_(True), InventoryItem.is_active.is_(True))
     )
 
 
 def by_item_name(query: Select[StockItem]) -> Select[StockItem]:
-    """A stock item query in item-name order."""
-    return query.join(InventoryItem, InventoryItem.id == StockItem.inventory_item_id).order_by(
-        InventoryItem.name
-    )
+    """An active_stock() query in item-name order."""
+    return query.order_by(InventoryItem.name)

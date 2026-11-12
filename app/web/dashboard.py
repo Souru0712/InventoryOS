@@ -26,13 +26,11 @@ from app.models import (
     SyncRun,
     SyncStatus,
     Tenant,
-    TrackMode,
     User,
 )
 from app.orchestration.alerts import proposals_for
 from app.orchestration.health import current as current_health
 from app.orchestration.reporting import weekly_report
-from app.orchestration.scanning import CodeInUse, link_code
 from app.orchestration.sync import NotConnected, run_sync
 from app.orchestration.views import (
     expiry_coverage,
@@ -57,7 +55,7 @@ from app.throttle import client_ip
 from app.transform.alerts import counts_as_waste_risk
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
-from app.units import Dimension, UnitError, to_base
+from app.units import UnitError, to_base
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -301,125 +299,10 @@ def remove_batch(
     return RedirectResponse("/app/expiring?removed=1", status_code=303)
 
 
-@router.get("/app/items/new", response_class=HTMLResponse)
-def new_item_form(
-    request: Request,
-    db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_permission("item.edit")),
-):
-    return templates.TemplateResponse(
-        request,
-        "app/item_form.html",
-        {
-            "title": "Add stock item",
-            "tenant": tenant,
-            "locations": _locations(db, org),
-            "item": None,
-        },
-    )
-
-
-@router.post("/app/items/new")
-def create_item(
-    request: Request,
-    name: str = Form(...),
-    location_id: int = Form(...),
-    dimension: str = Form(...),
-    stock_unit: str = Form(...),
-    quantity: str = Form("0"),
-    reorder_point: str = Form("0"),
-    par_level: str = Form(""),
-    cost_per_unit: str = Form("0"),
-    retail_price: str = Form(""),
-    receive_unit: str = Form("each"),
-    pack_size: str = Form(""),
-    supplier: str = Form(""),
-    lead_time_days: int = Form(2),
-    category: str = Form(""),
-    sku: str = Form(""),
-    upc: str = Form(""),
-    db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_permission("item.edit")),
-):
-    from app.load.upsert import slugify
-
-    location = get_scoped(db, org, Location, location_id)
-    if location is None:
-        raise HTTPException(status_code=404, detail="location not found")
-
-    try:
-        dimension_enum = Dimension(dimension)
-        qty_base = to_base(quantity or "0", stock_unit)
-        reorder_base = to_base(reorder_point or "0", stock_unit)
-        par_base = to_base(par_level, stock_unit) if par_level.strip() else None
-        pack_base = to_base(pack_size, stock_unit) if pack_size.strip() else None
-        # Cost is entered per display unit; store it per base unit.
-        cost_base = (Decimal(cost_per_unit or "0") * 100) / to_base("1", stock_unit)
-        retail_base = (
-            (Decimal(retail_price) * 100) / to_base("1", stock_unit)
-            if retail_price.strip()
-            else None
-        )
-        _check_thresholds(reorder_base, par_base, lead_time_days)
-        if pack_base is not None and pack_base <= 0:
-            raise ValueError("A pack holds more than nothing: enter a pack size above zero.")
-    except (UnitError, ValueError, ArithmeticError) as exc:
-        return templates.TemplateResponse(
-            request,
-            "app/item_form.html",
-            {
-                "title": "Add stock item",
-                "tenant": tenant,
-                "locations": _locations(db, org),
-                "item": None,
-                "error": str(exc),
-            },
-            status_code=400,
-        )
-
-    now = datetime.now(UTC)
-    item = StockItem(
-        tenant_id=tenant.id,
-        location_id=location.id,
-        slug=slugify(name),
-        name=name.strip(),
-        category=category.strip() or None,
-        dimension=dimension_enum,
-        stock_unit=stock_unit,
-        track_mode=TrackMode.DERIVED if dimension_enum is not Dimension.COUNT else TrackMode.MANUAL,
-        qty_base=qty_base,
-        reorder_point_base=reorder_base,
-        par_level_base=par_base,
-        cost_per_base_cents=cost_base,
-        retail_per_base_cents=retail_base,
-        receive_unit=receive_unit,
-        pack_size_base=pack_base,
-        supplier=supplier.strip() or None,
-        lead_time_days=lead_time_days,
-        last_counted_at=now,
-    )
-    db.add(item)
-    db.flush()
-    for raw in (upc, sku):
-        if raw.strip():
-            try:
-                link_code(db, org, item.id, raw, source="manual")
-            except CodeInUse:
-                log.info("code %r already identifies another item for tenant %s", raw, tenant.id)
-    db.add(
-        InventoryCount(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            qty_base=qty_base,
-            source="opening",
-            note="opening count",
-            counted_at=now,
-        )
-    )
-    db.commit()
-    return RedirectResponse("/app", status_code=303)
+@router.get("/app/items/new")
+def new_item_moved(org: OrgContext = Depends(require_permission("item.edit"))):
+    """The add-item form moved to the item screens (T1.14)."""
+    return RedirectResponse("/app/catalog/new", status_code=303)
 
 
 @router.post("/app/items/{item_id}/count")

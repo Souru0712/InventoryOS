@@ -169,12 +169,11 @@ def test_writes_land_in_the_selected_business(two_businesses):
             select(Location).where(Location.tenant_id == ids["juniper"])
         ).one()
     client.post(
-        "/app/items/new",
+        "/app/catalog/new",
         data={
             "name": "Oat milk",
-            "location_id": juniper_location.id,
-            "dimension": "count",
-            "stock_unit": "each",
+            "location_ids": [juniper_location.id],
+            "display_unit": "each",
         },
     )
     with SessionLocal() as db:

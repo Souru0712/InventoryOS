@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block content %}
+{% set editable = can(request, "item.edit") %}
+<p class="small"><a href="/app/catalog">&larr; Items</a></p>
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<h1>{{ item.name }} {% if not item.is_active %}<span class="pill expired">inactive</span>{% endif %}</h1>
+<p class="lede">{{ type_labels[item.item_type] }}{% if item.category %} · {{ item.category }}{% endif %} · counted in {{ unit_label }}</p>
+
+{% if editable %}
+<h2>Details</h2>
+<form method="post" action="/app/catalog/{{ item.id }}" class="card" style="max-width:760px;">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field" style="flex: 2 1 260px;">
+      <label for="name">Name</label>
+      <input id="name" name="name" required value="{{ item.name }}">
+    </div>
+    <div class="field">
+      <label for="item_type">Kind</label>
+      <select id="item_type" name="item_type">
+        {% for key, label in type_labels.items() %}<option value="{{ key }}"{% if key == item.item_type %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label for="category">Category</label>
+      <input id="category" name="category" list="category-names" value="{{ item.category or '' }}">
+      <datalist id="category-names">{% for c in categories %}<option value="{{ c.name }}">{% endfor %}</datalist>
+    </div>
+    <div class="field">
+      <label for="display_unit">Counted in</label>
+      <select id="display_unit" name="display_unit">
+        {% for dimension, choices in units.items() %}
+          {% if not locked_dimension or dimension == item.dimension.value %}
+          <optgroup label="{{ {'count': 'Counted', 'weight': 'Weighed', 'volume': 'Measured by volume'}[dimension] }}">
+            {% for code, label in choices %}<option value="{{ code }}"{% if code == item.display_unit %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </optgroup>
+          {% endif %}
+        {% endfor %}
+      </select>
+      {% if locked_dimension %}<div class="small muted">It has stock history, so it stays {{ {'count': 'counted', 'weight': 'weighed', 'volume': 'measured by volume'}[item.dimension.value] }}.</div>{% endif %}
+    </div>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label for="tracks_expiry">Has use-by dates</label>
+      <select id="tracks_expiry" name="tracks_expiry">
+        <option value=""{% if item.tracks_expiry is none %} selected{% endif %}>Not decided</option>
+        <option value="yes"{% if item.tracks_expiry %} selected{% endif %}>Yes</option>
+        <option value="no"{% if item.tracks_expiry is sameas false %} selected{% endif %}>No</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="shelf_life_days">Shelf life in days (optional)</label>
+      <input id="shelf_life_days" name="shelf_life_days" inputmode="numeric" value="{{ item.default_shelf_life_days if item.default_shelf_life_days is not none else '' }}">
+    </div>
+  </div>
+  <div class="field">
+    <label for="notes">Notes</label>
+    <textarea id="notes" name="notes" rows="2">{{ item.notes or '' }}</textarea>
+  </div>
+  <button class="btn" type="submit">Save</button>
+</form>
+{% endif %}
+
+<h2>Locations</h2>
+{% if editable %}
+  {% for place in row.places %}
+    {% set s = place.setting %}
+    <form method="post" action="/app/catalog/{{ item.id }}/settings/{{ s.id }}" class="card" style="max-width:760px; margin-bottom:12px;">{{ csrf_field(request) }}
+      <p style="margin:0 0 10px;"><strong>{{ place.location.name }}</strong>
+        <span class="muted">&middot; {{ place.stock.qty_base|qty(item.display_unit) }} on hand</span>
+        {% if place.low %}<span class="pill at_risk">low</span>{% endif %}
+        {% if not s.is_active %}<span class="pill expired">not stocked</span>{% endif %}</p>
+      <div class="row">
+        <div class="field">
+          <label for="reorder_{{ s.id }}">Reorder at ({{ unit_label }})</label>
+          <input id="reorder_{{ s.id }}" name="reorder_point" inputmode="decimal" value="{{ s.reorder_point_base|plain(item.display_unit) }}">
+        </div>
+        <div class="field">
+          <label for="par_{{ s.id }}">Par (optional)</label>
+          <input id="par_{{ s.id }}" name="par_level" inputmode="decimal" value="{{ s.par_level_base|plain(item.display_unit) if s.par_level_base is not none else '' }}">
+        </div>
+        <div class="field">
+          <label for="min_{{ s.id }}">Minimum (optional)</label>
+          <input id="min_{{ s.id }}" name="min_level" inputmode="decimal" value="{{ s.min_level_base|plain(item.display_unit) if s.min_level_base is not none else '' }}">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="storage_{{ s.id }}">Storage area (optional)</label>
+          <input id="storage_{{ s.id }}" name="storage_area" value="{{ s.storage_area or '' }}" placeholder="Walk-in">
+        </div>
+        <div class="field">
+          <label for="stocked_{{ s.id }}">Stocked here</label>
+          <select id="stocked_{{ s.id }}" name="stocked"><option value="yes"{% if s.is_active %} selected{% endif %}>Yes</option><option value="no"{% if not s.is_active %} selected{% endif %}>No</option></select>
+        </div>
+      </div>
+      <button class="btn small secondary" type="submit">Save {{ place.location.name }}</button>
+    </form>
+  {% endfor %}
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Location</th><th>On hand</th><th>Reorder at</th><th>Par</th><th>Minimum</th><th>Storage</th><th>Stocked</th></tr></thead>
+  <tbody>
+  {% for place in row.places %}
+    {% set s = place.setting %}
+    <tr>
+      <td>{{ place.location.name }}{% if place.low %} <span class="pill at_risk">low</span>{% endif %}</td>
+      <td>{{ place.stock.qty_base|qty(item.display_unit) }}</td>
+      <td>{{ s.reorder_point_base|qty(item.display_unit) }}</td>
+      <td>{{ s.par_level_base|qty(item.display_unit) if s.par_level_base is not none else "" }}</td>
+      <td>{{ s.min_level_base|qty(item.display_unit) if s.min_level_base is not none else "" }}</td>
+      <td class="small">{{ s.storage_area or "" }}</td>
+      <td>{{ "Yes" if s.is_active else "No" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if editable and elsewhere %}
+<form method="post" action="/app/catalog/{{ item.id }}/stock-at" class="card" style="display:flex; gap:8px; align-items:flex-end; max-width:520px; margin-bottom:16px;">{{ csrf_field(request) }}
+  <div class="field" style="margin:0;">
+    <label for="location_id">Also stock it at</label>
+    <select id="location_id" name="location_id">{% for loc in elsewhere %}<option value="{{ loc.id }}">{{ loc.name }}</option>{% endfor %}</select>
+  </div>
+  <button class="btn small secondary" type="submit">Add</button>
+</form>
+{% endif %}
+
+<h2>Barcodes and codes</h2>
+{% if codes %}
+  <p>{% for code in codes %}<code>{{ code.value }}</code>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% else %}
+  <p class="small muted">None yet. Scan the product on the <a href="/app/scan">Scan</a> page to link its barcode.</p>
+{% endif %}
+
+{% if editable %}
+<h2>{{ "Bring it back" if not item.is_active else "Stop using it" }}</h2>
+{% if item.is_active %}
+<form method="post" action="/app/catalog/{{ item.id }}/deactivate" class="card" style="max-width:620px;">{{ csrf_field(request) }}
+  <p style="margin:0 0 10px;">Deactivating keeps every count, delivery and sale on record and takes the item out of pick lists. Nothing is deleted.</p>
+  <button class="btn secondary" type="submit">Deactivate</button>
+</form>
+{% else %}
+<form method="post" action="/app/catalog/{{ item.id }}/activate" class="card" style="max-width:620px;">{{ csrf_field(request) }}
+  <button class="btn" type="submit">Bring it back</button>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

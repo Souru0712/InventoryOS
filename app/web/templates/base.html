@@ -216,7 +216,7 @@
           {% set on = path == href or (href != "/app" and path.startswith(href ~ "/")) %}
           <a href="{{ href }}"{% if on %} class="here" aria-current="page"{% endif %}>{{ label }}</a>
         {% endmacro %}
-        {% if can(request, "inventory.view") %}{{ nav("/app", "Inventory") }}{{ nav("/app/scan", "Scan") }}{% endif %}
+        {% if can(request, "inventory.view") %}{{ nav("/app", "Inventory") }}{{ nav("/app/catalog", "Items") }}{{ nav("/app/scan", "Scan") }}{% endif %}
         {% if can(request, "receiving.record") %}{{ nav("/app/receiving", "Receiving") }}{% endif %}
         {% if can(request, "inventory.view") %}{{ nav("/app/expiring", "Expiring") }}{% endif %}
         {% if can(request, "reports.financial") %}{{ nav("/app/promotions", "Promotions") }}{% endif %}

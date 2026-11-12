@@ -1,6 +1,7 @@
 """The business audit history (T1.12; DR-23, SEC-14, ADM-FR-11): who changed what, and when.
 
-Every change to settings, locations, the team, connections and the plan calls record_audit().
+Every change to settings, locations, items, the team, connections and the plan calls
+record_audit().
 Events are append-only: this module only ever inserts them, and the scoped layer refuses to
 update them. Managers see the history of their locations; the business-wide history (settings,
 team, connections, billing) is for roles that manage the business.
@@ -23,6 +24,7 @@ CATEGORIES = {
     "settings": "Business settings",
     "location": "Locations",
     "team": "Team",
+    "item": "Items and categories",
     "connection": "Connections",
     "billing": "Plan and billing",
 }
