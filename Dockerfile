@@ -1,6 +1,6 @@
 # One image, two roles: the web process (the default command) and the scheduler
 # (`python -m app.cli scheduler`). Run many of the first and exactly one of the second.
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
