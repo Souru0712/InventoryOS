@@ -120,7 +120,9 @@ def invite_member(
         flash(request, "That's a lot of invitations for one hour. Try again later.", "error")
         return _back()
     try:
-        invitation, token = invite(db, org, user, email, role, scope != "some", location_ids)
+        invitation, token = invite(
+            db, org, user, email, role, scope != "some", location_ids, ip=client_ip(request)
+        )
     except NotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except TeamRuleError as exc:
@@ -142,7 +144,7 @@ def withdraw_invitation(
     org: OrgContext = Depends(require_permission("team.manage")),
 ):
     try:
-        withdraw(db, org, invitation_id)
+        withdraw(db, org, invitation_id, ip=client_ip(request))
     except NotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     db.commit()
@@ -163,7 +165,9 @@ def change_member_role(
 ):
     """A new role or scope, in force from the member's next request (STF-FR-06)."""
     try:
-        change_role(db, org, membership_id, role, scope != "some", location_ids)
+        change_role(
+            db, org, membership_id, role, scope != "some", location_ids, ip=client_ip(request)
+        )
     except NotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except TeamRuleError as exc:
@@ -185,7 +189,7 @@ def remove_member(
     """End a member's access now, sessions included (AC-STF-04). Never waits on billing:
     taking access away must always work."""
     try:
-        remove(db, org, membership_id)
+        remove(db, org, membership_id, ip=client_ip(request))
     except NotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except TeamRuleError as exc:
@@ -272,7 +276,7 @@ def accept_invitation(
     if user is not None:
         if user.email != invitation.email:
             return _accept_page(request, db, invitation, user, token, status_code=403)
-        membership = accept(db, invitation, user)
+        membership = accept(db, invitation, user, ip=ip)
         request.state.auth_session.membership_id = membership.id
         db.commit()
         return RedirectResponse("/app?joined=1", status_code=303)
@@ -331,7 +335,7 @@ def accept_invitation(
         db.flush()
         log.info("user %s created from invitation %s", account.id, invitation.id)
 
-    membership = accept(db, invitation, account)
+    membership = accept(db, invitation, account, ip=ip)
     session = login_user(request, db, account)
     session.membership_id = membership.id
     db.commit()

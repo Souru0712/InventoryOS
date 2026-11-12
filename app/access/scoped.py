@@ -15,6 +15,7 @@ from app.access.context import OrgContext
 from app.db import Base
 from app.models import (
     Alert,
+    AuditEvent,
     Document,
     DocumentLine,
     EmailLog,
@@ -45,6 +46,9 @@ M = TypeVar("M", bound=Base)
 # Belong to no single organization: users are global identities (SAAS-T-03), reached through
 # members() or by name through app.access.system.
 GLOBAL_MODELS: frozenset[type[Base]] = frozenset({EmailSuppression, WebhookEvent, User})
+
+# History that is only ever added to (DR-23): no UPDATE path exists for these.
+APPEND_ONLY: frozenset[type[Base]] = frozenset({AuditEvent})
 
 # Belong to the organization as a whole, so a location scope does not narrow them.
 ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
@@ -158,5 +162,7 @@ def team(db: Session, org: OrgContext) -> list[tuple[Membership, User]]:
 
 
 def update_scoped(org: OrgContext, model: type[Base]) -> Update:
-    """update(model), limited to org."""
+    """update(model), limited to org. Append-only tables are refused (DR-23)."""
+    if model in APPEND_ONLY:
+        raise UnscopedAccess(f"{model.__name__} is append-only")
     return update(model).where(*scope_filter(org, model))

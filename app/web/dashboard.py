@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
+from app.audit import record_audit
 from app.config import get_settings
 from app.db import get_db
 from app.entitlements import require
@@ -52,6 +53,7 @@ from app.security import (
     require_verified,
     require_writable,
 )
+from app.throttle import client_ip
 from app.transform.alerts import counts_as_waste_risk
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
@@ -579,8 +581,20 @@ def square_callback(
         oauth.encrypt(token["refresh_token"]) if token["refresh_token"] else None
     )
     connection.expires_at = token["expires_at"]
+    was_active = existing is not None and existing.status == "active"
     connection.status = "active"
     db.add(connection)
+    db.flush()
+    record_audit(
+        db,
+        org,
+        "connection.connected",
+        "Reconnected Square" if was_active else "Connected Square",
+        subject_type="provider_connection",
+        subject_id=connection.id,
+        after={"provider": "square", "merchant": token["merchant_id"]},
+        ip=client_ip(request),
+    )
     db.commit()
 
     try:

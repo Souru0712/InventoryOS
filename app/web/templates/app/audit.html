@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="small"><a href="/app/settings">&larr; Settings</a></p>
+<h1>Business history</h1>
+<p class="lede">Every change to {% if business_wide %}the business settings, locations, team, connections and plan{% else %}your locations{% endif %}: who made it, when, and what it was before. Nothing here can be edited or removed.</p>
+
+<form method="get" action="/app/audit" class="card" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; max-width:760px; margin-bottom:16px;">
+  <div class="field" style="margin:0;">
+    <label for="category">Kind of change</label>
+    <select id="category" name="category">
+      <option value="">Everything</option>
+      {% for key, label in categories.items() %}<option value="{{ key }}"{% if key == category %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="person">Person</label>
+    <select id="person" name="person">
+      <option value="">Anyone</option>
+      {% for id, email in people %}<option value="{{ id }}"{% if id == person %} selected{% endif %}>{{ email }}</option>{% endfor %}
+    </select>
+  </div>
+  <button class="btn secondary" type="submit">Show</button>
+</form>
+
+{% if not rows %}
+  <div class="card"><p style="margin:0;">No changes recorded{% if category or person %} for this filter{% endif %} yet.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>When (UTC)</th><th>Who</th><th>What</th><th>Where</th></tr></thead>
+  <tbody>
+  {% for event, email in rows %}
+    <tr>
+      <td class="small" style="white-space:nowrap;">{{ event.at.strftime("%b %d, %Y %H:%M") }}</td>
+      <td class="small">{% if event.actor_kind == "system" %}<span class="muted">StockPulse</span>{% elif event.actor_kind == "support" %}Support{% if email %} ({{ email }}){% endif %}{% else %}{{ email or "A former member" }}{% endif %}</td>
+      <td style="min-width:260px;">
+        {{ event.summary }}
+        {% if event.before and event.after %}
+          <div class="small muted">{% for key, value in event.after.items() %}{{ key }}: {{ event.before.get(key) if event.before.get(key) is not none else "—" }} &rarr; {{ value if value is not none else "—" }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+        {% endif %}
+      </td>
+      <td class="small">{{ location_names.get(event.location_id, "Business") if event.location_id else "Business" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if older %}
+  <p><a class="btn small secondary" href="/app/audit?{% if category %}category={{ category|urlencode }}&amp;{% endif %}{% if person %}person={{ person }}&amp;{% endif %}before={{ older|urlencode }}">Older changes</a></p>
+{% endif %}
+{% endif %}
+{% endblock %}
