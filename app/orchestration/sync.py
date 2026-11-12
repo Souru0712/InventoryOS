@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.config import get_settings
+from app.jobs import enqueue
 from app.load.upsert import (
     apply_provider_counts,
     ensure_tracked_stock_items,
@@ -31,7 +32,7 @@ from app.models import (
     Tenant,
     TrackMode,
 )
-from app.orchestration.alerts import evaluate_and_store, send_alert_digest
+from app.orchestration.alerts import evaluate_and_store
 from app.orchestration.subscriptions import apply_location_limit
 from app.providers.square.client import (
     SquareClient,
@@ -217,13 +218,9 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
         raise
 
     db.commit()
-    try:
-        send_alert_digest(db, org)
-        db.commit()
-    except Exception:
-        db.rollback()
-        log.exception("alert digest failed for tenant %s after a successful sync", org.tenant_id)
-
+    # The digest is a job: a failed send is retried instead of lost (T1.20).
+    enqueue(db, org, "send_alert_digest", dedupe_key="digest")
+    db.commit()
     return stats
 
 

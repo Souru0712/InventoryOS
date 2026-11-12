@@ -5,6 +5,99 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.20 Jobs table; scheduled evaluation for every tenant
+
+**Implemented**
+- **`jobs` table** (`Job`, migration `cb043c5cd27a`):
+  - organization, kind, payload, dedupe key, status, attempts and maximum, run time, lock,
+    last error;
+  - named CHECKs;
+  - a partial unique index so one pending copy of the same work is queued once.
+- **Rules** (`app/transform/jobs.py`, pure): four kinds, exponential back-off (1, 2, 4 …
+  minutes, at most an hour), dead after the last attempt, abandoned after 15 minutes running.
+- **Service** (`app/jobs.py`):
+  - `enqueue()`;
+  - `drain()` claims with `FOR UPDATE SKIP LOCKED` (`next_due_job()` in
+    `app/access/system.py`), round-robin across organizations (SCL-03), and commits a
+    handler's work with its completion;
+  - failures roll back and retry; after the last attempt, a dead letter opens a `job_failed`
+    exception (new type; its CHECK is in the migration), which the kind's next success clears;
+  - abandoned jobs are queued again (at least once, REL-07).
+- **Scheduler process:**
+  - a worker every `JOB_POLL_SECONDS`;
+  - an evaluation queued for every subscribed business every `EVALUATION_INTERVAL_MINUTES`,
+    whether or not it has a POS (G2);
+  - weekly reports queued once per ISO week.
+- **Sync:** the Square sync queues the alert digest instead of sending it.
+- **Invoice upload** queues the reading. The review page shows "Reading the invoice" and
+  refreshes, and "Read it again" queues another read.
+- The worker polls every few seconds, so APScheduler's two INFO lines per run would have
+  meant about 35,000 log lines a day. `configure_logging` now keeps that logger at WARNING;
+  missed and failed runs still show.
+- ADR-0044 (Proposed); ADR-0006 notes it is built; CLAUDE.md rule; `.env.example` and README
+  settings.
+
+**Verified (locally, SQLite)**
+- `tests/test_jobs.py` (12; one Postgres-only):
+  - **Rules:** back-off and dead-letter rules.
+  - **Dedupe:** queued once, enforced by the database; requeued after done.
+  - **Running:** a job runs and its work commits.
+  - **Acceptance:** a failing job rolls back, retries at 1 minute, is not run early, and dies
+    after 5 attempts into a `job_failed` exception without the error text. The next success
+    resolves it.
+  - **Recovery and fairness:** an abandoned job runs again after its wait; a second business
+    is served before the first business's backlog finishes.
+  - **Two workers** never run the same job (Postgres).
+  - **Acceptance:** a business with no POS gets a low-stock exception on schedule, and a second
+    queue request does not duplicate it.
+  - **Weekly report:** queued once a week and sent once.
+  - **Upload:** it queues the reading; the page says so; the worker reads it; re-reading
+    queues again.
+- **Updated:** `tests/test_async_correctness.py` now checks that the upload answers without
+  reading and that `/healthz` answers while the worker reads. `tests/test_deployment.py` reruns
+  the report job through the queue.
+- `tests/test_migrations.py`: up and down through `cb043c5cd27a` (schema agreement).
+- **By hand:** a fresh database reached `cb043c5cd27a` through `migrate`, and `demo` seeded it.
+  The app then ran with its in-process worker:
+  - a photo uploaded through the receiving form answered at once with "Reading the invoice";
+  - the worker read it about two seconds later, with tenant and job ids in its log lines;
+  - the review page then showed the result;
+  - after the logging change, no per-poll lines appeared.
+- Full suite 913 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:** `app/transform/jobs.py`, `app/jobs.py`, migration `cb043c5cd27a`, ADR-0044,
+  `tests/test_jobs.py`.
+- **Changed:**
+  - `app/models.py` (`Job`), `app/access/{scoped,system}.py`, `app/exceptions.py`
+    (`clear`);
+  - `app/transform/exceptions.py` (`job_failed`), `app/config.py`;
+  - `app/orchestration/{scheduler,sync}.py`, `app/observability.py`, `app/web/receiving.py`, the receiving review
+    template;
+  - two existing tests, `.env.example`, README, CLAUDE.md, ADR-0006, ADR-0043 (Accepted), the
+    ADR index, the task index (T1.19 → Completed, T1.20 → In review) and this log.
+
+**Next task**
+- T1.21 Nightly ledger verification (`balance_drift` through a job).
+
+---
+
+## 2026-11-12 — T1.19 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #39 was merged with a merge commit (`548e5dc`).
+- CI on its head `5d98240`, all five required jobs green:
+  - SQLite: 902 passed, 23 skipped;
+  - PostgreSQL 16: 925 passed, 0 skipped, the concurrent `record_exception` test included;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0043 → Accepted.
+
+**Files changed**
+- Task index (T1.19 → Completed), ADR-0043 and its index row, this log.
+
+---
+
 ## 2026-11-12 — T1.19 Exception model
 
 **Implemented**

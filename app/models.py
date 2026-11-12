@@ -25,6 +25,8 @@ from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
 from app.transform.exceptions import EXCEPTION_TYPES, RESOLUTIONS, SEVERITIES, STATUSES
+from app.transform.jobs import JOB_KINDS
+from app.transform.jobs import STATUSES as JOB_STATUSES
 from app.transform.ledger import (
     ALLOCATION_MODES,
     DECREASES,
@@ -854,6 +856,51 @@ class ExceptionRecord(Base):
     resolution: Mapped[str | None] = mapped_column(String(16))
     resolution_note: Mapped[str | None] = mapped_column(String(500))
     notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class Job(Base):
+    """One piece of background work for one organization (T1.20; ID-06, REL-07, SCL-03).
+
+    Queued by app/jobs.py, claimed by the scheduler process's worker with FOR UPDATE SKIP
+    LOCKED, run at least once, retried with back-off and dead-lettered into an exception after
+    its last attempt. It always names its organization (SAAS-T-06).
+    """
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        one_of("jobs", "kind", JOB_KINDS),
+        one_of("jobs", "status", JOB_STATUSES),
+        CheckConstraint("attempts >= 0", name="ck_jobs_attempts_not_negative"),
+        CheckConstraint("max_attempts >= 1", name="ck_jobs_max_attempts_positive"),
+        Index("ix_jobs_due", "status", "run_at"),
+        Index("ix_jobs_tenant_status", "tenant_id", "status"),
+        # One waiting copy of the same work: a second request to queue it is the first.
+        Index(
+            "uq_jobs_pending",
+            "tenant_id",
+            "kind",
+            "dedupe_key",
+            unique=True,
+            sqlite_where=text("status = 'pending' AND dedupe_key IS NOT NULL"),
+            postgresql_where=text("status = 'pending' AND dedupe_key IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    kind: Mapped[str] = mapped_column(String(40))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    dedupe_key: Mapped[str | None] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=5)
+    run_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    locked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    locked_by: Mapped[str | None] = mapped_column(String(120))
+    # The last failure, for the founder console (T4.07); never shown to the business.
+    last_error: Mapped[str | None] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class SyncRun(Base):

@@ -1,6 +1,6 @@
 # ADR-0043: Exceptions: one record for everything that needs a person
 
-- **Status:** Proposed, 2026-11-12 (in the T1.19 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (owner: "Yes, merge it"; PR #39)
 - **Decision ID:** none (implements T1.19; REC-FR-11..16, AC-REC-06..09, WF-27, DM-8)
 - **Tasks:** T1.19; T1.20 (evaluates every tenant on schedule); T1.21 (`balance_drift`); T1.25 (dashboard)
 
@@ -75,8 +75,8 @@ action or a dismissal reason, and hidden from Employees when it is about money (
 - Producers of the other types arrive with their tasks: `balance_drift` (T1.21), and
   `unmapped_product` and the sales types with T2.x. They call `record_exception()` or extend
   the evaluator's set.
-- Standalone tenants get exceptions on a schedule only from T1.20. Until then, evaluation runs
-  in the Square sync and the command line, as alerts did.
+- Standalone tenants get exceptions on a schedule from T1.20 (ADR-0044); before it, evaluation
+  ran only in the Square sync and the command line, as alerts did.
 - A location-limited member does not see business-wide exceptions (those with no location), by
   the access layer's deny-by-default rule.
 - Built in T1.19 with migration `0dca80ee957e`.

@@ -31,6 +31,7 @@ from app.models import (
     Invitation,
     ItemPackage,
     ItemUnitConversion,
+    Job,
     Location,
     Membership,
     ProductIdentifier,
@@ -73,6 +74,7 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         SyncRun,
         EmailLog,
         HealthSnapshot,
+        Job,
     }
 )
 

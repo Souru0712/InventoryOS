@@ -59,6 +59,8 @@ TYPES: Mapping[str, ExceptionType] = {
     "low_stock": ExceptionType("Low stock", WARNING, "Reorder it"),
     "stale_count": ExceptionType("Not counted recently", INFO, "Count the item"),
     "waste_risk": ExceptionType("May expire unsold", WARNING, "Sell it first, or mark it down"),
+    # A background job that failed every attempt (T1.20, dead letter); clears on its next success.
+    "job_failed": ExceptionType("Background task failed", WARNING, "Contact support"),
 }
 EXCEPTION_TYPES = tuple(TYPES)
 

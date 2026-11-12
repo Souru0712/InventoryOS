@@ -15,6 +15,11 @@
 {% if document.error %}
   <div class="notice error">{{ document.error }}</div>
 {% endif %}
+{% set reading = document.status.value == "uploaded" %}
+{% if reading %}
+  <div class="notice ok">Reading the invoice. This page refreshes on its own when it is done.</div>
+  <script nonce="{{ request.state.csp_nonce }}">setTimeout(function () { window.location.reload(); }, 4000);</script>
+{% endif %}
 
 <h1>{{ document.supplier or "Delivery" }}</h1>
 <p class="lede">
@@ -36,7 +41,7 @@
         <a class="btn small secondary" href="/app/receiving/{{ document.id }}/image">Open document</a>
       {% endif %}
     </div>
-    {% if document.status.value != "applied" %}
+    {% if document.status.value != "applied" and not reading %}
     <form method="post" action="/app/receiving/{{ document.id }}/reparse" style="margin-top:10px;">{{ csrf_field(request) }}
       <button class="btn small secondary" type="submit">Read it again</button>
     </form>
@@ -44,7 +49,9 @@
   </div>
 
   <div style="flex: 3 1 520px;">
-    {% if not lines %}
+    {% if reading %}
+      <div class="card"><p style="margin:0;" class="muted">The lines appear here once the invoice is read.</p></div>
+    {% elif not lines %}
       <div class="card">
         <p style="margin:0;">No lines were read from this document. Try a clearer photo, or
         <a href="/app/catalog/new">add the items</a> and record counts by hand.</p>
