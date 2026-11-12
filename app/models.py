@@ -24,6 +24,14 @@ from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
+from app.transform.ledger import (
+    ALLOCATION_MODES,
+    DECREASES,
+    EITHER_WAY,
+    INCREASES,
+    MOVEMENT_TYPES,
+    TRANSACTION_KINDS,
+)
 from app.units import BASE_UNIT, Dimension
 
 
@@ -50,6 +58,13 @@ DIMENSIONS = tuple(d.value for d in Dimension)
 def ref(target: str) -> ForeignKey:
     """A reference that blocks deleting what it points at: master data is deactivated (DR-24)."""
     return ForeignKey(target, ondelete="RESTRICT")
+
+
+def earlier(target: str) -> ForeignKey:
+    """A reference to an earlier row of the same append-only table (a reversal to what it
+    reverses). Checked at the end of each statement (NO ACTION) rather than row by row, so a
+    row that is pointed at still cannot be deleted, yet the table can be emptied whole."""
+    return ForeignKey(target)
 
 
 def owned_by(target: str) -> ForeignKey:
@@ -922,6 +937,109 @@ class ProductIdentifier(Base):
     value: Mapped[str] = mapped_column(String(64))
     source: Mapped[str] = mapped_column(String(32), default="manual")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+def _signed(values: frozenset[str]) -> str:
+    return ", ".join(f"'{value}'" for value in sorted(values))
+
+
+class InventoryTransaction(Base):
+    """One business event that changed stock: a receipt, a count, a waste entry (T1.16, C-35).
+
+    Append-only. Only app/ledger writes it. Its idempotency key is unique in the business, so a
+    retried posting finds the first one instead of posting twice (DR-05).
+    """
+
+    __tablename__ = "inventory_transactions"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "idempotency_key"),
+        one_of("inventory_transactions", "kind", tuple(sorted(TRANSACTION_KINDS))),
+        Index("ix_inventory_transactions_source", "tenant_id", "source_type", "source_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    source_type: Mapped[str] = mapped_column(String(40))
+    source_id: Mapped[str] = mapped_column(String(80))
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+    idempotency_key: Mapped[str] = mapped_column(String(200))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))  # None: the system
+    reason: Mapped[str | None] = mapped_column(String(300))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    reverses_transaction_id: Mapped[int | None] = mapped_column(
+        earlier("inventory_transactions.id"), index=True
+    )
+
+    movements: Mapped[list[InventoryMovement]] = relationship(
+        order_by="InventoryMovement.id", back_populates="transaction"
+    )
+
+
+class InventoryMovement(Base):
+    """A signed quantity of one item at one location, in its base unit (DR-01..04, INV-FR-16).
+
+    Append-only: never updated or deleted; a mistake is undone by a reversal (DR-02). The sign
+    follows the type, and the database refuses anything else.
+    """
+
+    __tablename__ = "inventory_movements"
+    __table_args__ = (
+        one_of("inventory_movements", "movement_type", tuple(sorted(MOVEMENT_TYPES))),
+        one_of("inventory_movements", "allocation_mode", ALLOCATION_MODES),
+        CheckConstraint(
+            f"(movement_type IN ({_signed(INCREASES)}) AND CAST(qty_base AS NUMERIC) > 0)"
+            f" OR (movement_type IN ({_signed(DECREASES)}) AND CAST(qty_base AS NUMERIC) < 0)"
+            f" OR (movement_type IN ({_signed(EITHER_WAY)}) AND CAST(qty_base AS NUMERIC) <> 0)",
+            name="ck_inventory_movements_sign_by_type",
+        ),
+        not_negative("inventory_movements", "unit_cost_snapshot"),
+        Index(
+            "ix_inventory_movements_item_time",
+            "tenant_id",
+            "location_id",
+            "inventory_item_id",
+            "occurred_at",
+        ),
+        Index("ix_inventory_movements_batch", "tenant_id", "batch_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    transaction_id: Mapped[int] = mapped_column(owned_by("inventory_transactions.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    batch_id: Mapped[int | None] = mapped_column(ref("stock_batches.id"))
+    allocation_mode: Mapped[str] = mapped_column(String(10), default="none")
+    movement_type: Mapped[str] = mapped_column(String(24))
+    qty_base: Mapped[Decimal] = mapped_column(Qty)
+    # What one base unit cost when this moved, in cents (DR-19, PD-08).
+    unit_cost_snapshot: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
+    reason: Mapped[str | None] = mapped_column(String(300))
+    reverses_movement_id: Mapped[int | None] = mapped_column(earlier("inventory_movements.id"))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    transaction: Mapped[InventoryTransaction] = relationship(back_populates="movements")
+
+
+class StockBalance(Base):
+    """The recorded quantity of an item at a location: the sum of its movements (DR-03).
+
+    A projection kept in the same database transaction as every posting, and rebuildable from
+    the movements at any time. Only app/ledger writes it.
+    """
+
+    __tablename__ = "stock_balances"
+
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), primary_key=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    qty_base: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
+    last_movement_id: Mapped[int | None] = mapped_column(ref("inventory_movements.id"))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class InventoryEvent(Base):

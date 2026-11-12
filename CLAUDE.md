@@ -26,7 +26,9 @@ implementation sessions; the detail lives in `docs/`.
 - Never change product scope silently: stop, record the finding, propose a decision.
 
 ## Architecture rules (do not break)
-- Only the ledger posting service writes stock movements and balances (DR-01..07).
+- Only the ledger posting service writes stock movements and balances (DR-01..07):
+  `post_transaction()` / `reverse_transaction()` in `app/ledger/posting.py` (ADR-0040); nothing
+  else names the ledger models (a test enforces it).
 - Every query goes through the scoped data-access layer (tenant + location) (C-33, ADR-0026):
   routes take `org: OrgContext = Depends(require_org)`, services take `org`, queries use
   `select_scoped`/`get_scoped`/`update_scoped`; a lookup across organizations is a named function
@@ -72,7 +74,8 @@ implementation sessions; the detail lives in `docs/`.
 - "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`
   (`app/transform/business_days.py`, ADR-0027), never UTC's date.
 - Schema (ADR-0025): instants are `UTCDateTime` (aware UTC; naive values refused); every foreign
-  key is `ref()` (RESTRICT) or `owned_by()` (CASCADE, parts of a parent only); CHECKs are named.
+  key is `ref()` (RESTRICT) or `owned_by()` (CASCADE, parts of a parent only), or `earlier()`
+  for a self-reference in an append-only table (ADR-0040); CHECKs are named.
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).
 - Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
   `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or

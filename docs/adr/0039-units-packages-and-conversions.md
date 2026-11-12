@@ -1,6 +1,6 @@
 # ADR-0039: Units, packages and conversions
 
-- **Status:** Proposed, 2026-11-12 (in the T1.15 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (the owner merged the T1.15 pull request, #34: "Yes, merge it")
 - **Decision ID:** none (implements T1.15; INV-FR-04, -05, -11..14; DR-10, DR-11; AC-INV-02, AC-INV-03; DM-5)
 - **Tasks:** T1.15; T2.02 (recipes), T2.11 (receiving) and every later entry screen use the resolver
 

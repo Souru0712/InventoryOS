@@ -5,6 +5,71 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.16-a Ledger schema and posting service
+
+**Implemented**
+- **Tables** (migration `632386e0eb3f`, DM-6 schema):
+  - `inventory_transactions`: one per business event; the idempotency key is unique per business.
+  - `inventory_movements`: signed base-unit quantities with a unit-cost snapshot; a database
+    CHECK enforces the sign per movement type.
+  - `stock_balances`: the projection per location and item.
+- **Posting service** (`app/ledger/posting.py`, rules in `app/transform/ledger.py`):
+  - `post_transaction()` validates the posting, returns the earlier transaction for a used key
+    (also when another posting wins the race), and locks the balance rows in item order.
+  - It writes the transaction, movements and balances together.
+  - `reverse_transaction()` posts the opposite movements naming the originals, once; a reversal
+    is never reversed.
+- **Append-only**: only `app/ledger` names the ledger models (a test enforces it);
+  `update_scoped` refuses movements and transactions. Self-references use a new `earlier()`
+  foreign key (NO ACTION), so a referenced row still cannot be deleted while the table can be
+  emptied whole (a row-by-row RESTRICT blocked that on SQLite).
+- Nothing posts yet: opening balances come in T1.17, writers move in T1.18.
+- ADR-0040 (Proposed); ADR-0039 Accepted; `CLAUDE.md` states the rules.
+
+**Verified (locally, SQLite)**
+- `tests/test_ledger.py` (21):
+  - the rules: zero, sign by type, four places, kinds and their movement types;
+  - the database refuses a movement against its sign;
+  - a posting writes movements and moves the balance together, with the cost snapshot kept
+    through a later price change;
+  - **AC-INV-06**: the same key twice posts once and answers the same;
+  - the actor is the member unless the system posts;
+  - nothing is posted for an item not stocked there, another business's item, or a time without
+    a zone; a location-limited member posts only at their locations;
+  - reversal undoes, names and happens once, and a reversal is not reversed;
+  - **AC-INV-04**: 1,000 random sequences of receipts, sales, waste, production, counts,
+    adjustments and reversals across two locations and two items, with balance = sum of
+    movements = the pure model after every sequence;
+  - **AC-INV-05**: no other module names the ledger models, and the scoped layer refuses updates.
+- Full suite 858 passed, 13 skipped (837 before); ruff, mypy (strict for `app/ledger`) and the docs checker clean.
+
+**Files changed**
+- `app/ledger/__init__.py`, `app/ledger/posting.py`, `app/transform/ledger.py`, migration
+  `632386e0eb3f`, `tests/test_ledger.py`, ADR-0040 (new); `app/models.py`, `app/access/scoped.py`;
+  ADR-0039 (Accepted), the index, `CLAUDE.md`, task index (T1.15 → Completed, T1.16 → In progress),
+  this log.
+
+**Next task**
+- T1.16-b: concurrent postings on Postgres (AC-INV-07) and reversal hardening.
+
+---
+
+## 2026-11-12 — T1.15 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #34 was merged with a merge commit (`64073b4`). CI
+  on its head `6e32c36`, all five required jobs green: SQLite 837 passed, 13 skipped; PostgreSQL 16
+  850 passed, 0 skipped (the pack-size backfill test included); lint and types; dependency audit;
+  Docker image. Same five green on `main` after the merge. Acceptance met: AC-INV-02, AC-INV-03.
+
+**Decisions**
+- ADR-0039 accepted with the merge.
+
+**Files changed**
+- Task index (T1.15 → Completed), ADR-0039 status and index, this log.
+
+---
+
 ## 2026-11-12 — T1.15 Units, packages and conversions
 
 **Implemented**
