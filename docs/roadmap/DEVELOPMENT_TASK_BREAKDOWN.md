@@ -64,8 +64,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T1.15 | Units, packages and conversions | P0 | M | M2 | T1.13 | Completed (2026-11-12; resolver, packages, conversions, editor) |
 | T1.16 | Ledger schema and posting service | P0 | L | M2 | T1.01, T1.13, T1.15 | Completed (2026-11-12; ledger tables, posting service, concurrency proven on Postgres) |
 | T1.17 | Opening-balance migration | P0 | M | M2 | T1.16 | Completed (2026-11-12; the ledger opens equal to every item's quantity) |
-| T1.18 | Route existing writers through the ledger | P0 | M | M2 | T1.17 | In review (PR open; two owner decisions pending: R6 and `sales_daily`, see ADR-0042) |
-| T1.19 | Exception model | P1 | M | M2 | T1.06, T1.16 | Not started |
+| T1.18 | Route existing writers through the ledger | P0 | M | M2 | T1.17 | Completed (2026-11-12; every writer posts to the ledger; R6 moved to T2.06, DM-7 split, by the owner) |
+| T1.19 | Exception model | P1 | M | M2 | T1.06, T1.16 | In review (PR open; CI evidence in the execution log) |
 | T1.20 | Jobs table; scheduled evaluation for every tenant | P1 | M | M2 | T1.19 | Not started |
 | T1.21 | Nightly ledger verification | P1 | S | M2 | T1.20 | Not started |
 | T1.22 | Adjustments and movement history | P1 | M | M2 | T1.18, T1.06 | Not started |
@@ -526,8 +526,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Migration step:** DM-7 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.17.
 - **Acceptance:** concurrent apply posts once (AC-RCV-05, probe R4 inverted); no writer outside the posting service; weight/volume items no longer change without a movement.
-- **Tests:** writer tests; static test; probes R1, R2, R4, R5, R6 replaced by tests of the new behaviour (R3 was retired in T0.08).
-- **Done when:** probes R1, R2, R4, R5 and R6 retired. Note: sales consumption is absent until T2.05 — acceptable because no customer uses the product before M4 (C-40).
+- **Tests:** writer tests; static test; probes R1, R2, R4, R5 replaced by tests of the new behaviour (R3 was retired in T0.08; R6 moved to T2.06 by the owner, 2026-11-12).
+- **Done when:** probes R1, R2, R4 and R5 retired. Note: sales consumption is absent until T2.05 — acceptable because no customer uses the product before M4 (C-40).
 
 ### T1.19 Exception model · P1 · M
 - **Objective:** one exception mechanism for everything that needs a person (G15).
@@ -674,6 +674,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Existing code:** `sales_daily` (`app/models.py:270-287`) becomes legacy, read-only.
 - **DB:** new tables. **API · UI:** none yet.
 - **Security:** scoped; sales permission.
+- **Migration step:** DM-7 (the `sales_daily` freeze, split from T1.18 by the owner) — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T2.01, T1.04.
 - **Acceptance:** one source of record per location per business date is enforced (overlap raises `sales_source_overlap`).
 - **Tests:** model constraints; overlap rule.
@@ -703,8 +704,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Migration step:** DM-10 — [DATA_MIGRATION_ROADMAP](DATA_MIGRATION_ROADMAP.md#3-sequence).
 - **Depends on:** T1.18.
 - **Acceptance:** AC-BAT-01..05, -08.
-- **Tests:** conservation property test; FEFO/FIFO allocation tests.
-- **Done when:** merged.
+- **Tests:** conservation property test; FEFO/FIFO allocation tests; probe R6 replaced by a test that removed batches stay (moved from T1.18 by the owner, 2026-11-12).
+- **Done when:** probe R6 retired.
 
 ### T2.07 Waste module · P1 · M
 - **Objective:** log waste in seconds with reason, cost and actor, without double counting.

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Exceptions</h1>
+<p class="lede">What needs a person, most urgent first. Each one closes when its cause is fixed, or
+when someone dismisses it with a reason. Nothing here changes a quantity.</p>
+
+<p class="small">
+  {% if closed %}<a href="/app/exceptions">Open</a> · <strong>Closed</strong>
+  {% else %}<strong>Open</strong> · <a href="/app/exceptions?status=closed">Closed</a>{% endif %}
+</p>
+
+{% set costs = can(request, "inventory.view_costs") %}
+{% set resolve = can(request, "exception.resolve") %}
+{% if not rows %}
+  <div class="card"><p style="margin:0;">{% if closed %}Nothing closed yet.{% else %}Nothing needs attention right now.{% endif %}</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr>
+    <th>Severity</th><th>What</th><th>Where</th>
+    {% if costs %}<th>At stake</th>{% endif %}
+    <th>{% if closed %}Closed{% else %}Seen{% endif %}</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><span class="pill {{ row.severity }}">{{ row.severity }}</span></td>
+      <td style="min-width:260px;">
+        <strong>{{ row.label }}</strong>{% if row.subject_name %} &middot; {{ row.subject_name }}{% endif %}
+        <div class="small">{{ row.title }}</div>
+        {% if row.occurrences > 1 %}<div class="small muted">{{ row.occurrences }} times</div>{% endif %}
+        {% if row.status == "acknowledged" %}<div class="small muted">Acknowledged</div>{% endif %}
+        {% if closed %}<div class="small muted">{% if row.resolution == "system" %}Resolved by the system: {{ row.resolution_note }}{% elif row.resolution == "dismissed" %}Dismissed: {{ row.resolution_note }}{% else %}Resolved{% if row.resolution_note %}: {{ row.resolution_note }}{% endif %}{% endif %}</div>{% endif %}
+      </td>
+      <td class="small">{{ row.location_name or "Business-wide" }}</td>
+      {% if costs %}<td class="small">{% if row.money_impact_cents %}{{ row.money_impact_cents|money(currency) }}{% else %}<span class="muted">&ndash;</span>{% endif %}</td>{% endif %}
+      <td class="small" style="white-space:nowrap;">{{ (row.resolved_at if closed else row.last_seen_at).strftime("%b %d, %H:%M") }} UTC</td>
+      <td class="small" style="min-width:220px;">
+        {% if not closed %}
+          {% set link = fix_links.get(row.type) %}
+          {% if link %}<a class="btn small" href="{{ link }}">{{ row.fix }}</a>{% else %}<span class="muted">{{ row.fix }}</span>{% endif %}
+          {% if resolve %}
+            {% if row.status == "open" %}
+            <form method="post" action="/app/exceptions/{{ row.id }}/acknowledge" style="display:inline;">{{ csrf_field(request) }}
+              <button class="btn small secondary" type="submit">Acknowledge</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/app/exceptions/{{ row.id }}/dismiss" style="display:flex; gap:6px; margin-top:6px;">{{ csrf_field(request) }}
+              <input name="reason" type="text" placeholder="Why dismiss it?" required style="min-width:140px;">
+              <button class="btn small secondary" type="submit">Dismiss</button>
+            </form>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

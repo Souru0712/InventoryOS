@@ -1,6 +1,7 @@
 # ADR-0042: Every stock writer posts through the ledger
 
-- **Status:** Proposed, 2026-11-12 (in the T1.18 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (owner: "Yes, merge it", to merging PR #38 with R6 and
+  `sales_daily` handled as proposed)
 - **Decision ID:** none (implements T1.18; DR-01, DR-07, DR-12, DR-25, AC-RCV-05; C-34, C-35; DM-7)
 - **Tasks:** T1.18; T2.04 (freezes `sales_daily`); T2.06 (batch hard delete, probe R6); T4.16 (drops `qty_base`)
 
@@ -42,11 +43,12 @@ switch.
 7. **DM-7, in part.** Nothing writes `inventory_counts` or `inventory_events` any more (a test
    fails on constructing either); both stay readable as history. `sales_daily` keeps its writer
    (the Square sync) because velocity, cover, reorder and reports read it and nothing replaces it
-   before T2.04, whose entry already makes it legacy there. **Owner decision needed:** the
-   migration roadmap dates the whole of DM-7 to T1.18.
+   before T2.04, whose entry already makes it legacy there. **Decided by the owner
+   (2026-11-12):** DM-7 is split, so counts and events freeze at T1.18 and `sales_daily` at
+   T2.04.
 8. **Probe R6 stays.** Batch removal deletes a date annotation, not stock, so no posting is
    involved; making batches never disappear needs batch columns (T2.06, which names C9 and R6).
-   **Owner decision needed:** T1.18's "done when" lists R6.
+   **Decided by the owner (2026-11-12):** R6 moves to T2.06.
 
 ## Alternatives considered
 

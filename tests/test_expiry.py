@@ -150,9 +150,8 @@ from datetime import UTC, datetime  # noqa: E402
 import pytest  # noqa: E402
 
 from app.models import (  # noqa: E402
-    Alert,
-    AlertKind,
     EmailLog,
+    ExceptionRecord,
     Location,
     SalesDaily,
     SoldItem,
@@ -269,10 +268,10 @@ def test_an_item_with_no_sales_signal_is_not_projected(db, tenant, location):
 def test_a_waste_risk_alert_opens_with_the_money_at_stake(db, tenant, red_bull):
     evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
-    alert = db.query(Alert).filter(Alert.kind == AlertKind.WASTE_RISK).one()
-    assert alert.qty_base == Decimal("24")
-    assert alert.value_cents == 2640
-    assert "22 Sep" in alert.message
+    alert = db.query(ExceptionRecord).filter_by(type="waste_risk").one()
+    assert alert.quantity_base == Decimal("24")
+    assert alert.money_impact_cents == 2640
+    assert "22 Sep" in alert.title
 
 
 def test_the_digest_leads_with_the_money(db, tenant, red_bull):
@@ -291,8 +290,9 @@ def test_the_alert_resolves_once_the_stock_can_sell_in_time(db, tenant, red_bull
     db.commit()
     evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
-    alert = db.query(Alert).filter(Alert.kind == AlertKind.WASTE_RISK).one()
+    alert = db.query(ExceptionRecord).filter_by(type="waste_risk").one()
     assert alert.resolved_at is not None
+    assert (alert.status, alert.resolution) == ("resolved", "system")
 
 
 def test_expired_stock_raises_its_own_alert(db, tenant, location):
@@ -320,10 +320,10 @@ def test_expired_stock_raises_its_own_alert(db, tenant, location):
     db.commit()
     evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
-    alert = db.query(Alert).filter(Alert.kind == AlertKind.EXPIRED).one()
+    alert = db.query(ExceptionRecord).filter_by(type="batch_expired_unresolved").one()
     # 8,000 ml at 0.07 cents per ml.
-    assert alert.value_cents == 560
-    assert "08 Sep" in alert.message
+    assert alert.money_impact_cents == 560
+    assert "08 Sep" in alert.title
 
 
 # --- coverage: is the expiry figure built on anything? ---------------------------------------

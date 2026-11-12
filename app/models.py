@@ -24,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
+from app.transform.exceptions import EXCEPTION_TYPES, RESOLUTIONS, SEVERITIES, STATUSES
 from app.transform.ledger import (
     ALLOCATION_MODES,
     DECREASES,
@@ -767,6 +768,9 @@ class SalesDaily(Base):
 
 
 class Alert(Base):
+    """Legacy: the five stock alerts before exceptions (DM-8, T1.19). Read-only history;
+    nothing writes it any more (ExceptionRecord replaces it)."""
+
     __tablename__ = "alerts"
     __table_args__ = (Index("ix_alerts_tenant_open", "tenant_id", "resolved_at"),)
 
@@ -783,6 +787,73 @@ class Alert(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+_OPEN = "status IN ('open', 'acknowledged')"
+
+
+class ExceptionRecord(Base):
+    """Something that needs a person (T1.19; REC-FR-11..16, WF-27, ADR-0043).
+
+    Open at most once per type and subject (the partial unique index); a recurring condition
+    updates it. It closes by a fix (the condition clears and the system resolves it) or by a
+    dismissal with a reason, never by editing a quantity. Written only by app/exceptions.py and
+    the evaluation in app/orchestration/alerts.py. Named ExceptionRecord, not Exception.
+    """
+
+    __tablename__ = "exceptions"
+    __table_args__ = (
+        one_of("exceptions", "type", EXCEPTION_TYPES),
+        one_of("exceptions", "severity", SEVERITIES),
+        one_of("exceptions", "status", STATUSES),
+        one_of("exceptions", "resolution", RESOLUTIONS),
+        CheckConstraint("occurrences >= 1", name="ck_exceptions_occurrences_positive"),
+        CheckConstraint(
+            f"{_OPEN} OR (resolved_at IS NOT NULL AND resolution IS NOT NULL)",
+            name="ck_exceptions_closed_has_resolution",
+        ),
+        CheckConstraint(
+            "status <> 'dismissed' OR resolution_note IS NOT NULL",
+            name="ck_exceptions_dismissal_has_reason",
+        ),
+        Index("ix_exceptions_tenant_status", "tenant_id", "status"),
+        Index(
+            "uq_exceptions_open",
+            "tenant_id",
+            "type",
+            "subject_type",
+            "subject_id",
+            unique=True,
+            sqlite_where=text(_OPEN),
+            postgresql_where=text(_OPEN),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    # Where it is; empty for a business-wide one (a connection, a sales source).
+    location_id: Mapped[int | None] = mapped_column(ref("locations.id"), index=True)
+    type: Mapped[str] = mapped_column(String(40))
+    severity: Mapped[str] = mapped_column(String(10))
+    subject_type: Mapped[str] = mapped_column(String(30))
+    subject_id: Mapped[str] = mapped_column(String(80))
+    title: Mapped[str] = mapped_column(String(500))
+    # What it may cost, at cost; never shown to a role without cost access (REC-FR-16).
+    money_impact_cents: Mapped[int | None] = mapped_column(Integer)
+    quantity_base: Mapped[Decimal | None] = mapped_column(Qty)
+    days_of_cover: Mapped[Decimal | None] = mapped_column(Qty)
+    occurrences: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(16), default="open")
+    detected_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    acknowledged_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # Empty with resolution "system": the condition cleared on its own (REC-FR-14).
+    resolved_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    resolution: Mapped[str | None] = mapped_column(String(16))
+    resolution_note: Mapped[str | None] = mapped_column(String(500))
+    notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class SyncRun(Base):

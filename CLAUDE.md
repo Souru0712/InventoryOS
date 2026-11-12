@@ -45,6 +45,12 @@ implementation sessions; the detail lives in `docs/`.
 - Team changes go through `app/team.py` (rules in `app/transform/team.py`, ADR-0033): a
   business always keeps one active Owner (DR-27), only `owner.manage` touches an Owner, and
   removing a member revokes the membership and its sessions.
+- Anything that needs a person is an exception (`app/exceptions.py`, ADR-0043), the only writer
+  of `exceptions`: `record_exception()` for a problem seen as an event (it adds to the open
+  one), `apply_findings()` for an evaluation (opens, refreshes, auto-resolves its own types).
+  People close one only by fixing its cause or dismissing it with a reason; financial types
+  and every amount stay hidden from a role without `inventory.view_costs`. `alerts` is frozen
+  history (DM-8): nothing creates an `Alert` (a test enforces both).
 - A change to settings, locations, the team, a connection, the plan, a mapping or a recipe
   calls `record_audit()` (`app/audit.py`, ADR-0035) in the same change. Audit events are
   append-only: nothing else names `AuditEvent` (a test enforces it).
