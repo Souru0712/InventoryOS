@@ -41,6 +41,8 @@ from app.models import (
     SoldItem,
     StockAlias,
     StockBatch,
+    StockCount,
+    StockCountLine,
     StockItem,
     SyncRun,
     Tenant,
@@ -94,6 +96,7 @@ LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
         )
     },
     DocumentLine: ("document_id", Document),
+    StockCountLine: ("stock_count_id", StockCount),
     ExtractionCorrection: ("document_id", Document),
 }
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 # DOMAIN_MODEL §4.2, INV-FR-15.
@@ -78,6 +79,9 @@ class Line:
     batch_id: int | None = None
     reason: str | None = None
     reverses_movement_id: int | None = None  # set only by a reversal
+    # When this movement happened, if not when its transaction did: a count session's lines
+    # each happened when they were counted (T1.23).
+    occurred_at: datetime | None = None
 
 
 def check_line(line: Line) -> None:
