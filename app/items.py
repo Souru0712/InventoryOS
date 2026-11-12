@@ -26,6 +26,8 @@ from app.models import (
     InventoryEvent,
     InventoryItem,
     ItemLocation,
+    ItemPackage,
+    ItemUnitConversion,
     Location,
     ProductIdentifier,
     StockBatch,
@@ -34,6 +36,13 @@ from app.models import (
 )
 from app.orchestration.scanning import CodeInUse, link_code
 from app.transform.business_days import business_date
+from app.transform.conversions import (
+    Conversion,
+    Package,
+    check_conversion,
+    check_package,
+)
+from app.transform.conversions import to_base as resolve
 from app.transform.items import (
     ItemRuleError,
     base_unit,
@@ -353,6 +362,18 @@ def create_item(db: Session, org: OrgContext, new: NewItem, ip: str | None = Non
         raise RuntimeError("a new stock item was not linked to its item")
     item.item_type = item_type
     item.notes = new.notes.strip() or None
+    if pack is not None:
+        # The pack size the form asks for is the item's purchase package (T1.15).
+        item.packages.append(
+            ItemPackage(
+                tenant_id=org.tenant_id,
+                inventory_item_id=item.id,
+                name="pack",
+                quantity=Decimal(new.pack_size.strip()),
+                unit=unit,
+                is_purchase=True,
+            )
+        )
     for raw in (code for code in new.codes if code.strip()):
         # A code points at one stock row; the first location's, as the old form did.
         try:
@@ -673,5 +694,244 @@ def set_category_archived(
         f"{'Archived' if archived else 'Restored'} the category {category.name}",
         subject_type="category",
         subject_id=category.id,
+        ip=ip,
+    )
+
+
+# --- packages and conversions (T1.15; INV-FR-04, -05, -11..13) -----------------------------------
+
+
+def _packages(item: InventoryItem) -> dict[str, Package]:
+    return {p.name.casefold(): Package(p.name, p.quantity, p.unit) for p in item.packages}
+
+
+def _conversions(item: InventoryItem) -> list[Conversion]:
+    return [
+        Conversion(c.from_quantity, c.from_unit, c.to_quantity, c.to_unit) for c in item.conversions
+    ]
+
+
+def entered_base(item: InventoryItem, quantity: str, unit: str) -> Decimal:
+    """What someone typed (in any unit or package of the item) in its base unit, or refused
+    with the reason (DR-11): a missing conversion is named."""
+    try:
+        amount = Decimal(quantity.strip())
+    except ArithmeticError as exc:
+        raise ItemRuleError(f"{quantity} is not a quantity.") from exc
+    try:
+        return resolve(
+            amount,
+            unit or item.display_unit,
+            dimension=item.dimension,
+            packages=_packages(item),
+            conversions=_conversions(item),
+            item=item.name,
+        )
+    except UnitError as exc:
+        raise ItemRuleError(str(exc)) from exc
+
+
+def package_bases(item: InventoryItem) -> dict[int, Decimal | None]:
+    """What one of each package is in the item's base unit; None when it cannot be resolved."""
+    result: dict[int, Decimal | None] = {}
+    for package in item.packages:
+        try:
+            result[package.id] = entered_base(item, "1", package.name)
+        except ItemRuleError:
+            result[package.id] = None
+    return result
+
+
+def _sync_pack(db: Session, org: OrgContext, item: InventoryItem) -> None:
+    """Deliveries arrive in the purchase package: every stock row of the item takes its size,
+    which receiving and scanning read (no purchase package, no pack size)."""
+    db.flush()
+    purchase = next((p for p in item.packages if p.is_purchase), None)
+    size = package_bases(item).get(purchase.id) if purchase is not None else None
+    every_location = OrgContext.system(org.tenant_id)
+    for stock in db.scalars(
+        select_scoped(every_location, StockItem).where(StockItem.inventory_item_id == item.id)
+    ):
+        stock.pack_size_base = size
+
+
+def _amount(value: Decimal) -> str:
+    """6 rather than 6.0000 in a sentence."""
+    return f"{value.normalize():f}"
+
+
+def add_package(
+    db: Session,
+    org: OrgContext,
+    inventory_item_id: int,
+    *,
+    name: str,
+    quantity: str,
+    unit: str,
+    purchase: bool,
+    ip: str | None = None,
+) -> ItemPackage:
+    row = item_row(db, org, inventory_item_id)
+    item = row.item
+    name = clean_name(name, 60)
+    if name.casefold() in _packages(item):
+        raise ItemRuleError(f"{item.name} already has a package called {name}.")
+    try:
+        amount = Decimal(quantity.strip())
+        check_package(Package(name, amount, unit), _packages(item))
+        base = resolve(
+            amount,
+            unit,
+            dimension=item.dimension,
+            packages=_packages(item),
+            conversions=_conversions(item),
+            item=item.name,
+        )
+    except ArithmeticError as exc:
+        raise ItemRuleError(f"{quantity} is not a quantity.") from exc
+    except UnitError as exc:
+        raise ItemRuleError(str(exc)) from exc
+    if purchase:
+        for other in item.packages:
+            other.is_purchase = False
+    package = ItemPackage(
+        tenant_id=org.tenant_id,
+        inventory_item_id=item.id,
+        name=name,
+        quantity=amount,
+        unit=unit,
+        is_purchase=purchase,
+    )
+    item.packages.append(package)
+    _sync_pack(db, org, item)
+    holds = f"{_amount(amount)} {unit}"
+    record_audit(
+        db,
+        org,
+        "item.package_added",
+        f"Added the package {name} = {holds} to {item.name}",
+        subject_type="item_package",
+        subject_id=package.id,
+        after={"package": name, "holds": holds, "base": str(base)},
+        ip=ip,
+    )
+    return package
+
+
+def _package(row: ItemRow, package_id: int) -> ItemPackage:
+    package = next((p for p in row.item.packages if p.id == package_id), None)
+    if package is None:
+        raise NotFound("package not found")
+    return package
+
+
+def set_purchase_package(
+    db: Session, org: OrgContext, inventory_item_id: int, package_id: int, ip: str | None = None
+) -> None:
+    row = item_row(db, org, inventory_item_id)
+    chosen = _package(row, package_id)
+    if chosen.is_purchase:
+        return
+    for package in row.item.packages:
+        package.is_purchase = package.id == chosen.id
+    _sync_pack(db, org, row.item)
+    record_audit(
+        db,
+        org,
+        "item.package_purchase",
+        f"Deliveries of {row.item.name} now arrive by the {chosen.name}",
+        subject_type="item_package",
+        subject_id=chosen.id,
+        ip=ip,
+    )
+
+
+def remove_package(
+    db: Session, org: OrgContext, inventory_item_id: int, package_id: int, ip: str | None = None
+) -> None:
+    row = item_row(db, org, inventory_item_id)
+    package = _package(row, package_id)
+    users = [p.name for p in row.item.packages if p.unit.casefold() == package.name.casefold()]
+    if users:
+        raise ItemRuleError(f"{', '.join(users)} is measured in {package.name}; remove it first.")
+    row.item.packages.remove(package)
+    _sync_pack(db, org, row.item)
+    record_audit(
+        db,
+        org,
+        "item.package_removed",
+        f"Removed the package {package.name} from {row.item.name}",
+        subject_type="item_package",
+        subject_id=package_id,
+        ip=ip,
+    )
+
+
+def add_conversion(
+    db: Session,
+    org: OrgContext,
+    inventory_item_id: int,
+    *,
+    from_quantity: str,
+    from_unit: str,
+    to_quantity: str,
+    to_unit: str,
+    ip: str | None = None,
+) -> ItemUnitConversion:
+    """A measured link between two kinds of measure for this item (INV-FR-05)."""
+    row = item_row(db, org, inventory_item_id)
+    item = row.item
+    try:
+        link = Conversion(
+            Decimal(from_quantity.strip()), from_unit, Decimal(to_quantity.strip()), to_unit
+        )
+        check_conversion(link)
+    except ArithmeticError as exc:
+        raise ItemRuleError("Both sides of a conversion are amounts, like 1 and 340.") from exc
+    except UnitError as exc:
+        raise ItemRuleError(str(exc)) from exc
+    if any(existing.dimensions() == link.dimensions() for existing in _conversions(item)):
+        kinds = " and ".join(sorted(d.value for d in link.dimensions()))
+        raise ItemRuleError(f"{item.name} already converts between {kinds}; remove that first.")
+    conversion = ItemUnitConversion(
+        tenant_id=org.tenant_id,
+        inventory_item_id=item.id,
+        from_quantity=link.from_quantity,
+        from_unit=from_unit,
+        to_quantity=link.to_quantity,
+        to_unit=to_unit,
+    )
+    item.conversions.append(conversion)
+    _sync_pack(db, org, item)  # a package in the other measure may resolve now
+    text = f"{_amount(link.from_quantity)} {from_unit} = {_amount(link.to_quantity)} {to_unit}"
+    record_audit(
+        db,
+        org,
+        "item.conversion_added",
+        f"Added {text} for {item.name}",
+        subject_type="item_unit_conversion",
+        subject_id=conversion.id,
+        after={"conversion": text},
+        ip=ip,
+    )
+    return conversion
+
+
+def remove_conversion(
+    db: Session, org: OrgContext, inventory_item_id: int, conversion_id: int, ip: str | None = None
+) -> None:
+    row = item_row(db, org, inventory_item_id)
+    conversion = next((c for c in row.item.conversions if c.id == conversion_id), None)
+    if conversion is None:
+        raise NotFound("conversion not found")
+    row.item.conversions.remove(conversion)
+    _sync_pack(db, org, row.item)
+    record_audit(
+        db,
+        org,
+        "item.conversion_removed",
+        f"Removed a conversion from {row.item.name}",
+        subject_type="item_unit_conversion",
+        subject_id=conversion_id,
         ip=ip,
     )

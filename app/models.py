@@ -533,6 +533,12 @@ class InventoryItem(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     category_ref: Mapped[InventoryCategory | None] = relationship(lazy="joined")
+    packages: Mapped[list[ItemPackage]] = relationship(
+        order_by="ItemPackage.name", cascade="all, delete-orphan"
+    )
+    conversions: Mapped[list[ItemUnitConversion]] = relationship(
+        order_by="ItemUnitConversion.id", cascade="all, delete-orphan"
+    )
 
     @property
     def category(self) -> str | None:
@@ -545,6 +551,45 @@ class InventoryItem(Base):
         from app.catalog import category_named
 
         self.category_ref = category_named(object_session(self), self.tenant_id, name)
+
+
+class ItemPackage(Base):
+    """A way an item comes, named by the business: "case" = 6 × gal, "bottle" = 750 ml
+    (INV-FR-04, INV-FR-11). The unit is a built-in unit or another of the item's packages. The
+    one marked purchase is how deliveries arrive; it sets the stock rows' pack size."""
+
+    __tablename__ = "item_packages"
+    __table_args__ = (
+        UniqueConstraint("inventory_item_id", "name"),
+        positive("item_packages", "quantity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(owned_by("inventory_items.id"), index=True)
+    name: Mapped[str] = mapped_column(String(60))
+    quantity: Mapped[Decimal] = mapped_column(Qty)
+    unit: Mapped[str] = mapped_column(String(60))
+    is_purchase: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ItemUnitConversion(Base):
+    """How one item's weight and volume (or count) relate, entered by someone who measured it:
+    1 lb of carrots = 340 ml of juice (INV-FR-05). Never assumed from a density table."""
+
+    __tablename__ = "item_unit_conversions"
+    __table_args__ = (
+        positive("item_unit_conversions", "from_quantity"),
+        positive("item_unit_conversions", "to_quantity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(owned_by("inventory_items.id"), index=True)
+    from_quantity: Mapped[Decimal] = mapped_column(Qty)
+    from_unit: Mapped[str] = mapped_column(String(16))
+    to_quantity: Mapped[Decimal] = mapped_column(Qty)
+    to_unit: Mapped[str] = mapped_column(String(16))
 
 
 class ItemLocation(Base):

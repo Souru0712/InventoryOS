@@ -24,6 +24,8 @@ from app.models import (
     DocumentStatus,
     InventoryCategory,
     Invitation,
+    ItemPackage,
+    ItemUnitConversion,
     Location,
     Membership,
     ProductIdentifier,
@@ -131,6 +133,15 @@ CASES = {
     ("POST", "/app/catalog/categories/{category_id}/merge"): lambda ids: {
         "data": {"into_id": ids["category2"]}
     },
+    ("POST", "/app/catalog/{inventory_item_id}/packages"): lambda ids: {
+        "data": {"name": "crate", "quantity": "6", "unit": "each"}
+    },
+    ("POST", "/app/catalog/{inventory_item_id}/packages/{package_id}/purchase"): lambda ids: {},
+    ("POST", "/app/catalog/{inventory_item_id}/packages/{package_id}/remove"): lambda ids: {},
+    ("POST", "/app/catalog/{inventory_item_id}/conversions"): lambda ids: {
+        "data": {"from_quantity": "1", "from_unit": "each", "to_quantity": "330", "to_unit": "ml"}
+    },
+    ("POST", "/app/catalog/{inventory_item_id}/conversions/{conversion_id}/remove"): lambda ids: {},
     ("POST", "/app/catalog/categories/{category_id}/archive"): lambda ids: {},
     ("POST", "/app/catalog/categories/{category_id}/restore"): lambda ids: {},
     ("POST", "/app/items/{item_id}/count"): lambda ids: {"data": {"quantity": "3"}},
@@ -201,6 +212,8 @@ PATH_ROWS = {
     "inventory_item_id": "inventory_item",
     "item_location_id": "item_location",
     "category_id": "category",
+    "package_id": "package",
+    "conversion_id": "conversion",
 }
 
 
@@ -286,9 +299,26 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     db.add(line)
     snacks = InventoryCategory(tenant_id=tenant_id, name=f"{tag} snacks")
     drinks = InventoryCategory(tenant_id=tenant_id, name=f"{tag} drinks")
-    db.add_all([snacks, drinks])
+    box = ItemPackage(
+        tenant_id=tenant_id,
+        inventory_item_id=bars.inventory_item_id,
+        name="box",
+        quantity=Decimal("12"),
+        unit="each",
+    )
+    weighs = ItemUnitConversion(
+        tenant_id=tenant_id,
+        inventory_item_id=bars.inventory_item_id,
+        from_quantity=Decimal("1"),
+        from_unit="each",
+        to_quantity=Decimal("50"),
+        to_unit="g",
+    )
+    db.add_all([snacks, drinks, box, weighs])
     db.flush()
     return {
+        "package": box.id,
+        "conversion": weighs.id,
         "inventory_item": bars.inventory_item_id,
         "item_location": bars.item_location_id,
         "category": snacks.id,

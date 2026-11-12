@@ -133,6 +133,93 @@
 </form>
 {% endif %}
 
+<h2>Packages</h2>
+<p class="small muted">How {{ item.name }} comes: a case of 6 &times; 1 gal, a bottle of 750 ml. Counts and deliveries can be entered in any of them.</p>
+{% if item.packages %}
+<div class="table-wrap" style="margin-bottom:12px;">
+<table>
+  <thead><tr><th>Package</th><th>Holds</th><th>In {{ base_label }}</th><th>Deliveries</th>{% if editable %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for p in item.packages %}
+    <tr>
+      <td>{{ p.name }}</td>
+      <td>{{ p.quantity|num }} {{ p.unit|unit }}</td>
+      <td>{% if package_bases[p.id] is not none %}{{ package_bases[p.id]|num }} {{ base_label }}{% else %}<span class="small muted">needs a conversion</span>{% endif %}</td>
+      <td>{% if p.is_purchase %}<span class="pill ok">arrive by this</span>{% elif editable %}
+        <form method="post" action="/app/catalog/{{ item.id }}/packages/{{ p.id }}/purchase" style="margin:0;">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Arrive by this</button></form>{% endif %}</td>
+      {% if editable %}<td><form method="post" action="/app/catalog/{{ item.id }}/packages/{{ p.id }}/remove" style="margin:0;">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Remove</button></form></td>{% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% if editable %}
+<form method="post" action="/app/catalog/{{ item.id }}/packages" class="card" style="max-width:760px; margin-bottom:16px;">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field">
+      <label for="package_name">Name</label>
+      <input id="package_name" name="name" required placeholder="case">
+    </div>
+    <div class="field">
+      <label for="package_quantity">Holds</label>
+      <input id="package_quantity" name="quantity" inputmode="decimal" required placeholder="6">
+    </div>
+    <div class="field">
+      <label for="package_unit">of</label>
+      <select id="package_unit" name="unit">
+        {% if item.packages %}<optgroup label="Its packages">{% for p in item.packages %}<option value="{{ p.name }}">{{ p.name }}</option>{% endfor %}</optgroup>{% endif %}
+        {% for dimension, choices in units.items() %}
+          <optgroup label="{{ {'count': 'Counted', 'weight': 'Weighed', 'volume': 'Measured by volume'}[dimension] }}">
+            {% for code, label in choices %}<option value="{{ code }}"{% if code == item.display_unit %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <label class="small"><input type="checkbox" name="purchase" value="yes"> Deliveries arrive in this package</label>
+  <p style="margin:10px 0 0;"><button class="btn small" type="submit">Add package</button></p>
+</form>
+{% endif %}
+
+<h2>Conversions</h2>
+<p class="small muted">How {{ item.name }} is weighed against measured or counted: 1 lb of ginger = 225 ml of juice. Measure it yourself; nothing is assumed.</p>
+{% if item.conversions %}
+<ul>
+  {% for c in item.conversions %}
+    <li>{{ c.from_quantity|num }} {{ c.from_unit|unit }} = {{ c.to_quantity|num }} {{ c.to_unit|unit }}
+      {% if editable %}<form method="post" action="/app/catalog/{{ item.id }}/conversions/{{ c.id }}/remove" style="display:inline; margin:0 0 0 8px;">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Remove</button></form>{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if editable %}
+<form method="post" action="/app/catalog/{{ item.id }}/conversions" class="card" style="max-width:760px; margin-bottom:16px;">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field">
+      <label for="from_quantity">Amount</label>
+      <input id="from_quantity" name="from_quantity" inputmode="decimal" required placeholder="1">
+    </div>
+    <div class="field">
+      <label for="from_unit">Unit</label>
+      <select id="from_unit" name="from_unit">
+        {% for dimension, choices in units.items() %}<optgroup label="{{ dimension|capitalize }}">{% for code, label in choices %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</optgroup>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="to_quantity">equals</label>
+      <input id="to_quantity" name="to_quantity" inputmode="decimal" required placeholder="225">
+    </div>
+    <div class="field">
+      <label for="to_unit">Unit</label>
+      <select id="to_unit" name="to_unit">
+        {% for dimension, choices in units.items() %}<optgroup label="{{ dimension|capitalize }}">{% for code, label in choices %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</optgroup>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <button class="btn small" type="submit">Add conversion</button>
+</form>
+{% endif %}
+
 <h2>Barcodes and codes</h2>
 {% if codes %}
   <p>{% for code in codes %}<code>{{ code.value }}</code>{% if not loop.last %} · {% endif %}{% endfor %}</p>
