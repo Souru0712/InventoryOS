@@ -120,6 +120,8 @@ def post_transaction(
     accepted = check_transaction(kind, lines, key)
     if occurred_at.tzinfo is None or occurred_at.utcoffset() is None:
         raise LedgerRuleError("occurred_at must say its time zone")
+    if (kind == "reversal") != (reverses_transaction_id is not None):
+        raise LedgerRuleError("only a reversal names the transaction it undoes, and it must")
     earlier = _by_key(db, org, key)
     if earlier is not None:
         return earlier
@@ -227,6 +229,16 @@ def reverse_transaction(
         revision=original.revision + 1,
         reverses_transaction_id=original.id,
     )
+
+
+def reversed_by(db: Session, org: OrgContext, transaction_id: int) -> InventoryTransaction | None:
+    """The reversal of a posting, if there is one: how a source record shows it was corrected
+    (DR-06)."""
+    return db.scalars(
+        select_scoped(org, InventoryTransaction).where(
+            InventoryTransaction.reverses_transaction_id == transaction_id
+        )
+    ).first()
 
 
 def balance(db: Session, org: OrgContext, location_id: int, item_id: int) -> Decimal:

@@ -5,6 +5,60 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.16-b Ledger concurrency and reversal hardening
+
+**Implemented**
+- **Reversal links**: a reversal names the transaction and movements it undoes, and nothing else
+  may name one. This is enforced by the rules (`check_transaction`), the service, and two
+  database checks (migration `4166ed9858d6`).
+- **`reversed_by()`** finds a posting's reversal, so source records can show they were corrected
+  (DR-06).
+- No change to the posting path itself: the locking and idempotency built in T1.16-a are what
+  the new tests prove under real concurrency.
+
+**Verified**
+- `tests/test_ledger_concurrency.py` (10). On Postgres only, as ADR-0018 requires for row-lock
+  behaviour; locally they skip, CI's Postgres 16 job runs them with no skips allowed:
+  - **AC-INV-07**: 50 trials of a receipt and a waste released at the same moment on one item
+    and location, with both movements kept and the balance right after each;
+  - the same key posted twice at once posts once (20 trials);
+  - two postings naming two items in opposite orders do not deadlock (20 trials);
+  - two first postings to a new item both land while racing to create its balance row (20
+    trials);
+  - a posting reversed twice at once is reversed once (10 trials).
+  On both databases: only a reversal names what it undoes (service), and the database refuses a
+  reversal transaction or movement that names nothing. A corrected posting finds its reversal,
+  which keeps the source and the next revision; another business cannot reverse a posting.
+- Locally the threaded tests were also run on SQLite outside the suite: they reach the database,
+  which answers "database is locked", as the skip says.
+- Full suite 863 passed, 18 skipped (858 passed, 13 skipped before; the 5 new skips are the Postgres-only concurrency tests, run in CI); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- Migration `4166ed9858d6`, `tests/test_ledger_concurrency.py` (new); `app/ledger/posting.py`,
+  `app/transform/ledger.py`, `app/models.py`; ADR-0040 (Accepted, updated), the index, task index
+  (T1.16 → In review), this log.
+
+**Next task**
+- T1.17 Opening-balance migration (DM-6 backfill).
+
+---
+
+## 2026-11-12 — T1.16-a merged
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #35 was merged with a merge commit (`e167c9f`). CI
+  on its head `f86b5d8`, all five required jobs green: SQLite 858 passed, 13 skipped; PostgreSQL 16
+  871 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge.
+
+**Decisions**
+- ADR-0040 accepted with the merge.
+
+**Files changed**
+- ADR-0040 status and index, this log.
+
+---
+
 ## 2026-11-12 — T1.16-a Ledger schema and posting service
 
 **Implemented**

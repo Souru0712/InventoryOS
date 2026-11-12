@@ -955,6 +955,12 @@ class InventoryTransaction(Base):
         UniqueConstraint("tenant_id", "idempotency_key"),
         one_of("inventory_transactions", "kind", tuple(sorted(TRANSACTION_KINDS))),
         Index("ix_inventory_transactions_source", "tenant_id", "source_type", "source_id"),
+        # Only a reversal names the transaction it undoes, and it always does (WF-26).
+        CheckConstraint(
+            "(kind = 'reversal' AND reverses_transaction_id IS NOT NULL)"
+            " OR (kind <> 'reversal' AND reverses_transaction_id IS NULL)",
+            name="ck_inventory_transactions_reversal_link",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1004,6 +1010,11 @@ class InventoryMovement(Base):
             "occurred_at",
         ),
         Index("ix_inventory_movements_batch", "tenant_id", "batch_id"),
+        CheckConstraint(
+            "(movement_type = 'reversal' AND reverses_movement_id IS NOT NULL)"
+            " OR (movement_type <> 'reversal' AND reverses_movement_id IS NULL)",
+            name="ck_inventory_movements_reversal_link",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

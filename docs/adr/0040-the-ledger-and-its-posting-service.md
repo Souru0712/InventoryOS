@@ -1,6 +1,6 @@
 # ADR-0040: The ledger and its posting service
 
-- **Status:** Proposed, 2026-11-12 (in the T1.16-a pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (the owner merged the T1.16-a pull request, #35: "Yes, merge it")
 - **Decision ID:** none (implements T1.16 under C-35 and ID-01; DR-01..07, DR-19, INV-FR-15..18, -21, -22; DM-6 schema)
 - **Tasks:** T1.16-a (schema, service); T1.16-b (concurrency on Postgres, reversal hardening); T1.17 (opening balances); T1.18 (writers move onto it)
 
@@ -57,4 +57,9 @@ architecture (§4) fixes the shape; this ADR records how it is built.
 - Every future stock change posts through `post_transaction()`; the real concurrent test on
   Postgres (AC-INV-07, 50 trials) and reversal of source records (DR-06) come with T1.16-b.
 - `CLAUDE.md`'s schema rule gains `earlier()` for self-references in append-only tables.
-- Built in T1.16-a with migration `632386e0eb3f`.
+- Built in T1.16-a with migration `632386e0eb3f`. T1.16-b (migration `4166ed9858d6`) added:
+  - database checks that a reversal names the transaction and movement it undoes, and that
+    nothing else names one;
+  - `reversed_by()`, so source records can show they were corrected (DR-06);
+  - concurrency tests that run only on Postgres, where two sessions really lock rows at once
+    (ADR-0018); SQLite locks the whole file.

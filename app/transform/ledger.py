@@ -89,6 +89,11 @@ def check_transaction(kind: str, lines: Iterable[Line], idempotency_key: str) ->
         check_line(line)
         if line.movement_type not in allowed:
             raise LedgerRuleError(f"a {kind} transaction cannot hold a {line.movement_type}")
+        # Only a reversal undoes something, and it always says what (WF-26, DR-02).
+        if (kind == "reversal") != (line.reverses_movement_id is not None):
+            raise LedgerRuleError(
+                "a reversal names the movement it undoes, and nothing else names one"
+            )
     return accepted
 
 
