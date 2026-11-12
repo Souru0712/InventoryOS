@@ -187,3 +187,61 @@ def test_items_are_business_wide_and_settings_follow_the_location_scope(db, tena
     assert [i.id for i in inventory_items(db, harbor_only)] == [milk.id]
     assert len(item_locations(db, everywhere, milk.id)) == 2
     assert [s.location_id for s in item_locations(db, harbor_only, milk.id)] == [harbor.id]
+
+
+# --- T1.13-b: readers use the split rows -------------------------------------------------------
+
+
+def test_screens_read_the_item_and_its_settings_not_the_legacy_columns(db, tenant, location):
+    """What the item screens (T1.14) will change directly is what every reader shows."""
+    from app.orchestration.views import stock_views
+
+    milk = _stock(db, location, "milk", reorder_point_base=Decimal("1000"))
+    _stock(db, location, "apples", dimension=Dimension.COUNT, stock_unit="each")
+    db.commit()
+    milk.inventory_item.name = "Barista milk"
+    milk.inventory_item.display_unit = "ml"
+    milk.item_location.reorder_point_base = Decimal("2500")
+    db.commit()
+    db.expire_all()
+
+    org = OrgContext(tenant_id=tenant.id)
+    views = stock_views(db, org)
+    assert [v.name for v in views] == ["Apples", "Barista milk"]  # sorted by the item's name
+    shown = views[1]
+    assert (shown.stock_unit, shown.reorder_point_base) == ("ml", Decimal("2500"))
+    assert db.get(StockItem, milk.id)._name == "Milk"  # the legacy column was not consulted
+
+    milk = db.get(StockItem, milk.id)
+    milk.item_location.is_active = False
+    db.commit()
+    assert [v.name for v in stock_views(db, org)] == ["Apples"]
+
+
+def test_writing_a_stock_item_fills_the_split_row_and_the_legacy_column(db, tenant, location):
+    milk = _stock(db, location, "milk")
+    db.commit()
+    milk.par_level_base = Decimal("6000")
+    milk.dimension = Dimension.WEIGHT
+    db.commit()
+    db.expire_all()
+    milk = db.get(StockItem, milk.id)
+    assert milk.item_location.par_level_base == milk._par_level_base == Decimal("6000")
+    assert milk.inventory_item.base_unit == "g"  # derived fields follow
+
+
+def test_no_product_query_filters_or_sorts_on_a_legacy_column():
+    """Queries go through the split tables (app/catalog.py), never StockItem's legacy columns."""
+    import re
+    from pathlib import Path
+
+    fields = "name|category|dimension|stock_unit|tracks_expiry|reorder_point_base|par_level_base"
+    pattern = re.compile(rf"StockItem\.(_?(?:{fields}|is_active))\b")
+    offenders = [
+        f"{path}:{number}"
+        for path in Path("app").rglob("*.py")
+        if path.as_posix() not in {"app/models.py", "app/catalog.py"}
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if pattern.search(line)
+    ]
+    assert offenders == []

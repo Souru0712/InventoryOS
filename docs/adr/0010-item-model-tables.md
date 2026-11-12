@@ -18,4 +18,4 @@ Keep `stock_items` per location
 
 ## Consequences
 
-Partly built: the tables, the backfill and the mirror that keeps them in step with `stock_items` arrive in T1.13-a (ADR-0036); readers move in T1.13-b; `stock_balances` comes with the ledger (T1.16). `stock_items` stays until the contract migration DM-16 (T4.16).
+Partly built: the tables, the backfill and the mirror that keeps them in step with `stock_items` arrive in T1.13-a (ADR-0036); readers moved in T1.13-b (ADR-0037); `stock_balances` comes with the ledger (T1.16). `stock_items` stays until the contract migration DM-16 (T4.16).

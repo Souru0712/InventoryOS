@@ -1,32 +1,20 @@
 """Inventory items defined once per business, with per-location settings (T1.13, C-38, ID-10).
 
-During the transition `stock_items` is still the row every screen reads and writes. This module
-keeps `inventory_items` and `item_locations` in step with it: whenever a session flushes a new or
-changed stock item, the item it belongs to and its settings at that location are created or
-updated, and the stock item is linked to both. Reads of the new tables go through the scoped
-functions at the bottom. The compatibility layer goes when every reader and writer has moved
-(T1.13-b, then DM-16).
+A stock item is the compatibility row for one item at one location until DM-16: its definition
+fields read from the inventory item and its settings from the item location (SplitField in
+app/models.py, T1.13-b). Whenever a session flushes a new stock item, this module links it to its
+item (found by slug and dimension, or created) and a new item location. Queries that filter or
+sort on those fields go through the split tables, using the helpers at the bottom.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import event, inspect, select
+from sqlalchemy import Select, event, select
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
 from app.models import InventoryItem, ItemLocation, StockItem
 from app.transform.items import base_unit, item_slug, item_type
-
-# Stock item fields the business-wide item mirrors, and those the location's settings mirror.
-ITEM_FIELDS = ("name", "category", "dimension", "stock_unit", "tracks_expiry")
-LOCATION_FIELDS = ("reorder_point_base", "par_level_base", "is_active")
-
-
-def _assign(target: object, values: dict) -> None:
-    """Set only what differs, so an unchanged mirror writes nothing."""
-    for key, value in values.items():
-        if getattr(target, key) != value:
-            setattr(target, key, value)
 
 
 def _item_values(stock: StockItem) -> dict:
@@ -84,13 +72,8 @@ def _find_item(
     return item
 
 
-def _changed(stock: StockItem, fields: tuple[str, ...]) -> bool:
-    state = inspect(stock)
-    return any(state.attrs[name].history.has_changes() for name in fields)
-
-
 def mirror(session: Session, flush_context: object, instances: object) -> None:
-    """Before a flush: link new stock items, and carry changed fields across."""
+    """Before a flush: link each new stock item to its item and a new item location."""
     pending: dict[tuple[int, str], InventoryItem] = {}
     with session.no_autoflush:
         for stock in [obj for obj in session.new if isinstance(obj, StockItem)]:
@@ -106,13 +89,6 @@ def mirror(session: Session, flush_context: object, instances: object) -> None:
             session.add(setting)
             stock.inventory_item = item
             stock.item_location = setting
-        for stock in [obj for obj in session.dirty if isinstance(obj, StockItem)]:
-            if stock.item_location is None:
-                continue
-            if _changed(stock, ITEM_FIELDS) and stock.inventory_item is not None:
-                _assign(stock.inventory_item, _item_values(stock))
-            if _changed(stock, LOCATION_FIELDS):
-                _assign(stock.item_location, _location_values(stock))
 
 
 event.listen(Session, "before_flush", mirror)
@@ -134,4 +110,20 @@ def item_locations(db: Session, org: OrgContext, inventory_item_id: int) -> list
             .where(ItemLocation.inventory_item_id == inventory_item_id)
             .order_by(ItemLocation.location_id)
         )
+    )
+
+
+def active_stock(org: OrgContext) -> Select[StockItem]:
+    """Stock items whose settings at their location are active, within org."""
+    return (
+        select_scoped(org, StockItem)
+        .join(ItemLocation, ItemLocation.id == StockItem.item_location_id)
+        .where(ItemLocation.is_active.is_(True))
+    )
+
+
+def by_item_name(query: Select[StockItem]) -> Select[StockItem]:
+    """A stock item query in item-name order."""
+    return query.join(InventoryItem, InventoryItem.id == StockItem.inventory_item_id).order_by(
+        InventoryItem.name
     )

@@ -12,6 +12,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
+from app.catalog import active_stock
 from app.config import get_settings
 from app.extract.images import detect_media_type
 from app.extract.invoice import (
@@ -200,12 +201,7 @@ def candidates_for(db: Session, org: OrgContext, location_id: int) -> list[Candi
             else None,
             aliases=tuple(aliases.get(item.id, ())),
         )
-        for item in db.scalars(
-            select_scoped(org, StockItem).where(
-                StockItem.location_id == location_id,
-                StockItem.is_active.is_(True),
-            )
-        )
+        for item in db.scalars(active_stock(org).where(StockItem.location_id == location_id))
     ]
 
 

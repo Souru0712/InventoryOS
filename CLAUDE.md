@@ -60,9 +60,10 @@ implementation sessions; the detail lives in `docs/`.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
-  (`item_locations`) (C-38, ADR-0036). Until T1.13-b moves the readers, `stock_items` stays the
-  row screens read and write, and `app/catalog.py` mirrors it into the split tables; never
-  write those tables directly.
+  (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,
+  expiry tracking, reorder point, par and active flag read from those rows and write to both;
+  queries on them go through `app/catalog.py` (`active_stock`, `by_item_name`), never
+  `StockItem`'s legacy columns (a test enforces it). Quantities stay on `stock_items` until T1.17.
 - "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`
   (`app/transform/business_days.py`, ADR-0027), never UTC's date.
 - Schema (ADR-0025): instants are `UTCDateTime` (aware UTC; naive values refused); every foreign

@@ -59,7 +59,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T1.10 | Invitations and team management | P1 | M | M1 | T1.06, T1.08 | Completed (2026-11-11; emailed single-use invitations, team page, last-Owner guard) |
 | T1.11 | TOTP MFA | P1 | M | M1 | T1.07 | Completed (2026-11-11; optional authenticator codes, recovery codes, Owner prompt) |
 | T1.12 | Audit events | P1 | S | M1 | T1.05 | Completed (2026-11-12; append-only history, filtered screen) |
-| T1.13 | Item model split (C-38) | P0 | L | M2 | T1.04 | In progress (T1.13-a in review: schema, backfill, mirror; T1.13-b readers next) |
+| T1.13 | Item model split (C-38) | P0 | L | M2 | T1.04 | In review (T1.13-a merged; T1.13-b PR open; CI evidence in the execution log) |
 | T1.14 | Item management UI | P1 | M | M2 | T1.13, T1.06 | Not started |
 | T1.15 | Units, packages and conversions | P0 | M | M2 | T1.13 | Not started |
 | T1.16 | Ledger schema and posting service | P0 | L | M2 | T1.01, T1.13, T1.15 | Not started |

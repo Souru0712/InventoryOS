@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
 from app.access import OrgContext, get_scoped, select_scoped
+from app.catalog import active_stock
 from app.db import get_db
 from app.extract.invoice import SUPPORTED_MEDIA, ExtractionError
 from app.models import Document, DocumentStatus, Location, StockItem, Tenant, User
@@ -141,14 +142,7 @@ def review_document(
     org: OrgContext = Depends(require_permission("receiving.record")),
 ):
     document = _owned(db, org, document_id)
-    items = list(
-        db.scalars(
-            select_scoped(org, StockItem).where(
-                StockItem.location_id == document.location_id,
-                StockItem.is_active.is_(True),
-            )
-        )
-    )
+    items = list(db.scalars(active_stock(org).where(StockItem.location_id == document.location_id)))
     return templates.TemplateResponse(
         request,
         "app/receiving_review.html",
