@@ -5,6 +5,66 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.13-a Item model split: schema, backfill and mirror
+
+**Implemented**
+- **Tables** (migration `e3f7a1c9d5b2`, DM-5): `inventory_items` (business, slug, name, type,
+  category, dimension, base and display unit, batch and expiry tracking, shelf life, active;
+  unique per business and slug) and `item_locations` (location, item, reorder point, par, min,
+  storage area, active; unique per location and item). `stock_items` gains links to both.
+- **Backfill**: every stock item becomes one item location; the same slug across locations is
+  one item when measured the same way, otherwise its own item with the dimension in the slug;
+  anything with a shelf price is `resale`, the rest `raw`.
+- **Mirror** (`app/catalog.py`): a `before_flush` listener links each new stock item to its item
+  (found or created) and a new item location, and carries changed definition fields to the item
+  and changed settings to the location; quantity changes write nothing there. Scoped reads:
+  `inventory_items()` (business-wide) and `item_locations()` (location scope). Rules in
+  `app/transform/items.py`.
+- No screen changes: every reader still uses `stock_items` (T1.13-b moves them). ADR-0036
+  (Proposed); ADR-0010 updated; ADR-0035 Accepted; `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_item_split.py` (9): a new stock item gets its item and settings; the same item at
+  two locations is one item with two settings, also when added in one flush (as the Square sync
+  does); a slug measured differently becomes its own item; definition and setting changes reach
+  the split tables; a quantity change writes nothing there; the type and slug rules; **DM-5 over
+  the demo business**: every stock item maps to exactly one item and location with matching
+  settings, and every item has a location; items are business-wide while settings follow the
+  location scope and another business's rows stay out.
+- `tests/test_migrations.py`: DM-5 backfill over pre-split rows (two locations, a shared slug, a
+  dimension clash, a resale item) gives the expected items and links, and the downgrade keeps
+  every stock item; the model/migration diff stays empty.
+- Acceptance: existing screens unchanged: the full suite passes untouched. Full suite 784 passed, 12 skipped (774 passed, 11 skipped before; the new skip is the Postgres half of the DM-5 migration test, run in CI);
+  ruff, mypy and the docs checker clean.
+
+**Files changed**
+- `app/catalog.py`, `app/transform/items.py`, migration `e3f7a1c9d5b2`,
+  `tests/test_item_split.py`, ADR-0036 (new); `app/models.py`, `app/access/scoped.py`,
+  `tests/test_migrations.py`; ADR-0010, ADR-0035 (Accepted), the index, `CLAUDE.md`, task index
+  (T1.12 → Completed, T1.13 → In progress), this log.
+
+**Next task**
+- T1.13-b: move the readers to the split tables.
+
+---
+
+## 2026-11-12 — T1.12 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #30 was merged with a merge commit (`0530973`). CI
+  on its head `cee0737`, all five required jobs green: SQLite 774 passed, 11 skipped; PostgreSQL 16
+  785 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: AC-ADM-04. Every M1 task (T1.01–T1.12) is complete; the
+  Stage 1 exit criteria (gates G1, G2) also need M2.
+
+**Decisions**
+- ADR-0035 accepted with the merge.
+
+**Files changed**
+- Task index (T1.12 → Completed), ADR-0035 status and index, this log.
+
+---
+
 ## 2026-11-11 — T1.12 Audit events
 
 **Implemented**
