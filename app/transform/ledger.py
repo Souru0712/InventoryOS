@@ -50,6 +50,22 @@ class LedgerRuleError(ValueError):
     """A posting the ledger refuses; nothing is written."""
 
 
+class BelowZero(LedgerRuleError):
+    """A manual movement that would take recorded stock below zero (DR-08)."""
+
+
+def crosses_zero(
+    before: Mapping[tuple[int, int], Decimal], lines: Iterable[Line]
+) -> list[tuple[int, int]]:
+    """The (location, item) pairs these lines would leave below zero and lower than they were.
+    Stock already below zero may still rise; it may not fall further."""
+    after = apply(before, lines)
+    zero = Decimal("0")
+    return sorted(
+        pair for pair, qty in after.items() if qty < zero and qty < before.get(pair, zero)
+    )
+
+
 @dataclass(frozen=True)
 class Line:
     """One movement to post: a signed base-unit quantity of an item at a location."""

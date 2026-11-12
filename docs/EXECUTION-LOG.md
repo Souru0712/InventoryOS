@@ -5,6 +5,101 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.22 Adjustments and movement history
+
+**Implemented**
+- **`inventory_adjustments`** (`InventoryAdjustment`, migration `b8363254987e`):
+  - the source record of one `adjustment` transaction, keyed `adjustment:<id>`;
+  - it holds the reason (INV-FR-19's five), note, override reason, actor, transaction and value
+    at cost;
+  - named CHECKs: the quantity is not zero, the reason is known, and "other" has a note.
+- **Rules** (`app/transform/adjustments.py`, pure): reasons, checks, the $50 review threshold.
+- **Below-zero guard** (DR-08): `crosses_zero()`, and `post_transaction(...,
+  refuse_below_zero=True)` raising `BelowZero` under the balance lock. Stock already negative
+  may rise but not fall.
+- **`app/adjustments.py`** (the only writer):
+  - posts the adjustment;
+  - an override needs `adjustment.override_negative` and a reason, and opens `negative_balance`;
+  - $50 or more opens `adjustment_review` (new type, financial).
+- **Evaluation** now raises and auto-resolves `negative_balance` for any stock below zero
+  ("count required"), and the dashboard marks such an item "count required" (AC-INV-10).
+- **History** (`app/ledger/history.py`): every movement newest first, with the balance after it
+  computed before filtering. Filters are type, the location's business days and actor; values
+  only with cost access.
+- **Screens:** `/app/catalog/{item}/history` and `/app/catalog/{item}/adjust`, linked from
+  the item page; adjustments can be entered in any unit or package.
+- ADR-0046 (Proposed); CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_adjustments.py` (13):
+  - **Rules:** the reason and override rules, the below-zero rule (negative stock may rise),
+    and the review threshold.
+  - **AC-INV-08:** a Manager's adjustment posts with its key, reason, note and value, and the
+    history shows actor, reason, time and change, newest first. A missing reason posts nothing.
+    A package quantity converts.
+  - **AC-INV-09:** going below zero is refused and nothing is kept. An override without a
+    reason is refused. With a reason it posts, records the override and opens
+    `negative_balance` ("count required"). An Employee cannot adjust (403, no link) and cannot
+    override even if given the adjustment key. The ledger guard refuses a waste posting too.
+  - **AC-INV-10:** a sale larger than on hand posts in full, the evaluation opens
+    `negative_balance` and the dashboard says "count required". A count back above zero
+    resolves it by the system.
+  - **Review:** a $60 adjustment posts and opens `adjustment_review`, which an Employee does
+    not see; a $3 one opens none.
+  - **History:** filters by type, actor and day keep true running balances, and the owner sees
+    values.
+  - **Static:** only `app/adjustments.py` creates adjustments.
+- Isolation cases for the three new routes; migration tests through `b8363254987e`.
+- **By hand:** on the migrated demo database, as the owner:
+  - removing 12 of 9 oat milk cartons was refused with "That would take recorded stock below
+    zero", and the form kept what was typed;
+  - removing 2 for "Correction: two cartons leaked" posted;
+  - the history then showed the adjustment (actor, reason, -$4.20, balance 7) above the opening
+    balance (9), with no server errors.
+- Full suite 935 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker
+  clean.
+
+**Open issues**
+- WF-10 lists the reasons "internal use" and "returned to supplier", but INV-FR-19 (which the
+  task and AC-INV-08 follow) lists "sample" and "transfer in from outside". This build uses
+  INV-FR-19's list. Aligning WF-10 is for the owner; it is not blocking.
+- The history's batch filter waits for T2.06, when movements carry batches. The review
+  threshold becomes a business setting with ADM-FR-05.
+
+**Files changed**
+- **New:**
+  - `app/transform/adjustments.py`, `app/adjustments.py`, `app/ledger/history.py`,
+    `app/web/stock.py`;
+  - the templates `stock_history.html` and `stock_adjust.html`;
+  - migration `b8363254987e`, ADR-0046, `tests/test_adjustments.py`.
+- **Changed:**
+  - `app/models.py`, `app/transform/{ledger,exceptions}.py`, `app/ledger/posting.py`;
+  - `app/orchestration/alerts.py`, `app/web/dashboard.py`, `app/main.py`;
+  - the item page, `base.html` (the count-required pill), `tests/test_isolation.py`;
+  - CLAUDE.md, ADR-0045 (Accepted), the ADR index, the task index (T1.21 → Completed, T1.22 →
+    In review) and this log.
+
+**Next task**
+- T1.23 Count sessions (depends on T1.22).
+
+---
+
+## 2026-11-12 — T1.21 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #43 was merged with a merge commit (`e8a214b`).
+- CI on its head `fb60ffd`, all five required jobs green:
+  - SQLite: 919 passed, 24 skipped;
+  - PostgreSQL 16: 943 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0045 → Accepted.
+
+**Files changed**
+- Task index (T1.21 → Completed), ADR-0045 and its index row, this log.
+
+---
+
 ## 2026-11-12 — T1.21 Nightly ledger verification
 
 **Implemented**

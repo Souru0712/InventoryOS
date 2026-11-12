@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="small"><a href="/app/catalog/{{ item.id }}/history?location={{ place.location.id }}">&larr; {{ item.name }} history</a></p>
+<h1>Adjust {{ item.name }}</h1>
+<p class="lede">A deliberate correction at {{ place.location.name }}, with its reason. For a delivery, a count or
+waste, use those instead. Now {{ place.stock.qty_base|qty(item.display_unit) }} on hand.</p>
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<form method="post" action="/app/catalog/{{ item.id }}/adjust" class="card" style="max-width:620px;">{{ csrf_field(request) }}
+  <input type="hidden" name="location_id" value="{{ place.location.id }}">
+  <div class="row">
+    <div class="field">
+      <label for="direction">Add or remove</label>
+      <select id="direction" name="direction">
+        <option value="remove"{% if values.direction == "remove" %} selected{% endif %}>Remove</option>
+        <option value="add"{% if values.direction == "add" %} selected{% endif %}>Add</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="quantity">Quantity</label>
+      <input id="quantity" name="quantity" inputmode="decimal" required value="{{ values.quantity or '' }}">
+    </div>
+    <div class="field">
+      <label for="unit">Unit</label>
+      <select id="unit" name="unit">
+        {% for code, label in units %}<option value="{{ code }}"{% if code == values.unit %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="field">
+    <label for="reason">Reason</label>
+    <select id="reason" name="reason" required>
+      <option value="">Pick one</option>
+      {% for key, label in reasons.items() %}<option value="{{ key }}"{% if key == values.reason %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="note">Note <span class="muted small">(needed for "Other")</span></label>
+    <input id="note" name="note" maxlength="300" value="{{ values.note or '' }}">
+  </div>
+  {% if may_override %}
+  <div class="field">
+    <label><input type="checkbox" name="override" value="yes"{% if values.override == "yes" %} checked{% endif %}> Allow it to take stock below zero</label>
+    <input name="override_reason" maxlength="300" placeholder="Why stock may go below zero" value="{{ values.override_reason or '' }}">
+  </div>
+  {% endif %}
+  <button class="btn" type="submit">Post adjustment</button>
+</form>
+{% endblock %}

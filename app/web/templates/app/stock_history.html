@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/catalog/{{ item.id }}">&larr; {{ item.name }}</a></p>
+<h1>{{ item.name }}: history</h1>
+<p class="lede">Every movement at {{ place.location.name }}, newest first, with the balance after each.
+Now {{ place.stock.qty_base|qty(item.display_unit) }} on hand.
+{% if can(request, "adjustment.create") %}<a class="btn small secondary" href="/app/catalog/{{ item.id }}/adjust?location={{ place.location.id }}">Adjust stock</a>{% endif %}</p>
+
+<form method="get" action="/app/catalog/{{ item.id }}/history" class="card" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+  {% if row.places|length > 1 %}
+  <div class="field" style="margin:0;">
+    <label for="location">Location</label>
+    <select id="location" name="location">
+      {% for p in row.places %}<option value="{{ p.location.id }}"{% if p.location.id == place.location.id %} selected{% endif %}>{{ p.location.name }}</option>{% endfor %}
+    </select>
+  </div>
+  {% else %}<input type="hidden" name="location" value="{{ place.location.id }}">{% endif %}
+  <div class="field" style="margin:0;">
+    <label for="type">Type</label>
+    <select id="type" name="type">
+      <option value="">All</option>
+      {% for t in movement_types %}<option value="{{ t }}"{% if t == filters.type %} selected{% endif %}>{{ t.replace("_", " ") }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="since">From</label>
+    <input id="since" name="since" type="date" value="{{ filters.since }}">
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="until">To</label>
+    <input id="until" name="until" type="date" value="{{ filters.until }}">
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="actor">Who</label>
+    <select id="actor" name="actor">
+      <option value="">Anyone</option>
+      {% for id, email in people.items() %}<option value="{{ id }}"{% if id == filters.actor %} selected{% endif %}>{{ email }}</option>{% endfor %}
+    </select>
+  </div>
+  <button class="btn secondary" type="submit">Show</button>
+</form>
+
+{% if not rows %}
+  <div class="card"><p style="margin:0;">No movements{% if filters.type or filters.since or filters.until or filters.actor %} for this filter{% endif %} yet.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Day</th><th>What</th><th>Change</th><th>Balance after</th>{% if costs %}<th>Value</th>{% endif %}<th>Who</th><th>Why</th></tr></thead>
+  <tbody>
+  {% for m in rows %}
+    <tr>
+      <td class="small" style="white-space:nowrap;">{{ m.business_day.strftime("%d %b %Y") }}<div class="muted">{{ m.occurred_at.strftime("%H:%M") }} UTC</div></td>
+      <td>{{ kind_labels.get(m.kind, m.kind) }}
+        {% if m.source_type == "document" %}<div class="small"><a href="/app/receiving/{{ m.source_id }}">Delivery {{ m.source_id }}</a></div>{% endif %}
+      </td>
+      <td style="white-space:nowrap;">{{ "+" if m.qty_base > 0 else "" }}{{ m.qty_base|qty(item.display_unit) }}</td>
+      <td style="white-space:nowrap;">{{ m.running_base|qty(item.display_unit) }}</td>
+      {% if costs %}{% set value = (m.qty_base * m.unit_cost)|round|int %}<td class="small" style="white-space:nowrap;">{{ "-" if value < 0 else "" }}{{ value|abs|money(currency) }}</td>{% endif %}
+      <td class="small">{% if m.actor_user_id %}{{ people.get(m.actor_user_id, "A former member") }}{% else %}<span class="muted">StockPulse</span>{% endif %}</td>
+      <td class="small">{{ m.reason or "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

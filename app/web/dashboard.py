@@ -84,7 +84,10 @@ def _rows(db: Session, org: OrgContext, location_id: int | None = None) -> list[
                 "value_cents": valuation_cents(item.qty_base, item.cost_per_base_cents),
                 "suggested": suggest_order_base(item, speed),
                 "alert": alert,
-                "status": alert.kind if alert else "ok",
+                # Below zero needs a count before anything else (DR-08, AC-INV-10).
+                "status": "count_required"
+                if item.qty_base < 0
+                else (alert.kind if alert else "ok"),
             }
         )
     rows.sort(key=lambda row: (row["status"] == "ok", row["cover"] is None, row["cover"] or 0))

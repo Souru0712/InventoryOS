@@ -59,6 +59,11 @@ TYPES: Mapping[str, ExceptionType] = {
     "low_stock": ExceptionType("Low stock", WARNING, "Reorder it"),
     "stale_count": ExceptionType("Not counted recently", INFO, "Count the item"),
     "waste_risk": ExceptionType("May expire unsold", WARNING, "Sell it first, or mark it down"),
+    # An adjustment worth more than the review threshold, posted and awaiting an Owner's or
+    # Administrator's review (T1.22, STF-FR-08 R1).
+    "adjustment_review": ExceptionType(
+        "Adjustment to review", INFO, "Review the adjustment", financial=True
+    ),
     # A background job that failed every attempt (T1.20, dead letter); clears on its next success.
     "job_failed": ExceptionType("Background task failed", WARNING, "Contact support"),
 }
