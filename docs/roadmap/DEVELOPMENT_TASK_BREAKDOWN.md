@@ -66,8 +66,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T1.17 | Opening-balance migration | P0 | M | M2 | T1.16 | Completed (2026-11-12; the ledger opens equal to every item's quantity) |
 | T1.18 | Route existing writers through the ledger | P0 | M | M2 | T1.17 | Completed (2026-11-12; every writer posts to the ledger; R6 moved to T2.06, DM-7 split, by the owner) |
 | T1.19 | Exception model | P1 | M | M2 | T1.06, T1.16 | Completed (2026-11-12; exceptions replace alerts; AC-REC-06..09 met) |
-| T1.20 | Jobs table; scheduled evaluation for every tenant | P1 | M | M2 | T1.19 | In review (PR open; CI evidence in the execution log) |
-| T1.21 | Nightly ledger verification | P1 | S | M2 | T1.20 | Not started |
+| T1.20 | Jobs table; scheduled evaluation for every tenant | P1 | M | M2 | T1.19 | Completed (2026-11-12; job queue, every business evaluated on schedule) |
+| T1.21 | Nightly ledger verification | P1 | S | M2 | T1.20 | In review (PR open; CI evidence in the execution log) |
 | T1.22 | Adjustments and movement history | P1 | M | M2 | T1.18, T1.06 | Not started |
 | T1.23 | Count sessions | P1 | L | M2 | T1.22, T1.19 | Not started |
 | T1.24 | Cost basis and valuation | P1 | M | M2 | T1.16 | Not started |

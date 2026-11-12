@@ -118,3 +118,33 @@ def apply(
         key = (line.location_id, line.inventory_item_id)
         result[key] = result.get(key, Decimal("0")) + line.qty_base
     return result
+
+
+@dataclass(frozen=True)
+class Drift:
+    """One item at one location whose recorded figures disagree (DR-03)."""
+
+    location_id: int
+    inventory_item_id: int
+    recorded: Decimal  # the balance row; zero when there is none
+    movements: Decimal  # what the movements add up to
+    shown: Decimal | None  # the stock row the screens read (ADR-0042), if there is one
+
+
+def find_drift(
+    recorded: Mapping[tuple[int, int], Decimal],
+    movements: Mapping[tuple[int, int], Decimal],
+    shown: Mapping[tuple[int, int], Decimal],
+) -> list[Drift]:
+    """Every (location, item) whose balance is not the sum of its movements, or whose stock row
+    is not its balance: the nightly verification's finding (REL-08, AC-INV-11). It reports and
+    never corrects: a drift is a bug to understand, not a number to overwrite."""
+    zero = Decimal("0")
+    found = []
+    for pair in sorted(set(recorded) | set(movements) | set(shown)):
+        balance = recorded.get(pair, zero)
+        total = movements.get(pair, zero)
+        screen = shown.get(pair)
+        if balance != total or (screen is not None and screen != balance):
+            found.append(Drift(pair[0], pair[1], balance, total, screen))
+    return found

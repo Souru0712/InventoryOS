@@ -1,6 +1,6 @@
 # ADR-0044: The job queue and scheduled evaluation for every business
 
-- **Status:** Proposed, 2026-11-12 (in the T1.20 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (owner: "Yes, merge it"; PR #42)
 - **Decision ID:** none (implements T1.20 under ID-06 / ADR-0006; REL-07, SCL-03, SAAS-T-06)
 - **Tasks:** T1.20; T1.21 and later background work queue through it
 
