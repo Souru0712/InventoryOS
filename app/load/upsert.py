@@ -136,7 +136,6 @@ def ensure_tracked_stock_items(
                     receive_unit="each",
                     track_mode=TrackMode.PROVIDER,
                     provider_variation_id=row["provider_item_id"],
-                    qty_base=Decimal("0"),
                 )
             )
             created += 1
@@ -181,7 +180,9 @@ def sync_catalog_presence(
 
 
 def apply_provider_counts(db: Session, tenant_id: int, rows: list[dict]) -> int:
-    """Push POS quantities onto the stock items the POS owns."""
+    """Note when the POS last reported its count of each item it tracks; the number of rows
+    that matched one. The count itself changes nothing: InventoryOS's ledger is the source of
+    truth for every item, Square's included (C-34, T1.18)."""
     location_ids = {
         loc.provider_location_id: loc.id
         for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
@@ -198,7 +199,7 @@ def apply_provider_counts(db: Session, tenant_id: int, rows: list[dict]) -> int:
     }
 
     now = datetime.now(UTC)
-    updated = 0
+    seen = 0
     for row in rows:
         location_id = location_ids.get(row["provider_location_id"])
         if location_id is None:
@@ -206,13 +207,10 @@ def apply_provider_counts(db: Session, tenant_id: int, rows: list[dict]) -> int:
         item = items.get((location_id, row["provider_item_id"]))
         if item is None:
             continue
-        quantity = Decimal(row["quantity"])
-        if item.qty_base != quantity:
-            item.qty_base = quantity
-            updated += 1
         item.last_synced_at = now
+        seen += 1
     db.flush()
-    return updated
+    return seen
 
 
 def upsert_sales_daily(db: Session, tenant_id: int, rows: list[dict]) -> int:

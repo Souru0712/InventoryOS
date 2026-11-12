@@ -444,6 +444,101 @@ def test_dm6_the_ledger_opens_at_every_quantity_and_the_downgrade_clears_it(fres
         engine.dispose()
 
 
+BEFORE_CATCH_UP = "a6eec9216078"
+
+
+def test_the_catch_up_posts_drift_since_the_opening_and_the_downgrade_removes_it(fresh_url):
+    """T1.18 (ADR-0041's consequence): Σ movements = balance = qty_base again, for every pair."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    stock = (
+        "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension, stock_unit,"
+        " track_mode, qty_base, reorder_point_base, cost_per_base_cents, lead_time_days,"
+        " receive_unit, is_active) VALUES (1, 1, :slug, :slug, 'COUNT', 'each',"
+        " 'MANUAL', :qty, '0.0000', '5.0000', 2, 'each', true)"
+    )
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                    " VALUES (1, 'Main', 'UTC', 'USD', true)"
+                )
+            )
+            for slug, qty in (("bars", "24.0000"), ("cups", "0.0000"), ("lids", "5.0000")):
+                connection.execute(text(stock), {"slug": slug, "qty": qty})
+        command.upgrade(config, BEFORE_CATCH_UP)
+        with engine.begin() as connection:
+            # The old writers, after the opening balances: one quantity moved, and one row the
+            # ledger never heard of (its balance row missing, its quantity set directly).
+            connection.execute(
+                text("UPDATE stock_items SET qty_base = '30.5000' WHERE slug = 'bars'")
+            )
+            connection.execute(
+                text("UPDATE stock_items SET qty_base = '12.0000' WHERE slug = 'cups'")
+            )
+            connection.execute(
+                text(
+                    "DELETE FROM stock_balances WHERE inventory_item_id ="
+                    " (SELECT inventory_item_id FROM stock_items WHERE slug = 'cups')"
+                )
+            )
+
+        def state():
+            with engine.connect() as connection:
+                return connection.execute(
+                    text(
+                        "SELECT s.slug, s.qty_base, b.qty_base,"
+                        " (SELECT count(*) FROM inventory_movements m"
+                        "   WHERE m.location_id = s.location_id"
+                        "   AND m.inventory_item_id = s.inventory_item_id)"
+                        " FROM stock_items s LEFT JOIN stock_balances b"
+                        " ON b.location_id = s.location_id"
+                        " AND b.inventory_item_id = s.inventory_item_id ORDER BY s.slug"
+                    )
+                ).all()
+
+        def tidy(value):
+            return None if value is None else str(value).rstrip("0").rstrip(".") or "0"
+
+        command.upgrade(config, "head")
+        assert [(s, tidy(q), tidy(b), n) for s, q, b, n in state()] == [
+            ("bars", "30.5", "30.5", 2),  # its opening, then the adjustment
+            ("cups", "12", "12", 1),  # opened now
+            ("lids", "5", "5", 1),  # untouched: nothing had moved
+        ]
+        with engine.connect() as connection:
+            caught = connection.execute(
+                text(
+                    "SELECT t.kind, m.movement_type, m.qty_base, t.idempotency_key"
+                    " FROM inventory_transactions t JOIN inventory_movements m"
+                    " ON m.transaction_id = t.id WHERE t.source_id LIKE 'catch-up:%' ORDER BY t.id"
+                )
+            ).all()
+        assert [(k, m, tidy(q)) for k, m, q, _ in caught] == [
+            ("adjustment", "adjustment", "6.5"),
+            ("opening", "opening_balance", "12"),
+        ]
+        assert all(key.startswith("migration:catch-up:") for *_, key in caught)
+
+        command.downgrade(config, BEFORE_CATCH_UP)
+        assert [(s, tidy(b), n) for s, _, b, n in state()] == [
+            ("bars", "24", 1),
+            ("cups", "0", 0),  # keeps its balance row, at zero
+            ("lids", "5", 1),
+        ]
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

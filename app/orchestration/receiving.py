@@ -11,7 +11,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext, get_scoped, select_scoped
+from app.access import OrgContext, get_scoped, select_scoped, update_scoped
 from app.catalog import active_stock
 from app.config import get_settings
 from app.extract.images import detect_media_type
@@ -22,12 +22,12 @@ from app.extract.invoice import (
     Extractor,
     get_extractor,
 )
+from app.ledger.posting import post_transaction
 from app.models import (
     Document,
     DocumentLine,
     DocumentStatus,
     ExtractionCorrection,
-    InventoryCount,
     LineStatus,
     ProductIdentifier,
     StockAlias,
@@ -35,6 +35,7 @@ from app.models import (
     StockItem,
 )
 from app.storage import StorageError, get_storage
+from app.transform.ledger import Line, places
 from app.transform.receiving import (
     Candidate,
     MatchResult,
@@ -52,6 +53,10 @@ ZERO = Decimal("0")
 
 class UploadRejected(ValueError):
     pass
+
+
+class AlreadyApplied(ValueError):
+    """The delivery was received already, perhaps a moment ago by another request (AC-RCV-05)."""
 
 
 @dataclass
@@ -296,14 +301,23 @@ def apply_document(
     now: datetime | None = None,
     user_id: int | None = None,
 ) -> dict:
-    """Receive the delivery: raise stock, date it, cost it, anchor derived items, learn the wording."""
+    """Receive the delivery: one receipt posting for every applied line (DR-25), plus the
+    lots' dates, the latest costs and the supplier's wording."""
     now = now or datetime.now(UTC)
     document = get_scoped(db, org, Document, document_id)
     if document is None:
         raise ValueError(f"document {document_id} not found")
-    if document.status is DocumentStatus.APPLIED:
-        # Applying twice would raise stock twice and tell Square the delivery arrived twice.
-        raise ValueError(f"document {document_id} has already been applied")
+    # Claim the document before anything else: the status changes only if it is not applied
+    # yet (DR-07). A second request waits on this row, then finds it applied and stops here,
+    # so a double click or two people at once receive the delivery once (AC-RCV-05).
+    claim = db.execute(
+        update_scoped(org, Document)
+        .where(Document.id == document.id, Document.status != DocumentStatus.APPLIED)
+        .values(status=DocumentStatus.APPLIED, applied_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if int(getattr(claim, "rowcount", 0) or 0) != 1:
+        raise AlreadyApplied(f"document {document_id} has already been applied")
 
     lines = {line.id: line for line in document.lines}
     # What the reader produced, captured before the reviewer's answers overwrite any of it.
@@ -320,7 +334,7 @@ def apply_document(
 
     applied = 0
     batches = 0
-    received: dict[int, Decimal] = {}
+    movements: list[Line] = []
     for decision in decisions:
         line = lines.get(decision.line_id)
         if line is None:
@@ -331,7 +345,9 @@ def apply_document(
 
         item = items.get(decision.stock_item_id or line.stock_item_id or -1)
         quantity = decision.qty_base if decision.qty_base is not None else line.received_qty_base
-        if item is None or quantity is None or quantity <= ZERO:
+        if quantity is not None:
+            quantity = places(Decimal(quantity))
+        if item is None or item.inventory_item_id is None or quantity is None or quantity <= ZERO:
             line.status = LineStatus.UNMATCHED
             continue
 
@@ -344,21 +360,6 @@ def apply_document(
             )
             line.line_total_cents = decision.line_total_cents
 
-        item.qty_base = Decimal(item.qty_base or 0) + Decimal(quantity)
-        db.add(
-            InventoryCount(
-                tenant_id=document.tenant_id,
-                stock_item_id=item.id,
-                qty_base=item.qty_base,
-                source="receipt",
-                note=f"received from {document.supplier or 'supplier'} "
-                f"invoice {document.invoice_number or document.id}",
-                counted_at=now,
-            )
-        )
-        # A receipt re-anchors derived stock, so depletion restarts from a known quantity.
-        item.last_counted_at = now
-
         cost = line_cost_per_base(
             line.line_total_cents,
             None if decision.line_total_cents is not None else line.unit_price_cents,
@@ -368,6 +369,16 @@ def apply_document(
         if cost is not None:
             # The latest price paid is what replacing this stock costs, which is what waste costs.
             item.cost_per_base_cents = cost
+        movements.append(
+            Line(
+                item.location_id,
+                item.inventory_item_id,
+                "receipt",
+                quantity,
+                # What this delivery cost; the item's current cost when the invoice did not say.
+                unit_cost=cost if cost is not None and cost >= ZERO else None,
+            )
+        )
 
         expires_on = decision.expires_on if decision.expires_on is not None else line.expires_on
         record_correction(db, document, "expiry", was_expiry, expires_on, line.id, user_id)
@@ -392,9 +403,22 @@ def apply_document(
         line.expires_on = expires_on
         line.status = LineStatus.APPLIED
         _learn_alias(db, org, document, line, item.id)
-        received[item.id] = received.get(item.id, ZERO) + Decimal(quantity)
         applied += 1
 
+    if movements:
+        supplier = document.supplier or "supplier"
+        post_transaction(
+            db,
+            org,
+            kind="receipt",
+            source_type="document",
+            source_id=str(document.id),
+            idempotency_key=f"receipt:document:{document.id}",
+            lines=movements,
+            occurred_at=now,
+            reason=f"Received from {supplier}, invoice {document.invoice_number or document.id}",
+        )
+    # The row was changed in SQL above; the loaded copy follows it.
     document.status = DocumentStatus.APPLIED
     document.applied_at = now
     db.flush()

@@ -122,6 +122,13 @@ def format_amount(qty_base: Decimal | float | str, unit_code: str, approx: bool 
     return text
 
 
+def format_change(qty_base: Decimal | float | str, unit_code: str) -> str:
+    """A signed change to put inside a sentence: '+2 kg', '-1.5 L', '+3'."""
+    value = Decimal(str(qty_base))
+    sign = "+" if value > 0 else "-" if value < 0 else ""
+    return sign + format_amount(abs(value), unit_code)
+
+
 def dimension_of(unit_code: str) -> Dimension:
     return get_unit(unit_code).dimension
 

@@ -91,29 +91,6 @@ def consumption_by_day(
     return {item_id: dict(days) for item_id, days in result.items()}
 
 
-def consumed_since(
-    daily: dict[date, Decimal], since: datetime | None, until: date | None = None
-) -> Decimal:
-    """Total base units consumed after a physical count date."""
-    if not daily:
-        return ZERO
-    start = since.date() if since else min(daily)
-    end = until or max(daily)
-    # The count day itself is already reflected in the counted quantity.
-    return sum((qty for day, qty in daily.items() if start < day <= end), ZERO)
-
-
-def derived_quantity(
-    anchor_qty_base: Decimal,
-    anchor_at: datetime | None,
-    daily: dict[date, Decimal],
-    until: date | None = None,
-) -> Decimal:
-    """Quantity for weight/volume stock: last count minus consumption since."""
-    remaining = Decimal(anchor_qty_base) - consumed_since(daily, anchor_at, until)
-    return remaining if remaining > ZERO else ZERO
-
-
 def daily_velocity(daily: dict[date, Decimal], window_days: int, today: date) -> Decimal:
     """Mean base units consumed per day over the trailing window."""
     if window_days <= 0:

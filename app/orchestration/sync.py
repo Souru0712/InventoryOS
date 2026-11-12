@@ -33,7 +33,6 @@ from app.models import (
 )
 from app.orchestration.alerts import evaluate_and_store, send_alert_digest
 from app.orchestration.subscriptions import apply_location_limit
-from app.orchestration.views import refresh_derived_quantities
 from app.providers.square.client import (
     SquareClient,
     adjustment_change,
@@ -202,7 +201,6 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
         if tenant is not None:
             stats["locations_set_aside"] = apply_location_limit(db, tenant)
 
-        stats["derived_updated"] = refresh_derived_quantities(db, org)
         stats.update(evaluate_and_store(db, org))
 
         run.status = SyncStatus.SUCCESS
@@ -363,20 +361,3 @@ def record_square_failure(db: Session, org: OrgContext, kind: str, exc: Exceptio
             error=f"{type(exc).__name__}: {exc}"[:2000],
         )
     )
-
-
-def refresh_item_from_square(db: Session, org: OrgContext, item: StockItem) -> bool:
-    """Re-read one variation's count, so a scan shows what Square holds right now."""
-    if item.track_mode is not TrackMode.PROVIDER or not item.provider_variation_id:
-        return False
-    location = get_scoped(db, org, Location, item.location_id)
-    if location is None or not location.provider_location_id:
-        return False
-
-    connection = active_connection(db, org)
-    token = _access_token(db, connection)
-    with SquareClient(token) as client:
-        rows = normalize_counts(
-            client.inventory_counts([item.provider_variation_id], [location.provider_location_id])
-        )
-    return bool(apply_provider_counts(db, org.tenant_id, rows))

@@ -213,9 +213,6 @@
               (it.cover_days ? " &middot; " + esc(it.cover_days) + " d cover" : "") + '</div>' +
           '</div>' +
         '</div>' +
-        (data.square_unreachable
-          ? '<div class="notice error" style="margin:12px 0 0;">Square could not be reached, so this is the last count InventoryOS has, not Square\'s.</div>'
-          : "") +
         '<p style="margin:14px 0 0; display:flex; gap:8px; flex-wrap:wrap;">' +
           '<button class="btn" type="button" data-act="receive">Receive</button>' +
           '<button class="btn secondary" type="button" data-act="count">Correct count</button>' +
@@ -325,7 +322,9 @@
       const res = await fetch("/app/scan/count", { method: "POST", body: body, headers: { "X-CSRF-Token": CSRF } });
       const out = await res.json();
       if (!res.ok) { setStatus(out.detail || "Could not save that count.", "bad"); return; }
-      renderDone(it.name, "Counted. Now " + out.qty_text + " on hand.", out);
+      renderDone(it.name, (out.variance_text
+        ? "Counted. " + out.variance_text + " posted as a count variance. Now "
+        : "Counted. It matches the record, so nothing was posted. ") + out.qty_text + " on hand.", out);
     };
   }
 

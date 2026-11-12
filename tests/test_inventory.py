@@ -5,11 +5,9 @@ from app.transform.inventory import (
     Component,
     SaleRow,
     StockView,
-    consumed_since,
     consumption_by_day,
     daily_velocity,
     days_of_cover,
-    derived_quantity,
     stale_after,
     suggest_order_base,
     valuation_cents,
@@ -44,22 +42,6 @@ def test_sales_explode_into_base_units_per_stock_item():
     daily = consumption_by_day(sales, components)
     assert daily[1][TODAY] == Decimal("22000.0000")  # 22 litres
     assert daily[2][TODAY] == Decimal("1800.0000")  # 1.8 kg
-
-
-def test_consumption_only_counts_days_after_the_count():
-    daily = {
-        TODAY - timedelta(days=2): Decimal("5"),
-        TODAY - timedelta(days=1): Decimal("7"),
-        TODAY: Decimal("3"),
-    }
-    anchor = datetime(2026, 9, 5, tzinfo=UTC)  # yesterday
-    assert consumed_since(daily, anchor, TODAY) == Decimal("3")
-
-
-def test_derived_quantity_never_goes_negative():
-    daily = {TODAY: Decimal("40000")}
-    anchor = datetime(2026, 9, 5, tzinfo=UTC)
-    assert derived_quantity(to_base(30, "l"), anchor, daily, TODAY) == Decimal("0")
 
 
 def test_velocity_and_cover_use_the_trailing_window():

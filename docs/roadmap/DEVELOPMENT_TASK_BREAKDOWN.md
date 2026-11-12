@@ -63,8 +63,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T1.14 | Item management UI | P1 | M | M2 | T1.13, T1.06 | Completed (2026-11-12; item and category screens at /app/catalog) |
 | T1.15 | Units, packages and conversions | P0 | M | M2 | T1.13 | Completed (2026-11-12; resolver, packages, conversions, editor) |
 | T1.16 | Ledger schema and posting service | P0 | L | M2 | T1.01, T1.13, T1.15 | Completed (2026-11-12; ledger tables, posting service, concurrency proven on Postgres) |
-| T1.17 | Opening-balance migration | P0 | M | M2 | T1.16 | In review (PR open; CI evidence in the execution log) |
-| T1.18 | Route existing writers through the ledger | P0 | M | M2 | T1.17 | Not started |
+| T1.17 | Opening-balance migration | P0 | M | M2 | T1.16 | Completed (2026-11-12; the ledger opens equal to every item's quantity) |
+| T1.18 | Route existing writers through the ledger | P0 | M | M2 | T1.17 | In review (PR open; two owner decisions pending: R6 and `sales_daily`, see ADR-0042) |
 | T1.19 | Exception model | P1 | M | M2 | T1.06, T1.16 | Not started |
 | T1.20 | Jobs table; scheduled evaluation for every tenant | P1 | M | M2 | T1.19 | Not started |
 | T1.21 | Nightly ledger verification | P1 | S | M2 | T1.20 | Not started |

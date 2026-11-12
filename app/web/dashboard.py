@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -17,8 +18,8 @@ from app.config import get_settings
 from app.db import get_db
 from app.entitlements import require
 from app.items import entered_base
+from app.ledger.posting import post_count
 from app.models import (
-    InventoryCount,
     Location,
     Promotion,
     ProviderConnection,
@@ -36,7 +37,6 @@ from app.orchestration.sync import NotConnected, run_sync
 from app.orchestration.views import (
     expiry_coverage,
     expiry_positions,
-    refresh_derived_quantities,
     stock_views,
     tenant_currency,
     velocity_map,
@@ -57,7 +57,9 @@ from app.transform.alerts import counts_as_waste_risk
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
 from app.transform.items import ItemRuleError
-from app.units import UnitError, to_base
+from app.transform.ledger import LedgerRuleError
+from app.units import UnitError, format_amount, format_change, to_base
+from app.web.flash import flash, pop_flash
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -161,6 +163,7 @@ def dashboard(
         "app/dashboard.html",
         {
             "title": "Inventory",
+            "message": pop_flash(request),
             "tenant": tenant,
             "rows": rows,
             "locations": _locations(db, org),
@@ -310,6 +313,7 @@ def new_item_moved(org: OrgContext = Depends(require_permission("item.edit"))):
 @router.post("/app/items/{item_id}/count")
 def record_count(
     item_id: int,
+    request: Request,
     quantity: str = Form(...),
     unit: str = Form(""),
     note: str = Form(""),
@@ -317,31 +321,43 @@ def record_count(
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("count.record")),
 ):
-    """A physical count re-anchors the item; derived quantities restart from here. It may be
-    entered in any unit or package of the item; one that cannot convert is refused (DR-11)."""
+    """A physical count is an observation (DR-12): the difference from the recorded quantity
+    is posted as a count variance, never set directly. It may be entered in any unit or package
+    of the item; one that cannot convert is refused (DR-11)."""
     item = get_scoped(db, org, StockItem, item_id)
     if item is None or item.inventory_item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
 
     try:
-        qty_base = entered_base(item.inventory_item, quantity, unit or item.stock_unit)
+        counted = entered_base(item.inventory_item, quantity, unit or item.stock_unit)
     except ItemRuleError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     now = datetime.now(UTC)
-    item.qty_base = qty_base
-    item.last_counted_at = now
-    db.add(
-        InventoryCount(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            qty_base=qty_base,
-            source="manual",
-            note=note.strip()[:500] or None,
-            counted_at=now,
+    count = uuid4().hex
+    try:
+        posted = post_count(
+            db,
+            org,
+            location_id=item.location_id,
+            inventory_item_id=item.inventory_item.id,
+            counted=counted,
+            source_type="count",
+            source_id=count,
+            idempotency_key=f"count:{count}",
+            occurred_at=now,
+            reason=note.strip()[:300] or "Counted on the inventory screen",
         )
-    )
+    except LedgerRuleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    item.last_counted_at = now
     # Nothing is sent to Square (C-34).
     db.commit()
+    shown = format_amount(item.qty_base, item.stock_unit)
+    if posted is None:
+        flash(request, f"Counted {item.name}: {shown}, as recorded. Nothing to post.")
+    else:
+        variance = format_change(posted.movements[0].qty_base, item.stock_unit)
+        flash(request, f"Counted {item.name}: {shown}. {variance} posted as a count variance.")
     return RedirectResponse("/app", status_code=303)
 
 
@@ -413,17 +429,6 @@ def manual_sync(
     except Exception:
         log.exception("manual sync failed for tenant %s", tenant.id)
         return RedirectResponse("/app?error=sync_failed", status_code=303)
-    return RedirectResponse("/app", status_code=303)
-
-
-@router.post("/app/recalculate")
-def recalculate(
-    db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
-    org: OrgContext = Depends(require_permission("mapping.manage")),
-):
-    refresh_derived_quantities(db, org)
-    db.commit()
     return RedirectResponse("/app", status_code=303)
 
 

@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.main import app
-from app.models import InventoryCount, InventoryItem, ItemPackage, StockItem
+from app.models import InventoryItem, InventoryMovement, ItemPackage, StockItem
 from app.transform.conversions import (
     Conversion,
     ConversionMissing,
@@ -118,10 +118,19 @@ def stock_row(item_id: int) -> StockItem:
 
 
 def last_count() -> Decimal:
+    """The quantity the latest count left: a count posts the difference (DR-12, T1.18)."""
     with SessionLocal() as db:
-        return (
-            db.scalars(select(InventoryCount).order_by(InventoryCount.id.desc())).first().qty_base
-        )
+        movement = db.scalars(
+            select(InventoryMovement)
+            .where(InventoryMovement.movement_type == "count_variance")
+            .order_by(InventoryMovement.id.desc())
+        ).first()
+        return db.scalars(
+            select(StockItem.qty_base).where(
+                StockItem.location_id == movement.location_id,
+                StockItem.inventory_item_id == movement.inventory_item_id,
+            )
+        ).one()
 
 
 def test_a_count_can_be_entered_in_any_unit_or_package(owner, location):

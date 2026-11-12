@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.orchestration import sync
 from app.units import Dimension
+from tests.ledger_helpers import opened
 
 
 def catalog_object(variation_id: str, name: str, sku: str = "SKU1") -> dict:
@@ -176,12 +177,13 @@ def test_stock_the_operator_defined_is_not_touched_by_a_catalog_change(db, tenan
     assert flour.is_active is True
 
 
-def test_the_hourly_sync_recovers_a_sale_whose_webhook_never_arrived(db, tenant, connected):
-    """Webhooks are the fast path; this run is what makes the numbers right when one is lost."""
+def test_the_hourly_sync_reads_square_counts_but_never_applies_them(db, tenant, connected):
+    """Square's count is noted, not applied: the ledger owns the quantity (C-34, T1.18)."""
     sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()
     item = stock_for(db, "VAR-COKE")
-    item.qty_base = Decimal("24")  # what we hold; Square has since sold four
+    item.qty_base = Decimal("24")  # what we hold; Square says it has 20
+    opened(db, item)
     db.commit()
 
     connected.counts = {"VAR-COKE": 20}
@@ -190,7 +192,8 @@ def test_the_hourly_sync_recovers_a_sale_whose_webhook_never_arrived(db, tenant,
 
     db.refresh(item)
     assert stats["counts"] == 1
-    assert item.qty_base == Decimal("20"), "the missed sale has to show up at reconciliation"
+    assert "derived_updated" not in stats
+    assert item.qty_base == Decimal("24")
     assert item.last_synced_at is not None
 
 

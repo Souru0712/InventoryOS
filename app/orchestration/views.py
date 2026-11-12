@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, select_scoped
 from app.catalog import active_stock, by_item_name
 from app.models import (
-    InventoryCount,
     Location,
     RecipeComponent,
     SalesDaily,
@@ -36,7 +35,6 @@ from app.transform.inventory import (
     StockView,
     consumption_by_day,
     daily_velocity,
-    derived_quantity,
 )
 
 VELOCITY_WINDOW_DAYS = 28
@@ -237,35 +235,6 @@ def velocity_map(
     window_start = today - timedelta(days=window_days - 1)
     daily = consumption(db, org, window_start)
     return {item_id: daily_velocity(days, window_days, today) for item_id, days in daily.items()}
-
-
-def refresh_derived_quantities(db: Session, org: OrgContext, today: date | None = None) -> int:
-    """Recompute weight/volume quantities: last physical count minus consumption since."""
-    today = today or datetime.now(UTC).date()
-    items = list(db.scalars(active_stock(org).where(StockItem.track_mode == TrackMode.DERIVED)))
-    if not items:
-        return 0
-
-    daily = consumption(db, org)
-    updated = 0
-    for item in items:
-        anchor = db.scalars(
-            select_scoped(org, InventoryCount)
-            .where(InventoryCount.stock_item_id == item.id)
-            .order_by(InventoryCount.counted_at.desc())
-            .limit(1)
-        ).first()
-        if anchor is None:
-            continue
-        quantity = derived_quantity(
-            Decimal(anchor.qty_base), anchor.counted_at, daily.get(item.id, {}), today
-        )
-        if item.qty_base != quantity:
-            item.qty_base = quantity
-            updated += 1
-        item.last_counted_at = anchor.counted_at
-    db.flush()
-    return updated
 
 
 def expiry_coverage(db: Session, org: OrgContext, location_id: int | None = None) -> Coverage:

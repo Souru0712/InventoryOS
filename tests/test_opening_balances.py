@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.access import OrgContext
 from app.cli import cmd_demo
@@ -35,6 +35,10 @@ def demo():
         email="demo@stockpulse.local", password="demopassword", name="Rosewood Coffee", days=7
     )
     assert cmd_demo(args) == 0
+    with engine.begin() as connection:
+        # The demo now opens its items through the ledger (T1.18); before T1.17 there was none.
+        for table in ("stock_balances", "inventory_movements", "inventory_transactions"):
+            connection.execute(text(f"DELETE FROM {table}"))  # noqa: S608
     with SessionLocal() as db:
         rows = list(db.scalars(select(StockItem).order_by(StockItem.id)))
         rows[0].qty_base = Decimal("-3.5000")  # sales ran ahead of the last count

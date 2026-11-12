@@ -6,8 +6,9 @@ The page talks JSON to these routes so a scan never reloads the camera.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -17,6 +18,7 @@ from app.access import OrgContext, get_scoped, select_scoped
 from app.access.permissions import VIEW_COSTS, without_costs
 from app.config import get_settings
 from app.db import get_db
+from app.ledger.posting import post_count
 from app.models import ProductIdentifier, StockItem, Tenant, TrackMode, User
 from app.orchestration.scanning import (
     CONFIDENT_ENOUGH,
@@ -25,7 +27,6 @@ from app.orchestration.scanning import (
     link_code,
     read_expiry_photo,
     receive_scanned,
-    record_event,
     suspicious,
 )
 from app.orchestration.views import stock_views, tenant_currency, velocity_map
@@ -39,7 +40,8 @@ from app.security import (
 from app.transform.barcodes import canonical
 from app.transform.dates import prefer_for_currency
 from app.transform.inventory import days_of_cover
-from app.units import UnitError, format_amount, format_qty, from_base, to_base
+from app.transform.ledger import LedgerRuleError
+from app.units import UnitError, format_amount, format_change, format_qty, from_base, to_base
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -102,7 +104,6 @@ def _item_payload(db: Session, org: OrgContext, item: StockItem, code: str, kind
 def lookup(
     code: str,
     symbology: str | None = None,
-    refresh: bool = True,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_permission("inventory.view")),
@@ -127,30 +128,8 @@ def lookup(
     if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
 
-    # Square owns the quantity, so ask it for this one variation before showing a number.
-    square_unreachable = False
-    if refresh:
-        from app.orchestration.sync import (
-            NotConnected,
-            record_square_failure,
-            refresh_item_from_square,
-        )
-
-        try:
-            refresh_item_from_square(db, org, item)
-            db.commit()
-        except NotConnected:
-            pass
-        except Exception as exc:
-            db.rollback()
-            log.exception("could not refresh item %s from square for tenant %s", item.id, tenant.id)
-            record_square_failure(db, org, "item", exc)
-            db.commit()
-            square_unreachable = True
-
-    payload = _item_payload(db, org, item, value, identifier.identifier_type.value)
-    payload["square_unreachable"] = square_unreachable
-    return JSONResponse(payload)
+    # The quantity is the ledger's; Square's count never changes it (C-34).
+    return JSONResponse(_item_payload(db, org, item, value, identifier.identifier_type.value))
 
 
 @router.post("/app/scan/link")
@@ -209,7 +188,7 @@ def receive(
     user: User = Depends(require_user),
     org: OrgContext = Depends(require_permission("receiving.post")),
 ):
-    """Scan, then receive: stock rises, the lot is dated, Square gets the delta."""
+    """Scan, then receive: a receipt is posted and the lot is dated. Nothing goes to Square."""
     item = get_scoped(db, org, StockItem, stock_item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
@@ -226,15 +205,18 @@ def receive(
         confidence = Decimal(date_confidence) if date_confidence.strip() else None
     except InvalidOperation:
         confidence = None
-    result = receive_scanned(
-        db,
-        item,
-        qty_base,
-        user_id=user.id,
-        expires_on=expiry,
-        date_type=date_type if expiry else "unknown",
-        date_confidence=confidence if expiry else None,
-    )
+    try:
+        result = receive_scanned(
+            db,
+            org,
+            item,
+            qty_base,
+            expires_on=expiry,
+            date_type=date_type if expiry else "unknown",
+            date_confidence=confidence if expiry else None,
+        )
+    except ValueError as exc:  # a LedgerRuleError is one too
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     return JSONResponse(
         {
@@ -258,47 +240,41 @@ def count(
     user: User = Depends(require_user),
     org: OrgContext = Depends(require_permission("count.record")),
 ):
-    """Correct the count from the shelf. Nothing is sent to Square (C-34)."""
-    from app.models import InventoryCount
-
+    """Count from the shelf: the difference from the recorded quantity is posted as a count
+    variance (DR-12). Nothing is sent to Square (C-34)."""
     item = get_scoped(db, org, StockItem, stock_item_id)
-    if item is None:
+    if item is None or item.inventory_item_id is None:
         raise HTTPException(status_code=404, detail="stock item not found")
 
-    qty_base = _quantity(quantity, item, as_packs=False)
-    before = Decimal(item.qty_base or 0)
-    item.qty_base = qty_base
-    from datetime import datetime
-
+    counted = _quantity(quantity, item, as_packs=False)
     now = datetime.now(UTC)
-    item.last_counted_at = now
-    db.add(
-        InventoryCount(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            qty_base=qty_base,
-            source="scan",
-            note="counted by barcode scan",
-            counted_at=now,
+    scan = uuid4().hex
+    try:
+        posted = post_count(
+            db,
+            org,
+            location_id=item.location_id,
+            inventory_item_id=item.inventory_item_id,
+            counted=counted,
+            source_type="scan",
+            source_id=scan,
+            idempotency_key=f"count:scan:{scan}",
+            occurred_at=now,
+            reason="Counted by barcode scan",
         )
-    )
-    db.flush()
-
-    record_event(
-        db,
-        item,
-        action="counted",
-        source="barcode_scan",
-        qty_after_base=qty_base,
-        delta_base=qty_base - before,
-        user_id=user.id,
-    )
+    except LedgerRuleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    item.last_counted_at = now
     db.commit()
+    variance = Decimal(posted.movements[0].qty_base) if posted is not None else None
     return JSONResponse(
         {
             "ok": True,
-            "qty_label": format_qty(qty_base, item.stock_unit),
-            "qty_text": format_amount(qty_base, item.stock_unit),
+            "qty_label": format_qty(item.qty_base, item.stock_unit),
+            "qty_text": format_amount(item.qty_base, item.stock_unit),
+            "variance_text": (
+                format_change(variance, item.stock_unit) if variance is not None else None
+            ),
             "pos_tracked": item.track_mode is TrackMode.PROVIDER,
         }
     )

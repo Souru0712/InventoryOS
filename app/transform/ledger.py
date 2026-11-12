@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 # DOMAIN_MODEL §4.2, INV-FR-15.
 INCREASES = frozenset({"receipt", "production_output", "transfer_in"})
@@ -39,6 +39,11 @@ TRANSACTION_KINDS: Mapping[str, frozenset[str]] = {
 
 ALLOCATION_MODES = ("explicit", "inferred", "none")
 PLACES = Decimal("0.0001")
+
+
+def places(qty: Decimal) -> Decimal:
+    """A quantity as the ledger keeps it: four decimal places, half rounded up (DR-10)."""
+    return Decimal(qty).quantize(PLACES, rounding=ROUND_HALF_UP)
 
 
 class LedgerRuleError(ValueError):

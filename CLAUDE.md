@@ -28,7 +28,11 @@ implementation sessions; the detail lives in `docs/`.
 ## Architecture rules (do not break)
 - Only the ledger posting service writes stock movements and balances (DR-01..07):
   `post_transaction()` / `reverse_transaction()` in `app/ledger/posting.py` (ADR-0040); nothing
-  else names the ledger models (a test enforces it).
+  else names the ledger models (a test enforces it). It is also the only writer of
+  `stock_items.qty_base`, the balance's projection that screens read (ADR-0042): a count posts
+  through `post_count()`, a new item's quantity through `post_opening()`, a receipt as a
+  `receipt`; a test fails on any other assignment. Square's counts never change stock (C-34).
+  `inventory_counts` and `inventory_events` are frozen history (DM-7): nothing creates them.
 - Every query goes through the scoped data-access layer (tenant + location) (C-33, ADR-0026):
   routes take `org: OrgContext = Depends(require_org)`, services take `org`, queries use
   `select_scoped`/`get_scoped`/`update_scoped`; a lookup across organizations is a named function
@@ -65,7 +69,7 @@ implementation sessions; the detail lives in `docs/`.
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,
   expiry tracking, reorder point, par and active flag read from those rows and write to both;
   queries on them go through `app/catalog.py` (`active_stock`, `by_item_name`), never
-  `StockItem`'s legacy columns (a test enforces it). Quantities stay on `stock_items` until T1.17.
+  `StockItem`'s legacy columns (a test enforces it).
   Item and category changes go through `app/items.py` (screens at `/app/catalog`, ADR-0038):
   items are deactivated and categories archived or merged, never deleted (DR-24).
 - A quantity someone enters in a unit or package goes through the resolver

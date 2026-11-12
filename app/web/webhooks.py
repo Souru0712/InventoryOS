@@ -143,7 +143,8 @@ def square_webhook(
 
     org = OrgContext.system(tenant_id)
     rows = _drop_stale(db, org, normalize_counts(inventory_counts(event)))
-    updated = apply_provider_counts(db, tenant_id, rows) if rows else 0
+    # Acknowledged and noted, never applied: Square's count does not change stock (C-34).
+    seen = apply_provider_counts(db, tenant_id, rows) if rows else 0
     db.commit()
-    log.info("square webhook updated %s counts for tenant %s", updated, tenant_id)
-    return {"updated": updated}
+    log.info("square webhook reported %s counts for tenant %s", seen, tenant_id)
+    return {"seen": seen}
