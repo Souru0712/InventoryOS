@@ -5,6 +5,100 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.19 Exception model
+
+**Implemented**
+- **`exceptions` table** (`ExceptionRecord`, migration `0dca80ee957e`, DM-8):
+  - **Fields:** type, severity, subject, location, title, money impact, quantity, days of cover,
+    occurrences, status (`open` → `acknowledged` → `resolved` / `dismissed`), detected and
+    last-seen times, acknowledgement, resolver, resolution (`action` / `dismissed` / `system`)
+    and note.
+  - **Checks:** named CHECKs cover type, severity, status and resolution; a closed exception
+    needs a resolution, and a dismissed one needs a note.
+  - **Open-dedupe:** a partial unique index allows one open exception per type and subject.
+- **Pure rules** (`app/transform/exceptions.py`):
+  - the REC-FR-12 catalogue plus the four alert kinds that have no REC-FR-12 type, each with a
+    label, a severity (WF-27), whether it is financial, and a fix;
+  - `reconcile()`, plus dismissal and visibility rules;
+  - the alert-kind mapping (`expired` → `batch_expired_unresolved`).
+- **Service** (`app/exceptions.py`, the only writer):
+  - `record_exception()` adds occurrences to the open exception, or opens one, retrying on the
+    index if two runs race (AC-REC-06);
+  - `apply_findings()` opens, refreshes and resolves as the system only the types a run answers
+    for (AC-REC-07);
+  - `acknowledge()` and `dismiss()` (reason required) are conditional and audited under a new
+    `exception` category; `listing()` filters by role.
+- **Evaluation:** `evaluate_and_store` writes exceptions instead of alerts.
+- **Digest:** it reads exceptions and gives each member only what their role and locations may
+  see. Employees get no money: no financial types, and no amounts in the body or the subject.
+- **Screen:** `/app/exceptions` (open and closed lists, Fix link, Acknowledge, Dismiss with
+  reason), linked from the menu.
+- **DM-8:** alerts are copied into exceptions (open ones stay open, resolved ones are closed as
+  `system`), and nothing writes `alerts` any more.
+- ADR-0043 (Proposed); CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_exceptions.py` (17; one Postgres-only):
+  - **Rules:** reconcile clears only its own types; unknown types and blank subjects are refused;
+    a dismissal needs a reason; financial types are hidden; alert kinds map correctly.
+  - **AC-REC-06:** ten occurrences make one open exception counting 10. The index refuses a
+    second open exception and allows a new one once the first is closed. Two concurrent reports
+    share one exception (Postgres).
+  - **AC-REC-07:** a delivery clears low stock, and the next evaluation resolves it by the system
+    while leaving other types open.
+  - **AC-REC-08:** a dismissal without a reason is refused by the service, the screen and the
+    database. A dismissal is audited and leaves the balance unchanged. Acknowledging happens
+    once and keeps the exception open.
+  - **AC-REC-09:** an Employee sees operational exceptions without amounts, does not see
+    financial ones and cannot act on them (403). The screen shows no amounts to them. A
+    location-limited Manager sees only their locations.
+  - **Static:** only `app/exceptions.py` creates exceptions, and nothing creates an `Alert`.
+- `tests/test_migrations.py`: DM-8 through Alembic, with three alert kinds (open, open, and
+  resolved) and the downgrade.
+- Existing digest and expiry tests now read exceptions. The digest test asserts the Employee's
+  email carries no amount.
+- Full suite 902 passed, 23 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:**
+  - `app/transform/exceptions.py`, `app/exceptions.py`, `app/web/exceptions.py`;
+  - the template `app/exceptions.html`;
+  - migration `0dca80ee957e`, ADR-0043, `tests/test_exceptions.py`.
+- **Changed:**
+  - `app/models.py` (`ExceptionRecord`; `Alert` marked legacy);
+  - `app/orchestration/alerts.py`, `app/audit.py` (`exception` category);
+  - `app/main.py`, `base.html` (menu, severity pills);
+  - tests for email, expiry, isolation and migrations;
+  - CLAUDE.md, the ADR index, the task index (T1.18 → Completed, T1.19 → In review) and this log.
+
+**Next task**
+- T1.20 Jobs table and scheduled evaluation for every tenant (depends on T1.19).
+
+---
+
+## 2026-11-12 — T1.18 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #38 was merged with a merge commit (`9424362`).
+- CI on its head `e202053`, all five required jobs green:
+  - SQLite: 883 passed, 21 skipped;
+  - PostgreSQL 16: 904 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Decisions**
+- With that answer the owner accepted both proposals in ADR-0042:
+  - **Probe R6** moves to T2.06, whose Tests and Done-when now carry it.
+  - **DM-7 is split:** `inventory_counts` and `inventory_events` froze at T1.18, and
+    `sales_daily` freezes at T2.04.
+- ADR-0042 → Accepted. The data migration roadmap and T1.18's entry are updated to match.
+
+**Files changed**
+- The task index and entries (T1.18 → Completed, T2.06), DM-7, ADR-0042 and its index row, this
+  log.
+
+---
+
 ## 2026-11-12 — T1.18 Route existing writers through the ledger
 
 **Implemented**

@@ -539,6 +539,109 @@ def test_the_catch_up_posts_drift_since_the_opening_and_the_downgrade_removes_it
         engine.dispose()
 
 
+BEFORE_DM8 = "ba3da8bb8b6f"
+
+
+def test_dm8_alerts_become_exceptions_and_the_downgrade_leaves_alerts_alone(fresh_url):
+    """DM-8 (T1.19): each alert kind maps to its type; open stays open, resolved closes."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                    " VALUES (1, 'Main', 'UTC', 'USD', true)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension,"
+                    " stock_unit, track_mode, qty_base, reorder_point_base, cost_per_base_cents,"
+                    " lead_time_days, receive_unit, is_active) VALUES (1, 1, 'milk', 'Milk',"
+                    " 'COUNT', 'each', 'MANUAL', '4.0000', '20.0000', '5.0000', 2, 'each', true)"
+                )
+            )
+        command.upgrade(config, BEFORE_DM8)
+        alert = (
+            "INSERT INTO alerts (tenant_id, stock_item_id, kind, message, qty_base,"
+            " threshold_base, value_cents, created_at, resolved_at) VALUES (1, 1, :kind,"
+            " :message, '4.0000', '20.0000', :value, :created, :resolved)"
+        )
+        with engine.begin() as connection:
+            for kind, message, value, created, resolved in (
+                ("LOW_STOCK", "Milk is low", None, "2026-11-10 09:00:00", None),
+                ("EXPIRED", "Milk passed its date", 560, "2026-11-11 09:00:00", None),
+                (
+                    "OUT_OF_STOCK",
+                    "Milk ran out",
+                    None,
+                    "2026-11-01 09:00:00",
+                    "2026-11-02 09:00:00",
+                ),
+            ):
+                connection.execute(
+                    text(alert),
+                    {
+                        "kind": kind,
+                        "message": message,
+                        "value": value,
+                        "created": created,
+                        "resolved": resolved,
+                    },
+                )
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT type, severity, subject_type, subject_id, location_id, title,"
+                    " money_impact_cents, status, resolution FROM exceptions ORDER BY type"
+                )
+            ).all()
+        assert [tuple(row) for row in rows] == [
+            (
+                "batch_expired_unresolved",
+                "warning",
+                "stock_item",
+                "1",
+                1,
+                "Milk passed its date",
+                560,
+                "open",
+                None,
+            ),
+            ("low_stock", "warning", "stock_item", "1", 1, "Milk is low", None, "open", None),
+            (
+                "out_of_stock",
+                "warning",
+                "stock_item",
+                "1",
+                1,
+                "Milk ran out",
+                None,
+                "resolved",
+                "system",
+            ),
+        ]
+
+        command.downgrade(config, BEFORE_DM8)
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT count(*) FROM alerts")).scalar() == 3
+            tables = inspect(connection).get_table_names()
+        assert "exceptions" not in tables
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

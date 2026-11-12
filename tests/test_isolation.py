@@ -22,6 +22,7 @@ from app.models import (
     Document,
     DocumentLine,
     DocumentStatus,
+    ExceptionRecord,
     InventoryCategory,
     Invitation,
     ItemPackage,
@@ -198,6 +199,10 @@ CASES = {
     ("POST", "/app/team/{membership_id}/remove"): lambda ids: {},
     ("POST", "/app/team/invitations/{invitation_id}/withdraw"): lambda ids: {},
     ("GET", "/app/audit"): lambda ids: {"params": {"person": ids["user"]}},
+    ("POST", "/app/exceptions/{exception_id}/acknowledge"): lambda ids: {},
+    ("POST", "/app/exceptions/{exception_id}/dismiss"): lambda ids: {
+        "data": {"reason": "Counted it myself"}
+    },
 }
 
 PATH_ROWS = {
@@ -214,6 +219,7 @@ PATH_ROWS = {
     "category_id": "category",
     "package_id": "package",
     "conversion_id": "conversion",
+    "exception_id": "exception",
 }
 
 
@@ -314,9 +320,19 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
         to_quantity=Decimal("50"),
         to_unit="g",
     )
-    db.add_all([snacks, drinks, box, weighs])
+    problem = ExceptionRecord(
+        tenant_id=tenant_id,
+        location_id=location.id,
+        type="low_stock",
+        severity="warning",
+        subject_type="stock_item",
+        subject_id=str(bars.id),
+        title=f"{tag} bars are low",
+    )
+    db.add_all([snacks, drinks, box, weighs, problem])
     db.flush()
     return {
+        "exception": problem.id,
         "package": box.id,
         "conversion": weighs.id,
         "inventory_item": bars.inventory_item_id,

@@ -26,6 +26,7 @@ from app.web import (
     billing,
     catalog,
     dashboard,
+    exceptions,
     health,
     locations,
     marketing,
@@ -97,6 +98,7 @@ app.include_router(settings_page.router)
 app.include_router(team.router)
 app.include_router(mfa.router)
 app.include_router(audit.router)
+app.include_router(exceptions.router)
 app.include_router(catalog.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)

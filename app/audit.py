@@ -27,6 +27,7 @@ CATEGORIES = {
     "item": "Items and categories",
     "connection": "Connections",
     "billing": "Plan and billing",
+    "exception": "Exceptions",
 }
 PAGE = 100
 

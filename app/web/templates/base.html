@@ -109,6 +109,9 @@
   .pill.low_stock { background: var(--warn-wash); color: var(--warn); }
   .pill.out_of_stock { background: var(--danger-wash); color: var(--danger); }
   .pill.stale_count { background: var(--sunk); color: var(--muted); }
+  .pill.critical { background: var(--danger-wash); color: var(--danger); }
+  .pill.warning { background: var(--warn-wash); color: var(--warn); }
+  .pill.info { background: var(--sunk); color: var(--muted); }
   .pill.expired { background: var(--danger-wash); color: var(--danger); }
   .pill.at_risk, .pill.waste_risk { background: var(--warn-wash); color: var(--warn); }
   .pill.sell_first { background: var(--green-wash); color: var(--green); }
@@ -219,6 +222,7 @@
         {% if can(request, "inventory.view") %}{{ nav("/app", "Inventory") }}{{ nav("/app/catalog", "Items") }}{{ nav("/app/scan", "Scan") }}{% endif %}
         {% if can(request, "receiving.record") %}{{ nav("/app/receiving", "Receiving") }}{% endif %}
         {% if can(request, "inventory.view") %}{{ nav("/app/expiring", "Expiring") }}{% endif %}
+        {% if can(request, "exception.view") %}{{ nav("/app/exceptions", "Exceptions") }}{% endif %}
         {% if can(request, "reports.financial") %}{{ nav("/app/promotions", "Promotions") }}{% endif %}
         {% if can(request, "reorder.view") %}{{ nav("/app/reorder", "Reorder") }}{% endif %}
         {% if can(request, "reports.financial") %}{{ nav("/app/report", "Report") }}{% endif %}

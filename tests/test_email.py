@@ -7,11 +7,20 @@ import pytest
 
 from app.access import OrgContext
 from app.config import get_settings
-from app.models import Alert, AlertKind, EmailLog, Membership, StockItem, TrackMode, User
+from app.models import (
+    AlertKind,
+    EmailLog,
+    ExceptionRecord,
+    Membership,
+    StockItem,
+    TrackMode,
+    User,
+)
 from app.notify.email import suppress
 from app.orchestration.alerts import send_alert_digest
 from app.orchestration.reporting import send_weekly_report
 from app.security import hash_password
+from app.transform.exceptions import FROM_ALERT_KIND
 from app.units import Dimension
 
 
@@ -75,15 +84,20 @@ def milk(db, tenant, location) -> StockItem:
     return item
 
 
-def alert(db, tenant, item, kind: AlertKind, message: str, value_cents: int | None = None) -> Alert:
-    row = Alert(
+def alert(
+    db, tenant, item, kind: AlertKind, message: str, value_cents: int | None = None
+) -> ExceptionRecord:
+    """An open stock or expiry exception, as the evaluation opens one (T1.19)."""
+    row = ExceptionRecord(
         tenant_id=tenant.id,
-        stock_item_id=item.id,
-        kind=kind,
-        message=message,
-        qty_base=Decimal("4000"),
-        threshold_base=Decimal("20000"),
-        value_cents=value_cents,
+        location_id=item.location_id,
+        type=FROM_ALERT_KIND[kind.value],
+        severity="warning",
+        subject_type="stock_item",
+        subject_id=str(item.id),
+        title=message,
+        quantity_base=Decimal("4000"),
+        money_impact_cents=value_cents,
     )
     db.add(row)
     db.commit()
@@ -161,6 +175,9 @@ def test_each_person_gets_only_the_alert_categories_they_want(db, tenant, milk, 
     assert "will not sell" not in by_recipient["owner@rosewood.test"]
     assert "will not sell" in by_recipient["chef@rosewood.test"]
     assert "below its reorder point" not in by_recipient["chef@rosewood.test"]
+    # An Employee sees the problem, never what it costs (REC-FR-16, AC-REC-09).
+    assert "$24.00" not in by_recipient["chef@rosewood.test"]
+    assert "$24.00" not in mail[[m["To"] for m in mail].index("chef@rosewood.test")]["Subject"]
 
 
 def test_nobody_wanting_a_category_means_nothing_is_sent(db, tenant, milk, mail):

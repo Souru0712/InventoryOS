@@ -37,7 +37,7 @@ risks: [DATA_MIGRATION_ASSESSMENT](../audit/DATA_MIGRATION_ASSESSMENT.md).
 | DM-4 | Memberships backfilled from `users.tenant_id` (each user → Owner) | T1.05 | Expand + backfill | T1.06 |
 | DM-5 | Item split: `inventory_items` + `item_locations` + `item_packages` from `stock_items` | T1.13, T1.15 | Expand + backfill (compatibility layer kept) | T1.16 |
 | DM-6 | Ledger tables; one `opening_balance` movement per item × location = `qty_base`; `stock_balances` populated | T1.16, T1.17 | Expand + backfill | T1.18 |
-| DM-7 | Legacy freeze: `inventory_counts`, `inventory_events`, `sales_daily` read-only | T1.18 | Migrate (writers removed) | T2.05 |
+| DM-7 | Legacy freeze: `inventory_counts`, `inventory_events` read-only at T1.18; `sales_daily` at T2.04 (split by the owner, 2026-11-12) | T1.18, T2.04 | Migrate (writers removed) | T2.05 |
 | DM-8 | `alerts` → `exceptions` (five kinds mapped) | T1.19 | Expand + backfill | T1.25 |
 | DM-9 | Products and recipes: `sold_items` → products/variations; `recipe_components` → recipe version 1 | T2.01, T2.02 | Expand + backfill | T2.05 |
 | DM-10 | Batch allocation: allocation columns; existing batches get allocations from the opening movement (remaining = FEFO-derived at migration) | T2.06 | Expand + backfill | T2.07 |
