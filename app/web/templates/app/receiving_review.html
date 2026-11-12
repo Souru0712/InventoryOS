@@ -47,7 +47,7 @@
     {% if not lines %}
       <div class="card">
         <p style="margin:0;">No lines were read from this document. Try a clearer photo, or
-        <a href="/app/items/new">add the items</a> and record counts by hand.</p>
+        <a href="/app/catalog/new">add the items</a> and record counts by hand.</p>
       </div>
     {% else %}
     <form method="post" action="/app/receiving/{{ document.id }}/apply">{{ csrf_field(request) }}

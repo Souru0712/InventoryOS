@@ -5,6 +5,76 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.14 Item management UI
+
+**Implemented**
+- **Screens at `/app/catalog`** ("Items" in the menu; `/app/items/new` redirects there):
+  - a list with search and filters (category, supplier, status, low stock, expiring within 7
+    days of each location's business date, location);
+  - an item page: details, per-location levels (reorder point, par, minimum, storage area,
+    stocked), stocking it at another location, barcodes, deactivate or bring back;
+  - a categories page: add, rename, merge, archive, restore.
+  Looking takes `inventory.view`; changing takes `item.edit` and the subscription's write rule.
+- **Service** (`app/items.py`, rules in `app/transform/items.py`): items created at several
+  locations at once with opening quantities (stock rows linked by the T1.13 hook); definitions
+  and levels written to the split tables; names unique in any case; the unit picked decides the
+  dimension, locked once stock has moved (INV-FR-14); the old form's pack size, delivery unit,
+  lead time and codes stay on the new form. Every change is audited.
+- **Categories** (`inventory_categories`, migration `9c903ba85a8f`): the T1.13-a free-text
+  category becomes a link; typing a name reuses a category in any case; merging moves items and
+  archives the source. Items gain notes.
+- **Deactivated items leave every pick list**: `active_stock()` also requires the item active.
+- ADR-0038 (Proposed); ADR-0037 Accepted; ADR-0035 updated; `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_catalog.py` (13), **AC-INV-01**: an item is created once and stocked at the chosen
+  locations with opening counts; names are unique in any case; editing changes it everywhere it
+  is shown; the dimension locks once stock has moved; levels are set per location in the item's
+  unit and validated; a deactivated item keeps its stock and counts, leaves the stock list and
+  pickers, shows under inactive, and comes back; stocking at another location adds an empty row
+  once; the old address redirects; the old form's pack size, delivery unit, lead time and codes
+  are still set. **INV-FR-10**: search by name, category, supplier, low stock,
+  expiring, location; a foreign category is 404. **INV-FR-03**: categories created, renamed,
+  merged, archived (out of the picker, still on its items) and restored; typed names reuse a
+  category. Employees can look but not change. Audit events for each change.
+- Isolation suite: the eleven new routes that take an id refuse another business's items,
+  settings, categories and locations. Permission suite: `inventory.view` or `item.edit`.
+- In the browser (local server, test data): added an item at two locations, saw both on its page,
+  saved a par level and storage area, and browsed the list and categories.
+- Full suite 811 passed, 12 skipped (787 before); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- `app/items.py`, `app/web/catalog.py`, templates (`app/catalog.html`, `app/catalog_item.html`,
+  `app/categories.html`, `app/item_form.html` rewritten), migration `9c903ba85a8f`,
+  `tests/test_catalog.py`, ADR-0038 (new); `app/models.py`, `app/catalog.py`,
+  `app/transform/items.py`, `app/access/scoped.py`, `app/audit.py`, `app/web/dashboard.py` (old
+  form removed), `app/main.py`, templates (`base.html`, `app/dashboard.html`,
+  `app/receiving_review.html`), `tests/test_isolation.py`, and three tests that used the old form
+  (`test_locations.py`, `test_memberships.py`, `test_schema_hygiene.py`); ADR-0037 (Accepted), ADR-0035, the
+  index, `CLAUDE.md`, task index (T1.13 → Completed, T1.14 → In review), this log.
+
+**Next task**
+- T1.15 Units, packages and conversions.
+
+---
+
+## 2026-11-12 — T1.13 completed
+
+**Verified**
+- The owner merged PR #32 (T1.13-b) with a merge commit (`0d1d70f`). CI on its head `a37d599`,
+  all five required jobs green: SQLite 787 passed, 12 skipped; PostgreSQL 16 799 passed, 0
+  skipped; lint and types; dependency audit; Docker image. Same five green on `main` after the
+  merge. With T1.13-a (#31): every stock item maps to exactly one item and item location, and
+  existing screens are unchanged.
+
+**Decisions**
+- ADR-0037 accepted with the merge.
+
+**Files changed**
+- Task index (T1.13 → Completed), ADR-0037 status and index, this log.
+
+---
+
 ## 2026-11-12 — T1.13-b Item model split: readers moved
 
 **Implemented**

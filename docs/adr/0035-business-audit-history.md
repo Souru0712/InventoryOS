@@ -46,7 +46,6 @@ at least a year.
 
 - A new setting, mapping or recipe editor must call `record_audit()` in the same change
   (`CLAUDE.md`).
-- Item master data edits (new items, thresholds, barcode links) are not yet recorded; they join
-  with the item management screens (T1.14), recipes with T2.02, mappings with the catalog
-  (T2.01).
+- Item and category changes made on the item screens are recorded since T1.14 (ADR-0038);
+  recipes join with T2.02, mappings with the catalog (T2.01).
 - Built in T1.12 with migration `d8a2b6e4f1c3`.

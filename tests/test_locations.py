@@ -83,13 +83,8 @@ def test_a_business_without_square_adds_a_location_then_its_stock(client):
         assert location.open_days == 0b0111111  # Monday to Saturday
 
     created = client.post(
-        "/app/items/new",
-        data={
-            "name": "Mango",
-            "location_id": str(location.id),
-            "dimension": "weight",
-            "stock_unit": "g",
-        },
+        "/app/catalog/new",
+        data={"name": "Mango", "location_ids": [location.id], "display_unit": "g"},
         follow_redirects=False,
     )
     assert created.status_code == 303

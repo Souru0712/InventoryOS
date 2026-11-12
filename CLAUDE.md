@@ -64,6 +64,8 @@ implementation sessions; the detail lives in `docs/`.
   expiry tracking, reorder point, par and active flag read from those rows and write to both;
   queries on them go through `app/catalog.py` (`active_stock`, `by_item_name`), never
   `StockItem`'s legacy columns (a test enforces it). Quantities stay on `stock_items` until T1.17.
+  Item and category changes go through `app/items.py` (screens at `/app/catalog`, ADR-0038):
+  items are deactivated and categories archived or merged, never deleted (DR-24).
 - "Today" at a location is `business_date(now, location.timezone, location.business_day_cutoff_hour)`
   (`app/transform/business_days.py`, ADR-0027), never UTC's date.
 - Schema (ADR-0025): instants are `UTCDateTime` (aware UTC; naive values refused); every foreign

@@ -42,7 +42,7 @@
     </form>
     {% endif %}
     {% if can(request, "receiving.record") %}<a class="btn small secondary" href="/app/receiving">Receive delivery</a>{% endif %}
-    {% if can(request, "item.edit") %}<a class="btn small secondary" href="/app/items/new">Add item</a>{% endif %}
+    {% if can(request, "item.edit") %}<a class="btn small secondary" href="/app/catalog/new">Add item</a>{% endif %}
   </div>
 </div>
 
@@ -96,7 +96,7 @@
   it does not &mdash; the milk, the flour, the beans you weigh out. No Square? Add your location
   and your stock by hand.</p>
   <p>{% if can(request, "pos.manage") %}<a class="btn small" href="/connect/square">Connect Square</a>{% endif %}
-     {% if locations and can(request, "item.edit") %}<a class="btn small secondary" href="/app/items/new">Add a stock item</a>
+     {% if locations and can(request, "item.edit") %}<a class="btn small secondary" href="/app/catalog/new">Add a stock item</a>
      {% elif not locations and can(request, "location.manage") %}<a class="btn small secondary" href="/app/locations/new">Add a location</a>{% endif %}</p>
 </div>
 {% else %}

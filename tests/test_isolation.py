@@ -22,6 +22,7 @@ from app.models import (
     Document,
     DocumentLine,
     DocumentStatus,
+    InventoryCategory,
     Invitation,
     Location,
     Membership,
@@ -108,14 +109,30 @@ CASES = {
         "data": {"stock_item_id": ids["item"], "perishable": "yes"}
     },
     ("POST", "/app/expiring/{batch_id}/remove"): lambda ids: {},
-    ("POST", "/app/items/new"): lambda ids: {
-        "data": {
-            "location_id": ids["location"],
-            "name": "Oat milk",
-            "dimension": "count",
-            "stock_unit": "each",
-        }
+    ("GET", "/app/catalog"): lambda ids: {"params": {"category": ids["category"]}},
+    ("POST", "/app/catalog/new"): lambda ids: {
+        "data": {"name": "Oat milk", "location_ids": [ids["location"]], "display_unit": "each"}
     },
+    ("GET", "/app/catalog/{inventory_item_id}"): lambda ids: {},
+    ("POST", "/app/catalog/{inventory_item_id}"): lambda ids: {
+        "data": {"name": "Renamed bars", "item_type": "resale", "display_unit": "each"}
+    },
+    ("POST", "/app/catalog/{inventory_item_id}/settings/{item_location_id}"): lambda ids: {
+        "data": {"reorder_point": "2"}
+    },
+    ("POST", "/app/catalog/{inventory_item_id}/deactivate"): lambda ids: {},
+    ("POST", "/app/catalog/{inventory_item_id}/activate"): lambda ids: {},
+    ("POST", "/app/catalog/{inventory_item_id}/stock-at"): lambda ids: {
+        "data": {"location_id": ids["location"]}
+    },
+    ("POST", "/app/catalog/categories/{category_id}/rename"): lambda ids: {
+        "data": {"name": "Renamed"}
+    },
+    ("POST", "/app/catalog/categories/{category_id}/merge"): lambda ids: {
+        "data": {"into_id": ids["category2"]}
+    },
+    ("POST", "/app/catalog/categories/{category_id}/archive"): lambda ids: {},
+    ("POST", "/app/catalog/categories/{category_id}/restore"): lambda ids: {},
     ("POST", "/app/items/{item_id}/count"): lambda ids: {"data": {"quantity": "3"}},
     ("POST", "/app/items/{item_id}/thresholds"): lambda ids: {"data": {"reorder_point": "1"}},
     ("POST", "/app/receiving"): lambda ids: {
@@ -181,6 +198,9 @@ PATH_ROWS = {
     "promotion_id": "promotion",
     "membership_id": "membership",
     "invitation_id": "invitation",
+    "inventory_item_id": "inventory_item",
+    "item_location_id": "item_location",
+    "category_id": "category",
 }
 
 
@@ -264,8 +284,15 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
         parsed_qty=Decimal("2"),
     )
     db.add(line)
+    snacks = InventoryCategory(tenant_id=tenant_id, name=f"{tag} snacks")
+    drinks = InventoryCategory(tenant_id=tenant_id, name=f"{tag} drinks")
+    db.add_all([snacks, drinks])
     db.flush()
     return {
+        "inventory_item": bars.inventory_item_id,
+        "item_location": bars.item_location_id,
+        "category": snacks.id,
+        "category2": drinks.id,
         "tenant": tenant_id,
         "location": location.id,
         "item": bars.id,

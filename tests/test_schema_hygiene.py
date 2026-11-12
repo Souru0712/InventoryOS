@@ -307,12 +307,11 @@ def test_negative_thresholds_are_refused_with_a_reason(client, form):
 
 def test_a_new_item_with_an_empty_pack_is_refused(client):
     response = client.post(
-        "/app/items/new",
+        "/app/catalog/new",
         data={
             "name": "Oat milk",
-            "location_id": "1",
-            "dimension": "count",
-            "stock_unit": "each",
+            "location_ids": ["1"],
+            "display_unit": "each",
             "pack_size": "0",
         },
         follow_redirects=False,

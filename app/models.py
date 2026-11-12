@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
@@ -486,6 +486,20 @@ class DimensionValue(TypeDecorator[Dimension]):
         return None if value is None else Dimension(value)
 
 
+class InventoryCategory(Base):
+    """A business's own grouping of items (INV-FR-03): renamed, merged and archived, never
+    deleted while items use it. An archived category stays on its items but leaves the pickers."""
+
+    __tablename__ = "inventory_categories"
+    __table_args__ = (UniqueConstraint("tenant_id", "name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
 class InventoryItem(Base):
     """Something the business stocks, defined once for the whole business (C-38, ID-10).
 
@@ -506,7 +520,7 @@ class InventoryItem(Base):
     slug: Mapped[str] = mapped_column(String(160))
     name: Mapped[str] = mapped_column(String(300))
     item_type: Mapped[str] = mapped_column(String(16), default="raw")
-    category: Mapped[str | None] = mapped_column(String(200))
+    category_id: Mapped[int | None] = mapped_column(ref("inventory_categories.id"), index=True)
     dimension: Mapped[Dimension] = mapped_column(DimensionValue, default=Dimension.COUNT)
     # Quantities are kept in the dimension's base unit; the display unit is how people count it.
     base_unit: Mapped[str] = mapped_column(String(16), default="each")
@@ -514,8 +528,23 @@ class InventoryItem(Base):
     tracks_batches: Mapped[bool] = mapped_column(Boolean, default=False)
     tracks_expiry: Mapped[bool | None] = mapped_column(Boolean)
     default_shelf_life_days: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    category_ref: Mapped[InventoryCategory | None] = relationship(lazy="joined")
+
+    @property
+    def category(self) -> str | None:
+        """The category's name, as readers have always seen it."""
+        return self.category_ref.name if self.category_ref is not None else None
+
+    @category.setter
+    def category(self, name: str | None) -> None:
+        """Assign by name: an existing category (any case) or a new one (app/catalog.py)."""
+        from app.catalog import category_named
+
+        self.category_ref = category_named(object_session(self), self.tenant_id, name)
 
 
 class ItemLocation(Base):

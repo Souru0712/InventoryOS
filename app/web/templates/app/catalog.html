@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Items</h1>
+<p class="lede">Everything the business stocks, defined once and kept at one or more locations.</p>
+
+{% if can(request, "item.edit") %}
+<p><a class="btn small" href="/app/catalog/new">Add an item</a>
+   <a class="btn small secondary" href="/app/catalog/categories">Categories</a></p>
+{% endif %}
+
+<form method="get" action="/app/catalog" class="card" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+  <div class="field" style="margin:0; flex:2 1 200px;">
+    <label for="q">Search</label>
+    <input id="q" name="q" value="{{ filters.q }}" placeholder="Name">
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="category">Category</label>
+    <select id="category" name="category">
+      <option value="">Any</option>
+      {% for c in categories %}<option value="{{ c.id }}"{% if c.id == filters.category %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="supplier">Supplier</label>
+    <input id="supplier" name="supplier" value="{{ filters.supplier }}">
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      {% for value, label in (("active", "Active"), ("inactive", "Inactive"), ("all", "All")) %}<option value="{{ value }}"{% if value == filters.status %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  {% if locations|length > 1 %}
+  <div class="field" style="margin:0;">
+    <label for="location">Location</label>
+    <select id="location" name="location">
+      <option value="">All</option>
+      {% for loc in locations %}<option value="{{ loc.id }}"{% if loc.id == filters.location %} selected{% endif %}>{{ loc.name }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <label class="small"><input type="checkbox" name="low" value="1"{% if filters.low %} checked{% endif %}> Low stock</label>
+  <label class="small"><input type="checkbox" name="expiring" value="1"{% if filters.expiring %} checked{% endif %}> Expiring this week</label>
+  <button class="btn secondary" type="submit">Show</button>
+</form>
+
+{% if not rows %}
+  <div class="card"><p style="margin:0;">No items match.{% if can(request, "item.edit") %} <a href="/app/catalog/new">Add one</a>.{% endif %}</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>Type</th><th>Category</th><th>Where</th><th>On hand</th><th></th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td style="min-width:180px;"><a href="/app/catalog/{{ row.item.id }}">{{ row.item.name }}</a></td>
+      <td class="small">{{ type_labels[row.item.item_type] }}</td>
+      <td class="small">{{ row.item.category or "" }}</td>
+      <td class="small">{% for place in row.places %}{{ place.location.name }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      <td>{{ row.on_hand_base|qty(row.item.display_unit) }}</td>
+      <td class="small">
+        {% if not row.item.is_active %}<span class="pill expired">inactive</span>{% endif %}
+        {% if row.low %}<span class="pill at_risk">low</span>{% endif %}
+        {% if row.expiring %}<span class="pill at_risk">expiring</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

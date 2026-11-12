@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="small"><a href="/app/catalog">&larr; Items</a></p>
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Categories</h1>
+<p class="lede">How your items are grouped. Rename or merge them freely; archiving keeps a category on its items but takes it out of the list for new ones.</p>
+
+<form method="post" action="/app/catalog/categories" class="card" style="display:flex; gap:8px; align-items:flex-end; max-width:520px; margin-bottom:16px;">{{ csrf_field(request) }}
+  <div class="field" style="margin:0; flex:1;">
+    <label for="new_category">New category</label>
+    <input id="new_category" name="name" required placeholder="Dairy">
+  </div>
+  <button class="btn small" type="submit">Add</button>
+</form>
+
+{% if categories %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Category</th><th>Items</th><th>Rename</th><th>Merge into</th><th></th></tr></thead>
+  <tbody>
+  {% set active = categories|selectattr("archived_at", "none")|list %}
+  {% for c in categories %}
+    <tr>
+      <td>{{ c.name }}{% if c.archived_at %} <span class="pill expired">archived</span>{% endif %}</td>
+      <td>{{ counts.get(c.id, 0) }}</td>
+      <td>
+        <form method="post" action="/app/catalog/categories/{{ c.id }}/rename" style="display:flex; gap:6px; margin:0;">{{ csrf_field(request) }}
+          <input aria-label="New name for {{ c.name }}" name="name" size="12" value="{{ c.name }}" required>
+          <button class="btn small secondary" type="submit">Rename</button>
+        </form>
+      </td>
+      <td>
+        {% set others = active|rejectattr("id", "equalto", c.id)|list %}
+        {% if others %}
+        <form method="post" action="/app/catalog/categories/{{ c.id }}/merge" style="display:flex; gap:6px; margin:0;">{{ csrf_field(request) }}
+          <select aria-label="Merge {{ c.name }} into" name="into_id">{% for o in others %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select>
+          <button class="btn small secondary" type="submit">Merge</button>
+        </form>
+        {% endif %}
+      </td>
+      <td>
+        {% if c.archived_at %}
+          <form method="post" action="/app/catalog/categories/{{ c.id }}/restore" style="margin:0;">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Restore</button></form>
+        {% else %}
+          <form method="post" action="/app/catalog/categories/{{ c.id }}/archive" style="margin:0;">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Archive</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+  <div class="card"><p style="margin:0;">No categories yet. Add one above, or type a new one when you add an item.</p></div>
+{% endif %}
+{% endblock %}
