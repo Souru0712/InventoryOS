@@ -21,6 +21,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
 from app.units import Dimension
@@ -41,6 +42,9 @@ MEMBERSHIP_STATUSES = ("active", "revoked")
 AUTH_TOKEN_PURPOSES = ("verify_email", "reset_password")
 # Who made an audited change: a member, the product itself (webhooks, jobs), or support (T4.07).
 AUDIT_ACTORS = ("user", "system", "support")
+# What an inventory item is (DOMAIN_MODEL InventoryItem, C-38).
+ITEM_TYPES = ("raw", "prepared", "finished", "packaging", "supply", "resale")
+DIMENSIONS = tuple(d.value for d in Dimension)
 
 
 def ref(target: str) -> ForeignKey:
@@ -437,8 +441,81 @@ class SoldItem(Base):
     )
 
 
+class DimensionValue(TypeDecorator[Dimension]):
+    """A Dimension stored as its plain value ("count", "weight", "volume"), checked by name."""
+
+    impl = String(16)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return None if value is None else Dimension(value).value
+
+    def process_result_value(self, value, dialect):
+        return None if value is None else Dimension(value)
+
+
+class InventoryItem(Base):
+    """Something the business stocks, defined once for the whole business (C-38, ID-10).
+
+    Each location that holds it has an ItemLocation. During the transition stock_items stays the
+    row the product reads and writes; app/catalog.py keeps these tables in step with it.
+    """
+
+    __tablename__ = "inventory_items"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug"),
+        one_of("inventory_items", "item_type", ITEM_TYPES),
+        one_of("inventory_items", "dimension", DIMENSIONS),
+        not_negative("inventory_items", "default_shelf_life_days"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    slug: Mapped[str] = mapped_column(String(160))
+    name: Mapped[str] = mapped_column(String(300))
+    item_type: Mapped[str] = mapped_column(String(16), default="raw")
+    category: Mapped[str | None] = mapped_column(String(200))
+    dimension: Mapped[Dimension] = mapped_column(DimensionValue, default=Dimension.COUNT)
+    # Quantities are kept in the dimension's base unit; the display unit is how people count it.
+    base_unit: Mapped[str] = mapped_column(String(16), default="each")
+    display_unit: Mapped[str] = mapped_column(String(16), default="each")
+    tracks_batches: Mapped[bool] = mapped_column(Boolean, default=False)
+    tracks_expiry: Mapped[bool | None] = mapped_column(Boolean)
+    default_shelf_life_days: Mapped[int | None] = mapped_column(Integer)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ItemLocation(Base):
+    """An inventory item's settings at one location: when to reorder, how much to keep."""
+
+    __tablename__ = "item_locations"
+    __table_args__ = (
+        UniqueConstraint("location_id", "inventory_item_id"),
+        not_negative("item_locations", "reorder_point_base"),
+        not_negative("item_locations", "par_level_base"),
+        not_negative("item_locations", "min_level_base"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(owned_by("inventory_items.id"), index=True)
+    reorder_point_base: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
+    par_level_base: Mapped[Decimal | None] = mapped_column(Qty)
+    min_level_base: Mapped[Decimal | None] = mapped_column(Qty)
+    storage_area: Mapped[str | None] = mapped_column(String(120))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    inventory_item: Mapped[InventoryItem] = relationship()
+
+
 class StockItem(Base):
-    """A thing the business physically holds, at one location."""
+    """A thing the business physically holds, at one location.
+
+    Being split (C-38): its definition moves to InventoryItem and its per-location settings to
+    ItemLocation. It stays the compatibility layer, linked to both, until DM-16.
+    """
 
     __tablename__ = "stock_items"
     __table_args__ = (
@@ -485,6 +562,12 @@ class StockItem(Base):
     last_counted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # The split rows this one stands for; set by app/catalog.py whenever a stock item is saved.
+    inventory_item_id: Mapped[int | None] = mapped_column(ref("inventory_items.id"), index=True)
+    item_location_id: Mapped[int | None] = mapped_column(ref("item_locations.id"), unique=True)
+    inventory_item: Mapped[InventoryItem | None] = relationship()
+    item_location: Mapped[ItemLocation | None] = relationship()
 
 
 class RecipeComponent(Base):
@@ -880,3 +963,8 @@ class WebhookEvent(Base):
     event_type: Mapped[str] = mapped_column(String(80))
     tenant_id: Mapped[int | None] = mapped_column(ref("tenants.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+# Keeps inventory_items and item_locations in step with stock_items while both exist (C-38).
+# Imported last, so it registers for every session wherever the models are loaded.
+import app.catalog  # noqa: E402, F401

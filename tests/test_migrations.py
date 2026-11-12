@@ -203,6 +203,101 @@ def test_dm4_every_existing_user_becomes_the_owner_of_its_business(fresh_url):
         engine.dispose()
 
 
+BEFORE_DM5 = "d8a2b6e4f1c3"
+
+
+def test_dm5_every_stock_item_maps_to_exactly_one_item_and_location(fresh_url):
+    """DM-5 (T1.13-a): one item per slug and dimension per business; one setting per row."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    stock = (
+        "INSERT INTO stock_items (tenant_id, location_id, slug, name, category, dimension,"
+        " stock_unit, track_mode, qty_base, reorder_point_base, par_level_base,"
+        " cost_per_base_cents, retail_per_base_cents, lead_time_days, receive_unit,"
+        " tracks_expiry, is_active) VALUES (1, :location, :slug, :name, :category, :dimension,"
+        " :unit, 'MANUAL', '1.0000', :reorder, NULL, '0.0000', :retail, 2, :unit, :expiry, true)"
+    )
+    rows = [
+        (1, "milk", "Milk", "Dairy", "VOLUME", "l", "2000.0000", None, True),
+        (2, "milk", "Milk 2%", None, "VOLUME", "l", "500.0000", None, None),
+        (1, "flour", "Flour", None, "WEIGHT", "kg", "0.0000", None, None),
+        (2, "flour", "Flour bags", None, "COUNT", "each", "0.0000", None, None),
+        (1, "bars", "Protein bar", None, "COUNT", "each", "0.0000", "249.0000", False),
+    ]
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            for name in ("Main", "Harbor"):
+                connection.execute(
+                    text(
+                        "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                        " VALUES (1, :name, 'UTC', 'USD', true)"
+                    ),
+                    {"name": name},
+                )
+            for location, slug, name, category, dimension, unit, reorder, retail, expiry in rows:
+                connection.execute(
+                    text(stock),
+                    {
+                        "location": location,
+                        "slug": slug,
+                        "name": name,
+                        "category": category,
+                        "dimension": dimension,
+                        "unit": unit,
+                        "reorder": reorder,
+                        "retail": retail,
+                        "expiry": expiry,
+                    },
+                )
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            items = connection.execute(
+                text(
+                    "SELECT slug, name, item_type, dimension, base_unit, display_unit,"
+                    " tracks_expiry FROM inventory_items ORDER BY slug"
+                )
+            ).all()
+            links = connection.execute(
+                text(
+                    "SELECT s.slug, s.location_id, i.slug, l.location_id, l.reorder_point_base"
+                    " FROM stock_items s JOIN inventory_items i ON i.id = s.inventory_item_id"
+                    " JOIN item_locations l ON l.id = s.item_location_id ORDER BY s.id"
+                )
+            ).all()
+            settings = connection.execute(text("SELECT count(*) FROM item_locations")).scalar()
+        assert [tuple(row) for row in items] == [
+            ("bars", "Protein bar", "resale", "count", "each", "each", False),
+            ("flour", "Flour", "raw", "weight", "g", "kg", None),
+            ("flour-count", "Flour bags", "raw", "count", "each", "each", None),
+            ("milk", "Milk", "raw", "volume", "ml", "l", True),
+        ]
+        assert [(a, b, c, d) for a, b, c, d, _ in links] == [
+            ("milk", 1, "milk", 1),
+            ("milk", 2, "milk", 2),
+            ("flour", 1, "flour", 1),
+            ("flour", 2, "flour-count", 2),
+            ("bars", 1, "bars", 1),
+        ]
+        assert [str(row[4]).rstrip("0").rstrip(".") for row in links[:2]] == ["2000", "500"]
+        assert settings == 5
+
+        command.downgrade(config, BEFORE_DM5)
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT count(*) FROM stock_items")).scalar() == 5
+            assert "inventory_items" not in inspect(engine).get_table_names()
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

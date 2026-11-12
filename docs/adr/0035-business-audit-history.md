@@ -1,6 +1,6 @@
 # ADR-0035: The business audit history
 
-- **Status:** Proposed, 2026-11-11 (in the T1.12 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (the owner merged the T1.12 pull request, #30: "Yes, merge it")
 - **Decision ID:** none (implements T1.12; DR-23, SEC-14, ADM-FR-11, AC-ADM-04)
 - **Tasks:** T1.12; T4.07 (support access records itself here), and every later task that adds a
   setting, mapping or recipe editor
