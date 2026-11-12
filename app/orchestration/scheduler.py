@@ -23,9 +23,9 @@ from app.access import OrgContext
 from app.access.system import connected_tenant_ids, subscribed_tenants
 from app.config import get_settings
 from app.db import SCHEDULER_LOCK, LeaderLock, session_scope
+from app.jobs import drain, enqueue
 from app.observability import log_context, new_request_id
 from app.orchestration.health import record_snapshot
-from app.orchestration.reporting import report_sent_recently, send_weekly_report
 from app.orchestration.subscriptions import expire_due_trials
 from app.orchestration.sync import run_sync
 from app.throttle import prune
@@ -51,7 +51,8 @@ def sync_all_tenants() -> None:
 
 
 def send_due_reports(now: datetime | None = None) -> None:
-    """Send each tenant its weekly report at its configured day and hour, once."""
+    """Queue each tenant's weekly report at its configured day and hour, once a week; the job
+    retries a failed send (T1.20)."""
     now = now or datetime.now(UTC)
     with session_scope() as db:
         due = [
@@ -59,21 +60,48 @@ def send_due_reports(now: datetime | None = None) -> None:
             for tenant in subscribed_tenants(db)
             if tenant.report_day == now.weekday() and tenant.report_hour == now.hour
         ]
+    year, week, _ = now.isocalendar()
     for tenant_id in due:
         with log_context(tenant_id=tenant_id):
             try:
                 with session_scope() as db:
-                    # A retried or restarted job lands in the same hour; the email log says if
-                    # it went.
-                    if report_sent_recently(db, OrgContext.system(tenant_id), now):
-                        log.info(
-                            "weekly report for tenant %s already went out this week", tenant_id
-                        )
-                        continue
-                    send_weekly_report(db, OrgContext.system(tenant_id))
-                log.info("weekly report sent for tenant %s", tenant_id)
+                    enqueue(
+                        db,
+                        OrgContext.system(tenant_id),
+                        "send_weekly_report",
+                        dedupe_key=f"week:{year}-{week:02d}",
+                    )
+                log.info("weekly report queued for tenant %s", tenant_id)
             except Exception:
-                log.exception("weekly report failed for tenant %s", tenant_id)
+                log.exception("could not queue the weekly report for tenant %s", tenant_id)
+
+
+def queue_evaluations() -> None:
+    """Check every business's stock and expiry on a clock, POS or not (T1.20, G2)."""
+    with session_scope() as db:
+        tenant_ids = [tenant.id for tenant in subscribed_tenants(db)]
+    for tenant_id in tenant_ids:
+        with log_context(tenant_id=tenant_id):
+            try:
+                with session_scope() as db:
+                    enqueue(
+                        db,
+                        OrgContext.system(tenant_id),
+                        "evaluate_exceptions",
+                        dedupe_key="evaluate",
+                    )
+            except Exception:
+                log.exception("could not queue evaluation for tenant %s", tenant_id)
+
+
+def run_job_queue() -> None:
+    """The worker: run whatever background jobs are due (ID-06)."""
+    try:
+        stats = drain()
+        if any(stats.values()):
+            log.info("ran background jobs: %s", stats)
+    except Exception:
+        log.exception("the job worker failed")
 
 
 def close_finished_trials() -> None:
@@ -125,6 +153,22 @@ def _job(func: Callable[[], None]) -> Callable[[], None]:
 
 def _add_jobs(scheduler: BaseScheduler) -> None:
     settings = get_settings()
+    scheduler.add_job(
+        _job(run_job_queue),
+        "interval",
+        seconds=settings.job_poll_seconds,
+        id="run_job_queue",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        _job(queue_evaluations),
+        "interval",
+        minutes=settings.evaluation_interval_minutes,
+        id="queue_evaluations",
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.add_job(
         _job(sync_all_tenants),
         "interval",

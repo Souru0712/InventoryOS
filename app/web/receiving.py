@@ -15,7 +15,8 @@ from starlette.datastructures import FormData
 from app.access import OrgContext, get_scoped, select_scoped
 from app.catalog import active_stock
 from app.db import get_db
-from app.extract.invoice import SUPPORTED_MEDIA, ExtractionError
+from app.extract.invoice import SUPPORTED_MEDIA
+from app.jobs import enqueue
 from app.models import Document, DocumentStatus, Location, StockItem, Tenant, User
 from app.orchestration.extraction_quality import correction_stats
 from app.orchestration.receiving import (
@@ -23,7 +24,6 @@ from app.orchestration.receiving import (
     LineDecision,
     UploadRejected,
     apply_document,
-    parse_document,
     record_correction,
     save_upload,
 )
@@ -91,6 +91,17 @@ def receiving_index(
     )
 
 
+def read_later(db: Session, org: OrgContext, document: Document) -> None:
+    """Queue the photo to be read; asking again while it waits queues it once."""
+    enqueue(
+        db,
+        org,
+        "extract_document",
+        {"document_id": document.id},
+        dedupe_key=f"document:{document.id}",
+    )
+
+
 @router.post("/app/receiving")
 def upload_invoice(
     location_id: int = Form(...),
@@ -119,18 +130,10 @@ def upload_invoice(
         )
     except UploadRejected as exc:
         return RedirectResponse(f"/app/receiving?error={exc}", status_code=303)
+    # Reading takes seconds and calls out: a job does it, off the request (T1.20, SCL-03).
+    if document.status is DocumentStatus.UPLOADED:
+        read_later(db, org, document)
     db.commit()
-
-    try:
-        parse_document(db, org, document.id)
-        db.commit()
-    except ExtractionError as exc:
-        db.commit()
-        log.warning("document %s could not be read: %s", document.id, exc)
-    except Exception:
-        db.rollback()
-        log.exception("parsing document %s failed", document.id)
-
     return RedirectResponse(f"/app/receiving/{document.id}", status_code=303)
 
 
@@ -202,11 +205,10 @@ def reparse(
         return RedirectResponse(
             f"/app/receiving/{document.id}?error=already_applied", status_code=303
         )
-    try:
-        parse_document(db, org, document.id)
-        db.commit()
-    except ExtractionError:
-        db.commit()
+    document.status = DocumentStatus.UPLOADED
+    document.error = None
+    read_later(db, org, document)
+    db.commit()
     return RedirectResponse(f"/app/receiving/{document.id}", status_code=303)
 
 

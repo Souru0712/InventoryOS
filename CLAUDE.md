@@ -93,6 +93,11 @@ implementation sessions; the detail lives in `docs/`.
 - Routes are plain `def` (FastAPI runs them in its threadpool); a route that needs the raw
   body or a dynamic form takes it from `app/web/inputs.py`. `async def` routes would run the
   synchronous database and API calls on the event loop and stall the worker (C8; a test enforces it).
+- Work that should not hold up a request, or that runs per business on a clock, is a job
+  (`app/jobs.py`, ADR-0044): `enqueue(db, org, kind, payload, dedupe_key=...)`, drained by the
+  scheduler process. Jobs run at least once, so a handler must be safe to repeat. A new kind
+  goes in `app/transform/jobs.py` (its CHECK by migration) with a handler in `app/jobs.py`.
+  Tests run the queue with `drain()`.
 - Logs are JSON with `request_id`, `tenant_id`, `user_id` (`app/observability.py`). Never log
   bodies, cookies, query strings, tokens, passwords or email addresses (log ids instead); emails
   are masked as a last resort. A new scheduled job is registered through `scheduler._job`, and a

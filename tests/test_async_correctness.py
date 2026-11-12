@@ -12,6 +12,7 @@ from fastapi.routing import APIRoute
 
 from app.db import Base, SessionLocal, engine
 from app.extract.invoice import StubExtractor
+from app.jobs import drain
 from app.main import app
 from app.models import Location, Tenant
 from tests.accounts import confirm_email
@@ -89,24 +90,26 @@ async def test_a_slow_extraction_does_not_hold_up_other_requests(monkeypatch):
             location_id = location.id
 
         token = await form_token("/app/receiving")
-        upload = asyncio.create_task(
-            client.post(
-                "/app/receiving",
-                data={"location_id": location_id, "csrf_token": token},
-                files={"photo": ("note.jpg", jpeg("slow"), "image/jpeg")},
-            )
+        uploaded = await client.post(
+            "/app/receiving",
+            data={"location_id": location_id, "csrf_token": token},
+            files={"photo": ("note.jpg", jpeg("slow"), "image/jpeg")},
         )
-        assert await asyncio.to_thread(held.started.wait, 5), "the extraction never started"
+        # The upload answers without reading the photo: a job reads it (T1.20, SCL-03).
+        assert uploaded.status_code == 303
+        assert not held.started.is_set(), "the request read the photo itself"
 
+        worker = asyncio.create_task(asyncio.to_thread(drain))
+        assert await asyncio.to_thread(held.started.wait, 5), "the job never read the photo"
         started = time.perf_counter()
         health = await client.get("/healthz")
         elapsed = time.perf_counter() - started
         answered_mid_extraction = not held.finished.is_set()
         held.release.set()
-        uploaded = await upload
+        stats = await worker
 
     assert health.status_code == 200
     # A blocked event loop would only let /healthz through after the extraction finished.
     assert answered_mid_extraction, "/healthz waited for the extraction to finish"
     assert elapsed < 0.2, f"/healthz took {elapsed:.2f}s"
-    assert uploaded.status_code == 303
+    assert stats["done"] == 1

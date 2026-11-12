@@ -284,6 +284,8 @@ Everything is env-driven; see `.env.example`. The ones that matter:
 | `DATABASE_URL` | SQLite for dev, `postgresql+psycopg://…` for production. |
 | `ANTHROPIC_API_KEY` | Invoice photo reading. Unset → manual entry, everything else works. |
 | `SYNC_INTERVAL_MINUTES` | Background sync cadence (APScheduler). |
+| `EVALUATION_INTERVAL_MINUTES` | How often every business's stock and expiry is checked, POS or not (60). |
+| `JOB_POLL_SECONDS` | How often the scheduler process runs due background jobs (5). |
 | `STORAGE_BACKEND` | Where invoice photos live: `local` (a persistent volume) or `s3`. |
 | `SENTRY_DSN` | Error reports. Unset → errors are only logged. |
 | `ALERT_COOLDOWN_HOURS` | Stops alert digests becoming noise. |
