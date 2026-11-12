@@ -1,6 +1,6 @@
 # ADR-0036: Splitting stock items into inventory items and item locations
 
-- **Status:** Proposed, 2026-11-12 (in the T1.13-a pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (the owner merged the T1.13-a pull request, #31: "merged")
 - **Decision ID:** none (carries out ID-10 / ADR-0010 under C-38; DM-5)
 - **Tasks:** T1.13-a (schema, backfill, mirror); T1.13-b (readers move); T1.15, T1.16 build on it
 
@@ -50,4 +50,4 @@ several locations.
   mirror. When one location renames a shared item, the shared name follows the last change.
 - Name uniqueness per business (case-insensitive, DOMAIN_MODEL) is not enforced yet; the item
   screens add it (T1.14).
-- Built in T1.13-a with migration `e3f7a1c9d5b2`.
+- Built in T1.13-a with migration `e3f7a1c9d5b2`. In T1.13-b readers moved to the split rows and the change mirror gave way to write-through fields (ADR-0037).

@@ -67,4 +67,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0033](0033-invitations-and-team-management.md) | Invitations and team management | T1.10 | Accepted |
 | [ADR-0034](0034-two-step-sign-in.md) | Two-step sign-in with an authenticator app | T1.11 | Accepted |
 | [ADR-0035](0035-business-audit-history.md) | The business audit history | T1.12 | Accepted |
-| [ADR-0036](0036-splitting-stock-items.md) | Splitting stock items into inventory items and item locations | T1.13 | Proposed |
+| [ADR-0036](0036-splitting-stock-items.md) | Splitting stock items into inventory items and item locations | T1.13 | Accepted |
+| [ADR-0037](0037-reading-items-from-the-split-tables.md) | Reading stock items' definitions and settings from the split tables | T1.13 | Proposed |

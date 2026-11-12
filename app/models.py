@@ -24,7 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
-from app.units import Dimension
+from app.units import BASE_UNIT, Dimension
 
 
 def utcnow() -> datetime:
@@ -441,6 +441,38 @@ class SoldItem(Base):
     )
 
 
+class SplitField:
+    """A stock item field that now lives on its split row (C-38, ADR-0036).
+
+    Read from the item (or the location's settings) the stock item is linked to; written to both,
+    so the legacy column stays filled until DM-16 drops it. Before the first flush links a new
+    stock item, the legacy column is all there is. On the class it is the legacy column, so the
+    constructor keeps working; product code must not query it (a test enforces that).
+    """
+
+    def __init__(self, legacy: str, relation: str, field: str, also=None) -> None:
+        self.legacy, self.relation, self.field = legacy, relation, field
+        self.also = also or {}
+
+    def __get__(self, obj, owner=None):
+        if obj is None:
+            return getattr(owner, self.legacy)
+        target = getattr(obj, self.relation)
+        return getattr(obj, self.legacy) if target is None else getattr(target, self.field)
+
+    def __set__(self, obj, value) -> None:
+        setattr(obj, self.legacy, value)
+        target = getattr(obj, self.relation)
+        if target is None:
+            return
+        for field, wanted in {
+            self.field: value,
+            **{k: f(value) for k, f in self.also.items()},
+        }.items():
+            if getattr(target, field) != wanted:
+                setattr(target, field, wanted)
+
+
 class DimensionValue(TypeDecorator[Dimension]):
     """A Dimension stored as its plain value ("count", "weight", "volume"), checked by name."""
 
@@ -532,15 +564,20 @@ class StockItem(Base):
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
     slug: Mapped[str] = mapped_column(String(160))
-    name: Mapped[str] = mapped_column(String(300))
-    category: Mapped[str | None] = mapped_column(String(200))
-    dimension: Mapped[Dimension] = mapped_column(Enum(Dimension), default=Dimension.COUNT)
-    stock_unit: Mapped[str] = mapped_column(String(16), default="each")
+    # Legacy columns (DM-16 drops them); the split fields below are what code reads and writes.
+    _name: Mapped[str] = mapped_column("name", String(300))
+    _category: Mapped[str | None] = mapped_column("category", String(200))
+    _dimension: Mapped[Dimension] = mapped_column(
+        "dimension", Enum(Dimension), default=Dimension.COUNT
+    )
+    _stock_unit: Mapped[str] = mapped_column("stock_unit", String(16), default="each")
     track_mode: Mapped[TrackMode] = mapped_column(Enum(TrackMode), default=TrackMode.PROVIDER)
 
     qty_base: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
-    reorder_point_base: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
-    par_level_base: Mapped[Decimal | None] = mapped_column(Qty)
+    _reorder_point_base: Mapped[Decimal] = mapped_column(
+        "reorder_point_base", Qty, default=Decimal("0")
+    )
+    _par_level_base: Mapped[Decimal | None] = mapped_column("par_level_base", Qty)
     cost_per_base_cents: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
     # What it sells for. Only things sold as they are can be marked down: the milk inside a
     # latte has no shelf price, so it never gets a promotion.
@@ -557,17 +594,31 @@ class StockItem(Base):
 
     # None until someone says. True is perishable, False was dismissed as never expiring,
     # which is what keeps the coverage figure honest rather than counting cups and bags.
-    tracks_expiry: Mapped[bool | None] = mapped_column(Boolean)
+    _tracks_expiry: Mapped[bool | None] = mapped_column("tracks_expiry", Boolean)
 
     last_counted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    _is_active: Mapped[bool] = mapped_column("is_active", Boolean, default=True)
 
     # The split rows this one stands for; set by app/catalog.py whenever a stock item is saved.
     inventory_item_id: Mapped[int | None] = mapped_column(ref("inventory_items.id"), index=True)
     item_location_id: Mapped[int | None] = mapped_column(ref("item_locations.id"), unique=True)
-    inventory_item: Mapped[InventoryItem | None] = relationship()
-    item_location: Mapped[ItemLocation | None] = relationship()
+    inventory_item: Mapped[InventoryItem | None] = relationship(lazy="joined")
+    item_location: Mapped[ItemLocation | None] = relationship(lazy="joined")
+
+    # Read from the business-wide item and this location's settings (T1.13-b).
+    name = SplitField("_name", "inventory_item", "name")
+    category = SplitField("_category", "inventory_item", "category")
+    dimension = SplitField(
+        "_dimension", "inventory_item", "dimension", also={"base_unit": BASE_UNIT.__getitem__}
+    )
+    stock_unit = SplitField("_stock_unit", "inventory_item", "display_unit")
+    tracks_expiry = SplitField(
+        "_tracks_expiry", "inventory_item", "tracks_expiry", also={"tracks_batches": bool}
+    )
+    reorder_point_base = SplitField("_reorder_point_base", "item_location", "reorder_point_base")
+    par_level_base = SplitField("_par_level_base", "item_location", "par_level_base")
+    is_active = SplitField("_is_active", "item_location", "is_active")
 
 
 class RecipeComponent(Base):

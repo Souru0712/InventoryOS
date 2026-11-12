@@ -9,6 +9,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
+from app.catalog import active_stock, by_item_name
 from app.models import (
     InventoryCount,
     Location,
@@ -43,7 +44,7 @@ VELOCITY_WINDOW_DAYS = 28
 
 def stock_views(db: Session, org: OrgContext, location_id: int | None = None) -> list[StockView]:
     location_names = {loc.id: loc.name for loc in db.scalars(select_scoped(org, Location))}
-    query = select_scoped(org, StockItem).where(StockItem.is_active.is_(True))
+    query = active_stock(org)
     if location_id is not None:
         query = query.where(StockItem.location_id == location_id)
 
@@ -74,7 +75,7 @@ def stock_views(db: Session, org: OrgContext, location_id: int | None = None) ->
             last_counted_at=item.last_counted_at,
             tracks_expiry=item.tracks_expiry,
         )
-        for item in db.scalars(query.order_by(StockItem.name))
+        for item in db.scalars(by_item_name(query))
     ]
 
 
@@ -241,14 +242,7 @@ def velocity_map(
 def refresh_derived_quantities(db: Session, org: OrgContext, today: date | None = None) -> int:
     """Recompute weight/volume quantities: last physical count minus consumption since."""
     today = today or datetime.now(UTC).date()
-    items = list(
-        db.scalars(
-            select_scoped(org, StockItem).where(
-                StockItem.track_mode == TrackMode.DERIVED,
-                StockItem.is_active.is_(True),
-            )
-        )
-    )
+    items = list(db.scalars(active_stock(org).where(StockItem.track_mode == TrackMode.DERIVED)))
     if not items:
         return 0
 

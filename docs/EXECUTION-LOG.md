@@ -5,6 +5,57 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.13-b Item model split: readers moved
+
+**Implemented**
+- **Reads come from the split rows**: a stock item's `name`, `category`, `dimension`,
+  `stock_unit` and `tracks_expiry` read from its inventory item, and `reorder_point_base`,
+  `par_level_base` and `is_active` from its item location (`SplitField`, `app/models.py`). The
+  table columns keep their names; the mapped legacy attributes are `_name` and so on (DM-16).
+- **Writes reach both**: setting one of those fields updates the split row (with `base_unit` and
+  `tracks_batches`) and the legacy column; the flush hook only links new stock items now.
+- **Queries moved**: the active filter and the name order use the split tables
+  (`active_stock()`, `by_item_name()`) in the stock list, derived-quantity refresh and both
+  receiving lists. Both relationships load with the stock item, so no extra queries.
+- ADR-0037 (Proposed); ADR-0036 Accepted and updated; ADR-0010 updated; `CLAUDE.md` states the
+  rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_item_split.py` (12): what the item screens will change directly (the item's name
+  and unit, the location's reorder point and active flag) is what the stock list shows, sorted by
+  the item's name, without consulting the legacy column; writing a stock item fills the split row
+  and the legacy column, derived fields included; no product query filters or sorts on a legacy
+  column. The T1.13-a tests still pass.
+- Acceptance (T1.13): every stock item maps to exactly one item and item location (DM-5 tests);
+  existing screens unchanged: the full suite passes untouched. Full suite 787 passed, 12 skipped (784 before); ruff, mypy and
+  the docs checker clean.
+
+**Files changed**
+- ADR-0037 (new); `app/models.py`, `app/catalog.py`, `app/orchestration/views.py`,
+  `app/orchestration/receiving.py`, `app/web/receiving.py`, `tests/test_item_split.py`;
+  ADR-0036 (Accepted), ADR-0010, the index, `CLAUDE.md`, task index (T1.13 → In review), this log.
+
+**Next task**
+- T1.14 Item management UI (its dependencies T1.13 and T1.06 complete once this merges).
+
+---
+
+## 2026-11-12 — T1.13-a merged
+
+**Verified**
+- The owner merged PR #31 with a merge commit (`1e37e69`). CI on its head `4f14bc2`, all five
+  required jobs green: SQLite 784 passed, 12 skipped; PostgreSQL 16 796 passed, 0 skipped (the
+  DM-5 backfill test included); lint and types; dependency audit; Docker image. Same five green
+  on `main` after the merge.
+
+**Decisions**
+- ADR-0036 accepted with the merge.
+
+**Files changed**
+- ADR-0036 status and index, this log.
+
+---
+
 ## 2026-11-12 — T1.13-a Item model split: schema, backfill and mirror
 
 **Implemented**
