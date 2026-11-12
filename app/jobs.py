@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, select_scoped
 from app.access.system import abandoned_jobs, next_due_job
 from app.db import session_scope
-from app.exceptions import clear, record_exception
+from app.exceptions import apply_findings, clear, record_exception
 from app.models import Job
 from app.observability import log_context
 from app.transform.exceptions import Finding
@@ -84,6 +84,7 @@ def _waiting(db: Session, org: OrgContext, kind: str, dedupe_key: str | None) ->
 def _handlers() -> dict[str, Handler]:
     # Imported here: these modules queue follow-up work through this one.
     from app.extract.invoice import ExtractionError
+    from app.ledger.verify import drifts, findings
     from app.orchestration.alerts import evaluate_and_store, send_alert_digest
     from app.orchestration.receiving import parse_document
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
@@ -112,8 +113,22 @@ def _handlers() -> dict[str, Handler]:
             # Applied or gone since it was queued: there is nothing left to read.
             log.info("document %s no longer needs reading", payload["document_id"])
 
+    def verify(db: Session, org: OrgContext, payload: dict) -> None:
+        found = drifts(db, org)
+        # Opens, refreshes, and once a drift is gone resolves, critical balance_drift exceptions.
+        apply_findings(db, org, findings(db, org, found), frozenset({"balance_drift"}))
+        if found:
+            # The founder's alert (OBS-06, drift > 0): an error reaches error reporting.
+            log.error(
+                "ledger drift at %d item location(s) for tenant %s: %s",
+                len(found),
+                org.tenant_id,
+                ", ".join(f"{d.inventory_item_id}:{d.location_id}" for d in found),
+            )
+
     return {
         "evaluate_exceptions": evaluate,
+        "verify_ledger": verify,
         "send_alert_digest": digest,
         "send_weekly_report": weekly,
         "extract_document": extract,

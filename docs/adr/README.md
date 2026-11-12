@@ -75,4 +75,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0041](0041-opening-balances.md) | Opening balances | T1.17 | Accepted |
 | [ADR-0042](0042-writers-through-the-ledger.md) | Every stock writer posts through the ledger | T1.18 | Accepted |
 | [ADR-0043](0043-exceptions.md) | Exceptions: one record for everything that needs a person | T1.19 | Accepted |
-| [ADR-0044](0044-the-job-queue.md) | The job queue and scheduled evaluation for every business | T1.20 | Proposed |
+| [ADR-0044](0044-the-job-queue.md) | The job queue and scheduled evaluation for every business | T1.20 | Accepted |
+| [ADR-0045](0045-nightly-ledger-verification.md) | Nightly ledger verification | T1.21 | Proposed |

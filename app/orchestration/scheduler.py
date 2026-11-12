@@ -94,6 +94,25 @@ def queue_evaluations() -> None:
                 log.exception("could not queue evaluation for tenant %s", tenant_id)
 
 
+def queue_ledger_verification(now: datetime | None = None) -> None:
+    """Check every business's ledger each night (DR-03, REL-08): once per date."""
+    now = now or datetime.now(UTC)
+    with session_scope() as db:
+        tenant_ids = [tenant.id for tenant in subscribed_tenants(db)]
+    for tenant_id in tenant_ids:
+        with log_context(tenant_id=tenant_id):
+            try:
+                with session_scope() as db:
+                    enqueue(
+                        db,
+                        OrgContext.system(tenant_id),
+                        "verify_ledger",
+                        dedupe_key=f"night:{now.date().isoformat()}",
+                    )
+            except Exception:
+                log.exception("could not queue ledger verification for tenant %s", tenant_id)
+
+
 def run_job_queue() -> None:
     """The worker: run whatever background jobs are due (ID-06)."""
     try:
@@ -200,6 +219,15 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         hour=3,
         minute=25,
         id="prune_throttles",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        _job(queue_ledger_verification),
+        "cron",
+        hour=2,
+        minute=45,
+        id="queue_ledger_verification",
         max_instances=1,
         coalesce=True,
     )

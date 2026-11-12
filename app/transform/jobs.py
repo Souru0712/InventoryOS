@@ -25,6 +25,7 @@ KINDS: Mapping[str, JobKind] = {
     "send_alert_digest": JobKind("Sending the alert email"),
     "send_weekly_report": JobKind("Sending the weekly report"),
     "extract_document": JobKind("Reading an invoice", max_attempts=3),
+    "verify_ledger": JobKind("Checking the ledger", max_attempts=3),
 }
 JOB_KINDS = tuple(KINDS)
 

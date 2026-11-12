@@ -5,6 +5,77 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.21 Nightly ledger verification
+
+**Implemented**
+- **Pure rule** `find_drift()` (`app/transform/ledger.py`). It flags every item at a location
+  where the balance is not the sum of its movements, there are movements but no balance row, or
+  the stock row (the screens' projection, ADR-0042) is not the balance.
+- **Read-only check** `app/ledger/verify.py`. It sums one business's movements as exact
+  decimals, streamed in batches, compares them with the balances and stock rows, and builds
+  `balance_drift` findings: one per item and location, critical, giving the three figures in
+  the item's unit and "Nothing was changed."
+- **The job:**
+  - `verify_ledger` is a new job kind (CHECK by migration `6bedfbcf985f`);
+  - it is queued for every subscribed business at 02:45 UTC, once per date;
+  - its handler reconciles the findings into exceptions, so a drift that is fixed is resolved
+    by the system the next night.
+- **Founder alert:** one ERROR log line per business with drift, ids only. Error reporting turns
+  it into an alert when `SENTRY_DSN` is set (OBS-06; thresholds in T4.10).
+- ADR-0045 (Proposed); CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_ledger_verification.py` (6):
+  - **Rule:** each kind of drift, and none for an agreeing ledger.
+  - **AC-INV-11:** an injected balance of 999 against movements of 18 is found the same night
+    as one critical open exception with the exact title. Balances, movements and stock rows are
+    unchanged, and one ERROR alert carries ids only.
+  - **Projection:** a stock row out of step with its balance is drift.
+  - **Lifecycle:** a healthy ledger raises nothing, and a drift resolves by the system once
+    rebuilt.
+  - **Scope:** each business is queued once a night and flagged only for its own ledger; the
+    scheduler registers the 02:45 run.
+- `tests/test_ledger.py` (AC-INV-05 still holds: only `app/ledger` names the ledger models);
+  `tests/test_jobs.py`; `tests/test_migrations.py` through `6bedfbcf985f`.
+- **By hand:** the demo database migrated to `6bedfbcf985f` through the real chain, and then:
+  - the first night found no drift;
+  - after a balance was set to 1 against movements of 14, the next night opened "critical
+    open: House Blend beans 1kg bag at Rosewood Coffee - Main: the recorded balance is 1 each
+    but its movements add up to 14 each, and the screens show 14 each. Nothing was changed."
+  - it logged the alert line.
+- Full suite 919 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker
+  clean.
+
+**Files changed**
+- **New:** `app/ledger/verify.py`, migration `6bedfbcf985f`, ADR-0045,
+  `tests/test_ledger_verification.py`.
+- **Changed:**
+  - `app/transform/ledger.py` (`Drift`, `find_drift`), `app/transform/jobs.py`, `app/jobs.py`,
+    `app/orchestration/scheduler.py`;
+  - CLAUDE.md, ADR-0044 (Accepted), the ADR index, the task index (T1.20 → Completed, T1.21 →
+    In review) and this log.
+
+**Next task**
+- T1.22 Adjustments and movement history (depends on T1.18 and T1.06).
+
+---
+
+## 2026-11-12 — T1.20 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #42 was merged with a merge commit (`4deb769`).
+- CI on its head `af2b0fb`, all five required jobs green:
+  - SQLite: 913 passed, 24 skipped;
+  - PostgreSQL 16: 937 passed, 0 skipped, the two-worker test included;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0044 → Accepted.
+
+**Files changed**
+- Task index (T1.20 → Completed), ADR-0044 and its index row, this log.
+
+---
+
 ## 2026-11-12 — T1.20 Jobs table; scheduled evaluation for every tenant
 
 **Implemented**
