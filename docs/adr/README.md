@@ -70,4 +70,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0036](0036-splitting-stock-items.md) | Splitting stock items into inventory items and item locations | T1.13 | Accepted |
 | [ADR-0037](0037-reading-items-from-the-split-tables.md) | Reading stock items' definitions and settings from the split tables | T1.13 | Accepted |
 | [ADR-0038](0038-item-and-category-screens.md) | Item and category screens | T1.14 | Accepted |
-| [ADR-0039](0039-units-packages-and-conversions.md) | Units, packages and conversions | T1.15 | Proposed |
+| [ADR-0039](0039-units-packages-and-conversions.md) | Units, packages and conversions | T1.15 | Accepted |
+| [ADR-0040](0040-the-ledger-and-its-posting-service.md) | The ledger and its posting service | T1.16 | Proposed |
