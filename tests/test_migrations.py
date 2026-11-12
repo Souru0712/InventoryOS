@@ -298,6 +298,74 @@ def test_dm5_every_stock_item_maps_to_exactly_one_item_and_location(fresh_url):
         engine.dispose()
 
 
+def test_dm5_pack_sizes_become_packages_and_the_first_is_how_deliveries_arrive(fresh_url):
+    """T1.15 (DM-5, second half): each item's pack sizes become packages."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    stock = (
+        "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension, stock_unit,"
+        " track_mode, qty_base, reorder_point_base, cost_per_base_cents, lead_time_days,"
+        " receive_unit, pack_size_base, is_active) VALUES (1, :location, :slug, :name,"
+        " :dimension, :unit, 'MANUAL', '0.0000', '0.0000', '0.0000', 2, :unit, :pack, true)"
+    )
+    rows = [
+        (1, "milk", "Milk", "VOLUME", "l", "6000.0000"),
+        (2, "milk", "Milk", "VOLUME", "l", "12000.0000"),
+        (1, "flour", "Flour", "WEIGHT", "lb", "2000.0000"),
+        (1, "salt", "Salt", "WEIGHT", "g", None),
+    ]
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            for name in ("Main", "Harbor"):
+                connection.execute(
+                    text(
+                        "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                        " VALUES (1, :name, 'UTC', 'USD', true)"
+                    ),
+                    {"name": name},
+                )
+            for location, slug, name, dimension, unit, pack in rows:
+                connection.execute(
+                    text(stock),
+                    {
+                        "location": location,
+                        "slug": slug,
+                        "name": name,
+                        "dimension": dimension,
+                        "unit": unit,
+                        "pack": pack,
+                    },
+                )
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            packages = connection.execute(
+                text(
+                    "SELECT i.slug, p.name, p.quantity, p.unit, p.is_purchase FROM item_packages p"
+                    " JOIN inventory_items i ON i.id = p.inventory_item_id ORDER BY i.slug, p.name"
+                )
+            ).all()
+        tidy = [
+            (slug, name, str(qty).rstrip("0").rstrip("."), unit, bool(purchase))
+            for slug, name, qty, unit, purchase in packages
+        ]
+        assert tidy == [
+            ("flour", "pack", "2000", "g", True),  # 2000 g is not a whole number of lb
+            ("milk", "pack", "6", "l", True),
+            ("milk", "pack 2", "12", "l", False),
+        ]
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

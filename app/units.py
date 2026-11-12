@@ -46,6 +46,8 @@ UNITS: dict[str, Unit] = {
         _u("ml", "ml", "ml", Dimension.VOLUME, "1", "1"),
         _u("l", "L", "L", Dimension.VOLUME, "1000", "0.001"),
         _u("floz", "fl oz", "fl oz", Dimension.VOLUME, "29.5735295625", "0.01"),
+        _u("tbsp", "tbsp", "tbsp", Dimension.VOLUME, "14.78676478125", "0.01"),
+        _u("tsp", "tsp", "tsp", Dimension.VOLUME, "4.92892159375", "0.01"),
         _u("cup", "cup", "cups", Dimension.VOLUME, "236.5882365", "0.01"),
         _u("pt", "pt", "pt", Dimension.VOLUME, "473.176473", "0.01"),
         _u("qt", "qt", "qt", Dimension.VOLUME, "946.352946", "0.01"),

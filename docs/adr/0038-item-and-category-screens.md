@@ -1,6 +1,6 @@
 # ADR-0038: Item and category screens
 
-- **Status:** Proposed, 2026-11-12 (in the T1.14 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (the owner merged the T1.14 pull request, #33: "Yes, merge it")
 - **Decision ID:** none (implements T1.14; INV-FR-01, -02, -03, -06, -10, INV-FR-14, DR-24, AC-INV-01)
 - **Tasks:** T1.14; T1.15 (packages and conversions join the item page), T2.10 (suppliers)
 

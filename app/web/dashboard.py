@@ -16,6 +16,7 @@ from app.audit import record_audit
 from app.config import get_settings
 from app.db import get_db
 from app.entitlements import require
+from app.items import entered_base
 from app.models import (
     InventoryCount,
     Location,
@@ -55,6 +56,7 @@ from app.throttle import client_ip
 from app.transform.alerts import counts_as_waste_risk
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
+from app.transform.items import ItemRuleError
 from app.units import UnitError, to_base
 from app.web.templating import templates
 
@@ -309,17 +311,22 @@ def new_item_moved(org: OrgContext = Depends(require_permission("item.edit"))):
 def record_count(
     item_id: int,
     quantity: str = Form(...),
+    unit: str = Form(""),
     note: str = Form(""),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("count.record")),
 ):
-    """A physical count re-anchors the item; derived quantities restart from here."""
+    """A physical count re-anchors the item; derived quantities restart from here. It may be
+    entered in any unit or package of the item; one that cannot convert is refused (DR-11)."""
     item = get_scoped(db, org, StockItem, item_id)
-    if item is None:
+    if item is None or item.inventory_item is None:
         raise HTTPException(status_code=404, detail="stock item not found")
 
-    qty_base = to_base(quantity, item.stock_unit)
+    try:
+        qty_base = entered_base(item.inventory_item, quantity, unit or item.stock_unit)
+    except ItemRuleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     now = datetime.now(UTC)
     item.qty_base = qty_base
     item.last_counted_at = now

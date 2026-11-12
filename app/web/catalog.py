@@ -15,6 +15,8 @@ from app.db import get_db
 from app.items import (
     NewItem,
     NotFound,
+    add_conversion,
+    add_package,
     categories,
     category_counts,
     codes,
@@ -24,9 +26,13 @@ from app.items import (
     item_row,
     list_items,
     merge_category,
+    package_bases,
+    remove_conversion,
+    remove_package,
     rename_category,
     set_active,
     set_category_archived,
+    set_purchase_package,
     stock_at,
     update_item,
     update_levels,
@@ -344,6 +350,8 @@ def _item_page(request, db, org, tenant, inventory_item_id: int, error=None, sta
             if row.item.display_unit in UNITS
             else row.item.display_unit,
             "codes": codes(db, org, row),
+            "package_bases": package_bases(row.item),
+            "base_label": UNITS[row.item.base_unit].label,
             "locked_dimension": has_history(db, org, row),
             "categories": categories(db, org),
             "type_labels": ITEM_TYPE_LABELS,
@@ -497,3 +505,148 @@ def stock_elsewhere(
     db.commit()
     flash(request, "Now stocked there, with none on hand: count it to set the quantity.")
     return RedirectResponse(f"{BASE}/{inventory_item_id}", status_code=303)
+
+
+# --- packages and conversions (T1.15) -----------------------------------------------------------
+
+
+def _item_action(request, db, org, tenant, inventory_item_id: int, action, done: str):
+    try:
+        action()
+    except NotFound as exc:
+        raise _not_found(exc) from exc
+    except ItemRuleError as exc:
+        db.rollback()
+        return _item_page(request, db, org, tenant, inventory_item_id, str(exc), 400)
+    db.commit()
+    flash(request, done)
+    return RedirectResponse(f"{BASE}/{inventory_item_id}", status_code=303)
+
+
+@router.post(BASE + "/{inventory_item_id}/packages")
+def new_package(
+    request: Request,
+    inventory_item_id: int,
+    name: str = Form(""),
+    quantity: str = Form(""),
+    unit: str = Form(""),
+    purchase: str = Form(""),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("item.edit")),
+):
+    ip = client_ip(request)
+    return _item_action(
+        request,
+        db,
+        org,
+        tenant,
+        inventory_item_id,
+        lambda: add_package(
+            db,
+            org,
+            inventory_item_id,
+            name=name,
+            quantity=quantity,
+            unit=unit,
+            purchase=purchase == "yes",
+            ip=ip,
+        ),
+        "Package added.",
+    )
+
+
+@router.post(BASE + "/{inventory_item_id}/packages/{package_id}/purchase")
+def buy_by_package(
+    request: Request,
+    inventory_item_id: int,
+    package_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("item.edit")),
+):
+    ip = client_ip(request)
+    return _item_action(
+        request,
+        db,
+        org,
+        tenant,
+        inventory_item_id,
+        lambda: set_purchase_package(db, org, inventory_item_id, package_id, ip=ip),
+        "Deliveries now arrive by that package.",
+    )
+
+
+@router.post(BASE + "/{inventory_item_id}/packages/{package_id}/remove")
+def drop_package(
+    request: Request,
+    inventory_item_id: int,
+    package_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("item.edit")),
+):
+    ip = client_ip(request)
+    return _item_action(
+        request,
+        db,
+        org,
+        tenant,
+        inventory_item_id,
+        lambda: remove_package(db, org, inventory_item_id, package_id, ip=ip),
+        "Package removed.",
+    )
+
+
+@router.post(BASE + "/{inventory_item_id}/conversions")
+def new_conversion(
+    request: Request,
+    inventory_item_id: int,
+    from_quantity: str = Form(""),
+    from_unit: str = Form(""),
+    to_quantity: str = Form(""),
+    to_unit: str = Form(""),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("item.edit")),
+):
+    ip = client_ip(request)
+    return _item_action(
+        request,
+        db,
+        org,
+        tenant,
+        inventory_item_id,
+        lambda: add_conversion(
+            db,
+            org,
+            inventory_item_id,
+            from_quantity=from_quantity,
+            from_unit=from_unit,
+            to_quantity=to_quantity,
+            to_unit=to_unit,
+            ip=ip,
+        ),
+        "Conversion added.",
+    )
+
+
+@router.post(BASE + "/{inventory_item_id}/conversions/{conversion_id}/remove")
+def drop_conversion(
+    request: Request,
+    inventory_item_id: int,
+    conversion_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("item.edit")),
+):
+    ip = client_ip(request)
+    return _item_action(
+        request,
+        db,
+        org,
+        tenant,
+        inventory_item_id,
+        lambda: remove_conversion(db, org, inventory_item_id, conversion_id, ip=ip),
+        "Conversion removed.",
+    )

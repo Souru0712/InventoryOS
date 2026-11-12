@@ -52,6 +52,16 @@ def money(cents: int | Decimal | None, currency: str = "USD") -> str:
     return f"{symbol}{Decimal(cents) / 100:,.2f}"
 
 
+def unit_label(code: str) -> str:
+    """How a unit reads ("L" for "l"); a package name reads as itself."""
+    return UNITS[code].label if code in UNITS else code
+
+
+def num(value: Decimal | None) -> str:
+    """An exact amount without trailing zeros: 6, 22712.4707, 0.5."""
+    return "" if value is None else f"{Decimal(value).normalize():f}"
+
+
 def qty(qty_base: Decimal | None, unit_code: str) -> str:
     return "-" if qty_base is None else format_qty(qty_base, unit_code)
 
@@ -74,6 +84,8 @@ def plain(qty_base: Decimal | None, unit_code: str) -> str:
 
 
 templates.env.filters["money"] = money
+templates.env.filters["num"] = num
+templates.env.filters["unit"] = unit_label
 templates.env.filters["qty"] = qty
 templates.env.filters["plain"] = plain
 templates.env.filters["approx"] = approx

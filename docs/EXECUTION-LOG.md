@@ -5,6 +5,72 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.15 Units, packages and conversions
+
+**Implemented**
+- **Resolver** (`app/transform/conversions.py`, pure): any built-in unit or item package into the
+  item's base unit, exact to four places. Within a dimension by constants (tbsp and tsp added);
+  across dimensions only by the item's own conversion. Otherwise it refuses, naming the missing
+  conversion (DR-11). `entered_base()` in `app/items.py` applies it to an item.
+- **Packages** (`item_packages`): "case" = 6 × gal, or 24 × another package; nesting loops and
+  names that clash with units are refused; one package says how deliveries arrive.
+  **Conversions** (`item_unit_conversions`): "1 lb = 340 ml", one per pair of measures, both ways.
+  Migration `6d82b619c66f`.
+- **The delivery package sets every stock row's pack size**, which receiving and scanning read,
+  so there is one source of truth until T2.11. The add-item form's pack size becomes the "pack"
+  package. **Backfill**: existing pack sizes became packages ("pack", "pack 2"); the first is the
+  delivery package.
+- **Entry and editor**: counts accept any unit or package (`unit`); an unconvertible one answers
+  400 with the reason. The item page lists packages with what each is in the base unit (exact),
+  and edits packages and conversions. Every change is audited.
+- ADR-0039 (Proposed); ADR-0038 Accepted; `CLAUDE.md` states the rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_units_packages.py` (20): **AC-INV-02** (2 lb = 907.1847 g; 1 case of 6 × 1 gal =
+  22,712.4707 ml) in the resolver and through the count form; **AC-INV-03** (120 ml for a
+  weight item refused, naming the missing conversion; after 1 lb = 340 ml it records 160.0914 g)
+  in the resolver and through the count form, with a second conversion for the same measures
+  refused; the JuJu press-yield fixture (1 lb ginger = 225 ml, both ways); nested packages, loops,
+  unit-name clashes and unknown units; tbsp and tsp; seeded round-trip property tests within and
+  across dimensions; the delivery package drives the stock rows' pack size (create, switch,
+  remove, a package still in use refused); a package in another measure resolves once its
+  conversion exists; a base-unit change after movement is refused.
+- `tests/test_migrations.py`: pack sizes became packages (exact display unit or base unit, first
+  one delivers). Isolation suite: the five new routes refuse another business's items, packages
+  and conversions.
+- In the browser (local server, test data): added a "case" of 6 L as the delivery package (shown
+  as 6000 ml) and a conversion of 1 L = 1030 g on the item page.
+- Full suite 837 passed, 13 skipped (811 passed, 12 skipped before; the new skip is the Postgres half of the pack-size backfill test, run in CI); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- `app/transform/conversions.py`, migration `6d82b619c66f`, `tests/test_units_packages.py`,
+  ADR-0039 (new); `app/units.py`, `app/models.py`, `app/items.py`, `app/access/scoped.py`,
+  `app/web/catalog.py`, `app/web/dashboard.py` (count unit), `app/web/templating.py` (`num`, `unit`
+  filters), `app/web/templates/app/catalog_item.html`, `tests/test_isolation.py`,
+  `tests/test_migrations.py`; ADR-0038 (Accepted), the index, `CLAUDE.md`, task index (T1.14 →
+  Completed, T1.15 → In review), this log.
+
+**Next task**
+- T1.16 Ledger schema and posting service (depends on T1.01, T1.13, T1.15).
+
+---
+
+## 2026-11-12 — T1.14 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it") PR #33 was merged with a merge commit (`b0f42c2`). CI
+  on its head `a94573a`, all five required jobs green: SQLite 811 passed, 12 skipped; PostgreSQL 16
+  823 passed, 0 skipped; lint and types; dependency audit; Docker image. Same five green on `main`
+  after the merge. Acceptance met: AC-INV-01.
+
+**Decisions**
+- ADR-0038 accepted with the merge.
+
+**Files changed**
+- Task index (T1.14 → Completed), ADR-0038 status and index, this log.
+
+---
+
 ## 2026-11-12 — T1.14 Item management UI
 
 **Implemented**
