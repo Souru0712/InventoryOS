@@ -10,7 +10,7 @@ from app.extract.invoice import StubExtractor
 from app.models import (
     Document,
     DocumentStatus,
-    InventoryCount,
+    InventoryTransaction,
     LineStatus,
     StockAlias,
     StockItem,
@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.orchestration.receiving import LineDecision, apply_document, parse_document, save_upload
 from app.units import Dimension, to_base
+from tests.ledger_helpers import opened
 from tests.sample_files import jpeg
 
 INVOICE = {
@@ -111,6 +112,7 @@ def stock(db, tenant, location):
         ),
     ]
     db.add_all(items)
+    opened(db, *items)
     db.commit()
     return {item.slug: item for item in items}
 
@@ -186,10 +188,11 @@ def test_applying_a_delivery_raises_stock_and_files_the_record(db, tenant, locat
     assert stock["cups"].qty_base == Decimal("1620.0000")
     assert document.status is DocumentStatus.APPLIED
 
-    # Receiving re-anchors derived stock so depletion restarts from a known quantity.
-    counts = db.query(InventoryCount).filter(InventoryCount.source == "receipt").all()
-    assert len(counts) == 3
-    assert stock["whole-milk"].last_counted_at == datetime(2026, 9, 4, tzinfo=UTC)
+    # One receipt posting for the delivery, a movement per line (DR-25, T1.18). A delivery is
+    # not a count of the shelf, so it does not reset when the item was last counted.
+    receipt = db.query(InventoryTransaction).filter_by(kind="receipt").one()
+    assert len(receipt.movements) == 3
+    assert stock["whole-milk"].last_counted_at is None
 
 
 def test_supplier_wording_is_learned_so_the_next_invoice_is_automatic(db, tenant, location, stock):
@@ -314,6 +317,7 @@ def oat_milk(db, tenant, location):
         pack_size_base=to_base(6, "l"),
     )
     db.add(item)
+    opened(db, item)
     db.commit()
     return item
 

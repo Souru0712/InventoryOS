@@ -6,6 +6,9 @@ they move are written together, or nothing is. The balance rows touched are lock
 order (item, then location) before anything is written, so two postings to one item at one
 location wait for each other instead of losing an update. Posting the same idempotency key
 again returns the first transaction and writes nothing.
+
+It is also the only writer of stock_items.qty_base (T1.18, ADR-0042): that column, which every
+screen reads, is kept equal to the balance in the same transaction, as its projection.
 """
 
 from __future__ import annotations
@@ -27,7 +30,13 @@ from app.models import (
     StockBalance,
     StockItem,
 )
-from app.transform.ledger import LedgerRuleError, Line, check_transaction, reversal_of
+from app.transform.ledger import (
+    LedgerRuleError,
+    Line,
+    check_transaction,
+    places,
+    reversal_of,
+)
 
 
 class _Unset:
@@ -70,6 +79,9 @@ def _locked_balance(db: Session, org: OrgContext, location_id: int, item_id: int
         select_scoped(org, StockBalance)
         .where(StockBalance.location_id == location_id, StockBalance.inventory_item_id == item_id)
         .with_for_update()
+        # A row this session read earlier keeps its old quantity unless the locked read
+        # replaces it; the lock is only worth having over the latest committed value.
+        .execution_options(populate_existing=True)
     )
     row = db.scalars(query).first()
     if row is not None:
@@ -97,7 +109,20 @@ def _current_cost(db: Session, org: OrgContext, location_id: int, item_id: int) 
             StockItem.location_id == location_id, StockItem.inventory_item_id == item_id
         )
     ).first()
-    return Decimal(stock.cost_per_base_cents or 0) if stock is not None else Decimal("0")
+    cost = Decimal(stock.cost_per_base_cents or 0) if stock is not None else Decimal("0")
+    # A cost below zero is a slip in the stock row; the ledger keeps costs at zero or above
+    # (DR-19), as the opening balances did (ADR-0041).
+    return max(cost, Decimal("0"))
+
+
+def _project(db: Session, org: OrgContext, location_id: int, item_id: int, qty: Decimal) -> None:
+    """Keep the stock row every screen reads equal to the balance (ADR-0042)."""
+    for stock in db.scalars(
+        select_scoped(org, StockItem).where(
+            StockItem.location_id == location_id, StockItem.inventory_item_id == item_id
+        )
+    ):
+        stock.qty_base = qty
 
 
 def post_transaction(
@@ -174,6 +199,8 @@ def post_transaction(
                 balance.qty_base = Decimal(balance.qty_base) + line.qty_base
                 balance.last_movement_id = movement.id
                 balance.updated_at = now
+            for (location_id, item_id), balance in balances.items():
+                _project(db, org, location_id, item_id, Decimal(balance.qty_base))
             db.flush()
     except IntegrityError:
         # The same key was posted by someone else between our look and our write (DR-05).
@@ -182,6 +209,78 @@ def post_transaction(
             return earlier
         raise
     return transaction
+
+
+def post_opening(
+    db: Session,
+    org: OrgContext,
+    *,
+    location_id: int,
+    inventory_item_id: int,
+    qty_base: Decimal,
+    source_type: str,
+    source_id: str,
+    occurred_at: datetime,
+    actor_user_id: int | None | _Unset = _MEMBER,
+) -> InventoryTransaction | None:
+    """Open a newly stocked item at a location with the quantity it starts with (DR-03, ADR-0042).
+    None for nothing: a zero is the balance every pair starts at, and no movement is zero."""
+    qty = places(qty_base)
+    if qty == 0:
+        return None
+    return post_transaction(
+        db,
+        org,
+        kind="opening",
+        source_type=source_type,
+        source_id=source_id,
+        idempotency_key=f"opening:{inventory_item_id}:{location_id}",
+        lines=[Line(location_id, inventory_item_id, "opening_balance", qty)],
+        occurred_at=occurred_at,
+        actor_user_id=actor_user_id,
+        reason="Opening quantity entered when the item was stocked here",
+    )
+
+
+def post_count(
+    db: Session,
+    org: OrgContext,
+    *,
+    location_id: int,
+    inventory_item_id: int,
+    counted: Decimal,
+    source_type: str,
+    source_id: str,
+    idempotency_key: str,
+    occurred_at: datetime,
+    actor_user_id: int | None | _Unset = _MEMBER,
+    reason: str | None = None,
+) -> InventoryTransaction | None:
+    """Record a count as an observation (DR-12): post the difference from the recorded balance
+    as one count_variance, worked out while that balance is locked, so a posting that lands
+    between reading and writing is not lost. None when the count matches the record."""
+    key = idempotency_key.strip()
+    earlier = _by_key(db, org, key)
+    if earlier is not None:
+        return earlier
+    _check_stocked(db, org, [(location_id, inventory_item_id)])
+    # Held until the request commits; post_transaction takes the same lock again.
+    held = _locked_balance(db, org, location_id, inventory_item_id)
+    variance = places(counted) - Decimal(held.qty_base)
+    if variance == 0:
+        return None
+    return post_transaction(
+        db,
+        org,
+        kind="count",
+        source_type=source_type,
+        source_id=source_id,
+        idempotency_key=key,
+        lines=[Line(location_id, inventory_item_id, "count_variance", variance)],
+        occurred_at=occurred_at,
+        actor_user_id=actor_user_id,
+        reason=reason,
+    )
 
 
 def reverse_transaction(
@@ -260,3 +359,16 @@ def movements_total(db: Session, org: OrgContext, location_id: int, item_id: int
         )
     )
     return sum((Decimal(row.qty_base) for row in rows), Decimal("0"))
+
+
+def has_moved(db: Session, org: OrgContext, location_id: int, item_id: int) -> bool:
+    """Whether anything was ever posted for this item at this location."""
+    first = db.scalars(
+        select_scoped(org, InventoryMovement)
+        .where(
+            InventoryMovement.location_id == location_id,
+            InventoryMovement.inventory_item_id == item_id,
+        )
+        .limit(1)
+    ).first()
+    return first is not None

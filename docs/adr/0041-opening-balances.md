@@ -1,6 +1,6 @@
 # ADR-0041: Opening balances
 
-- **Status:** Proposed, 2026-11-12 (in the T1.17 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (owner: "Yes, merge it"; PR #37)
 - **Decision ID:** none (implements T1.17; DR-03; DM-6 backfill under C-35 and ADR-0040)
 - **Tasks:** T1.17; T1.18 (routes the writers through the ledger and catches it up)
 
@@ -41,4 +41,5 @@ number every screen shows. The ledger must begin equal to it, without loss.
   so the ledger is a snapshot as of this migration. T1.18 must post the difference for any pair
   that moved in between before readers switch, and new stock rows must post their opening
   quantity through the ledger.
-- Built in T1.17 with migration `a6eec9216078`.
+- Built in T1.17 with migration `a6eec9216078`; the catch-up and the writers' move followed in
+  T1.18 (ADR-0042, migration `ba3da8bb8b6f`).

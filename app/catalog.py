@@ -9,11 +9,18 @@ sort on those fields go through the split tables, using the helpers at the botto
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Select, event, select
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext, select_scoped
+# The module, not its names: app.access imports the models, which import this module last, so
+# a process that starts from app.access (the command line does) finds it half-loaded here.
+import app.access as access
 from app.models import InventoryCategory, InventoryItem, ItemLocation, StockItem
+
+if TYPE_CHECKING:
+    from app.access import OrgContext
 from app.transform.items import base_unit, item_slug, item_type
 
 
@@ -136,14 +143,14 @@ event.listen(Session, "before_flush", mirror)
 
 def inventory_items(db: Session, org: OrgContext) -> list[InventoryItem]:
     """The business's items, by name. Definitions are business-wide (C-38)."""
-    return list(db.scalars(select_scoped(org, InventoryItem).order_by(InventoryItem.name)))
+    return list(db.scalars(access.select_scoped(org, InventoryItem).order_by(InventoryItem.name)))
 
 
 def item_locations(db: Session, org: OrgContext, inventory_item_id: int) -> list[ItemLocation]:
     """An item's settings at the locations org may see."""
     return list(
         db.scalars(
-            select_scoped(org, ItemLocation)
+            access.select_scoped(org, ItemLocation)
             .where(ItemLocation.inventory_item_id == inventory_item_id)
             .order_by(ItemLocation.location_id)
         )
@@ -153,7 +160,7 @@ def item_locations(db: Session, org: OrgContext, inventory_item_id: int) -> list
 def active_stock(org: OrgContext) -> Select[StockItem]:
     """Stock items whose item, and whose settings at their location, are active, within org."""
     return (
-        select_scoped(org, StockItem)
+        access.select_scoped(org, StockItem)
         .join(ItemLocation, ItemLocation.id == StockItem.item_location_id)
         .join(InventoryItem, InventoryItem.id == StockItem.inventory_item_id)
         .where(ItemLocation.is_active.is_(True), InventoryItem.is_active.is_(True))

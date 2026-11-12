@@ -8,6 +8,7 @@ from decimal import Decimal
 import pytest
 from PIL import Image
 
+from app.access import OrgContext
 from app.config import get_settings
 from app.extract.expiry import ExpiryRead, StubExpiryReader
 from app.models import StockBatch, StockItem, TrackMode
@@ -170,6 +171,7 @@ def test_the_confidence_is_kept_with_the_batch_not_just_the_date(db, tenant, loc
 
     receive_scanned(
         db,
+        OrgContext.system(item.tenant_id),
         item,
         to_base(6, "each"),
         expires_on=date(2026, 10, 24),

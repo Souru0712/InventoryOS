@@ -16,6 +16,7 @@ from app.models import ProviderConnection, StockItem, TrackMode
 from app.orchestration import sync
 from app.orchestration.receiving import LineDecision, apply_document, parse_document, save_upload
 from app.units import Dimension
+from tests.ledger_helpers import opened
 from tests.sample_files import jpeg
 
 INVOICE = {
@@ -97,6 +98,7 @@ def square(db, tenant, location, monkeypatch):
         qty_base=Decimal("24"),
     )
     db.add(item)
+    opened(db, item)
     db.commit()
     fake = FakeSquare({("VAR-COKE", location.provider_location_id): Decimal("24")})
     monkeypatch.setattr(sync, "SquareClient", fake)
@@ -168,7 +170,7 @@ def test_receiving_by_scan_sends_nothing_to_square(db, location, square):
     from app.orchestration.scanning import receive_scanned
 
     fake, item = square
-    receive_scanned(db, item, Decimal("6"))
+    receive_scanned(db, OrgContext.system(item.tenant_id), item, Decimal("6"))
     db.commit()
 
     assert fake.calls == 0
@@ -286,11 +288,10 @@ def test_a_derived_weight_is_never_pushed_to_square_at_all(
     assert fake.changes == []
 
 
-def test_a_failed_square_read_during_a_scan_is_recorded_and_shown(
-    db, tenant, square, signed_in, monkeypatch
-):
-    """The one remaining Square call outside a sync used to fail into the log only."""
-    from app.models import IdentifierType, ProductIdentifier, SyncRun, SyncStatus
+def test_a_scan_never_reads_square_for_the_quantity(db, tenant, square, signed_in, monkeypatch):
+    """The scan page used to re-read Square's count, which then overwrote ours. The ledger owns
+    the quantity now (C-34, T1.18), so a scan asks Square nothing."""
+    from app.models import IdentifierType, ProductIdentifier, SyncRun
 
     _fake, item = square
     db.add(
@@ -305,13 +306,12 @@ def test_a_failed_square_read_during_a_scan_is_recorded_and_shown(
     db.commit()
 
     def unreachable(*_args, **_kwargs):
-        raise ConnectionError("square timed out")
+        raise AssertionError("the scan asked Square")
 
-    monkeypatch.setattr(sync, "refresh_item_from_square", unreachable)
+    monkeypatch.setattr(sync, "SquareClient", unreachable)
     response = signed_in.get("/app/scan/lookup", params={"code": "049000050103"})
 
     assert response.status_code == 200
-    assert response.json()["square_unreachable"] is True
-    run = db.query(SyncRun).filter(SyncRun.tenant_id == tenant.id).one()
-    assert (run.kind, run.status) == ("item", SyncStatus.FAILED)
-    assert "square timed out" in run.error
+    assert response.json()["item"]["qty_label"] == "24 each"
+    assert "square_unreachable" not in response.json()
+    assert db.query(SyncRun).filter(SyncRun.tenant_id == tenant.id).count() == 0

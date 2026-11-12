@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
 {% if request.query_params.get("connected") %}
   <div class="notice ok">Square is connected and your first sync has run.</div>
 {% endif %}
@@ -35,11 +36,6 @@
       <form method="post" action="/app/sync">{{ csrf_field(request) }}<button class="btn small" type="submit">Sync now</button></form>
     {% elif not connection and can(request, "pos.manage") %}
       <a class="btn small" href="/connect/square">Connect Square</a>
-    {% endif %}
-    {% if can(request, "mapping.manage") %}
-    <form method="post" action="/app/recalculate">{{ csrf_field(request) }}
-      <button class="btn small secondary" type="submit">Recalculate</button>
-    </form>
     {% endif %}
     {% if can(request, "receiving.record") %}<a class="btn small secondary" href="/app/receiving">Receive delivery</a>{% endif %}
     {% if can(request, "item.edit") %}<a class="btn small secondary" href="/app/catalog/new">Add item</a>{% endif %}
@@ -152,7 +148,6 @@
 </table>
 </div>
 <p class="small muted">Cover is how many days the current quantity lasts at the last four weeks of
-sales. Recording a count re-anchors the item &mdash; for weight and volume, depletion restarts from
-the number you enter.</p>
+sales. Saving a count posts the difference from the recorded quantity as a count variance.</p>
 {% endif %}
 {% endblock %}

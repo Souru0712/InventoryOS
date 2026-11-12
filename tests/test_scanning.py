@@ -1,4 +1,4 @@
-"""Scan a code, know the product, receive against it. Square still owns the quantity."""
+"""Scan a code, know the product, receive against it. The ledger owns the quantity (T1.18)."""
 
 from datetime import date, timedelta
 from decimal import Decimal
@@ -13,6 +13,7 @@ from app.models import (
     IdentifierType,
     InventoryCount,
     InventoryEvent,
+    InventoryTransaction,
     Location,
     ProductIdentifier,
     StockBatch,
@@ -29,6 +30,7 @@ from app.orchestration.scanning import (
 )
 from app.units import Dimension
 from tests.accounts import confirm_email
+from tests.ledger_helpers import opened
 
 COKE = "049000028911"  # a real-looking 12 digit UPC-A
 
@@ -59,6 +61,7 @@ def coke(db, tenant, location):
             source="square",
         )
     )
+    opened(db, item)
     db.commit()
     return item
 
@@ -145,7 +148,7 @@ def test_one_code_cannot_point_at_two_products(db, tenant, location, coke):
 
 
 def test_receiving_raises_stock_and_leaves_a_trail(db, tenant, coke):
-    result = receive_scanned(db, coke, Decimal("24"), user_id=None)
+    result = receive_scanned(db, OrgContext.system(tenant.id), coke, Decimal("24"))
     db.commit()
 
     assert coke.qty_base == Decimal("58")
@@ -153,16 +156,18 @@ def test_receiving_raises_stock_and_leaves_a_trail(db, tenant, coke):
     # Nothing is sent to Square (C-34), so there is no push to report.
     assert "pushed_to_pos" not in result
 
-    event = db.query(InventoryEvent).one()
-    assert (event.action, event.source) == ("received", "barcode_scan")
-    assert (event.delta_base, event.qty_after_base) == (Decimal("24"), Decimal("58"))
-    # The receipt re-anchors the quantity, exactly as an invoice does.
-    assert db.query(InventoryCount).filter(InventoryCount.source == "scan").count() == 1
+    # The trail is the ledger's receipt; the old tables are frozen history (DM-7).
+    receipt = db.query(InventoryTransaction).filter_by(kind="receipt").one()
+    assert (receipt.source_type, receipt.movements[0].qty_base) == ("scan", Decimal("24"))
+    assert db.query(InventoryEvent).count() == 0
+    assert db.query(InventoryCount).count() == 0
 
 
 def test_a_dated_scan_creates_the_batch_the_expiring_page_reads(db, tenant, coke):
     best_before = date.today() + timedelta(days=30)
-    result = receive_scanned(db, coke, Decimal("24"), expires_on=best_before)
+    result = receive_scanned(
+        db, OrgContext.system(tenant.id), coke, Decimal("24"), expires_on=best_before
+    )
     db.commit()
 
     batch = db.query(StockBatch).one()
@@ -176,7 +181,7 @@ def test_a_dated_scan_creates_the_batch_the_expiring_page_reads(db, tenant, coke
 
 
 def test_an_undated_scan_creates_no_batch(db, tenant, coke):
-    receive_scanned(db, coke, Decimal("24"))
+    receive_scanned(db, OrgContext.system(tenant.id), coke, Decimal("24"))
     db.commit()
     assert db.query(StockBatch).count() == 0
 
@@ -184,7 +189,7 @@ def test_an_undated_scan_creates_no_batch(db, tenant, coke):
 def test_receiving_nothing_is_refused(db, tenant, coke):
     for bad in (Decimal("0"), Decimal("-5")):
         with pytest.raises(ValueError):
-            receive_scanned(db, coke, bad)
+            receive_scanned(db, OrgContext.system(tenant.id), coke, bad)
 
 
 # --- through the browser --------------------------------------------------------------------
@@ -222,6 +227,7 @@ def signed_up(client, name="Rosewood", email="owner@rosewood.test") -> int:
             pack_size_base=Decimal("12"),
         )
         db.add(item)
+        opened(db, item)
         db.commit()
         return item.id
 

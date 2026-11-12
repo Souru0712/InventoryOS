@@ -12,8 +12,9 @@ from app.main import app
 from app.models import (
     AuditEvent,
     InventoryCategory,
-    InventoryCount,
     InventoryItem,
+    InventoryMovement,
+    InventoryTransaction,
     ItemLocation,
     Location,
     Membership,
@@ -112,8 +113,11 @@ def test_an_item_is_created_once_and_stocked_at_the_chosen_locations(owner, loca
     assert [r.location_id for r in rows] == [location.id, harbor.id]
     assert all(r.qty_base == Decimal("6000") and r.reorder_point_base == 2000 for r in rows)
     with SessionLocal() as db:
-        counts = db.scalars(select(InventoryCount).where(InventoryCount.source == "opening")).all()
-        assert len(counts) == 2
+        # Each location's starting quantity is its opening balance in the ledger (T1.18).
+        openings = db.scalars(
+            select(InventoryTransaction).where(InventoryTransaction.kind == "opening")
+        ).all()
+        assert sorted(o.movements[0].qty_base for o in openings) == [Decimal("6000")] * 2
     page = owner.get(f"/app/catalog/{item.id}").text
     assert "Main" in page and "Harbor" in page and "Oat milk" in page
     assert actions() == ["item.created"]
@@ -201,7 +205,10 @@ def test_a_deactivated_item_keeps_its_history_and_leaves_pick_lists(owner, locat
     with SessionLocal() as db:
         assert db.get(StockItem, stock.id).qty_base == Decimal("4000")
         assert db.scalars(
-            select(InventoryCount).where(InventoryCount.stock_item_id == stock.id)
+            select(InventoryMovement).where(
+                InventoryMovement.location_id == stock.location_id,
+                InventoryMovement.inventory_item_id == stock.inventory_item_id,
+            )
         ).all()
     assert "Oat milk" in owner.get("/app/catalog", params={"status": "inactive"}).text
     owner.post(f"/app/catalog/{item.id}/activate")

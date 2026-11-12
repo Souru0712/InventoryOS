@@ -1,4 +1,7 @@
-"""Square tells us when stock moves at the till. Only if it can prove it is Square."""
+"""Square tells us when stock moves at the till. Only if it can prove it is Square.
+
+Since T1.18 its count is noted, never applied: the ledger owns every item's quantity (C-34).
+"""
 
 import json
 from datetime import UTC, datetime, timedelta
@@ -144,20 +147,22 @@ def test_an_unsigned_call_is_refused(client, connected):
 # --- applying -------------------------------------------------------------------------------
 
 
-def test_a_sale_at_the_till_updates_our_count(client, connected):
+def test_a_count_at_the_till_is_noted_but_never_changes_our_stock(client, connected):
     response = post(client, event("30", datetime.now(UTC)))
     assert response.status_code == 200
-    assert response.json()["updated"] == 1
-    assert quantity_now(connected) == Decimal("30")
+    assert response.json()["seen"] == 1
+    assert quantity_now(connected) == Decimal("34")
+    with SessionLocal() as db:
+        assert db.get(StockItem, connected).last_synced_at is not None
 
 
 def test_a_count_calculated_before_our_last_read_is_ignored(client, connected):
-    # An offline till can deliver yesterday's number today; older news never wins.
+    # An offline till can deliver yesterday's number today; older news is not even noted.
     post(client, event("30", datetime.now(UTC)))
     stale = datetime.now(UTC) - timedelta(days=1)
     response = post(client, event("99", stale))
-    assert response.json()["updated"] == 0
-    assert quantity_now(connected) == Decimal("30")
+    assert response.json()["seen"] == 0
+    assert quantity_now(connected) == Decimal("34")
 
 
 def test_another_event_type_is_acknowledged_and_ignored(client, connected):

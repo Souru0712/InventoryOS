@@ -19,6 +19,7 @@ from app.extract.invoice import SUPPORTED_MEDIA, ExtractionError
 from app.models import Document, DocumentStatus, Location, StockItem, Tenant, User
 from app.orchestration.extraction_quality import correction_stats
 from app.orchestration.receiving import (
+    AlreadyApplied,
     LineDecision,
     UploadRejected,
     apply_document,
@@ -277,7 +278,14 @@ def apply_receipt(
     )
     document.supplier, document.invoice_number = supplier, invoice_number
 
-    result = apply_document(db, org, document.id, decisions, user_id=user.id)
+    try:
+        result = apply_document(db, org, document.id, decisions, user_id=user.id)
+    except AlreadyApplied:
+        # Another request received it between this page loading and now (AC-RCV-05).
+        db.rollback()
+        return RedirectResponse(
+            f"/app/receiving/{document_id}?error=already_applied", status_code=303
+        )
     db.commit()
     return RedirectResponse(
         f"/app/receiving/{document.id}?applied={result['applied']}&batches={result['batches']}",

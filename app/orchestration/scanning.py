@@ -1,7 +1,7 @@
-"""Barcode scanning: a code identifies the product, Square still owns the quantity.
+"""Barcode scanning: a code identifies the product; the ledger owns the quantity.
 
-The scan never invents a Square number. It resolves the code locally, raises stock the same
-way receiving a delivery does, and sends Square a delta.
+A scan resolves the code locally and raises stock the same way receiving a delivery does: a
+receipt posted to the ledger (T1.18). Nothing is sent to Square (C-34).
 """
 
 from __future__ import annotations
@@ -10,15 +10,15 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.extract.expiry import ExpiryReader, ExpiryReadError, get_reader
+from app.ledger.posting import post_transaction
 from app.models import (
     IdentifierType,
-    InventoryCount,
-    InventoryEvent,
     Location,
     ProductIdentifier,
     StockBatch,
@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.transform.barcodes import canonical, has_valid_check_digit, is_numeric, lookup_keys
 from app.transform.dates import parse_printed_date
+from app.transform.ledger import Line, places
 
 log = logging.getLogger(__name__)
 
@@ -188,67 +189,43 @@ def _iso(raw: str | None) -> date | None:
         return None
 
 
-def record_event(
-    db: Session,
-    item: StockItem,
-    action: str,
-    source: str,
-    qty_after_base: Decimal,
-    delta_base: Decimal | None = None,
-    user_id: int | None = None,
-    detail: str | None = None,
-    pushed_to_pos: bool = False,
-) -> InventoryEvent:
-    event = InventoryEvent(
-        tenant_id=item.tenant_id,
-        stock_item_id=item.id,
-        user_id=user_id,
-        action=action,
-        source=source,
-        delta_base=delta_base,
-        qty_after_base=qty_after_base,
-        detail=(detail or None) and detail[:500],
-        pushed_to_pos=pushed_to_pos,
-    )
-    db.add(event)
-    return event
-
-
 def receive_scanned(
     db: Session,
+    org: OrgContext,
     item: StockItem,
     qty_base: Decimal,
-    user_id: int | None = None,
     expires_on: date | None = None,
     date_type: str = "unknown",
     date_confidence: Decimal | None = None,
     now: datetime | None = None,
 ) -> dict:
-    """Raise stock for a scanned receipt, date the lot, and push the delta to Square."""
-    if qty_base is None or qty_base <= ZERO:
+    """Receive scanned stock: one receipt posted to the ledger, and the lot dated if known."""
+    if qty_base is None or places(qty_base) <= ZERO:
         raise ValueError("received quantity must be above zero")
+    if item.inventory_item_id is None:
+        raise ValueError("that stock item is not linked to an item")
     now = now or datetime.now(UTC)
-
-    item.qty_base = Decimal(item.qty_base or 0) + Decimal(qty_base)
-    db.add(
-        InventoryCount(
-            tenant_id=item.tenant_id,
-            stock_item_id=item.id,
-            qty_base=item.qty_base,
-            source="scan",
-            note="received by barcode scan",
-            counted_at=now,
-        )
+    received = places(qty_base)
+    # A scan has no document; each one is its own receipt.
+    scan = uuid4().hex
+    post_transaction(
+        db,
+        org,
+        kind="receipt",
+        source_type="scan",
+        source_id=scan,
+        idempotency_key=f"receipt:scan:{scan}",
+        lines=[Line(item.location_id, item.inventory_item_id, "receipt", received)],
+        occurred_at=now,
+        reason="Received by barcode scan",
     )
-    # A receipt re-anchors derived stock, exactly as an invoice does.
-    item.last_counted_at = now
 
     batch = None
     if expires_on is not None:
         batch = StockBatch(
             tenant_id=item.tenant_id,
             stock_item_id=item.id,
-            received_qty_base=Decimal(qty_base),
+            received_qty_base=received,
             expires_on=expires_on,
             date_type=date_type,
             date_confidence=date_confidence,
@@ -258,17 +235,6 @@ def receive_scanned(
         )
         db.add(batch)
 
-    # Nothing is sent to Square (C-34).
-    record_event(
-        db,
-        item,
-        action="received",
-        source="barcode_scan",
-        qty_after_base=item.qty_base,
-        delta_base=Decimal(qty_base),
-        user_id=user_id,
-        detail=f"best before {expires_on:%Y-%m-%d}" if expires_on else None,
-    )
     db.flush()
     return {"qty_after_base": item.qty_base, "dated": batch is not None}
 

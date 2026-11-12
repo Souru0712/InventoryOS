@@ -17,10 +17,10 @@ from app.access.system import user_by_email
 from app.config import require_deployable
 from app.db import init_db, run_migrations, session_scope, stamp_migrations
 from app.entitlements import allows, state
+from app.ledger.posting import SYSTEM, post_opening
 from app.models import (
     EmailSuppression,
     IdentifierType,
-    InventoryCount,
     Location,
     Membership,
     ProductIdentifier,
@@ -53,7 +53,6 @@ from app.orchestration.health import record_snapshot
 from app.orchestration.receiving import parse_document
 from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
-from app.orchestration.views import refresh_derived_quantities
 from app.security import hash_password, revoke_sessions
 from app.transform.barcodes import check_digit
 from app.transform.reports import money
@@ -299,7 +298,6 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 def cmd_alerts(args: argparse.Namespace) -> int:
     with session_scope() as db:
-        refresh_derived_quantities(db, OrgContext.system(args.tenant))
         stats = evaluate_and_store(db, OrgContext.system(args.tenant))
         if args.send:
             stats["emailed"] = send_alert_digest(db, OrgContext.system(args.tenant))
@@ -417,7 +415,6 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 dimension=dimension,
                 stock_unit=unit,
                 track_mode=TrackMode.MANUAL if dimension is Dimension.COUNT else TrackMode.DERIVED,
-                qty_base=qty_base,
                 reorder_point_base=to_base(reorder, unit),
                 par_level_base=to_base(par, unit),
                 cost_per_base_cents=(Decimal(cost) * 100) / to_base("1", unit),
@@ -429,15 +426,18 @@ def cmd_demo(args: argparse.Namespace) -> int:
             )
             db.add(item)
             db.flush()
-            db.add(
-                InventoryCount(
-                    tenant_id=tenant.id,
-                    stock_item_id=item.id,
-                    qty_base=qty_base,
-                    source="opening",
-                    note="demo opening count",
-                    counted_at=anchor,
-                )
+            if item.inventory_item_id is None:  # the flush links it (app/catalog.py)
+                raise RuntimeError(f"demo item {name} was not linked to an item")
+            post_opening(
+                db,
+                OrgContext.system(tenant.id),
+                location_id=location.id,
+                inventory_item_id=item.inventory_item_id,
+                qty_base=qty_base,
+                source_type="demo",
+                source_id=str(item.id),
+                occurred_at=anchor,
+                actor_user_id=SYSTEM,
             )
             stock[name] = item
             if retail := DEMO_RETAIL.get(name):
@@ -498,8 +498,8 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 )
         db.flush()
 
-        refresh_derived_quantities(db, OrgContext.system(tenant.id), today)
-        # Dated after the refresh, so each lot is a share of what is actually left.
+        # Sales do not consume stock until the consumption engine (T2.05), so each lot is a
+        # share of the opening quantity.
         for name, share, days in DEMO_LOTS:
             item = stock[name]
             step = Decimal("1") if item.dimension is Dimension.COUNT else Decimal("0.0001")

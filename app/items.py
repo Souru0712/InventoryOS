@@ -1,10 +1,11 @@
 """Managing items and categories (T1.14; INV-FR-01, -02, -03, -06, -10; DR-24, AC-INV-01).
 
-An item is defined once for the business (inventory_items) and stocked at locations; quantities
-still live on each location's stock item (until the ledger, T1.16), so creating an item, or
-stocking it somewhere new, creates stock items and lets app/catalog.py link them. Definitions and
-levels are written to the split tables directly. Nothing is deleted: items are deactivated,
-categories archived or merged (DR-24). Every change is recorded in the business history.
+An item is defined once for the business (inventory_items) and stocked at locations; creating
+an item, or stocking it somewhere new, creates stock items and lets app/catalog.py link them.
+Definitions and levels are written to the split tables directly; a starting quantity is posted
+to the ledger as an opening balance (T1.18), never written to a stock row. Nothing is deleted:
+items are deactivated, categories archived or merged (DR-24). Every change is recorded in the
+business history.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
 from app.audit import changes, record_audit
 from app.catalog import category_named
+from app.ledger.posting import has_moved, post_opening
 from app.models import (
     InventoryCategory,
     InventoryCount,
@@ -184,10 +186,12 @@ def item_row(db: Session, org: OrgContext, inventory_item_id: int) -> ItemRow:
 
 
 def has_history(db: Session, org: OrgContext, row: ItemRow) -> bool:
-    """Whether stock of this item has moved anywhere org can see: a quantity, a count of
-    something, a stock event or a dated lot. The zero opening count of a new item is not."""
+    """Whether stock of this item has moved anywhere org can see: a quantity, a posting, a
+    dated lot, or a count or stock event from before the ledger (kept read-only, DM-7)."""
     ids = [place.stock.id for place in row.places]
     if any((place.stock.qty_base or 0) != 0 for place in row.places):
+        return True
+    if any(has_moved(db, org, place.location.id, row.item.id) for place in row.places):
         return True
     counted = db.scalars(
         select_scoped(org, InventoryCount).where(InventoryCount.stock_item_id.in_(ids))
@@ -332,7 +336,6 @@ def create_item(db: Session, org: OrgContext, new: NewItem, ip: str | None = Non
             dimension=dimension,
             stock_unit=unit,
             track_mode=TrackMode.DERIVED if dimension is not Dimension.COUNT else TrackMode.MANUAL,
-            qty_base=quantity,
             reorder_point_base=reorder,
             par_level_base=par,
             cost_per_base_cents=cost,
@@ -346,20 +349,21 @@ def create_item(db: Session, org: OrgContext, new: NewItem, ip: str | None = Non
         db.add(stock)
         stock_rows.append(stock)
     db.flush()
-    for stock in stock_rows:
-        db.add(
-            InventoryCount(
-                tenant_id=org.tenant_id,
-                stock_item_id=stock.id,
-                qty_base=quantity,
-                source="opening",
-                note="opening count",
-                counted_at=now,
-            )
-        )
     item = stock_rows[0].inventory_item
     if item is None:  # the flush links every new stock item (app/catalog.py)
         raise RuntimeError("a new stock item was not linked to its item")
+    for stock in stock_rows:
+        # What is on the shelf today is the item's opening balance there (ADR-0042).
+        post_opening(
+            db,
+            org,
+            location_id=stock.location_id,
+            inventory_item_id=item.id,
+            qty_base=quantity,
+            source_type="item",
+            source_id=f"{item.id}:{stock.location_id}",
+            occurred_at=now,
+        )
     item.item_type = item_type
     item.notes = new.notes.strip() or None
     if pack is not None:
@@ -575,7 +579,6 @@ def stock_at(
         dimension=item.dimension,
         stock_unit=item.display_unit,
         track_mode=template.track_mode,
-        qty_base=Decimal("0"),
         cost_per_base_cents=template.cost_per_base_cents,
         retail_per_base_cents=template.retail_per_base_cents,
         receive_unit=template.receive_unit,

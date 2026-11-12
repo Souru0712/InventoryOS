@@ -5,6 +5,107 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.18 Route existing writers through the ledger
+
+**Implemented**
+- **Projection.** `post_transaction()` sets each touched stock row's `qty_base` to the new balance
+  in the same transaction, under the balance lock; it is the column's only writer. The locked
+  balance read now replaces a stale copy in the session (`populate_existing`).
+- **Receipts.** Invoice apply claims the document with a conditional update (`status <>
+  'applied'`, DR-07) and posts one `receipt` for its applied lines (key
+  `receipt:document:<id>`, unit cost from the line). A second request gets `AlreadyApplied`,
+  and the route answers "already applied" (AC-RCV-05). Scan receive posts a `receipt`.
+  Receipts no longer set `last_counted_at` (the derived engine's re-anchor; a delivery is not a
+  count).
+- **Counts** (DR-12). `post_count()` locks the balance and posts counted − balance as one
+  `count_variance`, or nothing when they match. Both the dashboard and scan counts use it; the
+  dashboard flashes what was posted, and the scan page shows the variance.
+- **Removed:**
+  - `refresh_derived_quantities`, `derived_quantity` and `consumed_since`;
+  - `/app/recalculate` and its button;
+  - the sync's derived step;
+  - the scan page's Square re-read.
+- **Square counts.** `apply_provider_counts` records only when Square reported (C-34), and the
+  webhook answers `seen`.
+- **New rows.** Item creation and the demo seed post opening quantities (`post_opening()`, key
+  `opening:<item>:<location>`). New stock rows no longer pass `qty_base`.
+- **Catch-up migration** `ba3da8bb8b6f`:
+  - posts an `adjustment` for drift since the opening balances;
+  - posts an `opening` (and a balance row) for rows the ledger never saw;
+  - is re-runnable, and its downgrade recomputes the balances.
+- **DM-7 (part).** Nothing creates `inventory_counts` or `inventory_events`; both stay readable.
+  Item history (`has_history`) also counts ledger movements.
+- **Probes.** R1, R2, R4 and R5 are retired and replaced by tests of the new behaviour. ADR-0042
+  (Proposed).
+- **Found and fixed (separate commit).** Since T1.13, `python -m app.cli` failed at import with
+  a cycle (`app.access` → `app.models` → `app.catalog` → `app.access`). That broke every command,
+  including `migrate`, `demo` and the scheduler worker that `render.yaml` starts. Tests never saw
+  it because they load `app.main` first. `app/catalog.py` now imports the `app.access` module,
+  not its names. `tests/test_cli_entry.py` runs `import app.cli` in a fresh process; it fails on
+  `main` and passes here.
+
+**Verified (locally, SQLite)**
+- `tests/test_ledger_writers.py` (17):
+  - **Static:** nothing outside `app/ledger` assigns `qty_base`. This covers attribute
+    assignment, `StockItem(qty_base=)`, `.values(qty_base=)`, `setattr` and SQL `SET`; the only
+    allowance is the alert's snapshot. Nothing constructs `InventoryCount` or `InventoryEvent`.
+  - **Receipts:** an invoice posts one receipt at the line's cost. R4 is inverted: two sessions
+    that both loaded the document receive it once. A second browser apply is told "already
+    applied". AC-RCV-05 runs with two threads at once (Postgres only; skipped on SQLite).
+  - **Scans and counts:** a scanned receipt posts. Counts post the variance and show it, a
+    matching count posts nothing, and the variance is measured against the balance at posting
+    time.
+  - **R1/R2 replaced:** sales at the same or another location move no milk.
+  - **R5 replaced:** a Square count, repeated, changes nothing.
+  - **New rows:** a new item opens through the ledger, and stocking it elsewhere starts at zero
+    with nothing posted.
+  - **Catch-up:** it posts the drift and the missing opening, then posts nothing on a second run.
+- `tests/test_migrations.py`: catch-up through Alembic over drifted rows, and its downgrade.
+- A fresh database: `python -m app.cli migrate` reached `ba3da8bb8b6f`, then `demo` posted 9
+  openings, and every stock row equalled its balance.
+- Updated tests that set quantities by hand now open them via `tests/ledger_helpers.opened()`.
+- Full suite 883 passed, 21 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Open issues (owner decisions)**
+- **Probe R6** (batch removal is a hard delete) is not retired. Removing a batch deletes a date,
+  not stock, so no posting is involved. Keeping batches needs batch columns, which is T2.06's
+  scope (it names C9 and R6). Recommendation: move R6's retirement to T2.06.
+- **`sales_daily`** keeps its writer, the Square sync. Velocity, cover, reorder and reports read
+  it, and T2.04 is the task that makes it legacy. DM-7 dates its freeze to T1.18. Recommendation:
+  split DM-7 (counts and events at T1.18, `sales_daily` at T2.04).
+
+**Files changed**
+- **App:**
+  - `app/ledger/posting.py`, `app/transform/ledger.py` (`places`);
+  - `app/orchestration/{receiving,scanning,sync,views}.py`, `app/load/upsert.py`;
+  - `app/web/{dashboard,scanning,receiving,webhooks}.py`, the dashboard and scan templates;
+  - `app/items.py`, `app/cli.py`, `app/units.py` (`format_change`), `app/transform/inventory.py`.
+- **New:** migration `ba3da8bb8b6f`, ADR-0042, `tests/test_ledger_writers.py`,
+  `tests/ledger_helpers.py`, `tests/test_cli_entry.py`; `app/catalog.py` (import fix).
+- **Updated:** the audit probes, the tests that used the old writers, CLAUDE.md, ADR-0041
+  (Accepted), the ADR index, the task index (T1.17 → Completed, T1.18 → In review) and this log.
+
+**Next task**
+- T1.19 Exception model, or T1.21 Nightly ledger verification (both unblocked by T1.16).
+
+---
+
+## 2026-11-12 — T1.17 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #37 was merged with a merge commit (`c9904a2`).
+- CI on its head `a60d72c`, all five required jobs green:
+  - SQLite: 867 passed, 19 skipped;
+  - PostgreSQL 16: 886 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0041 → Accepted.
+
+**Files changed**
+- Task index (T1.17 → Completed), ADR-0041 and its index row, this log.
+
+---
+
 ## 2026-11-12 — T1.17 Opening-balance migration
 
 **Implemented**
