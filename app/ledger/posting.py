@@ -14,6 +14,7 @@ screen reads, is kept equal to the balance in the same transaction, as its proje
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Final
@@ -144,6 +145,7 @@ def post_transaction(
     refuse_below_zero: bool = False,
 ) -> InventoryTransaction:
     """Post one business event's movements, or return the earlier posting of the same key.
+    A line may carry its own occurred_at; otherwise it happened when the transaction did.
 
     A manual movement passes refuse_below_zero: it is refused with BelowZero if it would take
     a balance below zero, checked while the balance is locked (DR-08). Movements the system
@@ -151,6 +153,8 @@ def post_transaction(
     key = idempotency_key.strip()
     accepted = check_transaction(kind, lines, key)
     if occurred_at.tzinfo is None or occurred_at.utcoffset() is None:
+        raise LedgerRuleError("occurred_at must say its time zone")
+    if any(line.occurred_at is not None and line.occurred_at.tzinfo is None for line in accepted):
         raise LedgerRuleError("occurred_at must say its time zone")
     if (kind == "reversal") != (reverses_transaction_id is not None):
         raise LedgerRuleError("only a reversal names the transaction it undoes, and it must")
@@ -202,7 +206,7 @@ def post_transaction(
                     unit_cost_snapshot=cost,
                     reason=line.reason[:300] if line.reason else None,
                     reverses_movement_id=line.reverses_movement_id,
-                    occurred_at=occurred_at,
+                    occurred_at=line.occurred_at or occurred_at,
                 )
                 db.add(movement)
                 db.flush()
@@ -383,3 +387,105 @@ def has_moved(db: Session, org: OrgContext, location_id: int, item_id: int) -> b
         .limit(1)
     ).first()
     return first is not None
+
+
+def balance_at(
+    db: Session, org: OrgContext, location_id: int, item_id: int, at: datetime
+) -> Decimal:
+    """What the ledger held at an instant: the movements that had happened by then (REC-FR-03).
+    A movement recorded later but dated earlier counts; one dated later does not."""
+    rows = db.scalars(
+        select_scoped(org, InventoryMovement)
+        .with_only_columns(InventoryMovement.qty_base)
+        .where(
+            InventoryMovement.location_id == location_id,
+            InventoryMovement.inventory_item_id == item_id,
+            InventoryMovement.occurred_at <= at,
+        )
+    )
+    return sum((Decimal(qty) for qty in rows), Decimal("0"))
+
+
+@dataclass(frozen=True)
+class Observation:
+    """What was counted of one item at one location, and when."""
+
+    location_id: int
+    inventory_item_id: int
+    counted: Decimal
+    counted_at: datetime
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class Observed:
+    expected: Decimal  # what the ledger held when it was counted
+    variance: Decimal  # counted - expected
+    unit_cost: Decimal  # cents per base unit, now
+    movement_id: int | None  # its count_variance; None for no difference
+
+
+def post_count_lines(
+    db: Session,
+    org: OrgContext,
+    *,
+    observations: Sequence[Observation],
+    source_type: str,
+    source_id: str,
+    idempotency_key: str,
+    occurred_at: datetime,
+    actor_user_id: int | None | _Unset = _MEMBER,
+    reason: str | None = None,
+) -> tuple[InventoryTransaction | None, list[Observed]]:
+    """Post a count session (DR-12, REC-FR-07): with every balance it touches locked, each
+    line's expected is what the ledger held at the line's own instant, and each non-zero
+    difference becomes one count_variance dated then. A movement posted after the count (a sale
+    a minute later) does not change what was expected (AC-REC-02). No transaction when nothing
+    differed."""
+    pairs = sorted(
+        {(o.location_id, o.inventory_item_id) for o in observations},
+        key=lambda pair: (pair[1], pair[0]),
+    )
+    _check_stocked(db, org, pairs)
+    for pair in pairs:
+        _locked_balance(db, org, *pair)  # held until the request commits
+    found: list[tuple[Decimal, Decimal, Decimal]] = []
+    lines = []
+    for o in observations:
+        expected = balance_at(db, org, o.location_id, o.inventory_item_id, o.counted_at)
+        variance = places(o.counted) - expected
+        found.append(
+            (expected, variance, _current_cost(db, org, o.location_id, o.inventory_item_id))
+        )
+        if variance != 0:
+            lines.append(
+                Line(
+                    o.location_id,
+                    o.inventory_item_id,
+                    "count_variance",
+                    variance,
+                    reason=o.reason,
+                    occurred_at=o.counted_at,
+                )
+            )
+    transaction = None
+    movements: list[int] = []
+    if lines:
+        transaction = post_transaction(
+            db,
+            org,
+            kind="count",
+            source_type=source_type,
+            source_id=source_id,
+            idempotency_key=idempotency_key,
+            lines=lines,
+            occurred_at=occurred_at,
+            actor_user_id=actor_user_id,
+            reason=reason,
+        )
+        movements = [m.id for m in sorted(transaction.movements, key=lambda m: m.id)]
+    results = []
+    posted = iter(movements)
+    for expected, variance, cost in found:
+        results.append(Observed(expected, variance, cost, next(posted) if variance != 0 else None))
+    return transaction, results

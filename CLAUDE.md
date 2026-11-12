@@ -33,7 +33,9 @@ implementation sessions; the detail lives in `docs/`.
   corrects either figure. A manual movement (an adjustment, waste) posts with
   `refuse_below_zero=True`: below zero only with `adjustment.override_negative` and a reason
   (DR-08). Adjustments go through `app/adjustments.py` (ADR-0046); history is read through
-  `app/ledger/history.py`. It is also the only writer of
+  `app/ledger/history.py`. A count session (`app/counts.py`, ADR-0047) compares each line
+  with `balance_at()` its own `counted_at` and posts through `post_count_lines()` under the
+  lock. It is also the only writer of
   `stock_items.qty_base`, the balance's projection that screens read (ADR-0042): a count posts
   through `post_count()`, a new item's quantity through `post_opening()`, a receipt as a
   `receipt`; a test fails on any other assignment. Square's counts never change stock (C-34).

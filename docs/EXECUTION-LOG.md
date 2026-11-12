@@ -5,6 +5,89 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.23-a Count sessions: model and posting
+
+**Implemented**
+- **`stock_counts` and `stock_count_lines`** (`StockCount`, `StockCountLine`, migration
+  `f38f77cefc20`):
+  - a session has a scope (full, category, storage area, item) and goes `open` → `posted`;
+  - a line is an observation (quantity, what was typed, when, by whom) with expected, variance
+    in quantity and cents, unit cost, optional REC-FR-06 reason, review flag and movement;
+  - named CHECKs; one line per item per session; lines are scoped through their session.
+- **Rules** (`app/transform/counts.py`, pure): scopes, reasons, parts (none below zero), and the
+  review rule ($25 or 20% of a positive expected).
+- **Ledger:**
+  - `balance_at()` sums the movements dated at or before an instant;
+  - `Line` gains an optional `occurred_at`;
+  - `post_count_lines()` locks the balances and, for each line, posts counted minus expected
+    at its own instant as one `count_variance` dated then (a single transaction, none when
+    nothing differed).
+- **`app/counts.py`** (the only writer):
+  - `start_count`;
+  - `count_items` lists a session's items in storage order (area, then name);
+  - `record_line` takes packages plus loose, and counting an item again replaces its line;
+  - `post_count` posts once (conditional update), fills each line's figures, sets
+    last-counted, and opens `count_variance_high` per line to review (no amount in the title).
+  - A session's status is read afresh because sessions keep rows across commits.
+- ADR-0047 (Proposed); CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_count_sessions.py` (11):
+  - **Rules:** scope and parts; the review rule, including AC-REC-04's -$40 and -$10.
+  - **AC-REC-01:** a storage-area session lists items in area order, with unplaced items last,
+    and takes "3 case + 4 each" = 40. An item outside the session is refused, and a single-item
+    session lists just it.
+  - **AC-REC-02:** expected is 26, the balance at the line's instant. It includes a delivery
+    recorded later but dated before the count, and excludes a sale a minute after. The
+    variance of -9 is dated at the count, and the balance ends at 15 = movements = the screen.
+  - **AC-REC-03:** one count transaction keyed `count:<id>` with one variance per non-zero line;
+    a matched line has no movement; a recount replaces the line; nothing new in
+    `inventory_counts`. A session with no difference has no transaction.
+  - **Posting once:** a session posts once even when two requests both saw it open, and cannot
+    take more lines after. An empty session is refused.
+  - **AC-REC-04:** -$40 opens `count_variance_high` with the exact title and 4000 at stake, which
+    an Employee sees without the amount; -$10 opens none.
+  - **Static:** only `app/counts.py` creates sessions and lines.
+- `tests/test_migrations.py` (schema agreement through `f38f77cefc20`), schema hygiene, scoped
+  access, ledger.
+- **By hand:** the demo database migrated to `f38f77cefc20` through the real chain, and a full
+  session there:
+  - listed 9 items in storage order;
+  - counted three lines 2 short and posted one variance each;
+  - flagged the $25 shortfall on the coffee bags for review, and left the ledger with no drift.
+- Full suite 946 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker
+  clean.
+
+**Files changed**
+- **New:** `app/transform/counts.py`, `app/counts.py`, migration `f38f77cefc20`, ADR-0047,
+  `tests/test_count_sessions.py`.
+- **Changed:** `app/models.py`, `app/access/scoped.py`, `app/transform/ledger.py`
+  (`Line.occurred_at`), `app/ledger/posting.py` (`balance_at`, `post_count_lines`), CLAUDE.md,
+  ADR-0046 (Accepted), the ADR index, the task index (T1.22 → Completed, T1.23 → In progress)
+  and this log.
+
+**Next**
+- T1.23-b Count session screens: phone-friendly, in storage order; reconciliation history
+  (REC-FR-09, AC-REC-05).
+
+---
+
+## 2026-11-12 — T1.22 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #44 was merged with a merge commit (`c01e7dd`).
+- CI on its head `368ef07`, all five required jobs green:
+  - SQLite: 935 passed, 24 skipped;
+  - PostgreSQL 16: 959 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0046 → Accepted. The WF-10 and INV-FR-19 reason-list finding remains open for the owner.
+
+**Files changed**
+- Task index (T1.22 → Completed), ADR-0046 and its index row, this log.
+
+---
+
 ## 2026-11-12 — T1.22 Adjustments and movement history
 
 **Implemented**

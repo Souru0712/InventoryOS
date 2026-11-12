@@ -1,6 +1,6 @@
 # ADR-0046: Adjustments and movement history
 
-- **Status:** Proposed, 2026-11-12 (in the T1.22 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (owner: "Yes, merge it"; PR #44)
 - **Decision ID:** none (implements T1.22; INV-FR-19, -20, -23, DR-08, WF-10, STF-FR-08, AC-INV-08..10)
 - **Tasks:** T1.22; T2.06 (batch filter); T2.07 (waste uses the same below-zero rule)
 
