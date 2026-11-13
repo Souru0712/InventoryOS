@@ -43,28 +43,99 @@
 </div>
 
 {% set costs = can(request, "inventory.view_costs") %}
-{% if rows and costs %}{% include "app/_health_block.html" %}{% endif %}
 
-<div class="grid cols-4" style="margin: 18px 0 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
-  <div class="card">
-    <div class="stat-label">Needs attention</div>
-    <div class="stat">{{ at_risk }}</div>
-  </div>
-  {% if costs %}
-  <div class="card">
-    <div class="stat-label">Stock on hand</div>
-    <div class="stat">{{ total_value|money(currency) }}</div>
-    {% if stock_value %}<div class="small muted">At {{ stock_value.basis }}{% if stock_value.without_cost %}; {{ stock_value.without_cost|length }} held without a cost{% endif %}.{% if can(request, "reports.financial") %} <a href="/app/valuation">Detail</a>{% endif %}</div>{% endif %}
+{% if completeness %}<div class="notice warn"><strong>Incomplete:</strong> {{ completeness }} <span class="small">Give each product a recipe, or link it to the stock it sells.</span></div>{% endif %}
+
+<section class="card" style="margin-bottom:16px;">
+  <h2 style="margin-top:0;">Needs attention{% if attention_total %} <span class="muted">({{ attention_total }})</span>{% endif %}</h2>
+  {% if not attention %}
+    <p class="small muted" style="margin:0;">Nothing needs attention right now.</p>
+  {% else %}
+  <ul class="attention" style="list-style:none; padding:0; margin:0;">
+    {% for v in attention %}
+    <li style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; padding:10px 0; border-top:1px solid var(--line, #e6e1d8);{% if v.severity == 'info' %} opacity:.85;{% endif %}">
+      <span class="pill {{ v.severity }}">{{ v.severity }}</span>
+      <div style="flex:1; min-width:220px;">
+        <strong>{{ v.label }}</strong>{% if v.subject_name %} &middot; {% if v.link %}<a href="{{ v.link }}">{{ v.subject_name }}</a>{% else %}{{ v.subject_name }}{% endif %}{% endif %}
+        {% if v.location_name and locations|length > 1 %}<span class="small muted"> &middot; {{ v.location_name }}</span>{% endif %}
+        <div class="small">{{ v.title }}</div>
+        {% if costs and v.money_impact_cents %}<div class="small muted">{{ v.money_impact_cents|money(currency) }} at stake</div>{% endif %}
+      </div>
+      {% set action = fix_links.get(v.type) or v.link or "/app/exceptions" %}
+      <a class="btn small{% if v.severity == 'info' %} secondary{% endif %}" href="{{ action }}">{{ v.fix }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if attention_total > attention|length %}<p class="small" style="margin:8px 0 0;"><a href="/app/exceptions">All {{ attention_total }} exceptions</a></p>{% endif %}
+  {% endif %}
+</section>
+
+{% if range_error %}<div class="notice error">{{ range_error }} Showing the last 7 days.</div>{% endif %}
+<form method="get" action="/app" class="card" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:0 0 16px;">
+  {% if locations|length > 1 %}
+  <div class="field" style="margin:0;">
+    <label for="location">Location</label>
+    <select id="location" name="location"><option value="">All</option>{% for loc in locations %}<option value="{{ loc.id }}"{% if loc.id == selected_location %} selected{% endif %}>{{ loc.name }}</option>{% endfor %}</select>
   </div>
   {% endif %}
-  {% if expiry and costs %}
+  <div class="field" style="margin:0;">
+    <label for="range">Period</label>
+    <select id="range" name="range">
+      {% for value, name in [("today", "Today"), ("7d", "Last 7 days"), ("30d", "Last 30 days"), ("custom", "Your own dates")] %}
+      <option value="{{ value }}"{% if period.choice == value %} selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="from">From <span class="muted small">(your own dates)</span></label>
+    <input id="from" name="from" type="date" value="{{ period.first.isoformat() if period.first else '' }}">
+  </div>
+  <div class="field" style="margin:0;">
+    <label for="to">To</label>
+    <input id="to" name="to" type="date" value="{{ period.last.isoformat() if period.last else '' }}">
+  </div>
+  <button class="btn secondary" type="submit">Show</button>
+  <p class="small muted" style="margin:0; flex-basis:100%;">{{ period.label }}, in each location's own business days.</p>
+</form>
+
+<div class="grid cols-4" style="margin: 0 0 8px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
+  {% if costs and stock_value %}
+  <div class="card">
+    <div class="stat-label">Stock on hand</div>
+    <div class="stat">{{ stock_value.total_cents|money(currency) }}</div>
+    <div class="small muted">At {{ stock_value.basis }}{% if stock_value.without_cost %}; {{ stock_value.without_cost|length }} held without a cost{% endif %}.{% if can(request, "reports.financial") %} <a href="/app/valuation">Detail</a>{% endif %}</div>
+  </div>
+  {% endif %}
+  {% if costs and money %}
+  <div class="card">
+    <div class="stat-label">Waste &middot; {{ period.label|lower }}</div>
+    <div class="stat"{% if money.waste.value_cents %} style="color: var(--warn);"{% endif %}>{{ (-money.waste.value_cents)|money(currency) }}</div>
+    <div class="small muted">{{ money.waste.movements }} line{{ "s" if money.waste.movements != 1 else "" }}, at the cost when wasted</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Received &middot; {{ period.label|lower }}</div>
+    <div class="stat">{{ money.received.value_cents|money(currency) }}</div>
+    <div class="small muted">{{ money.received.movements }} line{{ "s" if money.received.movements != 1 else "" }} received</div>
+  </div>
+  <div class="card">
+    <div class="stat-label">Count variance &middot; {{ period.label|lower }}</div>
+    <div class="stat">{{ money.count_variance.value_cents|signed_money(currency) }}</div>
+    <div class="small muted">{{ money.count_variance.movements }} counted difference{{ "s" if money.count_variance.movements != 1 else "" }}</div>
+  </div>
+  {% endif %}
+  {% if expiry %}
   <a class="card" href="/app/expiring" style="text-decoration:none; color:inherit;">
     <div class="stat-label">May expire unsold</div>
+    {% if costs %}
     <div class="stat"{% if expiry.at_risk_cents %} style="color: var(--warn);"{% endif %}>{{ expiry.at_risk_cents|money(currency) }}</div>
     <div class="small muted">
       {{ expiry.at_risk_products }} product{{ "s" if expiry.at_risk_products != 1 else "" }}
       {% if expiry.expired_cents %}&middot; {{ expiry.expired_cents|money(currency) }} past date{% endif %}
     </div>
+    {% else %}
+    <div class="stat"{% if expiry.at_risk_products %} style="color: var(--warn);"{% endif %}>{{ expiry.at_risk_products }}</div>
+    <div class="small muted">product{{ "s" if expiry.at_risk_products != 1 else "" }}{% if expiry.expired_products %} &middot; {{ expiry.expired_products }} past date{% endif %}</div>
+    {% endif %}
   </a>
   {% endif %}
   {% for name, bucket in by_dimension.items() %}
@@ -75,16 +146,6 @@
   </div>
   {% endfor %}
 </div>
-
-{% if locations|length > 1 %}
-<p class="small">
-  Location:
-  <a href="/app">All</a>
-  {% for location in locations %}
-    &middot; <a href="/app?location={{ location.id }}">{{ location.name }}</a>
-  {% endfor %}
-</p>
-{% endif %}
 
 {% if not rows %}
 <div class="card">
@@ -97,6 +158,7 @@
      {% elif not locations and can(request, "location.manage") %}<a class="btn small secondary" href="/app/locations/new">Add a location</a>{% endif %}</p>
 </div>
 {% else %}
+<h2>Stock</h2>
 <div class="table-wrap">
 <table>
   <thead>
@@ -105,8 +167,8 @@
       <th>Type</th>
       <th>On hand</th>
       <th>Reorder at</th>
-      <th>Cover</th>
-      <th>Uses / day</th>
+      <th>Cover{% if completeness %} <span class="pill warning">incomplete</span>{% endif %}</th>
+      <th>Uses / day{% if completeness %} <span class="pill warning">incomplete</span>{% endif %}</th>
       {% if costs %}<th>Value</th>{% endif %}
       <th>Order</th>
       <th>Status</th>
@@ -148,7 +210,8 @@
   </tbody>
 </table>
 </div>
-<p class="small muted">Cover is how many days the current quantity lasts at the last four weeks of
-sales. Saving a count posts the difference from the recorded quantity as a count variance.</p>
+<p class="small muted">On hand is the ledger balance. Cover is how many days it lasts at the last
+four weeks of sales. Saving a count posts the difference from the recorded quantity as a count
+variance.</p>
 {% endif %}
 {% endblock %}

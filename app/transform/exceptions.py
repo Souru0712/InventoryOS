@@ -173,3 +173,11 @@ def from_alert(proposal: AlertProposal, location_id: int | None) -> Finding:
 def rank(severity: str) -> int:
     """Most severe first."""
     return SEVERITIES.index(severity) if severity in SEVERITIES else len(SEVERITIES)
+
+
+def attention_key(
+    severity: str, money_cents: int | None, last_seen: float
+) -> tuple[int, int, float]:
+    """Needs-attention order (CMD-FR-01): most severe, then most money at risk, then latest seen.
+    An amount a role may not see is None here, so it cannot reorder that role's list."""
+    return (rank(severity), -abs(money_cents or 0), -last_seen)

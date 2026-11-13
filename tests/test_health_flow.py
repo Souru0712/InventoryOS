@@ -280,13 +280,16 @@ def item(slug, qty, **extra) -> dict:
     }
 
 
-def test_the_dashboard_leads_with_health_and_todays_actions(client):
+def test_the_dashboard_no_longer_carries_the_health_score(client):
+    # PD-26 (C-44): the health score stays off the R1 surface unless the owner asks (T1.25).
+    # The dashboard leads with what needs attention; the health page keeps working by its URL.
     workspace(client, items=[item("coke", "0"), item("water", "50")])
     response = client.get("/app")
     assert response.status_code == 200
-    assert "Inventory health" in response.text
-    assert "1 urgent" in response.text
-    assert "Reorder 1 product that is out of stock" in response.text
+    assert "Needs attention" in response.text
+    assert "Inventory health" not in response.text
+    assert "/app/health" not in response.text
+    assert client.get("/app/health").status_code == 200
 
 
 def test_an_empty_workspace_still_renders_without_a_health_block(client):

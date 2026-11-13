@@ -1,6 +1,6 @@
 # ADR-0048: Cost basis and valuation
 
-- **Status:** Proposed, 2026-11-13 (in the T1.24 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-13 (owner: "Yes, merge it"; PR #47, T1.24)
 - **Decision ID:** none (implements T1.24 under PD-08 / C-44; ANL-FR-01, -02, INV-FR-07, -24, DR-19, AC-ANL-01, -02)
 - **Tasks:** T1.24; T2.03 (recipe costing), T2.07 (waste cost), T1.25 (dashboard) read the same basis
 

@@ -45,6 +45,10 @@ implementation sessions; the detail lives in `docs/`.
   change is `override_cost()` (audited). A test fails on any other assignment. Past figures
   read the movement's snapshot, never today's cost (AC-ANL-01); stock value comes from
   `value_stock()` (Σ max(held, 0) × cost, its basis stated, items without a cost listed).
+- The dashboard (`/app`, ADR-0049) reads only exceptions and the ledger: needs attention is
+  `needs_attention()` (open exceptions, severity then money at stake, each linking to its
+  record); money over a period is `period_money()` in each location's business days. Its
+  data goes through `without_costs()` for a role without `inventory.view_costs`.
 - Every query goes through the scoped data-access layer (tenant + location) (C-33, ADR-0026):
   routes take `org: OrgContext = Depends(require_org)`, services take `org`, queries use
   `select_scoped`/`get_scoped`/`update_scoped`; a lookup across organizations is a named function

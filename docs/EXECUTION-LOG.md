@@ -5,6 +5,113 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-13 — T1.25 Core dashboard on ledger and exceptions
+
+**Implemented**
+- **Needs attention** (CMD-FR-01, -12): the open exceptions, in place of alert proposals
+  computed on the page.
+  - **Order:** most severe, then most money at stake, then latest seen (`attention_key()`). The
+    exceptions screen uses the same order.
+  - **Each one shows:** its subject by name, linked to that subject's own record (item page,
+    the batch's row on `/app/expiring`, the adjustment's history or the count), and its next
+    action as a button.
+  - **Severity:** critical, warning and info look different.
+  - **Size:** the top 8 are shown, with a link to all of them; a location's view keeps the
+    business-wide exceptions.
+- **Money over a period** (CMD-FR-10, AC-CMD-04):
+  - **What:** waste, receipts and count variances, for today, 7 days, 30 days or your own
+    dates (at most 366 days);
+  - **Days:** each location counts in its own business days (`business_day_start()` /
+    `business_day_end()`);
+  - **Source:** figures come from the ledger alone, at each movement's own posted cost
+    (`movement_totals()`), and a reversal counts against what it reversed;
+  - **Refused ranges:** a refused range falls back to 7 days and says why.
+- **Stock value** with its basis stays (CMD-FR-04, from T1.24).
+- **Completeness banner** (CMD-FR-13, AC-CMD-02): units sold over the period of products with
+  no recipe that are not POS-counted themselves. "Cover" and "Uses / day" are then labelled
+  incomplete.
+- **Employee view** (CMD-FR-14, AC-CMD-03): the page's data passes through `without_costs()`
+  before rendering, and period money and stock value are never computed. "May expire unsold"
+  shows product counts instead of money.
+- **Health score off the dashboard** (PD-26): its page and job are untouched.
+- **Layout:** needs attention leads; the period filter sits with the money cards it controls.
+- **Subject names:** exceptions about an item at a location, an adjustment or a count line are
+  now named by their item (previously "item location", "count line").
+- ADR-0049 (Proposed); ADR-0048 → Accepted; a CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_dashboard_core.py` (9):
+  - the pure rules: periods counted from each location's today, refused ranges, business-day
+    bounds (04:00 cutoff in New York), attention order, the completeness text;
+  - **AC-CMD-01:** a low-stock item, an expired batch and an unmapped product all appear,
+    linked to the item page and the batch's row, with "Reorder it";
+  - **order:** critical first, then the costlier problem before the newer one; business-wide
+    exceptions stay in a location's view;
+  - **AC-CMD-02:** "5 sold without a recipe in this period (1 product)", both labels, 14 over
+    30 days;
+  - **AC-CMD-03:** the Employee's response has no amount, no financial exception and no money
+    card, but still shows "Below zero";
+  - **AC-CMD-04:** in New York with a 04:00 cutoff, 7 days sums the first instant of day 1 and
+    leaves the minute before it out. A same-day reversal nets out. Today, 30 days and a custom
+    day each give their own sum, and the page shows "$3.00";
+  - a refused range explains itself.
+- `tests/test_health_flow.py`: the dashboard no longer carries the health score; its page
+  still works.
+- **By hand, in the preview, on the demo database:**
+  - needs attention listed 8, critical first, each subject linked to its record;
+  - today and 30 days gave their figures, and a backwards custom range its message;
+  - at 375 px wide, no horizontal scroll and needs attention leads;
+  - no console or server errors.
+  - The demo's "Ledger out of balance" is left over from T1.21's deliberate drift test: its
+    balance, movements and stock row agree again (12), and the next nightly check resolves it.
+- Full suite 977 passed, 25 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:**
+  - `app/transform/dashboard.py`, `app/orchestration/dashboard.py`;
+  - `tests/test_dashboard_core.py`, ADR-0049.
+- **Changed:**
+  - `app/web/dashboard.py` and `dashboard.html`;
+  - `app/exceptions.py` (order, subject names, links);
+  - `app/transform/exceptions.py` (`attention_key`), `app/ledger/history.py`
+    (`movement_totals`), `app/transform/business_days.py` (`business_day_start`);
+  - `expiring.html` (row anchors), `base.html` (warning notice);
+  - `tests/test_health_flow.py`;
+  - CLAUDE.md, ADR-0048, the ADR index, the task index (T1.24 → Completed, T1.25 → In review)
+    and this log.
+
+**Open findings (non-blocking)**
+- AC-CMD-01's unmapped product: nothing raises `unmapped_product` until the consumption engine
+  (T2.05), and its mapping screen comes with T3.04. The dashboard already lists one, with a
+  link to the exceptions screen until then.
+- AC-CMD-02 uses today's recipe link (`recipe_components`); versioned recipes (T2.02) and the
+  sales model (T2.04) replace it.
+
+**Decisions**
+- The page reads on-hand from the balance's projection (ADR-0042, verified nightly by
+  ADR-0045) rather than querying `stock_balances` a second time.
+
+**Next task**
+- T1.25 completes M2. The G2 gate review needs the owner's sign-off; the next task after it is
+  T2.01 Owned product catalog.
+
+---
+
+## 2026-11-13 — T1.24 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #47 was merged with a merge commit (`a407fc9`).
+- CI on its head `5695e37`, all five required jobs green:
+  - SQLite: 968 passed, 25 skipped;
+  - PostgreSQL 16: 993 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; ADR-0048 → Accepted; the task index (T1.24 → Completed).
+
+---
+
 ## 2026-11-13 — T1.24 Cost basis and valuation
 
 **Implemented**
