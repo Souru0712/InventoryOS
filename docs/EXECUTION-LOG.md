@@ -5,6 +5,77 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.23-b Count sessions: screens
+
+**Implemented**
+- **`/app/counts`** (`inventory.view`):
+  - start a count: location, then everything, one category, one storage area or one item;
+  - the reconciliation history: open counts first, then posted ones, each with items counted,
+    adjusted and to review, plus the variance at cost for roles with cost access (REC-FR-09,
+    AC-REC-05).
+- **`/app/counts/{id}` while open:** one phone-sized card per item, in storage order under
+  area headings (AC-REC-01).
+  - Each card has packages plus loose (when the item has packages), unit, an optional reason
+    (REC-FR-06), and the expected quantity.
+  - Saving moves to the next item; counting again replaces the line.
+  - "Post count" posts once and reports how many lines were counted, adjusted and sent for
+    review.
+- **`/app/counts/{id}` after posting:** totals and line detail (counted, expected, variance,
+  at cost, reason, who).
+- **Rules on the routes:** counting, saving and posting take `count.record` and the write rule.
+  Another business's location or count answers 404. Mistakes come back as messages.
+- **Template filters:** `change` (signed quantity) and `signed_money` ("-$15.00").
+- **Menu:** a "Counts" link.
+- ADR-0047 → Accepted with T1.23-a, now covering the screens.
+
+**Verified (locally, SQLite)**
+- `tests/test_count_screens.py` (4):
+  - **AC-REC-01 on screen:** an area count lists Ale before Lemons and leaves the walk-in milk
+    out. It offers the case, takes "3 case + 4 each" = 40, and returns to the post button
+    after the last item.
+  - **Counting, posting and reading back (AC-REC-05):** saving moves to the next item and a
+    recount replaces the line. Posting reports "2 counted, 1 adjusted, 1 sent for review". The
+    line detail shows 2 counted against 8 expected, -6, -$15.00, the reason and the review
+    flag; the history links it with the total; a posted count refuses more lines.
+  - **Mistakes:** a negative count and an empty post are explained, and nothing is recorded.
+  - **Roles:** an Employee counts and posts without seeing an amount. Read-only can read but
+    cannot start (403), and has no start form.
+- Isolation cases for the four new routes (start, view, line, post); permissions test.
+- **By hand, in the preview at phone size (375 px, no horizontal scroll):**
+  - started a full count on the demo business;
+  - counted cold brew at 16.5 L, and the page moved on to the next item;
+  - posted "1 counted, 1 adjusted";
+  - the detail showed 16.5 L against 17.998 L expected, -1.498 L, -$9.29, with no errors from
+    the count.
+- Full suite 954 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:** `app/web/counts.py`, the templates `counts.html` and `count_session.html`,
+  `tests/test_count_screens.py`.
+- **Changed:** `app/counts.py` (`get_count`, `summaries`), `app/web/templating.py`,
+  `app/main.py`, `base.html` (menu), `tests/test_isolation.py`, ADR-0047, the ADR index, the
+  task index (T1.23 → In review) and this log.
+
+**Next task**
+- T1.24 Cost basis and valuation.
+
+---
+
+## 2026-11-12 — T1.23-a completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #45 was merged with a merge commit (`b2c7a68`).
+- CI on its head `b9601a7`, all five required jobs green:
+  - SQLite: 946 passed, 24 skipped;
+  - PostgreSQL 16: 970 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; ADR-0047 → Accepted.
+
+---
+
 ## 2026-11-12 — T1.23-a Count sessions: model and posting
 
 **Implemented**

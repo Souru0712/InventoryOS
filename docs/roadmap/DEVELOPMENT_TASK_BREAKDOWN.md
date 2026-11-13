@@ -69,7 +69,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T1.20 | Jobs table; scheduled evaluation for every tenant | P1 | M | M2 | T1.19 | Completed (2026-11-12; job queue, every business evaluated on schedule) |
 | T1.21 | Nightly ledger verification | P1 | S | M2 | T1.20 | Completed (2026-11-12; nightly drift check, balance_drift raised, never corrected) |
 | T1.22 | Adjustments and movement history | P1 | M | M2 | T1.18, T1.06 | Completed (2026-11-12; adjustments with reasons, below-zero guard, movement history) |
-| T1.23 | Count sessions | P1 | L | M2 | T1.22, T1.19 | In progress (T1.23-a model and posting: PR open; T1.23-b screens next) |
+| T1.23 | Count sessions | P1 | L | M2 | T1.22, T1.19 | In review (T1.23-a merged; T1.23-b screens: PR open; CI evidence in the execution log) |
 | T1.24 | Cost basis and valuation | P1 | M | M2 | T1.16 | Not started |
 | T1.25 | Core dashboard on ledger and exceptions | P1 | M | M2 | T1.19, T1.24 | Not started |
 | T2.01 | Owned product catalog (C-36) | P0 | M | M3 | T1.06, T1.13 | Not started |

@@ -17,6 +17,7 @@ from app.units import (
     Dimension,
     format_amount,
     format_approx,
+    format_change,
     format_qty,
     from_base,
 )
@@ -83,6 +84,18 @@ def plain(qty_base: Decimal | None, unit_code: str) -> str:
     return "" if qty_base is None else str(from_base(qty_base, unit_code))
 
 
+def change(qty_base: Decimal | None, unit_code: str) -> str:
+    """A signed change: '+2 kg', '-3'; see units.format_change."""
+    return "-" if qty_base is None else format_change(qty_base, unit_code)
+
+
+def signed_money(cents: int | None, currency: str = "USD") -> str:
+    """'-$40.00' rather than '$-40.00'."""
+    if cents is None:
+        return "-"
+    return ("-" if cents < 0 else "") + money(abs(cents), currency)
+
+
 templates.env.filters["money"] = money
 templates.env.filters["num"] = num
 templates.env.filters["unit"] = unit_label
@@ -91,6 +104,8 @@ templates.env.filters["plain"] = plain
 templates.env.filters["approx"] = approx
 templates.env.filters["amount"] = amount
 templates.env.filters["approx_amount"] = approx_amount
+templates.env.filters["change"] = change
+templates.env.filters["signed_money"] = signed_money
 
 
 def can(request, key: str) -> bool:
