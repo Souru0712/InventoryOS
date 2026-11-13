@@ -803,6 +803,90 @@ class Modifier(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
+class Recipe(Base):
+    """What one owner is made of, over time (T2.02): a product variation, an "add" modifier or
+    a prepared item (its production recipe). Its contents live in immutable versions."""
+
+    __tablename__ = "recipes"
+    __table_args__ = (
+        CheckConstraint(
+            "(CASE WHEN product_variation_id IS NULL THEN 0 ELSE 1 END)"
+            " + (CASE WHEN modifier_id IS NULL THEN 0 ELSE 1 END)"
+            " + (CASE WHEN inventory_item_id IS NULL THEN 0 ELSE 1 END) = 1",
+            name="ck_recipes_one_owner",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    product_variation_id: Mapped[int | None] = mapped_column(
+        ref("product_variations.id"), unique=True
+    )
+    modifier_id: Mapped[int | None] = mapped_column(ref("modifiers.id"), unique=True)
+    inventory_item_id: Mapped[int | None] = mapped_column(ref("inventory_items.id"), unique=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    versions: Mapped[list[RecipeVersion]] = relationship(
+        back_populates="recipe", order_by="RecipeVersion.version_no"
+    )
+
+
+class RecipeVersion(Base):
+    """One saved state of a recipe, effective from a moment (RCP-FR-07, DR-16). Append-only:
+    written by app/recipes.py, never updated or deleted; an edit is the next version."""
+
+    __tablename__ = "recipe_versions"
+    __table_args__ = (
+        UniqueConstraint("recipe_id", "version_no", name="uq_recipe_versions_number"),
+        positive("recipe_versions", "version_no"),
+        positive("recipe_versions", "yield_base"),
+        Index("ix_recipe_versions_effective", "recipe_id", "effective_from"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    recipe_id: Mapped[int] = mapped_column(owned_by("recipes.id"), index=True)
+    version_no: Mapped[int] = mapped_column(Integer)
+    effective_from: Mapped[datetime] = mapped_column(UTCDateTime)
+    # What one making yields (RCP-FR-05): servings for a product, an amount for a prepared item.
+    yield_quantity: Mapped[Decimal] = mapped_column(Qty, default=Decimal("1"))
+    yield_unit: Mapped[str] = mapped_column(String(16), default="serving")
+    yield_base: Mapped[Decimal] = mapped_column(Qty, default=Decimal("1"))
+    instructions: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int | None] = mapped_column(ref("users.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    recipe: Mapped[Recipe] = relationship(back_populates="versions")
+    lines: Mapped[list[RecipeLine]] = relationship(
+        back_populates="version", order_by="RecipeLine.position"
+    )
+
+
+class RecipeLine(Base):
+    """An ingredient of a version: an item, the amount as entered and in its base unit (DR-11);
+    packaging such as cups and lids is flagged so costs can split it out (RCP-FR-14, -17)."""
+
+    __tablename__ = "recipe_lines"
+    __table_args__ = (
+        UniqueConstraint("recipe_version_id", "inventory_item_id", name="uq_recipe_lines_item"),
+        positive("recipe_lines", "quantity"),
+        positive("recipe_lines", "qty_base"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    recipe_version_id: Mapped[int] = mapped_column(owned_by("recipe_versions.id"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"), index=True)
+    quantity: Mapped[Decimal] = mapped_column(Qty)
+    unit: Mapped[str] = mapped_column(String(16))
+    qty_base: Mapped[Decimal] = mapped_column(Qty)
+    is_packaging: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    version: Mapped[RecipeVersion] = relationship(back_populates="lines")
+    item: Mapped[InventoryItem] = relationship(lazy="joined")
+
+
 class InventoryCount(Base):
     """Point-in-time quantity: a physical count or a POS snapshot."""
 

@@ -41,7 +41,10 @@ from app.models import (
     ProductVariation,
     Promotion,
     ProviderConnection,
+    Recipe,
     RecipeComponent,
+    RecipeLine,
+    RecipeVersion,
     SoldItem,
     StockAlias,
     StockBatch,
@@ -62,7 +65,14 @@ GLOBAL_MODELS: frozenset[type[Base]] = frozenset({EmailSuppression, WebhookEvent
 
 # History that is only ever added to (DR-23): no UPDATE path exists for these.
 APPEND_ONLY: frozenset[type[Base]] = frozenset(
-    {AuditEvent, InventoryTransaction, InventoryMovement, ItemCostHistory}
+    {
+        AuditEvent,
+        InventoryTransaction,
+        InventoryMovement,
+        ItemCostHistory,
+        RecipeVersion,
+        RecipeLine,
+    }
 )
 
 # Belong to the organization as a whole, so a location scope does not narrow them.
@@ -80,6 +90,9 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         Product,
         ProductVariation,
         Modifier,
+        Recipe,
+        RecipeVersion,
+        RecipeLine,
         SyncRun,
         EmailLog,
         HealthSnapshot,

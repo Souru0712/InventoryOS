@@ -55,6 +55,7 @@ from app.orchestration.receiving import parse_document
 from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
 from app.products import products_from_sold_items
+from app.recipes import recipes_from_components
 from app.security import hash_password, revoke_sessions
 from app.transform.barcodes import check_digit
 from app.transform.reports import money
@@ -488,6 +489,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
         # What the café sells, as products it owns (T2.01, DM-9's rule).
         products_from_sold_items(db, OrgContext.system(tenant.id))
+        recipes_from_components(db, OrgContext.system(tenant.id))
 
         for offset in range(args.days):
             day = today - timedelta(days=offset)

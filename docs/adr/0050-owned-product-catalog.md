@@ -1,6 +1,6 @@
 # ADR-0050: Owned product catalog
 
-- **Status:** Proposed, 2026-11-13 (in the T2.01 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-13 (owner: "Yes, merge it"; PR #50, T2.01)
 - **Decision ID:** none (implements T2.01 under C-36: RCP-FR-01, RCP-FR-03, DM-9)
 - **Tasks:** T2.01; T2.02 (recipes per variation and per modifier), T2.04 and T2.05 (sales and
   consumption), T3.03 and T3.04 (POS products mapped onto these)

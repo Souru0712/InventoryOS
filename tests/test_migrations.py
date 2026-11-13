@@ -642,6 +642,80 @@ def test_dm8_alerts_become_exceptions_and_the_downgrade_leaves_alerts_alone(fres
         engine.dispose()
 
 
+BEFORE_RECIPES = "5e0b7c41d2a9"
+
+
+def test_recipe_components_become_version_1_and_the_downgrade_keeps_them(fresh_url):
+    """T2.02, DM-9: each sold item's components are version 1 of its variation's recipe."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    stock = (
+        "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension, stock_unit,"
+        " track_mode, qty_base, reorder_point_base, cost_per_base_cents, lead_time_days,"
+        " receive_unit, is_active) VALUES (1, 1, :slug, :slug, :dimension, :unit,"
+        " 'MANUAL', '0.0000', '0.0000', '0.0000', 2, :unit, true)"
+    )
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-13 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                    " VALUES (1, 'Main', 'UTC', 'USD', true)"
+                )
+            )
+            for slug, dimension, unit in (("milk", "VOLUME", "ml"), ("beans", "WEIGHT", "g")):
+                connection.execute(
+                    text(stock), {"slug": slug, "dimension": dimension, "unit": unit}
+                )
+            connection.execute(
+                text(
+                    "INSERT INTO sold_items (tenant_id, provider, provider_item_id, name,"
+                    " price_cents, currency, sell_unit, is_active) VALUES (1, 'square', 'v1',"
+                    " 'Latte - 12 oz', 425, 'USD', 'each', true)"
+                )
+            )
+            for stock_id, qty in ((1, "220.0000"), (2, "18.0000")):
+                connection.execute(
+                    text(
+                        "INSERT INTO recipe_components (tenant_id, sold_item_id, stock_item_id,"
+                        " qty_base_per_sale) VALUES (1, 1, :stock, :qty)"
+                    ),
+                    {"stock": stock_id, "qty": qty},
+                )
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT v.name, rv.version_no, ii.name, rl.unit, rl.qty_base"
+                    " FROM recipe_lines rl"
+                    " JOIN recipe_versions rv ON rv.id = rl.recipe_version_id"
+                    " JOIN recipes r ON r.id = rv.recipe_id"
+                    " JOIN product_variations v ON v.id = r.product_variation_id"
+                    " JOIN inventory_items ii ON ii.id = rl.inventory_item_id ORDER BY rl.position"
+                )
+            ).all()
+        assert [(a, b, c, d, str(e).rstrip("0").rstrip(".")) for a, b, c, d, e in rows] == [
+            ("12 oz", 1, "milk", "ml", "220"),
+            ("12 oz", 1, "beans", "g", "18"),
+        ]
+        command.downgrade(config, BEFORE_RECIPES)
+        with engine.connect() as connection:
+            tables = set(inspect(connection).get_table_names())
+            assert not tables & {"recipes", "recipe_versions", "recipe_lines"}
+            kept = connection.execute(text("SELECT COUNT(*) FROM recipe_components")).scalar()
+        assert kept == 2
+    finally:
+        engine.dispose()
+
+
 BEFORE_PRODUCTS = "2832ec7b91b7"
 
 

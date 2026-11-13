@@ -5,6 +5,84 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-13 — T2.02-a Versioned recipes: model and versioning
+
+**Implemented**
+- **Three tables** (migration `7a3c9d2e4f18`, ADR-0051):
+  - `recipes`: one owner each (a size, an "add" modifier, or a prepared or finished item), held
+    by a named CHECK;
+  - `recipe_versions`: number, `effective_from`, yield (servings, or an amount of the prepared
+    item in any of its units, kept in base units too), instructions, who saved it;
+  - `recipe_lines`: item, amount as entered, the same in base units, a packaging flag; each
+    item once per version.
+- **`app/recipes.py`, the only writer:**
+  - `save_recipe()` adds the next version, effective now or at a chosen later moment; the past
+    is refused (DR-16), and a save that changes nothing adds nothing;
+  - every line converts through the item's resolver, and an unconvertible one is refused with
+    the missing conversion named (DR-11);
+  - a prepared item that would lead back to itself is refused, with the circle named (DR-17);
+  - only "add" modifiers and made items may own recipes;
+  - every save is audited (`recipe.saved`, a new "Recipes" category).
+- **Reading:** `effective_version()` gives the version in effect at any instant, and
+  `start_from()` scales another size's recipe by the sizes' amounts (16/12).
+- **Append-only:** versions and lines are `APPEND_ONLY` in the scoped layer.
+- **DM-9, recipes half:** each variation from a sold item gets version 1 of its
+  `recipe_components`, effective from 2000-01-01. The demo seed does the same.
+  `recipe_components` stays until T2.05.
+
+**Verified (locally, SQLite)**
+- `tests/test_recipes.py` (11):
+  - the pure rules: the version in effect (ties go to the later save), the past refused, size
+    scaling, circle finding;
+  - **AC-RCP-01:** milk 0.25 l, beans 18 g and a cup (packaging) save in base units. Ginger
+    120 ml is refused, naming the missing conversion, and nothing is written; after adding
+    "1 lb = 340 ml" it saves as 160.09 g;
+  - a line needs an amount and each item once;
+  - **AC-RCP-02:** an edit effective in an hour is version 2. A sale before it, even one
+    arriving late, reads version 1, and the same save again adds nothing;
+  - **AC-RCP-05:** a drink uses prepared ginger juice, the juice uses prepared syrup, and the
+    syrup using the juice is refused, naming the circle. A yield of 0.5 l is kept as 500 ml;
+  - modifiers that scale and raw items cannot own recipes;
+  - **AC-RCP-06:** "start from 12 oz" gives 160 ml and 12 g for 16 oz;
+  - versions are append-only, written in one place and audited;
+  - each of the demo café's components is a line of version 1.
+- `tests/test_migrations.py`: the backfill and the downgrade, keeping `recipe_components`.
+- Full suite 1007 passed, 27 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:**
+  - `app/transform/recipes.py`, `app/recipes.py`;
+  - migration `7a3c9d2e4f18`;
+  - `tests/test_recipes.py`, ADR-0051.
+- **Changed:** `app/models.py`, `app/access/scoped.py`, `app/audit.py`, `app/cli.py` (demo
+  seed), `tests/test_migrations.py`, CLAUDE.md, ADR-0050 → Accepted, the ADR index, the task
+  index (T2.01 → Completed, T2.02 → In progress) and this log.
+
+**Decisions**
+- No drafts: a version scheduled for later covers "not yet". Recipes are business-wide, not per
+  location. Both are recorded in ADR-0051.
+
+**Next task**
+- T2.02-b: the recipe editor with unit pickers, version history, "start from", and the staff
+  recipe card without costs (AC-RCP-09).
+
+---
+
+## 2026-11-13 — T2.01 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #50 was merged with a merge commit (`0169a23`).
+- CI on its head `9d9e7de`, all five required jobs green:
+  - SQLite: 995 passed, 26 skipped;
+  - PostgreSQL 16: 1021 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; ADR-0050 → Accepted; the task index (T2.01 → Completed).
+
+---
+
 ## 2026-11-13 — T2.01 Owned product catalog (C-36)
 
 **Implemented**
