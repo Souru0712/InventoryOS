@@ -5,6 +5,89 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-13 — T2.02-b Versioned recipes: editor and staff card
+
+**Implemented**
+- **The staff recipe card** at `/app/recipes/{kind}/{owner_id}`, for a size, an "adds
+  ingredients" modifier or a prepared item (`recipe.view`):
+  - the version in use with its yield, lines (packaging marked) and instructions;
+  - any version scheduled for later;
+  - every version, with when it starts, who saved it and what changed (RCP-FR-08);
+  - no cost anywhere (AC-RCP-09).
+- **The editor** (`recipe.edit`, plus `production_recipe.edit` for a prepared item, under the
+  write rule):
+  - ingredient rows with an item picker, an amount, and a unit field suggesting every unit and
+    package; a packaging tick; yield (servings, or batch amount and unit); instructions;
+  - an optional later start in the business's own time zone;
+  - "start from" buttons for the product's other sizes, which scale every line except packaging
+    and bring the instructions along;
+  - a mistake comes back explained, with what was typed kept, and nothing saved.
+  - Saving adds a version and says so ("Earlier sales keep their version").
+- **Ways in:** "Recipe" links on each size and each "adds ingredients" modifier, and a
+  "Production recipe" button on prepared and finished items.
+- **Change notes:** `what_changed()` lists added, removed and changed lines, packaging changes,
+  yield and instructions.
+- Isolation cases for the three new id routes.
+
+**Verified (locally, SQLite)**
+- `tests/test_recipe_screens.py` (6):
+  - **AC-RCP-01 on screen:** a Manager's 16 oz recipe in mixed units saves, with packaging
+    and instructions shown. An unconvertible line is refused, naming the item, keeping the
+    entry and saving nothing;
+  - a repeated save adds nothing, and an edit is listed as "Milk 200 ml to 240 ml" with who
+    saved it;
+  - a version set for tomorrow is announced while version 1 stays in use, and a start in the
+    past is refused;
+  - **AC-RCP-06 on screen:** start from 12 oz fills 160 ml and 12 g, keeps one cup, and brings
+    the instructions;
+  - **AC-RCP-09:** an Employee reads the card with no amount of money or cost, and gets 403 on
+    the editor and on saving;
+  - a prepared item's production recipe keeps its 0.5 l yield; a raw item has none; the links
+    are on the item and product pages.
+- `tests/test_recipes.py` (12, one new): the change notes, and packaging kept unscaled.
+- **By hand, in the preview, on the migrated demo database:**
+  - the demo Latte reads as version 1 "from the start";
+  - wrote Golden State 12 oz (milk, syrup, cup, instructions);
+  - ticking the cup as packaging made version 2, noted as such;
+  - "start from 12 oz" on 16 oz filled 320 ml, 20 ml and still 1 cup;
+  - no horizontal scroll at 375 px on the editor or the card;
+  - no console or server errors.
+  - The walk-through found two problems, both fixed here: the cup scaling to 1.33, and a
+    packaging-only change listed as "no change".
+- Full suite 1017 passed, 27 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:**
+  - `app/web/recipes.py`;
+  - the templates `recipe.html` and `recipe_edit.html`;
+  - `tests/test_recipe_screens.py`.
+- **Changed:**
+  - `app/transform/recipes.py` (`what_changed`, packaging kept unscaled), `app/main.py`;
+  - the templates `product.html`, `products.html` and `catalog_item.html` (links);
+  - `tests/test_recipes.py`, `tests/test_isolation.py`;
+  - ADR-0051 (→ Accepted, with the screens), the ADR index, the task index (T2.02 → In
+    review) and this log.
+
+**Next task**
+- T2.03 Recipe costing, margins, completeness.
+
+---
+
+## 2026-11-13 — T2.02-a completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #51 was merged with a merge commit (`3263392`).
+- CI on its head `2e91a1a`, all five required jobs green:
+  - SQLite: 1007 passed, 27 skipped;
+  - PostgreSQL 16: 1034 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; ADR-0051 → Accepted.
+
+---
+
 ## 2026-11-13 — T2.02-a Versioned recipes: model and versioning
 
 **Implemented**

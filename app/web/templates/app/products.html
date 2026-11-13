@@ -48,6 +48,7 @@ uses. This list is yours: a POS catalog is matched to it, never the other way ro
           <input name="scale_factor" value="{{ m.scale_factor|num if m.scale_factor is not none else '' }}" aria-label="Scale" placeholder="Scale, e.g. 1.15" inputmode="decimal" style="width:120px;">
           <label class="small" style="display:flex; gap:4px; align-items:center;"><input type="checkbox" name="active" value="yes"{% if m.is_active %} checked{% endif %}> On</label>
           <button class="btn small secondary" type="submit">Save</button>
+          {% if m.effect == "add" %}<a class="small" href="/app/recipes/modifier/{{ m.id }}">Recipe</a>{% endif %}
         </form>
       </td>
     </tr>
@@ -55,7 +56,7 @@ uses. This list is yours: a POS catalog is matched to it, never the other way ro
     <tr>
       <td>{{ m.name }}{% if not m.is_active %} <span class="pill info">inactive</span>{% endif %}</td>
       <td class="small">{{ m.group_name or "" }}</td>
-      <td class="small">{{ effect_labels[m.effect] }}{% if m.effect == "scale" %} &times; {{ m.scale_factor|num }}{% endif %}</td>
+      <td class="small">{{ effect_labels[m.effect] }}{% if m.effect == "scale" %} &times; {{ m.scale_factor|num }}{% endif %}{% if m.effect == "add" %} &middot; <a href="/app/recipes/modifier/{{ m.id }}">Recipe</a>{% endif %}</td>
     </tr>
     {% endif %}
   {% endfor %}

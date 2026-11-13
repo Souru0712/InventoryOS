@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+<p class="small"><a href="/app/recipes/{{ kind }}/{{ owner.id }}">&larr; {{ name }}</a></p>
+<h1>{{ kind_label }}: {{ name }}</h1>
+<p class="lede">Saving adds a new version. Sales, waste and prep already recorded keep the version
+they used. Any unit works if the item can convert it; a missing conversion is named.</p>
+
+{% if start_from %}
+<p class="small">Start from another size, scaled by size:
+  {% for other in start_from %}<a class="btn small secondary" href="/app/recipes/variation/{{ owner.id }}/edit?start={{ other.id }}">{{ other.name }}</a> {% endfor %}
+</p>
+{% endif %}
+{% if started_from %}<div class="notice ok">Filled from {{ started_from }}, scaled by size. Check the amounts, then save.</div>{% endif %}
+
+<form method="post" action="/app/recipes/{{ kind }}/{{ owner.id }}" class="card">{{ csrf_field(request) }}
+  <datalist id="recipe-units">{% for u in unit_choices %}<option value="{{ u }}">{% endfor %}</datalist>
+  <fieldset style="border:0; padding:0; margin:0 0 12px;">
+    <legend class="small" style="font-weight:600; margin-bottom:6px;">Ingredients</legend>
+    {% for row in rows %}
+    <div class="recipe-row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+      <select name="item" aria-label="Ingredient {{ loop.index }}" style="flex:2 1 180px;">
+        <option value="">&mdash; ingredient &mdash;</option>
+        {% for it in items %}<option value="{{ it.id }}"{% if row.item == it.id %} selected{% endif %}>{{ it.name }} ({{ it.display_unit|unit }})</option>{% endfor %}
+      </select>
+      <input name="quantity" aria-label="Amount {{ loop.index }}" value="{{ row.quantity or '' }}" inputmode="decimal" placeholder="Amount" style="width:96px;">
+      <input name="unit" aria-label="Unit {{ loop.index }}" value="{{ row.unit or '' }}" list="recipe-units" placeholder="Unit" style="width:96px;">
+      <label class="small" style="display:flex; gap:4px; align-items:center;"><input type="checkbox" name="packaging" value="{{ loop.index0 }}" aria-label="Packaging {{ loop.index }}"{% if row.packaging %} checked{% endif %}> Packaging</label>
+    </div>
+    {% endfor %}
+    <p class="small muted" style="margin:0;">Leave a row empty to skip it; save and edit again for more rows. A blank unit means the item's own unit. Cups, lids and straws are packaging by their item type.</p>
+  </fieldset>
+
+  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+    <div class="field" style="margin:0;">
+      <label for="yield_quantity">{% if kind == "item" %}One batch makes{% else %}Servings{% endif %}</label>
+      <input id="yield_quantity" name="yield_quantity" value="{{ yield_quantity }}" inputmode="decimal" style="width:110px;">
+    </div>
+    {% if kind == "item" %}
+    <div class="field" style="margin:0;">
+      <label for="yield_unit">Unit</label>
+      <input id="yield_unit" name="yield_unit" value="{{ yield_unit }}" list="recipe-units" placeholder="e.g. l" style="width:96px;">
+    </div>
+    {% endif %}
+    <div class="field" style="margin:0;">
+      <label for="starts_at">Starts <span class="muted small">(empty for now)</span></label>
+      <input id="starts_at" name="starts_at" type="datetime-local" value="{{ starts_at }}">
+    </div>
+  </div>
+  <div class="field">
+    <label for="instructions">How to make it <span class="muted small">(shown on the staff card)</span></label>
+    <textarea id="instructions" name="instructions" rows="5">{{ instructions }}</textarea>
+  </div>
+  <button class="btn" type="submit">Save as a new version</button>
+</form>
+{% endblock %}

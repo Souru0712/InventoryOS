@@ -7,6 +7,7 @@
 
 <h1>{{ item.name }} {% if not item.is_active %}<span class="pill expired">inactive</span>{% endif %}</h1>
 <p class="lede">{{ type_labels[item.item_type] }}{% if item.category %} · {{ item.category }}{% endif %} · counted in {{ unit_label }}</p>
+{% if item.item_type in ("prepared", "finished") and can(request, "recipe.view") %}<p><a class="btn small secondary" href="/app/recipes/item/{{ item.id }}">Production recipe</a></p>{% endif %}
 
 {% if editable %}
 <h2>Details</h2>

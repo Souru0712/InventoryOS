@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="{{ back }}">&larr; {{ back_label }}</a></p>
+<h1>{{ name }}</h1>
+<p class="lede">{{ kind_label }}{% if current %} &middot; version {{ current.version_no }}{% if current.effective_from > from_the_start %}, since {{ current.effective_from.astimezone(zone).strftime("%d %b %Y %H:%M") }}{% endif %} &middot; makes {{ yield_text(current) }}{% endif %}</p>
+
+{% if can_edit %}<p><a class="btn small" href="/app/recipes/{{ kind }}/{{ owner.id }}/edit">{% if current or upcoming %}Edit recipe{% else %}Write the recipe{% endif %}</a></p>{% endif %}
+
+{% for v in upcoming %}
+<div class="notice">Version {{ v.version_no }} starts {{ v.effective_from.astimezone(zone).strftime("%d %b %Y %H:%M") }}; until then the version below is used.</div>
+{% endfor %}
+
+{% if not current %}
+<div class="card"><p style="margin:0;">No recipe yet{% if upcoming %} in effect{% endif %}.{% if not can_edit %} Ask a manager to write it.{% endif %}</p></div>
+{% else %}
+<div class="card recipe-card">
+  <h2 style="margin-top:0;">What goes in</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Ingredient</th><th>Amount</th></tr></thead>
+    <tbody>
+    {% for ln in current.lines %}
+      <tr>
+        <td><strong>{{ ln.item.name }}</strong>{% if ln.is_packaging %} <span class="pill info">packaging</span>{% endif %}</td>
+        <td>{{ ln.quantity|num }} {{ ln.unit|unit }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if current.instructions %}
+  <h2>How to make it</h2>
+  <div class="small" style="white-space:pre-line; line-height:1.6;">{{ current.instructions }}</div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if history %}
+<h2 style="margin-top:28px;">Versions</h2>
+<p class="small muted">Every save is a new version. Each sale, waste or prep uses the version in effect when it happened, so editing never changes the past.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Version</th><th>From</th><th>Saved</th><th>What changed</th></tr></thead>
+  <tbody>
+  {% for h in history %}
+    <tr>
+      <td>{{ h.version.version_no }}{% if current and h.version.id == current.id %} <span class="pill ok">in use</span>{% endif %}</td>
+      <td class="small" style="white-space:nowrap;">{% if h.version.effective_from <= from_the_start %}the start{% else %}{{ h.version.effective_from.astimezone(zone).strftime("%d %b %Y %H:%M") }}{% endif %}</td>
+      <td class="small">{{ h.version.created_at.astimezone(zone).strftime("%d %b %Y") }}{% if h.who %}<div class="muted">{{ h.who }}</div>{% endif %}</td>
+      <td class="small">{{ h.changes|join("; ") }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
