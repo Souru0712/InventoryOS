@@ -72,8 +72,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T1.23 | Count sessions | P1 | L | M2 | T1.22, T1.19 | Completed (2026-11-13; count sessions posting variances under the lock, phone count screens) |
 | T1.24 | Cost basis and valuation | P1 | M | M2 | T1.16 | Completed (2026-11-13; cost history with one writer, valuation with its basis and as of a date) |
 | T1.25 | Core dashboard on ledger and exceptions | P1 | M | M2 | T1.19, T1.24 | Completed (2026-11-13; needs attention from exceptions, money over a period, completeness, no money for Employees; G2 review prepared) |
-| T2.01 | Owned product catalog (C-36) | P0 | M | M3 | T1.06, T1.13 | In review (products, sizes and modifiers owned with no POS; sold items backfilled; PR open; CI evidence in the execution log) |
-| T2.02 | Versioned recipes | P0 | L | M3 | T2.01, T1.15 | Not started |
+| T2.01 | Owned product catalog (C-36) | P0 | M | M3 | T1.06, T1.13 | Completed (2026-11-13; products, sizes and modifiers owned with no POS; sold items backfilled) |
+| T2.02 | Versioned recipes | P0 | L | M3 | T2.01, T1.15 | In progress (T2.02-a model and versioning: PR open; T2.02-b editor next) |
 | T2.03 | Recipe costing, margins, completeness | P1 | M | M3 | T2.02, T1.24 | Not started |
 | T2.04 | Sales model and sources | P0 | M | M3 | T2.01, T1.04 | Not started |
 | T2.05 | Consumption engine | P0 | L | M3 | T2.02, T2.04, T1.18 | Not started |

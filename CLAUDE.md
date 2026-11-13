@@ -125,6 +125,11 @@ implementation sessions; the detail lives in `docs/`.
   (sizes, informational price) and `modifiers` (none, scale, add), changed only through
   `app/products.py` and never deleted. A POS catalog is mapped onto it (T3.03, T3.04); the
   Square sync writes `sold_items` only. A price is money: behind `inventory.view_costs`.
+- Recipes are versioned (ADR-0051): `recipes`, `recipe_versions`, `recipe_lines`, written only
+  by `app/recipes.py` (`save_recipe()`). Versions and lines are append-only: an edit is the
+  next version, effective now or later, never earlier, and anything that happened reads the
+  version in effect at its own time (`effective_version()`, DR-16). Lines convert through
+  `entered_base` (DR-11); prepared items never form a circle (DR-17).
 - JuJu (`C:\Users\oscar\.vscode\JuJu`) and the snack-box project are separate repositories: never
   modify them from here.
 
