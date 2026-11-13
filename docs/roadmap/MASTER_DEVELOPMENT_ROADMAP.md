@@ -61,7 +61,7 @@ both.
 | Why | The blueprint's integrity rules (DR-01..09, 19..24, 27, 35) and access model must exist before any operational module, or each module would be built on a balance-overwrite model and then rewritten (C-35) |
 | Milestone M1 "Tenancy & access" | T1.01–T1.12: timestamptz + constraints, scoped data access (C-33), isolation suite, organization/location model, memberships, permissions, sessions + CSRF, verification + reset, throttling, invitations, MFA, audit events |
 | Milestone M2 "Ledger engine" | T1.13–T1.25: item model split (C-38), item UI, units and conversions, ledger + posting service, opening-balance migration, writers routed through the ledger, exceptions, jobs table + scheduled evaluation for every tenant, nightly verification, adjustments + history, count sessions, cost basis, core dashboard |
-| Exit criteria (gates G1, G2) | Isolation suite passes for every route and file; permission matrix tests pass; AC-INV-01..11 pass on Postgres; no code path writes stock outside the posting service (static test); probes R1, R2, R4, R5, R6, R8, PA1, PA3 and PA5 replaced by passing tests of the corrected behaviour |
+| Exit criteria (gates G1, G2) | Isolation suite passes for every route and file; permission matrix tests pass; AC-INV-01..11 pass on Postgres; no code path writes stock outside the posting service (static test); probes R1, R2, R4, R5, R8, PA1, PA3 and PA5 replaced by passing tests of the corrected behaviour (R6 moved to Stage 2 with T2.06 by the owner, 2026-11-12); evidence in [GATE_REVIEWS](GATE_REVIEWS.md) |
 
 ### Stage 2 — Shared operations + Standalone (P0/P1) → M3, M4
 
@@ -71,7 +71,7 @@ both.
 | Milestone M3 "Operations engine" | T2.01–T2.11, T2.19, T2.21: owned catalog, versioned recipes, costing, sales model, consumption engine, batch allocation, waste, expiry, production, suppliers, receiving on the ledger, settings, employee home |
 | Milestone M4 "Standalone end-to-end" | T2.12–T2.18, T2.20, T2.22: daily sales, file import, usage records, reorder, reports, weekly summary, onboarding, no-POS end-to-end suite |
 | Validation | T5.01 JuJu reference tenant at M3; T5.02 scripted JuJu days at M4; free Standalone pilots may start at M4 (ID-13, after C-40) |
-| Exit criteria (gates G3, G4) | AC-RCP, AC-PRD, AC-WST, AC-BAT, AC-RCV, AC-REC, AC-ROR, AC-ANL R1 criteria and AC-SAL-01..05, -07, -08 pass; AC-SAAS-10 observed with a non-founder |
+| Exit criteria (gates G3, G4) | AC-RCP, AC-PRD, AC-WST, AC-BAT, AC-RCV, AC-REC, AC-ROR, AC-ANL R1 criteria and AC-SAL-01..05, -07, -08 pass; probe R6 replaced by a passing test (T2.06); AC-SAAS-10 observed with a non-founder |
 
 ### Stage 3 — Connected: Square (P1) → M5
 

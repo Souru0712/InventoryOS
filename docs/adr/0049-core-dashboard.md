@@ -1,6 +1,6 @@
 # ADR-0049: Core dashboard on the ledger and exceptions
 
-- **Status:** Proposed, 2026-11-13 (in the T1.25 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-13 (owner: "Yes, merge it"; PR #48, T1.25)
 - **Decision ID:** none (implements T1.25: CMD-FR-01..04, -10, -12..14, AC-CMD-01..04, PD-26)
 - **Tasks:** T1.25; T2.05 and T3.04 bring the producers and the screen for `unmapped_product`
 

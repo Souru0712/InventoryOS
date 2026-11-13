@@ -44,6 +44,7 @@ Phase 2 (C-34 wording) with no requirement change.
 | 13 | [RISK_AND_DEPENDENCY_REGISTER](RISK_AND_DEPENDENCY_REGISTER.md) | Risks → tasks; owner and external dependencies |
 | 14 | [CUSTOMER_VALIDATION_PLAN](CUSTOMER_VALIDATION_PLAN.md) | Hypotheses, interviews, experiments, evidence log (Track V) |
 | 15 | [JUJU_VALIDATION_PLAN](JUJU_VALIDATION_PLAN.md) | JuJu reference tenant and parity scenarios (Stage 5) |
+| 16 | [GATE_REVIEWS](GATE_REVIEWS.md) | Evidence for each stage gate, and the owner's sign-off |
 
 ## 4. Governance
 

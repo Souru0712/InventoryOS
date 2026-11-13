@@ -5,6 +5,86 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-13 — Gates G1 and G2 passed; Stage 1 complete
+
+**Decisions**
+- The owner signed off gates G1 (Tenancy & access) and G2 (Ledger engine) on the evidence in
+  [GATE_REVIEWS](roadmap/GATE_REVIEWS.md) ("Sign off both").
+  - This includes moving probe R6 to G3 in the gate tables, as decided on 2026-11-12.
+  - The two caveats stay with their tasks: AC-INV-09 for waste in T2.07, and AC-INV-05's
+    wording.
+- Stage 1 (M1, M2) is complete.
+
+**Verified**
+- CI on PR #49's head `19d0646`, all five required jobs green:
+  - SQLite: 978 passed, 25 skipped;
+  - PostgreSQL 16: 1003 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+
+**Files changed**
+- `docs/roadmap/GATE_REVIEWS.md` (status and sign-off table); this log.
+
+**Next task**
+- T2.01 Owned product catalog (C-36), the first Stage 2 task.
+
+---
+
+## 2026-11-13 — Gates G1 and G2 prepared for sign-off
+
+**Implemented**
+- [GATE_REVIEWS](roadmap/GATE_REVIEWS.md): each pass condition of G2 (Ledger engine) and G1
+  (Tenancy & access) with the tests and CI runs that prove it, and a sign-off table for the
+  owner.
+  - G1's sign-off was never recorded, and Stage 1 ends only when both gates pass, so G1 is
+    included.
+- **New gate test:** `test_g2_the_demo_business_verifies_clean_from_its_seed`. The demo
+  business, seeded as a developer seeds it, verifies with no drift. This is direct evidence for
+  "Σ movements = balance for every fixture".
+- **R6 moved to G3:** probe R6 was moved to T2.06 by the owner on 2026-11-12. The G2 row of the
+  testing strategy and Stage 1's exit criteria in the master roadmap still listed it; they now
+  name it under G3 and Stage 2.
+- The roadmap README indexes the new document.
+
+**Verified**
+- Every test the review cites exists and passed in CI on `8b99bf4`:
+  - SQLite: 977 passed, 25 skipped;
+  - PostgreSQL 16: 1002 passed, 0 skipped.
+- The new test passes locally. Full suite 978 passed, 25 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Findings (non-blocking, in the review)**
+- AC-INV-09 names waste. It is proven on adjustments, which use the same below-zero guard;
+  T2.07 must show it for waste.
+- AC-INV-05's "via the API returns an error": no path exists to call, and the scoped layer
+  refuses any update.
+
+**Files changed**
+- **New:** `docs/roadmap/GATE_REVIEWS.md`.
+- **Changed:**
+  - `tests/test_ledger_verification.py`;
+  - the testing strategy and the master roadmap (R6 moved to G3 and Stage 2), the roadmap
+    README;
+  - ADR-0049 → Accepted, the ADR index, the task index (T1.25 → Completed) and this log.
+
+**Next**
+- The owner signs off G1 and G2. Stage 2 then starts with T2.01 Owned product catalog.
+
+---
+
+## 2026-11-13 — T1.25 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #48 was merged with a merge commit (`75f07f2`).
+- CI on its head `8b99bf4`, all five required jobs green:
+  - SQLite: 977 passed, 25 skipped;
+  - PostgreSQL 16: 1002 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; ADR-0049 → Accepted; the task index (T1.25 → Completed).
+
+---
+
 ## 2026-11-13 — T1.25 Core dashboard on ledger and exceptions
 
 **Implemented**
