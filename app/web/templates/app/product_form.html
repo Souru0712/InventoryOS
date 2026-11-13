@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+{% if values.error %}<div class="notice error">{{ values.error }}</div>{% endif %}
+{% set costs = can(request, "inventory.view_costs") %}
+<p class="small"><a href="/app/products">&larr; Products</a></p>
+<h1>New product</h1>
+<p class="lede">Name it, then list each size you sell it in. A product sold one way needs no size:
+it is sold as "Regular". Prices are for reference; your POS stays the price authority.</p>
+
+<form method="post" action="/app/products/new" class="card">{{ csrf_field(request) }}
+  <div class="field">
+    <label for="name">Name</label>
+    <input id="name" name="name" required value="{{ values.name or '' }}" placeholder="e.g. Golden State">
+  </div>
+  <div class="field">
+    <label for="category">Category <span class="muted small">(optional)</span></label>
+    <input id="category" name="category" list="product-categories" value="{{ values.category or '' }}" placeholder="e.g. Juices">
+    <datalist id="product-categories">{% for c in categories %}<option value="{{ c }}">{% endfor %}</datalist>
+  </div>
+  <fieldset style="border:0; padding:0; margin:0 0 12px;">
+    <legend class="small" style="font-weight:600; margin-bottom:6px;">Sizes</legend>
+    {% set sizes = values.sizes or [] %}
+    {% for i in range(rows) %}
+    {% set given = sizes[i] if i < sizes|length else none %}
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+      <input name="variation_name" aria-label="Size {{ i + 1 }}" value="{{ given.name if given else '' }}" placeholder="{{ ['e.g. 12 oz', 'e.g. 16 oz', 'e.g. 24 oz', ''][i] if i < 4 else '' }}" style="flex:1 1 140px;">
+      {% if costs %}<input name="variation_price" aria-label="Price of size {{ i + 1 }}" value="{{ given.price if given else '' }}" inputmode="decimal" placeholder="Price, e.g. 6.50" style="width:140px;">{% endif %}
+    </div>
+    {% endfor %}
+    <p class="small muted" style="margin:0;">Add more sizes on the product's page.</p>
+  </fieldset>
+  <button class="btn" type="submit">Add product</button>
+</form>
+{% endblock %}

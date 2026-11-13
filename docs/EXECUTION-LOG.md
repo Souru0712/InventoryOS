@@ -5,6 +5,81 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-13 — T2.01 Owned product catalog (C-36)
+
+**Implemented**
+- **Three tables** (migration `5e0b7c41d2a9`, ADR-0050):
+  - `products`: name unique per business, category, active;
+  - `product_variations`: sizes unique within a product, with an informational price;
+  - `modifiers`: name, group and effect.
+    - **Effects:** none, scale (a factor above zero, held by a named CHECK) or add.
+    - **Add modifiers:** their lines are their recipe, coming in T2.02, so there is no
+      `modifier_effects` table.
+- **`app/products.py`, the only writer:**
+  - creates and edits products, sizes and modifiers;
+  - deactivates rather than deletes (DR-24), and keeps one size on sale;
+  - audits every change under the new "Products and modifiers" category.
+- **Screens at `/app/products`** (`recipe.view` reads, `product.edit` changes, under the write
+  rule):
+  - the product list with sizes and prices, and an "On sale" / "All" toggle;
+  - a new-product form with four size rows;
+  - a product page to edit sizes, prices, name and category, and to deactivate;
+  - modifiers listed and edited inline;
+  - a "Products" menu link.
+  - Prices sit behind `inventory.view_costs`. A role without it is never sent one, and its
+    edits leave the price as it was.
+- **DM-9, products half:** each sold item becomes a variation of an owned product.
+  - The name splits at its last " - " (Square's "Item - Variation"); otherwise it is a
+    "Regular" size.
+  - A price above zero is kept, and `source_sold_item_id` remembers the origin.
+  - It can run again safely. The demo seed applies the same rule.
+- Isolation cases for the six new id routes.
+
+**Verified (locally, SQLite)**
+- `tests/test_products.py` (10):
+  - the price, modifier and name-splitting rules, and grouping (with a repeated size and a
+    taken name);
+  - **acceptance:** with no POS connection, a Manager creates "Golden State" with 12 oz $6.50
+    and 16 oz $7.50 and a "Light ice" scale modifier at 1.15. Both are listed and audited;
+  - a form mistake is explained and keeps what was typed;
+  - names are unique whatever the case; a product keeps one size on sale; a product with no
+    size is sold as "Regular";
+  - deactivating removes a product from the list and deletes nothing;
+  - an Employee reads the catalog with no price anywhere and gets 403 on changes;
+  - sold items become products once; the demo café owns a product for every sold item.
+- `tests/test_migrations.py`: the backfill, split and linked, and the downgrade keeping sold
+  items.
+- **By hand, in the preview:**
+  - migrating the demo database turned its 9 sold items into 9 products;
+  - added Golden State (12 oz $6.50, 16 oz $7.50) and Light ice (scale 1.15) through the
+    forms;
+  - at 375 px wide, no horizontal scroll;
+  - no console or server errors.
+- Full suite 995 passed, 26 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:**
+  - `app/transform/products.py`, `app/products.py`, `app/web/products.py`;
+  - the templates `products.html`, `product_form.html` and `product.html`;
+  - migration `5e0b7c41d2a9`;
+  - `tests/test_products.py`, ADR-0050.
+- **Changed:**
+  - `app/models.py`, `app/access/scoped.py`, `app/audit.py`, `app/main.py`, `app/cli.py`
+    (demo seed), `base.html` (menu);
+  - `tests/test_isolation.py`, `tests/test_migrations.py`;
+  - CLAUDE.md, the data migration roadmap (DM-9 invariant), the ADR index, the task index
+    (T2.01 → In review) and this log.
+
+**Decisions**
+- Prices are money and sit behind the cost permission (Read-only keeps them for margins). The
+  task's "hidden from roles without it" is read that way. This is recorded in ADR-0050 for
+  the owner to confirm.
+
+**Next task**
+- T2.02 Versioned recipes.
+
+---
+
 ## 2026-11-13 — Gates G1 and G2 passed; Stage 1 complete
 
 **Decisions**
