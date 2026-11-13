@@ -5,6 +5,419 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-12 — T1.23-b Count sessions: screens
+
+**Implemented**
+- **`/app/counts`** (`inventory.view`):
+  - start a count: location, then everything, one category, one storage area or one item;
+  - the reconciliation history: open counts first, then posted ones, each with items counted,
+    adjusted and to review, plus the variance at cost for roles with cost access (REC-FR-09,
+    AC-REC-05).
+- **`/app/counts/{id}` while open:** one phone-sized card per item, in storage order under
+  area headings (AC-REC-01).
+  - Each card has packages plus loose (when the item has packages), unit, an optional reason
+    (REC-FR-06), and the expected quantity.
+  - Saving moves to the next item; counting again replaces the line.
+  - "Post count" posts once and reports how many lines were counted, adjusted and sent for
+    review.
+- **`/app/counts/{id}` after posting:** totals and line detail (counted, expected, variance,
+  at cost, reason, who).
+- **Rules on the routes:** counting, saving and posting take `count.record` and the write rule.
+  Another business's location or count answers 404. Mistakes come back as messages.
+- **Template filters:** `change` (signed quantity) and `signed_money` ("-$15.00").
+- **Menu:** a "Counts" link.
+- ADR-0047 → Accepted with T1.23-a, now covering the screens.
+
+**Verified (locally, SQLite)**
+- `tests/test_count_screens.py` (4):
+  - **AC-REC-01 on screen:** an area count lists Ale before Lemons and leaves the walk-in milk
+    out. It offers the case, takes "3 case + 4 each" = 40, and returns to the post button
+    after the last item.
+  - **Counting, posting and reading back (AC-REC-05):** saving moves to the next item and a
+    recount replaces the line. Posting reports "2 counted, 1 adjusted, 1 sent for review". The
+    line detail shows 2 counted against 8 expected, -6, -$15.00, the reason and the review
+    flag; the history links it with the total; a posted count refuses more lines.
+  - **Mistakes:** a negative count and an empty post are explained, and nothing is recorded.
+  - **Roles:** an Employee counts and posts without seeing an amount. Read-only can read but
+    cannot start (403), and has no start form.
+- Isolation cases for the four new routes (start, view, line, post); permissions test.
+- **By hand, in the preview at phone size (375 px, no horizontal scroll):**
+  - started a full count on the demo business;
+  - counted cold brew at 16.5 L, and the page moved on to the next item;
+  - posted "1 counted, 1 adjusted";
+  - the detail showed 16.5 L against 17.998 L expected, -1.498 L, -$9.29, with no errors from
+    the count.
+- Full suite 954 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:** `app/web/counts.py`, the templates `counts.html` and `count_session.html`,
+  `tests/test_count_screens.py`.
+- **Changed:** `app/counts.py` (`get_count`, `summaries`), `app/web/templating.py`,
+  `app/main.py`, `base.html` (menu), `tests/test_isolation.py`, ADR-0047, the ADR index, the
+  task index (T1.23 → In review) and this log.
+
+**Next task**
+- T1.24 Cost basis and valuation.
+
+---
+
+## 2026-11-12 — T1.23-a completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #45 was merged with a merge commit (`b2c7a68`).
+- CI on its head `b9601a7`, all five required jobs green:
+  - SQLite: 946 passed, 24 skipped;
+  - PostgreSQL 16: 970 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; ADR-0047 → Accepted.
+
+---
+
+## 2026-11-12 — T1.23-a Count sessions: model and posting
+
+**Implemented**
+- **`stock_counts` and `stock_count_lines`** (`StockCount`, `StockCountLine`, migration
+  `f38f77cefc20`):
+  - a session has a scope (full, category, storage area, item) and goes `open` → `posted`;
+  - a line is an observation (quantity, what was typed, when, by whom) with expected, variance
+    in quantity and cents, unit cost, optional REC-FR-06 reason, review flag and movement;
+  - named CHECKs; one line per item per session; lines are scoped through their session.
+- **Rules** (`app/transform/counts.py`, pure): scopes, reasons, parts (none below zero), and the
+  review rule ($25 or 20% of a positive expected).
+- **Ledger:**
+  - `balance_at()` sums the movements dated at or before an instant;
+  - `Line` gains an optional `occurred_at`;
+  - `post_count_lines()` locks the balances and, for each line, posts counted minus expected
+    at its own instant as one `count_variance` dated then (a single transaction, none when
+    nothing differed).
+- **`app/counts.py`** (the only writer):
+  - `start_count`;
+  - `count_items` lists a session's items in storage order (area, then name);
+  - `record_line` takes packages plus loose, and counting an item again replaces its line;
+  - `post_count` posts once (conditional update), fills each line's figures, sets
+    last-counted, and opens `count_variance_high` per line to review (no amount in the title).
+  - A session's status is read afresh because sessions keep rows across commits.
+- ADR-0047 (Proposed); CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_count_sessions.py` (11):
+  - **Rules:** scope and parts; the review rule, including AC-REC-04's -$40 and -$10.
+  - **AC-REC-01:** a storage-area session lists items in area order, with unplaced items last,
+    and takes "3 case + 4 each" = 40. An item outside the session is refused, and a single-item
+    session lists just it.
+  - **AC-REC-02:** expected is 26, the balance at the line's instant. It includes a delivery
+    recorded later but dated before the count, and excludes a sale a minute after. The
+    variance of -9 is dated at the count, and the balance ends at 15 = movements = the screen.
+  - **AC-REC-03:** one count transaction keyed `count:<id>` with one variance per non-zero line;
+    a matched line has no movement; a recount replaces the line; nothing new in
+    `inventory_counts`. A session with no difference has no transaction.
+  - **Posting once:** a session posts once even when two requests both saw it open, and cannot
+    take more lines after. An empty session is refused.
+  - **AC-REC-04:** -$40 opens `count_variance_high` with the exact title and 4000 at stake, which
+    an Employee sees without the amount; -$10 opens none.
+  - **Static:** only `app/counts.py` creates sessions and lines.
+- `tests/test_migrations.py` (schema agreement through `f38f77cefc20`), schema hygiene, scoped
+  access, ledger.
+- **By hand:** the demo database migrated to `f38f77cefc20` through the real chain, and a full
+  session there:
+  - listed 9 items in storage order;
+  - counted three lines 2 short and posted one variance each;
+  - flagged the $25 shortfall on the coffee bags for review, and left the ledger with no drift.
+- Full suite 946 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker
+  clean.
+
+**Files changed**
+- **New:** `app/transform/counts.py`, `app/counts.py`, migration `f38f77cefc20`, ADR-0047,
+  `tests/test_count_sessions.py`.
+- **Changed:** `app/models.py`, `app/access/scoped.py`, `app/transform/ledger.py`
+  (`Line.occurred_at`), `app/ledger/posting.py` (`balance_at`, `post_count_lines`), CLAUDE.md,
+  ADR-0046 (Accepted), the ADR index, the task index (T1.22 → Completed, T1.23 → In progress)
+  and this log.
+
+**Next**
+- T1.23-b Count session screens: phone-friendly, in storage order; reconciliation history
+  (REC-FR-09, AC-REC-05).
+
+---
+
+## 2026-11-12 — T1.22 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #44 was merged with a merge commit (`c01e7dd`).
+- CI on its head `368ef07`, all five required jobs green:
+  - SQLite: 935 passed, 24 skipped;
+  - PostgreSQL 16: 959 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0046 → Accepted. The WF-10 and INV-FR-19 reason-list finding remains open for the owner.
+
+**Files changed**
+- Task index (T1.22 → Completed), ADR-0046 and its index row, this log.
+
+---
+
+## 2026-11-12 — T1.22 Adjustments and movement history
+
+**Implemented**
+- **`inventory_adjustments`** (`InventoryAdjustment`, migration `b8363254987e`):
+  - the source record of one `adjustment` transaction, keyed `adjustment:<id>`;
+  - it holds the reason (INV-FR-19's five), note, override reason, actor, transaction and value
+    at cost;
+  - named CHECKs: the quantity is not zero, the reason is known, and "other" has a note.
+- **Rules** (`app/transform/adjustments.py`, pure): reasons, checks, the $50 review threshold.
+- **Below-zero guard** (DR-08): `crosses_zero()`, and `post_transaction(...,
+  refuse_below_zero=True)` raising `BelowZero` under the balance lock. Stock already negative
+  may rise but not fall.
+- **`app/adjustments.py`** (the only writer):
+  - posts the adjustment;
+  - an override needs `adjustment.override_negative` and a reason, and opens `negative_balance`;
+  - $50 or more opens `adjustment_review` (new type, financial).
+- **Evaluation** now raises and auto-resolves `negative_balance` for any stock below zero
+  ("count required"), and the dashboard marks such an item "count required" (AC-INV-10).
+- **History** (`app/ledger/history.py`): every movement newest first, with the balance after it
+  computed before filtering. Filters are type, the location's business days and actor; values
+  only with cost access.
+- **Screens:** `/app/catalog/{item}/history` and `/app/catalog/{item}/adjust`, linked from
+  the item page; adjustments can be entered in any unit or package.
+- ADR-0046 (Proposed); CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_adjustments.py` (13):
+  - **Rules:** the reason and override rules, the below-zero rule (negative stock may rise),
+    and the review threshold.
+  - **AC-INV-08:** a Manager's adjustment posts with its key, reason, note and value, and the
+    history shows actor, reason, time and change, newest first. A missing reason posts nothing.
+    A package quantity converts.
+  - **AC-INV-09:** going below zero is refused and nothing is kept. An override without a
+    reason is refused. With a reason it posts, records the override and opens
+    `negative_balance` ("count required"). An Employee cannot adjust (403, no link) and cannot
+    override even if given the adjustment key. The ledger guard refuses a waste posting too.
+  - **AC-INV-10:** a sale larger than on hand posts in full, the evaluation opens
+    `negative_balance` and the dashboard says "count required". A count back above zero
+    resolves it by the system.
+  - **Review:** a $60 adjustment posts and opens `adjustment_review`, which an Employee does
+    not see; a $3 one opens none.
+  - **History:** filters by type, actor and day keep true running balances, and the owner sees
+    values.
+  - **Static:** only `app/adjustments.py` creates adjustments.
+- Isolation cases for the three new routes; migration tests through `b8363254987e`.
+- **By hand:** on the migrated demo database, as the owner:
+  - removing 12 of 9 oat milk cartons was refused with "That would take recorded stock below
+    zero", and the form kept what was typed;
+  - removing 2 for "Correction: two cartons leaked" posted;
+  - the history then showed the adjustment (actor, reason, -$4.20, balance 7) above the opening
+    balance (9), with no server errors.
+- Full suite 935 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker
+  clean.
+
+**Open issues**
+- WF-10 lists the reasons "internal use" and "returned to supplier", but INV-FR-19 (which the
+  task and AC-INV-08 follow) lists "sample" and "transfer in from outside". This build uses
+  INV-FR-19's list. Aligning WF-10 is for the owner; it is not blocking.
+- The history's batch filter waits for T2.06, when movements carry batches. The review
+  threshold becomes a business setting with ADM-FR-05.
+
+**Files changed**
+- **New:**
+  - `app/transform/adjustments.py`, `app/adjustments.py`, `app/ledger/history.py`,
+    `app/web/stock.py`;
+  - the templates `stock_history.html` and `stock_adjust.html`;
+  - migration `b8363254987e`, ADR-0046, `tests/test_adjustments.py`.
+- **Changed:**
+  - `app/models.py`, `app/transform/{ledger,exceptions}.py`, `app/ledger/posting.py`;
+  - `app/orchestration/alerts.py`, `app/web/dashboard.py`, `app/main.py`;
+  - the item page, `base.html` (the count-required pill), `tests/test_isolation.py`;
+  - CLAUDE.md, ADR-0045 (Accepted), the ADR index, the task index (T1.21 → Completed, T1.22 →
+    In review) and this log.
+
+**Next task**
+- T1.23 Count sessions (depends on T1.22).
+
+---
+
+## 2026-11-12 — T1.21 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #43 was merged with a merge commit (`e8a214b`).
+- CI on its head `fb60ffd`, all five required jobs green:
+  - SQLite: 919 passed, 24 skipped;
+  - PostgreSQL 16: 943 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0045 → Accepted.
+
+**Files changed**
+- Task index (T1.21 → Completed), ADR-0045 and its index row, this log.
+
+---
+
+## 2026-11-12 — T1.21 Nightly ledger verification
+
+**Implemented**
+- **Pure rule** `find_drift()` (`app/transform/ledger.py`). It flags every item at a location
+  where the balance is not the sum of its movements, there are movements but no balance row, or
+  the stock row (the screens' projection, ADR-0042) is not the balance.
+- **Read-only check** `app/ledger/verify.py`. It sums one business's movements as exact
+  decimals, streamed in batches, compares them with the balances and stock rows, and builds
+  `balance_drift` findings: one per item and location, critical, giving the three figures in
+  the item's unit and "Nothing was changed."
+- **The job:**
+  - `verify_ledger` is a new job kind (CHECK by migration `6bedfbcf985f`);
+  - it is queued for every subscribed business at 02:45 UTC, once per date;
+  - its handler reconciles the findings into exceptions, so a drift that is fixed is resolved
+    by the system the next night.
+- **Founder alert:** one ERROR log line per business with drift, ids only. Error reporting turns
+  it into an alert when `SENTRY_DSN` is set (OBS-06; thresholds in T4.10).
+- ADR-0045 (Proposed); CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_ledger_verification.py` (6):
+  - **Rule:** each kind of drift, and none for an agreeing ledger.
+  - **AC-INV-11:** an injected balance of 999 against movements of 18 is found the same night
+    as one critical open exception with the exact title. Balances, movements and stock rows are
+    unchanged, and one ERROR alert carries ids only.
+  - **Projection:** a stock row out of step with its balance is drift.
+  - **Lifecycle:** a healthy ledger raises nothing, and a drift resolves by the system once
+    rebuilt.
+  - **Scope:** each business is queued once a night and flagged only for its own ledger; the
+    scheduler registers the 02:45 run.
+- `tests/test_ledger.py` (AC-INV-05 still holds: only `app/ledger` names the ledger models);
+  `tests/test_jobs.py`; `tests/test_migrations.py` through `6bedfbcf985f`.
+- **By hand:** the demo database migrated to `6bedfbcf985f` through the real chain, and then:
+  - the first night found no drift;
+  - after a balance was set to 1 against movements of 14, the next night opened "critical
+    open: House Blend beans 1kg bag at Rosewood Coffee - Main: the recorded balance is 1 each
+    but its movements add up to 14 each, and the screens show 14 each. Nothing was changed."
+  - it logged the alert line.
+- Full suite 919 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker
+  clean.
+
+**Files changed**
+- **New:** `app/ledger/verify.py`, migration `6bedfbcf985f`, ADR-0045,
+  `tests/test_ledger_verification.py`.
+- **Changed:**
+  - `app/transform/ledger.py` (`Drift`, `find_drift`), `app/transform/jobs.py`, `app/jobs.py`,
+    `app/orchestration/scheduler.py`;
+  - CLAUDE.md, ADR-0044 (Accepted), the ADR index, the task index (T1.20 → Completed, T1.21 →
+    In review) and this log.
+
+**Next task**
+- T1.22 Adjustments and movement history (depends on T1.18 and T1.06).
+
+---
+
+## 2026-11-12 — T1.20 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #42 was merged with a merge commit (`4deb769`).
+- CI on its head `af2b0fb`, all five required jobs green:
+  - SQLite: 913 passed, 24 skipped;
+  - PostgreSQL 16: 937 passed, 0 skipped, the two-worker test included;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0044 → Accepted.
+
+**Files changed**
+- Task index (T1.20 → Completed), ADR-0044 and its index row, this log.
+
+---
+
+## 2026-11-12 — T1.20 Jobs table; scheduled evaluation for every tenant
+
+**Implemented**
+- **`jobs` table** (`Job`, migration `cb043c5cd27a`):
+  - organization, kind, payload, dedupe key, status, attempts and maximum, run time, lock,
+    last error;
+  - named CHECKs;
+  - a partial unique index so one pending copy of the same work is queued once.
+- **Rules** (`app/transform/jobs.py`, pure): four kinds, exponential back-off (1, 2, 4 …
+  minutes, at most an hour), dead after the last attempt, abandoned after 15 minutes running.
+- **Service** (`app/jobs.py`):
+  - `enqueue()`;
+  - `drain()` claims with `FOR UPDATE SKIP LOCKED` (`next_due_job()` in
+    `app/access/system.py`), round-robin across organizations (SCL-03), and commits a
+    handler's work with its completion;
+  - failures roll back and retry; after the last attempt, a dead letter opens a `job_failed`
+    exception (new type; its CHECK is in the migration), which the kind's next success clears;
+  - abandoned jobs are queued again (at least once, REL-07).
+- **Scheduler process:**
+  - a worker every `JOB_POLL_SECONDS`;
+  - an evaluation queued for every subscribed business every `EVALUATION_INTERVAL_MINUTES`,
+    whether or not it has a POS (G2);
+  - weekly reports queued once per ISO week.
+- **Sync:** the Square sync queues the alert digest instead of sending it.
+- **Invoice upload** queues the reading. The review page shows "Reading the invoice" and
+  refreshes, and "Read it again" queues another read.
+- The worker polls every few seconds, so APScheduler's two INFO lines per run would have
+  meant about 35,000 log lines a day. `configure_logging` now keeps that logger at WARNING;
+  missed and failed runs still show.
+- ADR-0044 (Proposed); ADR-0006 notes it is built; CLAUDE.md rule; `.env.example` and README
+  settings.
+
+**Verified (locally, SQLite)**
+- `tests/test_jobs.py` (12; one Postgres-only):
+  - **Rules:** back-off and dead-letter rules.
+  - **Dedupe:** queued once, enforced by the database; requeued after done.
+  - **Running:** a job runs and its work commits.
+  - **Acceptance:** a failing job rolls back, retries at 1 minute, is not run early, and dies
+    after 5 attempts into a `job_failed` exception without the error text. The next success
+    resolves it.
+  - **Recovery and fairness:** an abandoned job runs again after its wait; a second business
+    is served before the first business's backlog finishes.
+  - **Two workers** never run the same job (Postgres).
+  - **Acceptance:** a business with no POS gets a low-stock exception on schedule, and a second
+    queue request does not duplicate it.
+  - **Weekly report:** queued once a week and sent once.
+  - **Upload:** it queues the reading; the page says so; the worker reads it; re-reading
+    queues again.
+- **Updated:** `tests/test_async_correctness.py` now checks that the upload answers without
+  reading and that `/healthz` answers while the worker reads. `tests/test_deployment.py` reruns
+  the report job through the queue.
+- `tests/test_migrations.py`: up and down through `cb043c5cd27a` (schema agreement).
+- **By hand:** a fresh database reached `cb043c5cd27a` through `migrate`, and `demo` seeded it.
+  The app then ran with its in-process worker:
+  - a photo uploaded through the receiving form answered at once with "Reading the invoice";
+  - the worker read it about two seconds later, with tenant and job ids in its log lines;
+  - the review page then showed the result;
+  - after the logging change, no per-poll lines appeared.
+- Full suite 913 passed, 24 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:** `app/transform/jobs.py`, `app/jobs.py`, migration `cb043c5cd27a`, ADR-0044,
+  `tests/test_jobs.py`.
+- **Changed:**
+  - `app/models.py` (`Job`), `app/access/{scoped,system}.py`, `app/exceptions.py`
+    (`clear`);
+  - `app/transform/exceptions.py` (`job_failed`), `app/config.py`;
+  - `app/orchestration/{scheduler,sync}.py`, `app/observability.py`, `app/web/receiving.py`, the receiving review
+    template;
+  - two existing tests, `.env.example`, README, CLAUDE.md, ADR-0006, ADR-0043 (Accepted), the
+    ADR index, the task index (T1.19 → Completed, T1.20 → In review) and this log.
+
+**Next task**
+- T1.21 Nightly ledger verification (`balance_drift` through a job).
+
+---
+
+## 2026-11-12 — T1.19 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #39 was merged with a merge commit (`548e5dc`).
+- CI on its head `5d98240`, all five required jobs green:
+  - SQLite: 902 passed, 23 skipped;
+  - PostgreSQL 16: 925 passed, 0 skipped, the concurrent `record_exception` test included;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+- ADR-0043 → Accepted.
+
+**Files changed**
+- Task index (T1.19 → Completed), ADR-0043 and its index row, this log.
+
+---
+
 ## 2026-11-12 — T1.19 Exception model
 
 **Implemented**

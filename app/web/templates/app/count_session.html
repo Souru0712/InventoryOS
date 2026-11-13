@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/counts">&larr; Counts</a></p>
+<h1>Count {{ count.id }}</h1>
+<p class="lede">{{ scopes[count.scope] }} at {{ location.name if location else "" }}.
+{% if count.status == "open" %}Started {{ count.started_at.strftime("%d %b %H:%M") }} UTC by {{ people.get(count.started_by_user_id, "StockPulse") }}.
+{% else %}Posted {{ count.posted_at.strftime("%d %b %Y %H:%M") }} UTC by {{ people.get(count.posted_by_user_id, "StockPulse") }}.{% endif %}</p>
+
+{% if count.status == "open" %}
+  {% if not entries %}
+    <div class="card"><p style="margin:0;">Nothing to count here: no active items match this count.</p></div>
+  {% endif %}
+  {% set ns = namespace(area="__start__") %}
+  {% for entry in entries %}
+    {% set area = entry.setting.storage_area or "No storage area" %}
+    {% if area != ns.area %}<h2 style="margin:22px 0 8px;">{{ area }}</h2>{% set ns.area = area %}{% endif %}
+    {% set item = entry.item %}
+    {% set line = lines.get(item.id) %}
+    {% set next = entries[loop.index].item.id if not loop.last else "" %}
+    <form id="item-{{ item.id }}" method="post" action="/app/counts/{{ count.id }}/lines" class="card" style="max-width:620px; margin-bottom:10px;">{{ csrf_field(request) }}
+      <input type="hidden" name="item_id" value="{{ item.id }}">
+      <input type="hidden" name="next_item" value="{{ next }}">
+      <p style="margin:0 0 8px;"><strong style="font-size:17px;">{{ item.name }}</strong>
+        <span class="small muted">&middot; expected {{ entry.stock.qty_base|qty(item.display_unit) }}</span>
+        {% if line %}<span class="pill ok">counted {{ line.counted_qty_base|qty(item.display_unit) }}</span>{% endif %}</p>
+      <div class="row">
+        {% if item.packages %}
+        <div class="field">
+          <label for="pq-{{ item.id }}">Packages</label>
+          <input id="pq-{{ item.id }}" name="pack_quantity" inputmode="decimal" style="font-size:18px;">
+        </div>
+        <div class="field">
+          <label for="pk-{{ item.id }}">of</label>
+          <select id="pk-{{ item.id }}" name="pack">{% for p in item.packages %}<option value="{{ p.name }}">{{ p.name }}</option>{% endfor %}</select>
+        </div>
+        {% endif %}
+        <div class="field">
+          <label for="q-{{ item.id }}">{% if item.packages %}Plus loose{% else %}Counted{% endif %}</label>
+          <input id="q-{{ item.id }}" name="quantity" inputmode="decimal" style="font-size:18px;">
+        </div>
+        <div class="field">
+          <label for="u-{{ item.id }}">Unit</label>
+          <select id="u-{{ item.id }}" name="unit">{% for code, label in units[item.dimension] %}<option value="{{ code }}"{% if code == item.display_unit %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="r-{{ item.id }}">Reason for a difference <span class="muted small">(optional)</span></label>
+        <select id="r-{{ item.id }}" name="reason"><option value="">None</option>{% for key, label in reasons.items() %}<option value="{{ key }}"{% if line and line.reason == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      </div>
+      {% if may_count %}<button class="btn" type="submit">{{ "Count again" if line else "Save count" }}</button>{% endif %}
+    </form>
+  {% endfor %}
+  {% if may_count %}
+  <form id="post" method="post" action="/app/counts/{{ count.id }}/post" class="card" style="max-width:620px; margin-top:18px;">{{ csrf_field(request) }}
+    <p style="margin:0 0 10px;">{{ lines|length }} of {{ entries|length }} items counted. Posting compares each with what was expected when it
+    was counted and posts the differences. It cannot be undone.</p>
+    <button class="btn" type="submit" data-confirm="Post this count? Differences become stock movements.">Post count</button>
+  </form>
+  {% endif %}
+{% else %}
+  {% if totals %}
+  <div class="grid cols-4" style="margin:12px 0 18px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+    <div class="card"><div class="stat-label">Items counted</div><div class="stat">{{ totals.lines }}</div></div>
+    <div class="card"><div class="stat-label">Adjusted</div><div class="stat">{{ totals.variances }}</div></div>
+    <div class="card"><div class="stat-label">To review</div><div class="stat">{{ totals.to_review }}</div></div>
+    {% if costs %}<div class="card"><div class="stat-label">Variance at cost</div><div class="stat">{{ totals.variance_cents|signed_money(currency) }}</div></div>{% endif %}
+  </div>
+  {% endif %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Item</th><th>Counted</th><th>Expected</th><th>Variance</th>{% if costs %}<th>At cost</th>{% endif %}<th>Reason</th><th>Counted by</th></tr></thead>
+    <tbody>
+    {% for line in count.lines %}
+      {% set item = items.get(line.inventory_item_id) %}
+      {% set unit = item.display_unit if item else "each" %}
+      <tr>
+        <td>{{ item.name if item else "Item " ~ line.inventory_item_id }}{% if line.needs_review %} <span class="pill warning">review</span>{% endif %}
+          <div class="small muted">{{ line.entered }} &middot; {{ line.counted_at.strftime("%H:%M") }} UTC</div></td>
+        <td>{{ line.counted_qty_base|qty(unit) }}</td>
+        <td>{{ line.expected_qty_base|qty(unit) }}</td>
+        <td>{% if line.variance_qty_base %}{{ line.variance_qty_base|change(unit) }}{% else %}<span class="muted">none</span>{% endif %}</td>
+        {% if costs %}<td class="small">{{ line.variance_cents|signed_money(currency) }}</td>{% endif %}
+        <td class="small">{{ reasons.get(line.reason, "") if line.reason else "" }}</td>
+        <td class="small">{{ people.get(line.counted_by_user_id, "StockPulse") }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endif %}
+{% endblock %}

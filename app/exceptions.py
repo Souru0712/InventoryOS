@@ -201,6 +201,15 @@ def close_cleared(db: Session, org: OrgContext, ids: Sequence[int], now: datetim
     return int(getattr(result, "rowcount", 0) or 0)
 
 
+def clear(db: Session, org: OrgContext, key: Key, now: datetime | None = None) -> bool:
+    """Resolve, as the system, the open exception for this type and subject, if there is one:
+    its condition has cleared (a job of that kind succeeded, say)."""
+    row = _open(db, org, key)
+    if row is None:
+        return False
+    return close_cleared(db, org, [row.id], now or datetime.now(UTC)) == 1
+
+
 def _visible(db: Session, org: OrgContext, exception_id: int) -> ExceptionRecord:
     row = get_scoped(db, org, ExceptionRecord, exception_id)
     if row is None or not visible_to(row.type, org.can(VIEW_COSTS)):

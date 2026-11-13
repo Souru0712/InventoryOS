@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     stripe_price_pro: str = ""
 
     sync_interval_minutes: int = 60
+    # Every business's stock and expiry is checked this often, with or without a POS (T1.20).
+    evaluation_interval_minutes: int = 60
+    # How often the scheduler process's worker looks for due background jobs.
+    job_poll_seconds: int = 5
     alert_cooldown_hours: int = 24
     expiry_horizon_days: int = 30
 

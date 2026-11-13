@@ -18,4 +18,6 @@ Redis + RQ/Celery now
 
 ## Consequences
 
-Not built yet (T1.20). Until then extraction runs inside the upload request in a worker thread (T0.07).
+Built in T1.20 (ADR-0044, migration `cb043c5cd27a`): the scheduler process drains the queue, and
+invoice reading, alert digests, weekly reports and every business's stock and expiry checks
+run as jobs. Before it, extraction ran inside the upload request in a worker thread (T0.07).

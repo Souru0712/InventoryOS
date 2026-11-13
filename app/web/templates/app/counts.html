@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Counts</h1>
+<p class="lede">Count what is on the shelf. Each item is compared with what the stock should have been at
+the moment you counted it, and the differences are posted as count variances.</p>
+
+{% if can(request, "count.record") and locations %}
+<form method="post" action="/app/counts" class="card" style="max-width:620px; margin-bottom:20px;">{{ csrf_field(request) }}
+  <h2 style="margin-top:0;">Start a count</h2>
+  {% if locations|length > 1 %}
+  <div class="field">
+    <label for="location_id">Location</label>
+    <select id="location_id" name="location_id">{% for loc in locations %}<option value="{{ loc.id }}">{{ loc.name }}</option>{% endfor %}</select>
+  </div>
+  {% else %}<input type="hidden" name="location_id" value="{{ locations[0].id }}">{% endif %}
+  <div class="field">
+    <label for="scope">What to count</label>
+    <select id="scope" name="scope">{% for key, label in scopes.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label for="category_id">Category <span class="muted small">(for one category)</span></label>
+      <select id="category_id" name="category_id"><option value="">Pick one</option>{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+    </div>
+    <div class="field">
+      <label for="area">Storage area <span class="muted small">(for one area)</span></label>
+      <select id="area" name="area"><option value="">Pick one</option>{% for a in areas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select>
+    </div>
+    <div class="field">
+      <label for="item_id">Item <span class="muted small">(for one item)</span></label>
+      <select id="item_id" name="item_id"><option value="">Pick one</option>{% for i in items %}<option value="{{ i.id }}">{{ i.name }}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <button class="btn" type="submit">Start counting</button>
+</form>
+{% endif %}
+
+<h2>History</h2>
+{% if not summaries %}
+  <div class="card"><p style="margin:0;">No counts yet.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Count</th><th>Where</th><th>Status</th><th>Items</th><th>Adjusted</th><th>To review</th>{% if costs %}<th>Variance</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for s in summaries %}
+    <tr>
+      <td><a href="/app/counts/{{ s.count.id }}">Count {{ s.count.id }}</a>
+        <div class="small muted">{{ scopes[s.count.scope] }} &middot; {{ (s.count.posted_at or s.count.started_at).strftime("%d %b %Y %H:%M") }} UTC</div></td>
+      <td class="small">{{ s.location_name }}</td>
+      <td>{% if s.count.status == "open" %}<span class="pill at_risk">open</span>{% else %}<span class="pill ok">posted</span>{% endif %}</td>
+      <td>{{ s.lines }}</td>
+      <td>{{ s.variances }}</td>
+      <td>{% if s.to_review %}<span class="pill warning">{{ s.to_review }}</span>{% else %}0{% endif %}</td>
+      {% if costs %}<td class="small">{{ s.variance_cents|signed_money(currency) if s.count.status == "posted" else "" }}</td>{% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

@@ -7,11 +7,15 @@ on through an OrgContext for that one organization.
 
 from __future__ import annotations
 
+from collections.abc import Collection
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
     Invitation,
+    Job,
     Membership,
     Plan,
     ProviderConnection,
@@ -96,3 +100,29 @@ def tenant_by_stripe_id(
     if customer_id:
         return db.scalars(select(Tenant).where(Tenant.stripe_customer_id == customer_id)).first()
     return None
+
+
+def next_due_job(db: Session, now: datetime, served: Collection[int] = ()) -> Job | None:
+    """The oldest job due to run, locked for this worker, from an organization not yet served
+    this round, so one business's backlog cannot starve the others (SCL-03). Crosses
+    organizations: the worker serves them all. Rows another worker holds are skipped."""
+    query = select(Job).where(Job.status == "pending", Job.run_at <= now)
+    if served:
+        query = query.where(Job.tenant_id.not_in(sorted(served)))
+    return db.scalars(
+        query.order_by(Job.run_at, Job.id)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+        .execution_options(populate_existing=True)
+    ).first()
+
+
+def abandoned_jobs(db: Session, started_before: datetime) -> list[Job]:
+    """Jobs left running by a worker that stopped mid-way, across organizations."""
+    return list(
+        db.scalars(
+            select(Job)
+            .where(Job.status == "running", Job.locked_at < started_before)
+            .with_for_update(skip_locked=True)
+        )
+    )

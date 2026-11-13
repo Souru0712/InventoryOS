@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 # DOMAIN_MODEL §4.2, INV-FR-15.
@@ -50,6 +51,22 @@ class LedgerRuleError(ValueError):
     """A posting the ledger refuses; nothing is written."""
 
 
+class BelowZero(LedgerRuleError):
+    """A manual movement that would take recorded stock below zero (DR-08)."""
+
+
+def crosses_zero(
+    before: Mapping[tuple[int, int], Decimal], lines: Iterable[Line]
+) -> list[tuple[int, int]]:
+    """The (location, item) pairs these lines would leave below zero and lower than they were.
+    Stock already below zero may still rise; it may not fall further."""
+    after = apply(before, lines)
+    zero = Decimal("0")
+    return sorted(
+        pair for pair, qty in after.items() if qty < zero and qty < before.get(pair, zero)
+    )
+
+
 @dataclass(frozen=True)
 class Line:
     """One movement to post: a signed base-unit quantity of an item at a location."""
@@ -62,6 +79,9 @@ class Line:
     batch_id: int | None = None
     reason: str | None = None
     reverses_movement_id: int | None = None  # set only by a reversal
+    # When this movement happened, if not when its transaction did: a count session's lines
+    # each happened when they were counted (T1.23).
+    occurred_at: datetime | None = None
 
 
 def check_line(line: Line) -> None:
@@ -118,3 +138,33 @@ def apply(
         key = (line.location_id, line.inventory_item_id)
         result[key] = result.get(key, Decimal("0")) + line.qty_base
     return result
+
+
+@dataclass(frozen=True)
+class Drift:
+    """One item at one location whose recorded figures disagree (DR-03)."""
+
+    location_id: int
+    inventory_item_id: int
+    recorded: Decimal  # the balance row; zero when there is none
+    movements: Decimal  # what the movements add up to
+    shown: Decimal | None  # the stock row the screens read (ADR-0042), if there is one
+
+
+def find_drift(
+    recorded: Mapping[tuple[int, int], Decimal],
+    movements: Mapping[tuple[int, int], Decimal],
+    shown: Mapping[tuple[int, int], Decimal],
+) -> list[Drift]:
+    """Every (location, item) whose balance is not the sum of its movements, or whose stock row
+    is not its balance: the nightly verification's finding (REL-08, AC-INV-11). It reports and
+    never corrects: a drift is a bug to understand, not a number to overwrite."""
+    zero = Decimal("0")
+    found = []
+    for pair in sorted(set(recorded) | set(movements) | set(shown)):
+        balance = recorded.get(pair, zero)
+        total = movements.get(pair, zero)
+        screen = shown.get(pair)
+        if balance != total or (screen is not None and screen != balance):
+            found.append(Drift(pair[0], pair[1], balance, total, screen))
+    return found

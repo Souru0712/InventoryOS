@@ -15,10 +15,11 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped, team
 from app.access.permissions import VIEW_COSTS
+from app.adjustments import negative_finding
 from app.config import get_settings
 from app.entitlements import allows
 from app.exceptions import apply_findings, mark_notified
-from app.models import ExceptionRecord, StockItem, Tenant
+from app.models import ExceptionRecord, Location, StockItem, Tenant
 from app.notify.email import render_pair, send_email, wants
 from app.orchestration.views import expiry_positions, stock_views, tenant_currency, velocity_map
 from app.transform.alerts import AlertProposal, evaluate_expiries, evaluate_stock
@@ -55,12 +56,21 @@ def evaluate_and_store(db: Session, org: OrgContext, now: datetime | None = None
     """Open new stock and expiry exceptions, refresh current ones, and resolve, as the system,
     those whose condition has cleared (REC-FR-13, -14). Returns a small stats dict."""
     now = now or datetime.now(UTC)
-    places = {item.id: item.location_id for item in db.scalars(select_scoped(org, StockItem))}
+    stock = list(db.scalars(select_scoped(org, StockItem)))
+    places = {item.id: item.location_id for item in stock}
     findings = [
         from_alert(proposal, places.get(proposal.stock_item_id))
         for proposal in all_proposals(db, org, now)
     ]
-    return apply_findings(db, org, findings, STOCK_TYPES, now)
+    # Recorded stock below zero needs a count (DR-08, AC-INV-10); it clears once stock is back
+    # at zero or above.
+    locations = {place.id: place for place in db.scalars(select_scoped(org, Location))}
+    for row in stock:
+        if (row.qty_base or 0) < 0 and row.inventory_item is not None:
+            findings.append(
+                negative_finding(row.inventory_item, locations[row.location_id], row.qty_base)
+            )
+    return apply_findings(db, org, findings, STOCK_TYPES | {"negative_balance"}, now)
 
 
 def send_alert_digest(db: Session, org: OrgContext, now: datetime | None = None) -> bool:

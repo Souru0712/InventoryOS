@@ -66,6 +66,7 @@
 {% endif %}
 
 <h2>Locations</h2>
+<p class="small"><a href="/app/catalog/{{ item.id }}/history">Movement history</a>{% if can(request, "adjustment.create") %} &middot; <a href="/app/catalog/{{ item.id }}/adjust">Adjust stock</a>{% endif %}</p>
 {% if editable %}
   {% for place in row.places %}
     {% set s = place.setting %}

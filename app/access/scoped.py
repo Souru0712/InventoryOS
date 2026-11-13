@@ -31,6 +31,7 @@ from app.models import (
     Invitation,
     ItemPackage,
     ItemUnitConversion,
+    Job,
     Location,
     Membership,
     ProductIdentifier,
@@ -40,6 +41,8 @@ from app.models import (
     SoldItem,
     StockAlias,
     StockBatch,
+    StockCount,
+    StockCountLine,
     StockItem,
     SyncRun,
     Tenant,
@@ -73,6 +76,7 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         SyncRun,
         EmailLog,
         HealthSnapshot,
+        Job,
     }
 )
 
@@ -92,6 +96,7 @@ LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
         )
     },
     DocumentLine: ("document_id", Document),
+    StockCountLine: ("stock_count_id", StockCount),
     ExtractionCorrection: ("document_id", Document),
 }
 

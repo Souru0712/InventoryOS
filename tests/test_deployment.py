@@ -5,8 +5,10 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 
+from app.access import OrgContext
 from app.config import Settings, require_deployable
 from app.db import SCHEDULER_LOCK, Base, LeaderLock, engine, is_postgres
+from app.jobs import drain, enqueue
 from app.main import app
 from app.models import EmailLog
 from app.monitoring import FILTERED, init_monitoring, scrub
@@ -194,9 +196,13 @@ def test_a_rerun_report_job_does_not_send_the_weekly_report_twice(db, tenant, mo
             )
         )
 
-    monkeypatch.setattr(scheduler, "send_weekly_report", fake_send)
+    monkeypatch.setattr("app.orchestration.reporting.send_weekly_report", fake_send)
     scheduler.send_due_reports(now)
-    scheduler.send_due_reports(now)
+    scheduler.send_due_reports(now)  # queued once (T1.20)
+    drain()
+    enqueue(db, OrgContext.system(tenant.id), "send_weekly_report")  # a re-run job
+    db.commit()
+    drain()  # finds this week's report in the email log, and stops
     assert sent == [tenant.id]
 
 

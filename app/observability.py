@@ -117,6 +117,9 @@ def configure_logging(level: int = logging.INFO) -> None:
     # query strings stay out of the log, failures still show at WARNING.
     for name in ("httpx", "httpx2", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
+    # The job worker runs every few seconds (T1.20); APScheduler's two lines per run would bury
+    # everything else. A missed or failed run is a warning or error, and still shows.
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 
 
 class RequestContext:

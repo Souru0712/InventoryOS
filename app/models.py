@@ -24,7 +24,11 @@ from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
+from app.transform.adjustments import ADJUSTMENT_REASONS
+from app.transform.counts import COUNT_SCOPES, COUNT_STATUSES, VARIANCE_REASONS
 from app.transform.exceptions import EXCEPTION_TYPES, RESOLUTIONS, SEVERITIES, STATUSES
+from app.transform.jobs import JOB_KINDS
+from app.transform.jobs import STATUSES as JOB_STATUSES
 from app.transform.ledger import (
     ALLOCATION_MODES,
     DECREASES,
@@ -789,6 +793,104 @@ class Alert(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
+class InventoryAdjustment(Base):
+    """A deliberate correction with its reason (T1.22; INV-FR-19, WF-10): the source record of
+    one `adjustment` transaction, keyed `adjustment:<id>`. Written only by app/adjustments.py."""
+
+    __tablename__ = "inventory_adjustments"
+    __table_args__ = (
+        one_of("inventory_adjustments", "reason", ADJUSTMENT_REASONS),
+        CheckConstraint(
+            "CAST(qty_base AS NUMERIC) <> 0", name="ck_inventory_adjustments_qty_base_not_zero"
+        ),
+        CheckConstraint(
+            "reason <> 'other' OR note IS NOT NULL",
+            name="ck_inventory_adjustments_other_has_note",
+        ),
+        Index("ix_inventory_adjustments_item", "tenant_id", "inventory_item_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    qty_base: Mapped[Decimal] = mapped_column(Qty)
+    reason: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str | None] = mapped_column(String(300))
+    # Set only when the person let it take stock below zero, saying why (DR-08).
+    override_reason: Mapped[str | None] = mapped_column(String(300))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+    value_cents: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class StockCount(Base):
+    """A count session at one location (T1.23; REC-FR-01, WF-09): open while lines are counted,
+    then posted once, as one `count` transaction keyed `count:<id>`. Written only by
+    app/counts.py."""
+
+    __tablename__ = "stock_counts"
+    __table_args__ = (
+        one_of("stock_counts", "scope", COUNT_SCOPES),
+        one_of("stock_counts", "status", COUNT_STATUSES),
+        CheckConstraint(
+            "status <> 'posted' OR posted_at IS NOT NULL", name="ck_stock_counts_posted_has_time"
+        ),
+        Index("ix_stock_counts_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
+    scope: Mapped[str] = mapped_column(String(16))
+    # Which category (its id), storage area (its name) or item (its id); empty for a full count.
+    scope_ref: Mapped[str | None] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(16), default="open")
+    note: Mapped[str | None] = mapped_column(String(300))
+    started_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    posted_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    posted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+
+    lines: Mapped[list[StockCountLine]] = relationship(
+        back_populates="count", cascade="all, delete-orphan", order_by="StockCountLine.id"
+    )
+
+
+class StockCountLine(Base):
+    """What was counted of one item in a session, when, and by whom (an observation, DR-12), with
+    what the ledger expected at that instant and the variance posted for the difference."""
+
+    __tablename__ = "stock_count_lines"
+    __table_args__ = (
+        UniqueConstraint("stock_count_id", "inventory_item_id", name="uq_stock_count_lines_item"),
+        not_negative("stock_count_lines", "counted_qty_base"),
+        one_of("stock_count_lines", "reason", VARIANCE_REASONS),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    stock_count_id: Mapped[int] = mapped_column(owned_by("stock_counts.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    counted_qty_base: Mapped[Decimal] = mapped_column(Qty)
+    # What was typed, for the record: "3 case + 4 each".
+    entered: Mapped[str] = mapped_column(String(200))
+    counted_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    counted_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    # When counted, a preview for the counter; at posting, what the ledger held at counted_at.
+    expected_qty_base: Mapped[Decimal | None] = mapped_column(Qty)
+    variance_qty_base: Mapped[Decimal | None] = mapped_column(Qty)
+    unit_cost: Mapped[Decimal | None] = mapped_column(Qty)
+    variance_cents: Mapped[int | None] = mapped_column(Integer)
+    reason: Mapped[str | None] = mapped_column(String(24))
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    movement_id: Mapped[int | None] = mapped_column(ref("inventory_movements.id"))
+
+    count: Mapped[StockCount] = relationship(back_populates="lines")
+
+
 _OPEN = "status IN ('open', 'acknowledged')"
 
 
@@ -854,6 +956,51 @@ class ExceptionRecord(Base):
     resolution: Mapped[str | None] = mapped_column(String(16))
     resolution_note: Mapped[str | None] = mapped_column(String(500))
     notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class Job(Base):
+    """One piece of background work for one organization (T1.20; ID-06, REL-07, SCL-03).
+
+    Queued by app/jobs.py, claimed by the scheduler process's worker with FOR UPDATE SKIP
+    LOCKED, run at least once, retried with back-off and dead-lettered into an exception after
+    its last attempt. It always names its organization (SAAS-T-06).
+    """
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        one_of("jobs", "kind", JOB_KINDS),
+        one_of("jobs", "status", JOB_STATUSES),
+        CheckConstraint("attempts >= 0", name="ck_jobs_attempts_not_negative"),
+        CheckConstraint("max_attempts >= 1", name="ck_jobs_max_attempts_positive"),
+        Index("ix_jobs_due", "status", "run_at"),
+        Index("ix_jobs_tenant_status", "tenant_id", "status"),
+        # One waiting copy of the same work: a second request to queue it is the first.
+        Index(
+            "uq_jobs_pending",
+            "tenant_id",
+            "kind",
+            "dedupe_key",
+            unique=True,
+            sqlite_where=text("status = 'pending' AND dedupe_key IS NOT NULL"),
+            postgresql_where=text("status = 'pending' AND dedupe_key IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    kind: Mapped[str] = mapped_column(String(40))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    dedupe_key: Mapped[str | None] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=5)
+    run_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    locked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    locked_by: Mapped[str | None] = mapped_column(String(120))
+    # The last failure, for the founder console (T4.07); never shown to the business.
+    last_error: Mapped[str | None] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class SyncRun(Base):

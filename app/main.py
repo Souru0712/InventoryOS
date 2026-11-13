@@ -25,6 +25,7 @@ from app.web import (
     auth,
     billing,
     catalog,
+    counts,
     dashboard,
     exceptions,
     health,
@@ -35,6 +36,7 @@ from app.web import (
     promotions,
     receiving,
     scanning,
+    stock,
     team,
     webhooks,
 )
@@ -99,6 +101,8 @@ app.include_router(team.router)
 app.include_router(mfa.router)
 app.include_router(audit.router)
 app.include_router(exceptions.router)
+app.include_router(stock.router)
+app.include_router(counts.router)
 app.include_router(catalog.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)

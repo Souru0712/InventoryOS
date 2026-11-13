@@ -28,7 +28,14 @@ implementation sessions; the detail lives in `docs/`.
 ## Architecture rules (do not break)
 - Only the ledger posting service writes stock movements and balances (DR-01..07):
   `post_transaction()` / `reverse_transaction()` in `app/ledger/posting.py` (ADR-0040); nothing
-  else names the ledger models (a test enforces it). It is also the only writer of
+  else names the ledger models (a test enforces it). A nightly job (`app/ledger/verify.py`,
+  ADR-0045) checks balance = Σ movements = stock row and raises `balance_drift`; it never
+  corrects either figure. A manual movement (an adjustment, waste) posts with
+  `refuse_below_zero=True`: below zero only with `adjustment.override_negative` and a reason
+  (DR-08). Adjustments go through `app/adjustments.py` (ADR-0046); history is read through
+  `app/ledger/history.py`. A count session (`app/counts.py`, ADR-0047) compares each line
+  with `balance_at()` its own `counted_at` and posts through `post_count_lines()` under the
+  lock. It is also the only writer of
   `stock_items.qty_base`, the balance's projection that screens read (ADR-0042): a count posts
   through `post_count()`, a new item's quantity through `post_opening()`, a receipt as a
   `receipt`; a test fails on any other assignment. Square's counts never change stock (C-34).
@@ -93,6 +100,11 @@ implementation sessions; the detail lives in `docs/`.
 - Routes are plain `def` (FastAPI runs them in its threadpool); a route that needs the raw
   body or a dynamic form takes it from `app/web/inputs.py`. `async def` routes would run the
   synchronous database and API calls on the event loop and stall the worker (C8; a test enforces it).
+- Work that should not hold up a request, or that runs per business on a clock, is a job
+  (`app/jobs.py`, ADR-0044): `enqueue(db, org, kind, payload, dedupe_key=...)`, drained by the
+  scheduler process. Jobs run at least once, so a handler must be safe to repeat. A new kind
+  goes in `app/transform/jobs.py` (its CHECK by migration) with a handler in `app/jobs.py`.
+  Tests run the queue with `drain()`.
 - Logs are JSON with `request_id`, `tenant_id`, `user_id` (`app/observability.py`). Never log
   bodies, cookies, query strings, tokens, passwords or email addresses (log ids instead); emails
   are masked as a last resort. A new scheduled job is registered through `scheduler._job`, and a
