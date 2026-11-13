@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
+from app.access.permissions import VIEW_COSTS
+from app.costs import history as cost_history
 from app.db import get_db
 from app.items import (
     NewItem,
@@ -357,6 +359,13 @@ def _item_page(request, db, org, tenant, inventory_item_id: int, error=None, sta
             "type_labels": ITEM_TYPE_LABELS,
             "units": _units(),
             "elsewhere": [loc for loc in _locations(db, org) if loc.id not in stocked],
+            # The last few costs at each location, newest first (INV-FR-07); shown with costs only.
+            "cost_history": {
+                place.location.id: cost_history(db, org, place.location.id, row.item.id)[:5]
+                for place in row.places
+            }
+            if org.can(VIEW_COSTS)
+            else {},
             "message": pop_flash(request),
             "error": error,
         },

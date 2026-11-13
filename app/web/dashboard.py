@@ -13,8 +13,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
+from app.access.permissions import VIEW_COSTS
 from app.audit import record_audit
 from app.config import get_settings
+from app.costs import value_stock
 from app.db import get_db
 from app.entitlements import require
 from app.items import entered_base
@@ -160,6 +162,8 @@ def dashboard(
 
     expiries = expiry_positions(db, org, location_id=location)
     expiry = _expiry_summary(expiries, get_settings().expiry_horizon_days) if expiries else None
+    # The same figure the valuation page gives, with its basis (AC-ANL-02).
+    stock_value = value_stock(db, org, location_id=location) if org.can(VIEW_COSTS) else None
 
     return templates.TemplateResponse(
         request,
@@ -175,7 +179,8 @@ def dashboard(
             "last_run": last_run,
             "sync": sync,
             "by_dimension": by_dimension,
-            "total_value": sum(row["value_cents"] for row in rows),
+            "total_value": stock_value.total_cents if stock_value else 0,
+            "stock_value": stock_value,
             "at_risk": sum(1 for row in rows if row["status"] != "ok"),
             "expiry": expiry,
             "currency": tenant_currency(db, org),

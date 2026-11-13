@@ -20,6 +20,7 @@ from app.units import (
     format_change,
     format_qty,
     from_base,
+    to_base,
 )
 from app.web.csrf import csrf_field, csrf_token
 
@@ -89,6 +90,14 @@ def change(qty_base: Decimal | None, unit_code: str) -> str:
     return "-" if qty_base is None else format_change(qty_base, unit_code)
 
 
+def unit_cost(cost_per_base_cents: Decimal | None, unit_code: str, currency: str = "USD") -> str:
+    """A cost per base unit as money per one display unit: '$4.50 / L'."""
+    if not cost_per_base_cents:
+        return "-"
+    per = Decimal(cost_per_base_cents) * to_base("1", unit_code)
+    return f"{money(per, currency)} / {unit_label(unit_code)}"
+
+
 def signed_money(cents: int | None, currency: str = "USD") -> str:
     """'-$40.00' rather than '$-40.00'."""
     if cents is None:
@@ -106,6 +115,7 @@ templates.env.filters["amount"] = amount
 templates.env.filters["approx_amount"] = approx_amount
 templates.env.filters["change"] = change
 templates.env.filters["signed_money"] = signed_money
+templates.env.filters["unit_cost"] = unit_cost
 
 
 def can(request, key: str) -> bool:

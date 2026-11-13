@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Inventory value</h1>
+<p class="lede">{% if as_of %}What was held at the end of {{ as_of.strftime("%d %b %Y") }} (each location's business day), at the cost in effect then.{% else %}What is held now, at each item's current cost.{% endif %}
+Cost basis: {{ valuation.basis }}. Stock below zero counts as nothing.</p>
+
+<form method="get" action="/app/valuation" class="card" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px;">
+  {% if locations|length > 1 %}
+  <div class="field" style="margin:0;">
+    <label for="location">Location</label>
+    <select id="location" name="location"><option value="">All</option>{% for loc in locations %}<option value="{{ loc.id }}"{% if loc.id == selected_location %} selected{% endif %}>{{ loc.name }}</option>{% endfor %}</select>
+  </div>
+  {% endif %}
+  <div class="field" style="margin:0;">
+    <label for="as_of">As of <span class="muted small">(empty for now)</span></label>
+    <input id="as_of" name="as_of" type="date" value="{{ as_of.isoformat() if as_of else '' }}">
+  </div>
+  <button class="btn secondary" type="submit">Show</button>
+</form>
+
+<div class="grid cols-4" style="margin:0 0 16px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
+  <div class="card"><div class="stat-label">Total value</div><div class="stat">{{ valuation.total_cents|money(currency) }}</div></div>
+  <div class="card"><div class="stat-label">Held without a cost</div><div class="stat">{{ valuation.without_cost|length }}</div></div>
+</div>
+
+{% if valuation.without_cost %}
+<div class="notice error">Held without a cost, so not in the total: {% for h in valuation.without_cost %}{{ h.name }}{% if locations|length > 1 %} ({{ names.get(h.location_id, "") }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}.</div>
+{% endif %}
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th>{% if locations|length > 1 %}<th>Location</th>{% endif %}<th>Held</th><th>Cost</th><th>Value</th></tr></thead>
+  <tbody>
+  {% for v in valuation.lines if v.holding.qty_base != 0 %}
+    <tr>
+      <td><a href="/app/catalog/{{ v.holding.inventory_item_id }}">{{ v.holding.name }}</a></td>
+      {% if locations|length > 1 %}<td class="small">{{ names.get(v.holding.location_id, "") }}</td>{% endif %}
+      <td>{{ v.holding.qty_base|qty(v.holding.display_unit) }}</td>
+      <td class="small">{% if v.holding.cost_per_base_cents %}{{ v.holding.cost_per_base_cents|unit_cost(v.holding.display_unit, currency) }}{% else %}<span class="muted">none</span>{% endif %}</td>
+      <td>{{ v.value_cents|money(currency) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
 from app.catalog import active_stock
 from app.config import get_settings
+from app.costs import set_cost
 from app.extract.images import detect_media_type
 from app.extract.invoice import (
     STORED_SUFFIX,
@@ -366,9 +367,18 @@ def apply_document(
             line.parsed_qty,
             Decimal(quantity),
         )
-        if cost is not None:
+        if cost is not None and cost >= ZERO:
             # The latest price paid is what replacing this stock costs, which is what waste costs.
-            item.cost_per_base_cents = cost
+            set_cost(
+                db,
+                org,
+                location_id=item.location_id,
+                inventory_item_id=item.inventory_item_id,
+                cost=cost,
+                source_type="receipt",
+                source_id=str(document.id),
+                effective_at=now,
+            )
         movements.append(
             Line(
                 item.location_id,

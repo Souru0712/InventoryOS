@@ -208,6 +208,10 @@ CASES = {
         "data": {"item_id": ids["inventory_item"], "quantity": "1", "unit": "each"}
     },
     ("POST", "/app/counts/{count_id}/post"): lambda ids: {},
+    ("GET", "/app/valuation"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/catalog/{inventory_item_id}/cost"): lambda ids: {
+        "data": {"location_id": ids["location"], "price": "1.00", "unit": "each"}
+    },
     ("GET", "/app/catalog/{inventory_item_id}/history"): lambda ids: {},
     ("GET", "/app/catalog/{inventory_item_id}/adjust"): lambda ids: {},
     ("POST", "/app/catalog/{inventory_item_id}/adjust"): lambda ids: {

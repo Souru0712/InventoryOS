@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
 from app.audit import changes, record_audit
 from app.catalog import category_named
+from app.costs import set_cost
 from app.ledger.posting import has_moved, post_opening
 from app.models import (
     InventoryCategory,
@@ -338,7 +339,6 @@ def create_item(db: Session, org: OrgContext, new: NewItem, ip: str | None = Non
             track_mode=TrackMode.DERIVED if dimension is not Dimension.COUNT else TrackMode.MANUAL,
             reorder_point_base=reorder,
             par_level_base=par,
-            cost_per_base_cents=cost,
             retail_per_base_cents=retail,
             receive_unit=receive_unit,
             pack_size_base=pack,
@@ -353,6 +353,17 @@ def create_item(db: Session, org: OrgContext, new: NewItem, ip: str | None = Non
     if item is None:  # the flush links every new stock item (app/catalog.py)
         raise RuntimeError("a new stock item was not linked to its item")
     for stock in stock_rows:
+        if cost > 0:
+            # The cost first, so the opening balance is posted at it (DR-19, T1.24).
+            set_cost(
+                db,
+                org,
+                location_id=stock.location_id,
+                inventory_item_id=item.id,
+                cost=cost,
+                source_type="opening",
+                effective_at=now,
+            )
         # What is on the shelf today is the item's opening balance there (ADR-0042).
         post_opening(
             db,
@@ -579,13 +590,22 @@ def stock_at(
         dimension=item.dimension,
         stock_unit=item.display_unit,
         track_mode=template.track_mode,
-        cost_per_base_cents=template.cost_per_base_cents,
         retail_per_base_cents=template.retail_per_base_cents,
         receive_unit=template.receive_unit,
         supplier=template.supplier,
     )
     db.add(stock)
     db.flush()
+    if template.cost_per_base_cents:
+        # It starts at what it costs where the item is already stocked (T1.24).
+        set_cost(
+            db,
+            org,
+            location_id=location.id,
+            inventory_item_id=item.id,
+            cost=template.cost_per_base_cents,
+            source_type="opening",
+        )
     record_audit(
         db,
         org,

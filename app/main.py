@@ -38,6 +38,7 @@ from app.web import (
     scanning,
     stock,
     team,
+    valuation,
     webhooks,
 )
 from app.web import (
@@ -103,6 +104,7 @@ app.include_router(audit.router)
 app.include_router(exceptions.router)
 app.include_router(stock.router)
 app.include_router(counts.router)
+app.include_router(valuation.router)
 app.include_router(catalog.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)

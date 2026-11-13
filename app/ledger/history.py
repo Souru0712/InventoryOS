@@ -89,3 +89,21 @@ def history(
         and (actor_user_id is None or row.actor_user_id == actor_user_id)
     ]
     return list(reversed(shown))
+
+
+def snapshot_cost_at(
+    db: Session, org: OrgContext, location_id: int, inventory_item_id: int, at: datetime
+) -> Decimal | None:
+    """The unit cost on the last movement posted for the item at the location by an instant: what
+    an as-of valuation falls back on before the item had any cost history (ANL-FR-01)."""
+    row = db.scalars(
+        select_scoped(org, InventoryMovement)
+        .where(
+            InventoryMovement.location_id == location_id,
+            InventoryMovement.inventory_item_id == inventory_item_id,
+            InventoryMovement.occurred_at <= at,
+        )
+        .order_by(InventoryMovement.occurred_at.desc(), InventoryMovement.id.desc())
+        .limit(1)
+    ).first()
+    return Decimal(row.unit_cost_snapshot) if row is not None else None

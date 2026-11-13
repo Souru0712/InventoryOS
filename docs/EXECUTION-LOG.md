@@ -5,6 +5,104 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-13 — T1.24 Cost basis and valuation
+
+**Implemented**
+- **`item_cost_history`** (migration `2832ec7b91b7`):
+  - one entry per change of an item's current cost at a location: cost, source (`opening`,
+    `receipt`, `override`, `migration`), which receipt, who, and when it took effect;
+  - append-only in the scoped layer;
+  - the migration starts each stock row that has a cost with one `migration` entry; the
+    downgrade drops the table and keeps the costs.
+- **One writer, `app/costs.py`:**
+  - `set_cost()` appends an entry and mirrors it on `stock_items.cost_per_base_cents`; an
+    unchanged cost writes nothing;
+  - receipts set the cost they paid (source = the document);
+  - new items, stocking an item elsewhere and the demo seed set the opening cost before the
+    opening balance posts, so the opening movement carries it;
+  - `override_cost()` is a hand change by `receiving.edit_costs`, audited as
+    `item.cost_changed`. It is a "Cost" section on the item page with the last five changes.
+- **Past figures never move (AC-ANL-01):** movement snapshots, adjustment value, count
+  variance and history values all keep the cost they were posted at.
+- **Valuation (AC-ANL-02, INV-FR-24):** Σ max(held, 0) × current cost.
+  - Stock below zero counts as nothing; `valuation_cents` now clamps at zero too.
+  - Items held without a cost are listed apart, never priced at zero.
+  - The figure states its basis ("latest receipt cost, unless overridden") on the dashboard
+    card and on the new `/app/valuation` (`reports.financial`), which also has a location
+    filter.
+- **As of a date (ANL-FR-02):** what each location held at the end of that business day
+  (`business_day_end()`, ADR-0027), times the cost in effect then. That cost comes from the
+  history, or, before it began, from the last movement's snapshot (`snapshot_cost_at()`).
+- ADR-0048 (Proposed) and a CLAUDE.md rule.
+
+**Verified (locally, SQLite)**
+- `tests/test_costs.py` (11):
+  - the pure rules: value, below zero, no cost, the cost in effect at an instant, a negative
+    cost refused;
+  - **AC-ANL-01:** after an adjustment and a count, an override to $9.00 leaves every movement
+    snapshot, the adjustment's $2.00, the count's -$2.00 variance and yesterday's valuation
+    unchanged, and moves only today's (6 × $9.00); the history page still shows the opening at
+    $10.00;
+  - **AC-ANL-02:** milk 10 × $1.00, oats sold below zero count as nothing, and cups without a
+    cost are listed. The page and the dashboard state the basis;
+  - **as of:** day 2 is 10 × $1.00, before day 1 nothing, today 15 × $2.00;
+  - a new item opens at its cost and its history starts;
+  - the same cost twice adds no history;
+  - a manager's override is recorded and audited;
+  - an Employee gets 403 on both routes;
+  - the history is append-only and written only in `app/costs.py`.
+- `tests/test_migrations.py`: the backfill and the downgrade.
+- Isolation cases for the two new routes.
+- **By hand, in the preview, on the migrated demo database:**
+  - `/app/valuation` showed $619.71 with its basis, and $658.25 as of 11 Nov;
+  - overriding the beans to $20.00 flashed "Past figures keep their cost." and listed the
+    override above the migration entry;
+  - afterwards 11 Nov still showed $658.25, and today showed $709.71 on the page and the
+    dashboard;
+  - no console or server errors.
+- Full suite 968 passed, 25 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:**
+  - `app/costs.py`, `app/transform/costs.py`;
+  - `app/web/valuation.py`, `valuation.html`;
+  - migration `2832ec7b91b7`;
+  - `tests/test_costs.py`, ADR-0048.
+- **Changed:**
+  - `app/models.py`, `app/access/scoped.py`, `app/ledger/history.py`,
+    `app/transform/business_days.py`, `app/transform/inventory.py`;
+  - the cost writers: `app/orchestration/receiving.py`, `app/items.py`, `app/cli.py`;
+  - the screens: `app/web/dashboard.py`, `app/web/catalog.py` and their templates,
+    `app/web/templating.py` (`unit_cost`), `app/main.py`;
+  - `tests/test_isolation.py`, `tests/test_migrations.py`;
+  - CLAUDE.md, the ADR index, the task index (T1.23 → Completed, T1.24 → In review) and this
+    log.
+
+**Decisions**
+- As-of valuation uses the cost in effect at the end of the day. That is the history entry,
+  which matches the snapshot movements posted with, or the snapshot itself before the history
+  began. This follows the task's "as-of valuation from snapshots" and PD-08's latest cost.
+
+**Next task**
+- T1.25 Core dashboard on ledger and exceptions.
+
+---
+
+## 2026-11-13 — T1.23 completed
+
+**Verified**
+- The owner merged PR #46 (T1.23-b) with a merge commit (`31bc67f`).
+- CI on its head `bf8a177`, all five required jobs green:
+  - SQLite: 954 passed, 24 skipped;
+  - PostgreSQL 16: 978 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; the task index (T1.23 → Completed).
+
+---
+
 ## 2026-11-12 — T1.23-b Count sessions: screens
 
 **Implemented**

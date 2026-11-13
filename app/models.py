@@ -25,6 +25,7 @@ from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
 from app.transform.adjustments import ADJUSTMENT_REASONS
+from app.transform.costs import COST_SOURCES
 from app.transform.counts import COUNT_SCOPES, COUNT_STATUSES, VARIANCE_REASONS
 from app.transform.exceptions import EXCEPTION_TYPES, RESOLUTIONS, SEVERITIES, STATUSES
 from app.transform.jobs import JOB_KINDS
@@ -823,6 +824,31 @@ class InventoryAdjustment(Base):
     transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
     value_cents: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ItemCostHistory(Base):
+    """Every change to an item's current cost at a location, effective-dated (T1.24; INV-FR-07,
+    DR-19). Append-only: written by app/costs.py, never updated or deleted. The latest entry is
+    the current cost, mirrored on the stock row for the screens."""
+
+    __tablename__ = "item_cost_history"
+    __table_args__ = (
+        one_of("item_cost_history", "source_type", COST_SOURCES),
+        not_negative("item_cost_history", "cost_per_base_cents"),
+        Index("ix_item_cost_history_pair", "location_id", "inventory_item_id", "effective_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    cost_per_base_cents: Mapped[Decimal] = mapped_column(Qty)
+    source_type: Mapped[str] = mapped_column(String(16))
+    # The receipt (a document's id) that set it, when one did.
+    source_id: Mapped[str | None] = mapped_column(String(80))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    effective_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class StockCount(Base):

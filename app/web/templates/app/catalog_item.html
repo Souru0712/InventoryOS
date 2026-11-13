@@ -134,6 +134,33 @@
 </form>
 {% endif %}
 
+{% if can(request, "inventory.view_costs") %}
+<h2>Cost</h2>
+<p class="small muted">The current cost is the latest receipt's, unless someone sets it here. Past figures keep the cost
+they were posted at.</p>
+{% for place in row.places %}
+  {% set history = cost_history.get(place.location.id, []) %}
+  <div class="card" style="max-width:760px; margin-bottom:12px;">
+    <p style="margin:0 0 6px;"><strong>{{ place.location.name }}</strong>
+      <span class="muted">&middot; {{ place.stock.cost_per_base_cents|unit_cost(item.display_unit, place.location.currency) }}</span></p>
+    {% if history %}
+    <p class="small muted" style="margin:0 0 8px;">{% for h in history %}{{ h.effective_at.strftime("%d %b %Y") }}: {{ h.cost_per_base_cents|unit_cost(item.display_unit, place.location.currency) }} ({{ h.source_type }}){% if not loop.last %} &middot; {% endif %}{% endfor %}</p>
+    {% endif %}
+    {% if can(request, "receiving.edit_costs") %}
+    <form method="post" action="/app/catalog/{{ item.id }}/cost" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">{{ csrf_field(request) }}
+      <input type="hidden" name="location_id" value="{{ place.location.id }}">
+      <input type="hidden" name="unit" value="{{ item.display_unit }}">
+      <div class="field" style="margin:0;">
+        <label for="price_{{ place.location.id }}">Cost per {{ unit_label }}</label>
+        <input id="price_{{ place.location.id }}" name="price" inputmode="decimal" required style="width:110px;">
+      </div>
+      <button class="btn small secondary" type="submit">Set cost</button>
+    </form>
+    {% endif %}
+  </div>
+{% endfor %}
+{% endif %}
+
 <h2>Packages</h2>
 <p class="small muted">How {{ item.name }} comes: a case of 6 &times; 1 gal, a bottle of 750 ml. Counts and deliveries can be entered in any of them.</p>
 {% if item.packages %}

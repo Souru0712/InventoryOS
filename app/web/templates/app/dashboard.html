@@ -54,6 +54,7 @@
   <div class="card">
     <div class="stat-label">Stock on hand</div>
     <div class="stat">{{ total_value|money(currency) }}</div>
+    {% if stock_value %}<div class="small muted">At {{ stock_value.basis }}{% if stock_value.without_cost %}; {{ stock_value.without_cost|length }} held without a cost{% endif %}.{% if can(request, "reports.financial") %} <a href="/app/valuation">Detail</a>{% endif %}</div>{% endif %}
   </div>
   {% endif %}
   {% if expiry and costs %}
