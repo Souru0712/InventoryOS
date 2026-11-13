@@ -108,8 +108,10 @@ def days_of_cover(qty_base: Decimal, velocity_per_day: Decimal) -> Decimal | Non
 
 
 def valuation_cents(qty_base: Decimal, cost_per_base_cents: Decimal) -> int:
-    """Value of held stock, rounded to whole cents."""
-    return int((Decimal(qty_base) * Decimal(cost_per_base_cents)).quantize(Decimal("1")))
+    """Value of held stock, rounded to whole cents. Stock below zero holds nothing: it is a count
+    to do, not negative money (AC-ANL-02)."""
+    held = max(Decimal(qty_base), ZERO)
+    return int((held * Decimal(cost_per_base_cents)).quantize(Decimal("1")))
 
 
 def suggest_order_base(item: StockView, velocity_per_day: Decimal, cover_days: int = 14) -> Decimal:

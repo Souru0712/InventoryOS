@@ -22,6 +22,18 @@ def business_date(moment: datetime, time_zone: str, cutoff_hour: int = 0) -> dat
     return local.date() - timedelta(days=1) if local.hour < cutoff_hour else local.date()
 
 
+def business_day_end(day: date, time_zone: str, cutoff_hour: int = 0) -> datetime:
+    """The last instant of a business day: just before the next day's cutoff, local time. An
+    "as of" figure for that day counts everything up to and including it."""
+    if not 0 <= cutoff_hour <= 23:
+        raise ValueError(f"cutoff hour {cutoff_hour} is not between 0 and 23")
+    zone = ZoneInfo(time_zone)
+    next_start = datetime(day.year, day.month, day.day, cutoff_hour, tzinfo=zone) + timedelta(
+        days=1
+    )
+    return next_start - timedelta(microseconds=1)
+
+
 @lru_cache(maxsize=1)
 def time_zones() -> frozenset[str]:
     """Every IANA time zone name this machine knows."""

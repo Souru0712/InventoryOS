@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.access import OrgContext
 from app.access.system import user_by_email
 from app.config import require_deployable
+from app.costs import set_cost
 from app.db import init_db, run_migrations, session_scope, stamp_migrations
 from app.entitlements import allows, state
 from app.ledger.posting import SYSTEM, post_opening
@@ -417,7 +418,6 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 track_mode=TrackMode.MANUAL if dimension is Dimension.COUNT else TrackMode.DERIVED,
                 reorder_point_base=to_base(reorder, unit),
                 par_level_base=to_base(par, unit),
-                cost_per_base_cents=(Decimal(cost) * 100) / to_base("1", unit),
                 receive_unit=recv,
                 pack_size_base=to_base(pack, unit),
                 supplier="Northside Supply",
@@ -428,6 +428,15 @@ def cmd_demo(args: argparse.Namespace) -> int:
             db.flush()
             if item.inventory_item_id is None:  # the flush links it (app/catalog.py)
                 raise RuntimeError(f"demo item {name} was not linked to an item")
+            set_cost(
+                db,
+                OrgContext.system(tenant.id),
+                location_id=location.id,
+                inventory_item_id=item.inventory_item_id,
+                cost=((Decimal(cost) * 100) / to_base("1", unit)).quantize(Decimal("0.0001")),
+                source_type="opening",
+                effective_at=anchor,
+            )
             post_opening(
                 db,
                 OrgContext.system(tenant.id),

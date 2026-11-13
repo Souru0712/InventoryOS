@@ -642,6 +642,62 @@ def test_dm8_alerts_become_exceptions_and_the_downgrade_leaves_alerts_alone(fres
         engine.dispose()
 
 
+BEFORE_COST_HISTORY = "f38f77cefc20"
+
+
+def test_cost_history_starts_from_each_current_cost_and_the_downgrade_keeps_them(fresh_url):
+    """T1.24: each stock row with a cost gets one `migration` entry; none for no cost."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    stock = (
+        "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension, stock_unit,"
+        " track_mode, qty_base, reorder_point_base, cost_per_base_cents, lead_time_days,"
+        " receive_unit, is_active) VALUES (1, 1, :slug, :slug, 'COUNT', 'each',"
+        " 'MANUAL', '4.0000', '0.0000', :cost, 2, 'each', true)"
+    )
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                    " VALUES (1, 'Main', 'UTC', 'USD', true)"
+                )
+            )
+            for slug, cost in (("bars", "80.0000"), ("cups", "0.0000")):
+                connection.execute(text(stock), {"slug": slug, "cost": cost})
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT s.slug, h.cost_per_base_cents, h.source_type FROM item_cost_history h"
+                    " JOIN stock_items s ON s.inventory_item_id = h.inventory_item_id"
+                    " AND s.location_id = h.location_id"
+                )
+            ).all()
+        assert [(slug, str(cost).rstrip("0").rstrip("."), src) for slug, cost, src in rows] == [
+            ("bars", "80", "migration")
+        ]
+        command.downgrade(config, BEFORE_COST_HISTORY)
+        with engine.connect() as connection:
+            assert "item_cost_history" not in inspect(connection).get_table_names()
+            costs = (
+                connection.execute(text("SELECT cost_per_base_cents FROM stock_items ORDER BY id"))
+                .scalars()
+                .all()
+            )
+        assert [str(c).rstrip("0").rstrip(".") for c in costs] == ["80", "0"]
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

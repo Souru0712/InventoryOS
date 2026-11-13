@@ -40,6 +40,11 @@ implementation sessions; the detail lives in `docs/`.
   through `post_count()`, a new item's quantity through `post_opening()`, a receipt as a
   `receipt`; a test fails on any other assignment. Square's counts never change stock (C-34).
   `inventory_counts` and `inventory_events` are frozen history (DM-7): nothing creates them.
+- An item's current cost changes only through `app/costs.py` (ADR-0048): `set_cost()` appends
+  to `item_cost_history` (append-only) and mirrors `stock_items.cost_per_base_cents`; a hand
+  change is `override_cost()` (audited). A test fails on any other assignment. Past figures
+  read the movement's snapshot, never today's cost (AC-ANL-01); stock value comes from
+  `value_stock()` (Σ max(held, 0) × cost, its basis stated, items without a cost listed).
 - Every query goes through the scoped data-access layer (tenant + location) (C-33, ADR-0026):
   routes take `org: OrgContext = Depends(require_org)`, services take `org`, queries use
   `select_scoped`/`get_scoped`/`update_scoped`; a lookup across organizations is a named function
