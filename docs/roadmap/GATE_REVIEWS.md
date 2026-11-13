@@ -5,13 +5,14 @@ prepared for the owner. A gate passes only when the owner signs it off ([README 
 rule 9). Gate G0 is recorded in the execution log (2026-11-06).
 
 Stage 1 ends when gates G1 and G2 both pass ([MASTER_DEVELOPMENT_ROADMAP](MASTER_DEVELOPMENT_ROADMAP.md),
-Stage 1 exit criteria). Neither has been signed off yet.
+Stage 1 exit criteria). The owner signed off both on 2026-11-13 ("Sign off both"), so Stage 1
+is complete.
 
 ---
 
 ## G2 Ledger engine (M2)
 
-**Status:** prepared 2026-11-13, awaiting the owner's sign-off.
+**Status:** passed, 2026-11-13. Signed off by the owner ("Sign off both"; PR #49).
 
 **CI evidence.** Every M2 task (T1.13 to T1.25) is merged. `main` at `75f07f2` (PR #48) is green
 on all five required jobs. On its pull-request head `8b99bf4`:
@@ -88,8 +89,8 @@ milestone M3, in the testing strategy and the master roadmap, to match the owner
 
 ## G1 Tenancy & access (M1)
 
-**Status:** every M1 task (T1.01 to T1.12) was merged by 2026-11-11. The sign-off was never
-recorded; the execution log noted it as the owner's. The evidence is still green at `75f07f2`.
+**Status:** passed, 2026-11-13. Signed off by the owner ("Sign off both"; PR #49). Every M1
+task (T1.01 to T1.12) was merged by 2026-11-11, and the evidence was still green at `75f07f2`.
 
 | Pass condition | Evidence |
 |---|---|
@@ -106,7 +107,7 @@ recorded; the execution log noted it as the owner's. The evidence is still green
 
 | Gate | Owner's decision | Date |
 |---|---|---|
-| G1 Tenancy & access | pending | |
-| G2 Ledger engine | pending | |
+| G1 Tenancy & access | Passed ("Sign off both") | 2026-11-13 |
+| G2 Ledger engine | Passed ("Sign off both"); R6 moved to G3 as decided on 2026-11-12 | 2026-11-13 |
 
-With both passed, Stage 1 is complete and Stage 2 starts with T2.01 Owned product catalog.
+Stage 1 is complete. Stage 2 starts with T2.01 Owned product catalog.

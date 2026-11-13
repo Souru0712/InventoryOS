@@ -5,6 +5,30 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-13 — Gates G1 and G2 passed; Stage 1 complete
+
+**Decisions**
+- The owner signed off gates G1 (Tenancy & access) and G2 (Ledger engine) on the evidence in
+  [GATE_REVIEWS](roadmap/GATE_REVIEWS.md) ("Sign off both").
+  - This includes moving probe R6 to G3 in the gate tables, as decided on 2026-11-12.
+  - The two caveats stay with their tasks: AC-INV-09 for waste in T2.07, and AC-INV-05's
+    wording.
+- Stage 1 (M1, M2) is complete.
+
+**Verified**
+- CI on PR #49's head `19d0646`, all five required jobs green:
+  - SQLite: 978 passed, 25 skipped;
+  - PostgreSQL 16: 1003 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+
+**Files changed**
+- `docs/roadmap/GATE_REVIEWS.md` (status and sign-off table); this log.
+
+**Next task**
+- T2.01 Owned product catalog (C-36), the first Stage 2 task.
+
+---
+
 ## 2026-11-13 — Gates G1 and G2 prepared for sign-off
 
 **Implemented**
