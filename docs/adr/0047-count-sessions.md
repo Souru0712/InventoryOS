@@ -1,6 +1,6 @@
 # ADR-0047: Count sessions
 
-- **Status:** Proposed, 2026-11-12 (in the T1.23-a pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-12 (owner: "Yes, merge it"; PR #45, T1.23-a)
 - **Decision ID:** none (implements T1.23; REC-FR-01..03, -05..08, DR-12, PD-12, WF-09, AC-REC-01..05)
 - **Tasks:** T1.23-a (model and posting); T1.23-b (session screens and reconciliation history)
 
@@ -63,6 +63,10 @@ compared with must be the stock at *its* instant, not at posting time (REC-FR-03
 
 - The dashboard and scan quick counts stay single-line counts against the balance now (T1.18).
   A session is the tool for a deliberate count.
-- T1.23-b adds the phone-friendly screens in storage order (AC-REC-01's UI) and the
-  reconciliation history (REC-FR-09, AC-REC-05).
-- Built in T1.23-a with migration `f38f77cefc20`.
+- T1.23-b adds the screens (`app/web/counts.py`): `/app/counts` to start a count and read the
+  reconciliation history with totals (REC-FR-09, AC-REC-05), and `/app/counts/{id}`. While a
+  count is open, that page lists its items in storage order, one card each, with packages plus
+  loose and an optional reason. Saving moves to the next item, and the page posts once. After
+  posting it is the line detail. Counting takes `count.record`; reading takes `inventory.view`;
+  amounts show only with cost access.
+- Built in T1.23-a (migration `f38f77cefc20`) and T1.23-b (screens).

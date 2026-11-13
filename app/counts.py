@@ -305,3 +305,46 @@ def post_count(
         sum(1 for r in results if r.movement_id is not None),
     )
     return count
+
+
+def get_count(db: Session, org: OrgContext, count_id: int) -> StockCount:
+    """A session org may see, read afresh; NotFound otherwise."""
+    return _session(db, org, count_id)
+
+
+@dataclass(frozen=True)
+class Summary:
+    """One session in the reconciliation history (REC-FR-09, AC-REC-05)."""
+
+    count: StockCount
+    location_name: str
+    lines: int
+    variances: int
+    to_review: int
+    variance_cents: int  # the sum of the lines' variances at cost, signed
+
+
+def summaries(db: Session, org: OrgContext, location_id: int | None = None) -> list[Summary]:
+    """Every session org may see, open ones first, then the most recently posted."""
+    query = select_scoped(org, StockCount)
+    if location_id is not None:
+        query = query.where(StockCount.location_id == location_id)
+    places = {place.id: place.name for place in db.scalars(select_scoped(org, Location))}
+    found = [
+        Summary(
+            count=count,
+            location_name=places.get(count.location_id, ""),
+            lines=len(count.lines),
+            variances=sum(1 for line in count.lines if line.movement_id is not None),
+            to_review=sum(1 for line in count.lines if line.needs_review),
+            variance_cents=sum(line.variance_cents or 0 for line in count.lines),
+        )
+        for count in db.scalars(query)
+    ]
+    return sorted(
+        found,
+        key=lambda s: (
+            s.count.status != "open",
+            -(s.count.posted_at or s.count.started_at).timestamp(),
+        ),
+    )

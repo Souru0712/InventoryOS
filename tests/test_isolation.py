@@ -33,6 +33,7 @@ from app.models import (
     Promotion,
     PromotionStatus,
     StockBatch,
+    StockCount,
     StockItem,
     Tenant,
     TrackMode,
@@ -199,6 +200,14 @@ CASES = {
     ("POST", "/app/team/{membership_id}/remove"): lambda ids: {},
     ("POST", "/app/team/invitations/{invitation_id}/withdraw"): lambda ids: {},
     ("GET", "/app/audit"): lambda ids: {"params": {"person": ids["user"]}},
+    ("POST", "/app/counts"): lambda ids: {
+        "data": {"location_id": ids["location"], "scope": "full"}
+    },
+    ("GET", "/app/counts/{count_id}"): lambda ids: {},
+    ("POST", "/app/counts/{count_id}/lines"): lambda ids: {
+        "data": {"item_id": ids["inventory_item"], "quantity": "1", "unit": "each"}
+    },
+    ("POST", "/app/counts/{count_id}/post"): lambda ids: {},
     ("GET", "/app/catalog/{inventory_item_id}/history"): lambda ids: {},
     ("GET", "/app/catalog/{inventory_item_id}/adjust"): lambda ids: {},
     ("POST", "/app/catalog/{inventory_item_id}/adjust"): lambda ids: {
@@ -231,6 +240,7 @@ PATH_ROWS = {
     "package_id": "package",
     "conversion_id": "conversion",
     "exception_id": "exception",
+    "count_id": "count",
 }
 
 
@@ -340,9 +350,11 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
         subject_id=str(bars.id),
         title=f"{tag} bars are low",
     )
-    db.add_all([snacks, drinks, box, weighs, problem])
+    session = StockCount(tenant_id=tenant_id, location_id=location.id, scope="full")
+    db.add_all([snacks, drinks, box, weighs, problem, session])
     db.flush()
     return {
+        "count": session.id,
         "exception": problem.id,
         "package": box.id,
         "conversion": weighs.id,
