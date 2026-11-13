@@ -20,16 +20,24 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
 from app.access.permissions import VIEW_COSTS
 from app.audit import record_audit
-from app.models import ExceptionRecord, Location, StockItem
+from app.models import (
+    ExceptionRecord,
+    InventoryAdjustment,
+    InventoryItem,
+    Location,
+    StockCountLine,
+    StockItem,
+)
 from app.transform.exceptions import (
+    EXPIRY_TYPES,
     OPEN_STATUSES,
     TYPES,
     ExceptionRuleError,
     Finding,
     Key,
+    attention_key,
     check_dismissal,
     check_finding,
-    rank,
     reconcile,
     severity_of,
     visible_to,
@@ -66,6 +74,8 @@ class ExceptionView:
     resolved_at: datetime | None
     resolution: str | None
     resolution_note: str | None
+    link: str | None = None  # the record it is about, where it has a screen (CMD-FR-01)
+    location_id: int | None = None
 
 
 def _open(db: Session, org: OrgContext, key: Key, lock: bool = False) -> ExceptionRecord | None:
@@ -311,11 +321,7 @@ def listing(db: Session, org: OrgContext, *, closed: bool = False) -> list[Excep
         query = query.where(ExceptionRecord.status.in_(OPEN_STATUSES))
     rows = [row for row in db.scalars(query) if visible_to(row.type, costs)]
     places = {place.id: place.name for place in db.scalars(select_scoped(org, Location))}
-    stock_ids = [int(row.subject_id) for row in rows if row.subject_type == "stock_item"]
-    names = {
-        item.id: item.name
-        for item in db.scalars(select_scoped(org, StockItem).where(StockItem.id.in_(stock_ids)))
-    }
+    subjects = _subjects(db, org, rows)
     views = [
         ExceptionView(
             id=row.id,
@@ -327,11 +333,7 @@ def listing(db: Session, org: OrgContext, *, closed: bool = False) -> list[Excep
             fix=TYPES[row.type].fix,
             subject_type=row.subject_type,
             subject_id=row.subject_id,
-            subject_name=(
-                names.get(int(row.subject_id), "")
-                if row.subject_type == "stock_item"
-                else row.subject_type.replace("_", " ")
-            ),
+            subject_name=subjects.get(row.id, (None, row.subject_type.replace("_", " ")))[1],
             location_name=places.get(row.location_id, "") if row.location_id else "",
             money_impact_cents=row.money_impact_cents if costs else None,
             occurrences=row.occurrences,
@@ -340,9 +342,79 @@ def listing(db: Session, org: OrgContext, *, closed: bool = False) -> list[Excep
             resolved_at=row.resolved_at,
             resolution=row.resolution,
             resolution_note=row.resolution_note,
+            link=subjects.get(row.id, (None, ""))[0],
+            location_id=row.location_id,
         )
         for row in rows
     ]
     if closed:
         return views
-    return sorted(views, key=lambda view: (rank(view.severity), -view.last_seen_at.timestamp()))
+    return sorted(
+        views,
+        key=lambda view: attention_key(
+            view.severity, view.money_impact_cents, view.last_seen_at.timestamp()
+        ),
+    )
+
+
+def _subjects(
+    db: Session, org: OrgContext, rows: Sequence[ExceptionRecord]
+) -> dict[int, tuple[str | None, str]]:
+    """Each exception's subject as a person knows it, and where its own record opens: the item,
+    its dated stock, the adjustment's history or the count. A subject with no screen yet (a POS
+    product) has no link and keeps its kind as its name."""
+
+    def ids(kind: str) -> list[int]:
+        return [int(r.subject_id) for r in rows if r.subject_type == kind]
+
+    stock = {
+        s.id: s
+        for s in db.scalars(
+            select_scoped(org, StockItem).where(StockItem.id.in_(ids("stock_item")))
+        )
+    }
+    adjusted = {
+        a.id: a.inventory_item_id
+        for a in db.scalars(
+            select_scoped(org, InventoryAdjustment).where(
+                InventoryAdjustment.id.in_(ids("adjustment"))
+            )
+        )
+    }
+    counted = {
+        line.id: (line.stock_count_id, line.inventory_item_id)
+        for line in db.scalars(
+            select_scoped(org, StockCountLine).where(StockCountLine.id.in_(ids("count_line")))
+        )
+    }
+    item_ids = {
+        *adjusted.values(),
+        *(item for _, item in counted.values()),
+        *(int(r.subject_id.split(":", 1)[0]) for r in rows if r.subject_type == "item_location"),
+    }
+    names = {
+        item.id: item.name
+        for item in db.scalars(
+            select_scoped(org, InventoryItem).where(InventoryItem.id.in_(item_ids))
+        )
+    }
+    found: dict[int, tuple[str | None, str]] = {}
+    for row in rows:
+        subject, kind = row.subject_id, row.subject_type
+        if kind == "stock_item" and int(subject) in stock:
+            item = stock[int(subject)]
+            if row.type in EXPIRY_TYPES:
+                found[row.id] = (f"/app/expiring#item-{item.id}", item.name)
+            elif item.inventory_item_id is not None:
+                found[row.id] = (f"/app/catalog/{item.inventory_item_id}", item.name)
+        elif kind == "item_location":
+            item_id = int(subject.split(":", 1)[0])
+            if item_id in names:
+                found[row.id] = (f"/app/catalog/{item_id}", names[item_id])
+        elif kind == "adjustment" and int(subject) in adjusted:
+            item_id = adjusted[int(subject)]
+            found[row.id] = (f"/app/catalog/{item_id}/history", names.get(item_id, "adjustment"))
+        elif kind == "count_line" and int(subject) in counted:
+            count_id, item_id = counted[int(subject)]
+            found[row.id] = (f"/app/counts/{count_id}", names.get(item_id, "count line"))
+    return found

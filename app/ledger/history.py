@@ -8,6 +8,7 @@ balances.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, select_scoped
 from app.models import InventoryMovement, InventoryTransaction, Location
 from app.transform.business_days import business_date
+from app.transform.dashboard import movement_value_cents
 
 
 @dataclass(frozen=True)
@@ -107,3 +109,62 @@ def snapshot_cost_at(
         .limit(1)
     ).first()
     return Decimal(row.unit_cost_snapshot) if row is not None else None
+
+
+@dataclass(frozen=True)
+class MovementTotal:
+    """What moved of one kind over a period: how many movements and their value as posted."""
+
+    movements: int = 0
+    value_cents: int = 0  # signed as the stock moved: waste is negative
+
+
+def movement_totals(
+    db: Session,
+    org: OrgContext,
+    windows: Mapping[int, tuple[datetime, datetime]],
+    movement_types: Iterable[str],
+) -> dict[str, MovementTotal]:
+    """Movements of the given types per type, each location over its own window (first and last
+    instant, both included), valued at each movement's own snapshot cost (DR-33, AC-ANL-01). A
+    reversal in the window counts against the type it reversed, so undone waste is not waste."""
+    wanted = sorted(set(movement_types))
+    totals = {kind: MovementTotal() for kind in wanted}
+    columns = (
+        InventoryMovement.movement_type,
+        InventoryMovement.qty_base,
+        InventoryMovement.unit_cost_snapshot,
+        InventoryMovement.reverses_movement_id,
+    )
+    found: list[tuple[str, Decimal, Decimal, int | None]] = []
+    for location_id, (start, end) in windows.items():
+        rows = db.execute(
+            select_scoped(org, InventoryMovement)
+            .with_only_columns(*columns)
+            .where(
+                InventoryMovement.location_id == location_id,
+                InventoryMovement.movement_type.in_([*wanted, "reversal"]),
+                InventoryMovement.occurred_at >= start,
+                InventoryMovement.occurred_at <= end,
+            )
+        )
+        found.extend((kind, qty, cost, undone) for kind, qty, cost, undone in rows)
+    reversed_ids = {undone for kind, _, _, undone in found if kind == "reversal" and undone}
+    original: dict[int, str] = {}
+    if reversed_ids:
+        undone_rows = db.execute(
+            select_scoped(org, InventoryMovement)
+            .with_only_columns(InventoryMovement.id, InventoryMovement.movement_type)
+            .where(InventoryMovement.id.in_(reversed_ids))
+        )
+        original = {movement_id: kind for movement_id, kind in undone_rows}
+    for kind, qty, cost, undone in found:
+        counted = original.get(undone) if kind == "reversal" and undone else kind
+        if counted not in totals:
+            continue
+        before = totals[counted]
+        totals[counted] = MovementTotal(
+            before.movements + (-1 if kind == "reversal" else 1),
+            before.value_cents + movement_value_cents(Decimal(qty), Decimal(cost or 0)),
+        )
+    return totals

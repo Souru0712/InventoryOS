@@ -8,12 +8,12 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
-from app.access.permissions import VIEW_COSTS
+from app.access.permissions import VIEW_COSTS, without_costs
 from app.audit import record_audit
 from app.config import get_settings
 from app.costs import value_stock
@@ -33,7 +33,12 @@ from app.models import (
     User,
 )
 from app.orchestration.alerts import proposals_for
-from app.orchestration.health import current as current_health
+from app.orchestration.dashboard import (
+    ATTENTION_SHOWN,
+    needs_attention,
+    period_money,
+    sales_without_recipe,
+)
 from app.orchestration.reporting import weekly_report
 from app.orchestration.sync import NotConnected, run_sync
 from app.orchestration.views import (
@@ -56,11 +61,13 @@ from app.security import (
 )
 from app.throttle import client_ip
 from app.transform.alerts import counts_as_waste_risk
+from app.transform.dashboard import DEFAULT_RANGE, DateRange, RangeError, check_range
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
 from app.transform.items import ItemRuleError
 from app.transform.ledger import LedgerRuleError
 from app.units import UnitError, format_amount, format_change, to_base
+from app.web.exceptions import FIX_LINKS
 from app.web.flash import flash, pop_flash
 from app.web.templating import templates
 
@@ -134,14 +141,35 @@ def _locations(db: Session, org: OrgContext) -> list[Location]:
     )
 
 
+def _day(text: str) -> date | None:
+    if not text.strip():
+        return None
+    try:
+        return date.fromisoformat(text.strip())
+    except ValueError as exc:
+        raise RangeError("A day is a date like 2026-11-05.") from exc
+
+
 @router.get("/app", response_class=HTMLResponse)
 def dashboard(
     request: Request,
     location: int | None = Depends(location_filter),
+    period: str = Query(DEFAULT_RANGE, alias="range"),
+    first: str = Query("", alias="from"),
+    last: str = Query("", alias="to"),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_permission("inventory.view")),
 ):
+    """What needs attention, then stock (T1.25). Money appears only for a role with cost access,
+    and never reaches the page otherwise (CMD-FR-14, AC-CMD-03)."""
+    now = datetime.now(UTC)
+    range_error = None
+    try:
+        chosen = check_range(period, _day(first), _day(last))
+    except RangeError as exc:
+        chosen, range_error = DateRange(), str(exc)
+    costs = org.can(VIEW_COSTS)
     rows = _rows(db, org, location)
     connection = db.scalars(
         select_scoped(org, ProviderConnection).where(ProviderConnection.status == "active")
@@ -162,8 +190,22 @@ def dashboard(
 
     expiries = expiry_positions(db, org, location_id=location)
     expiry = _expiry_summary(expiries, get_settings().expiry_horizon_days) if expiries else None
-    # The same figure the valuation page gives, with its basis (AC-ANL-02).
-    stock_value = value_stock(db, org, location_id=location) if org.can(VIEW_COSTS) else None
+    attention = needs_attention(db, org, location)
+    context = {
+        "rows": rows,
+        "by_dimension": by_dimension,
+        "expiry": expiry,
+        # The same figure the valuation page gives, with its basis (AC-ANL-02, CMD-FR-04).
+        "stock_value": value_stock(db, org, location_id=location) if costs else None,
+        "money": period_money(db, org, chosen, now, location) if costs else None,
+    }
+    if not costs:
+        context = without_costs(context)
+        if expiry:
+            context["expiry"] = {
+                "at_risk_products": expiry["at_risk_products"],
+                "expired_products": expiry["expired_products"],
+            }
 
     return templates.TemplateResponse(
         request,
@@ -172,19 +214,19 @@ def dashboard(
             "title": "Inventory",
             "message": pop_flash(request),
             "tenant": tenant,
-            "rows": rows,
             "locations": _locations(db, org),
             "selected_location": location,
             "connection": connection,
             "last_run": last_run,
             "sync": sync,
-            "by_dimension": by_dimension,
-            "total_value": stock_value.total_cents if stock_value else 0,
-            "stock_value": stock_value,
-            "at_risk": sum(1 for row in rows if row["status"] != "ok"),
-            "expiry": expiry,
+            "attention": attention[:ATTENTION_SHOWN],
+            "attention_total": len(attention),
+            "fix_links": FIX_LINKS,
+            "period": chosen,
+            "range_error": range_error,
+            "completeness": sales_without_recipe(db, org, chosen, now, location),
             "currency": tenant_currency(db, org),
-            "health": current_health(db, org, location),
+            **context,
         },
     )
 

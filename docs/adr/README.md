@@ -79,4 +79,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0045](0045-nightly-ledger-verification.md) | Nightly ledger verification | T1.21 | Accepted |
 | [ADR-0046](0046-adjustments-and-movement-history.md) | Adjustments and movement history | T1.22 | Accepted |
 | [ADR-0047](0047-count-sessions.md) | Count sessions | T1.23 | Accepted |
-| [ADR-0048](0048-cost-basis-and-valuation.md) | Cost basis and valuation | T1.24 | Proposed |
+| [ADR-0048](0048-cost-basis-and-valuation.md) | Cost basis and valuation | T1.24 | Accepted |
+| [ADR-0049](0049-core-dashboard.md) | Core dashboard on the ledger and exceptions | T1.25 | Proposed |

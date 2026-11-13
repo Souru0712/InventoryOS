@@ -65,10 +65,11 @@ from the last four weeks of sales.</p>
     </tr>
   </thead>
   <tbody>
+  {% set anchored = namespace(ids=[]) %}
   {% for row in rows %}
     {% set item = row.item %}
     {% set p = row.position %}
-    <tr>
+    <tr{% if item.id not in anchored.ids %} id="item-{{ item.id }}"{% set anchored.ids = anchored.ids + [item.id] %}{% endif %}>
       <td>
         <strong>{{ item.name }}</strong>
         {% if item.location_name and locations|length > 1 %}
