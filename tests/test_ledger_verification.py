@@ -1,5 +1,6 @@
 """T1.21: nightly ledger verification (DR-03, REL-08, AC-INV-11, OBS-06)."""
 
+import argparse
 import logging
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -7,8 +8,11 @@ from decimal import Decimal
 from sqlalchemy import func, select, update
 
 from app.access import OrgContext
+from app.cli import cmd_demo
+from app.db import Base, SessionLocal, engine
 from app.jobs import drain
 from app.ledger.posting import post_transaction
+from app.ledger.verify import drifts
 from app.models import (
     ExceptionRecord,
     InventoryMovement,
@@ -199,3 +203,23 @@ def test_the_scheduler_queues_the_verification_every_night():
     scheduler._add_jobs(recorder)
     trigger, kwargs = recorder.jobs["queue_ledger_verification"]
     assert (trigger, kwargs["hour"], kwargs["minute"]) == ("cron", 2, 45)
+
+
+# --- Gate G2: Σ movements = balance for every fixture ------------------------------------------
+
+
+def test_g2_the_demo_business_verifies_clean_from_its_seed():
+    """The richest fixture, the demo café, seeded as a developer seeds it: every item at every
+    location has balance = Σ movements = what the screens show, with nothing to report."""
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    args = argparse.Namespace(
+        email="demo@stockpulse.local", password="demopassword", name="Rosewood Coffee", days=7
+    )
+    assert cmd_demo(args) == 0
+    with SessionLocal() as db:
+        tenant_ids = list(db.scalars(select(Tenant.id)))
+        pairs = db.scalar(select(func.count()).select_from(StockBalance))
+        assert tenant_ids and pairs, "the demo seeds a business with stock"
+        for tenant_id in tenant_ids:
+            assert drifts(db, OrgContext.system(tenant_id)) == []
