@@ -29,7 +29,10 @@ from app.models import (
     ItemUnitConversion,
     Location,
     Membership,
+    Modifier,
+    Product,
     ProductIdentifier,
+    ProductVariation,
     Promotion,
     PromotionStatus,
     StockBatch,
@@ -153,6 +156,18 @@ CASES = {
         "files": {"photo": ("delivery.jpg", jpeg("isolation"), "image/jpeg")},
     },
     ("GET", "/app/receiving/{document_id}"): lambda ids: {},
+    ("GET", "/app/products/{product_id}"): lambda ids: {},
+    ("POST", "/app/products/{product_id}"): lambda ids: {
+        "data": {"name": "House juice", "category": "Juices"}
+    },
+    ("POST", "/app/products/{product_id}/active"): lambda ids: {"data": {"active": "no"}},
+    ("POST", "/app/products/{product_id}/variations"): lambda ids: {"data": {"name": "Large"}},
+    ("POST", "/app/products/{product_id}/variations/{variation_id}"): lambda ids: {
+        "data": {"name": "Small", "price": "4.00", "active": "yes"}
+    },
+    ("POST", "/app/modifiers/{modifier_id}"): lambda ids: {
+        "data": {"name": "Extra ice", "effect": "scale", "scale_factor": "0.9", "active": "yes"}
+    },
     ("GET", "/app/receiving/{document_id}/image"): lambda ids: {},
     ("POST", "/app/receiving/{document_id}/reparse"): lambda ids: {},
     ("POST", "/app/receiving/{document_id}/apply"): _apply_form,
@@ -245,6 +260,9 @@ PATH_ROWS = {
     "conversion_id": "conversion",
     "exception_id": "exception",
     "count_id": "count",
+    "product_id": "product",
+    "variation_id": "variation",
+    "modifier_id": "modifier",
 }
 
 
@@ -356,8 +374,17 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     )
     session = StockCount(tenant_id=tenant_id, location_id=location.id, scope="full")
     db.add_all([snacks, drinks, box, weighs, problem, session])
+    juice = Product(tenant_id=tenant_id, name=f"{tag} juice")
+    ice = Modifier(tenant_id=tenant_id, name="Light ice", effect="scale", scale_factor=1.15)
+    db.add_all([juice, ice])
+    db.flush()
+    size = ProductVariation(tenant_id=tenant_id, product_id=juice.id, name="Regular")
+    db.add(size)
     db.flush()
     return {
+        "product": juice.id,
+        "variation": size.id,
+        "modifier": ice.id,
         "count": session.id,
         "exception": problem.id,
         "package": box.id,

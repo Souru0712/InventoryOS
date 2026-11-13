@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+{% set edit = can(request, "product.edit") %}
+{% set costs = can(request, "inventory.view_costs") %}
+<p class="small"><a href="/app/products">&larr; Products</a></p>
+<h1>{{ product.name }}{% if not product.is_active %} <span class="pill info">inactive</span>{% endif %}</h1>
+<p class="lede">{{ product.category or "No category" }} &middot; {{ product.variations|selectattr("is_active")|list|length }} size{{ "s" if product.variations|selectattr("is_active")|list|length != 1 else "" }} on sale. Its recipes come with the recipe screens.</p>
+
+<h2>Sizes</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Size</th>{% if costs %}<th>Price</th>{% endif %}<th>Status</th>{% if edit %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for v in product.variations %}
+    {% if edit %}
+    <tr>
+      <td colspan="4">
+        <form method="post" action="/app/products/{{ product.id }}/variations/{{ v.id }}" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">{{ csrf_field(request) }}
+          <input name="name" value="{{ v.name }}" aria-label="Size" style="flex:1 1 120px;">
+          {% if costs %}<input name="price" value="{{ '%.2f'|format(v.price_cents / 100) if v.price_cents is not none else '' }}" aria-label="Price" inputmode="decimal" placeholder="Price" style="width:110px;">{% endif %}
+          <label class="small" style="display:flex; gap:4px; align-items:center;"><input type="checkbox" name="active" value="yes"{% if v.is_active %} checked{% endif %}> On sale</label>
+          <button class="btn small secondary" type="submit">Save</button>
+          {% if v.source_sold_item_id %}<span class="small muted">from your POS sales</span>{% endif %}
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td>{{ v.name }}</td>
+      {% if costs %}<td>{% if v.price_cents is not none %}{{ v.price_cents|money(currency) }}{% else %}<span class="muted">&ndash;</span>{% endif %}</td>{% endif %}
+      <td class="small">{{ "On sale" if v.is_active else "Off sale" }}</td>
+    </tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if edit %}
+<form method="post" action="/app/products/{{ product.id }}/variations" class="card" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-top:12px;">{{ csrf_field(request) }}
+  <div class="field" style="margin:0;"><label for="v-name">New size</label><input id="v-name" name="name" required placeholder="e.g. 24 oz"></div>
+  {% if costs %}<div class="field" style="margin:0;"><label for="v-price">Price</label><input id="v-price" name="price" inputmode="decimal" placeholder="e.g. 8.50"></div>{% endif %}
+  <button class="btn secondary" type="submit">Add size</button>
+</form>
+
+<h2 style="margin-top:28px;">Details</h2>
+<form method="post" action="/app/products/{{ product.id }}" class="card">{{ csrf_field(request) }}
+  <div class="field"><label for="name">Name</label><input id="name" name="name" required value="{{ product.name }}"></div>
+  <div class="field">
+    <label for="category">Category</label>
+    <input id="category" name="category" list="product-categories" value="{{ product.category or '' }}">
+    <datalist id="product-categories">{% for c in categories %}<option value="{{ c }}">{% endfor %}</datalist>
+  </div>
+  <button class="btn secondary" type="submit">Save</button>
+</form>
+
+<form method="post" action="/app/products/{{ product.id }}/active" style="margin-top:12px;">{{ csrf_field(request) }}
+  {% if product.is_active %}
+  <input type="hidden" name="active" value="no">
+  <button class="btn small secondary" type="submit">Deactivate the product</button>
+  <span class="small muted">It leaves the list; nothing is deleted.</span>
+  {% else %}
+  <input type="hidden" name="active" value="yes">
+  <button class="btn small" type="submit">Put it back on sale</button>
+  {% endif %}
+</form>
+{% endif %}
+{% endblock %}

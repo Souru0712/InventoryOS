@@ -81,3 +81,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0047](0047-count-sessions.md) | Count sessions | T1.23 | Accepted |
 | [ADR-0048](0048-cost-basis-and-valuation.md) | Cost basis and valuation | T1.24 | Accepted |
 | [ADR-0049](0049-core-dashboard.md) | Core dashboard on the ledger and exceptions | T1.25 | Accepted |
+| [ADR-0050](0050-owned-product-catalog.md) | Owned product catalog | T2.01 | Proposed |

@@ -642,6 +642,60 @@ def test_dm8_alerts_become_exceptions_and_the_downgrade_leaves_alerts_alone(fres
         engine.dispose()
 
 
+BEFORE_PRODUCTS = "2832ec7b91b7"
+
+
+def test_sale_items_become_owned_products_and_the_downgrade_keeps_them(fresh_url):
+    """T2.01, DM-9: each sold item becomes a variation of an owned product, split at " - "."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_PRODUCTS)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    sold = (
+        "INSERT INTO sold_items (tenant_id, provider, provider_item_id, name, category, price_cents,"
+        " currency, sell_unit, is_active) VALUES (1, 'square', :ref, :name, 'Juices', :price,"
+        " 'USD', 'each', :active)"
+    )
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-13 12:00:00')"
+                )
+            )
+            for ref, name, price, active in (
+                ("v1", "Golden State - 12 oz", 650, True),
+                ("v2", "Golden State - 16 oz", 750, False),
+                ("v3", "Water", 0, True),
+            ):
+                connection.execute(
+                    text(sold), {"ref": ref, "name": name, "price": price, "active": active}
+                )
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT p.name, p.category, v.name, v.price_cents, s.provider_item_id"
+                    " FROM product_variations v JOIN products p ON p.id = v.product_id"
+                    " JOIN sold_items s ON s.id = v.source_sold_item_id ORDER BY v.id"
+                )
+            ).all()
+        assert [tuple(r) for r in rows] == [
+            ("Golden State", "Juices", "12 oz", 650, "v1"),
+            ("Golden State", "Juices", "16 oz", 750, "v2"),
+            ("Water", "Juices", "Regular", None, "v3"),
+        ]
+        command.downgrade(config, BEFORE_PRODUCTS)
+        with engine.connect() as connection:
+            tables = set(inspect(connection).get_table_names())
+            assert not tables & {"products", "product_variations", "modifiers"}
+            kept = connection.execute(text("SELECT COUNT(*) FROM sold_items")).scalar()
+        assert kept == 3
+    finally:
+        engine.dispose()
+
+
 BEFORE_COST_HISTORY = "f38f77cefc20"
 
 

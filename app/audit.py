@@ -25,6 +25,7 @@ CATEGORIES = {
     "location": "Locations",
     "team": "Team",
     "item": "Items and categories",
+    "product": "Products and modifiers",
     "connection": "Connections",
     "billing": "Plan and billing",
     "exception": "Exceptions",

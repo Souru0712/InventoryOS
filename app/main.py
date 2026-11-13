@@ -33,6 +33,7 @@ from app.web import (
     marketing,
     mfa,
     ops,
+    products,
     promotions,
     receiving,
     scanning,
@@ -106,6 +107,7 @@ app.include_router(stock.router)
 app.include_router(counts.router)
 app.include_router(valuation.router)
 app.include_router(catalog.router)
+app.include_router(products.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

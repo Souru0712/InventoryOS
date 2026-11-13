@@ -75,7 +75,7 @@ risks: [DATA_MIGRATION_ASSESSMENT](../audit/DATA_MIGRATION_ASSESSMENT.md).
 | DM-4 | Every former user has exactly one active membership in its former tenant; login still works |
 | DM-5 | Every `stock_items` row maps to exactly one (item, item_location); no item without a location row |
 | DM-6 | For every (location, item): Σ movements = previous `qty_base`; `stock_balances` equals Σ movements |
-| DM-9 | Every recipe component appears once in version 1 of its recipe |
+| DM-9 | Every sold item is the source of exactly one product variation, its name split at the last " - " (T2.01); every recipe component appears once in version 1 of its recipe (T2.02) |
 | DM-10 | For batch-tracked items: Σ batch remaining = balance (DR-13) |
 | DM-13 | Every Square-origin sold item has an external product and a mapping |
 | DM-15 | Every tenant has a subscription with an entitlement set; no core capability gated |

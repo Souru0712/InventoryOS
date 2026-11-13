@@ -67,7 +67,8 @@ implementation sessions; the detail lives in `docs/`.
   People close one only by fixing its cause or dismissing it with a reason; financial types
   and every amount stay hidden from a role without `inventory.view_costs`. `alerts` is frozen
   history (DM-8): nothing creates an `Alert` (a test enforces both).
-- A change to settings, locations, the team, a connection, the plan, a mapping or a recipe
+- A change to settings, locations, the team, a connection, the plan, a mapping, a product or a
+  recipe
   calls `record_audit()` (`app/audit.py`, ADR-0035) in the same change. Audit events are
   append-only: nothing else names `AuditEvent` (a test enforces it).
 - Every product route takes `org: OrgContext = Depends(require_permission("key"))` with a key
@@ -120,6 +121,10 @@ implementation sessions; the detail lives in `docs/`.
   per-tenant loop wraps each tenant in `log_context(tenant_id=...)`.
 - An upload's type comes from its bytes (`detect_media_type`), never its name or Content-Type;
   uploads are served with an allow-listed type, `nosniff` and `Content-Disposition`.
+- What a business sells is its own catalog (C-36, ADR-0050): `products`, `product_variations`
+  (sizes, informational price) and `modifiers` (none, scale, add), changed only through
+  `app/products.py` and never deleted. A POS catalog is mapped onto it (T3.03, T3.04); the
+  Square sync writes `sold_items` only. A price is money: behind `inventory.view_costs`.
 - JuJu (`C:\Users\oscar\.vscode\JuJu`) and the snack-box project are separate repositories: never
   modify them from here.
 

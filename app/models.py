@@ -38,6 +38,7 @@ from app.transform.ledger import (
     MOVEMENT_TYPES,
     TRANSACTION_KINDS,
 )
+from app.transform.products import MODIFIER_EFFECTS
 from app.units import BASE_UNIT, Dimension
 
 
@@ -732,6 +733,74 @@ class RecipeComponent(Base):
     qty_base_per_sale: Mapped[Decimal] = mapped_column(Qty)
 
     sold_item: Mapped[SoldItem] = relationship(back_populates="components")
+
+
+class Product(Base):
+    """Something the business sells, owned by InventoryOS (T2.01, C-36). A POS catalog is mapped
+    onto it (T3.03, T3.04), never the reverse. Deactivated, never deleted (DR-24)."""
+
+    __tablename__ = "products"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_products_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    category: Mapped[str | None] = mapped_column(String(200))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    variations: Mapped[list[ProductVariation]] = relationship(
+        back_populates="product", order_by="ProductVariation.id"
+    )
+
+
+class ProductVariation(Base):
+    """One way a product is sold, a size such as 12 oz, with an informational price (the POS is
+    the price authority, RCP-FR-01). Its recipe arrives with T2.02."""
+
+    __tablename__ = "product_variations"
+    __table_args__ = (
+        UniqueConstraint("product_id", "name", name="uq_product_variations_name"),
+        not_negative("product_variations", "price_cents"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    product_id: Mapped[int] = mapped_column(owned_by("products.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The POS sale item it was created from (DM-9), so T2.02 can carry its recipe over and
+    # T3.03 can map the POS product to it (DM-13).
+    source_sold_item_id: Mapped[int | None] = mapped_column(ref("sold_items.id"), unique=True)
+
+    product: Mapped[Product] = relationship(back_populates="variations")
+
+
+class Modifier(Base):
+    """A choice on a sold product with an inventory effect (RCP-FR-03): none, scale the recipe
+    by a factor (e.g. light ice x 1.15), or add its own ingredients (its recipe, T2.02)."""
+
+    __tablename__ = "modifiers"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_modifiers_name"),
+        one_of("modifiers", "effect", MODIFIER_EFFECTS),
+        CheckConstraint(
+            "(effect = 'scale' AND scale_factor IS NOT NULL "
+            "AND CAST(scale_factor AS NUMERIC) > 0) "
+            "OR (effect <> 'scale' AND scale_factor IS NULL)",
+            name="ck_modifiers_scale_factor",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    group_name: Mapped[str | None] = mapped_column(String(100))  # e.g. "Ice", "Add-ins"
+    effect: Mapped[str] = mapped_column(String(8), default="none")
+    scale_factor: Mapped[Decimal | None] = mapped_column(Qty)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class InventoryCount(Base):

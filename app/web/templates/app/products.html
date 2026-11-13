@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+{% set edit = can(request, "product.edit") %}
+{% set costs = can(request, "inventory.view_costs") %}
+<h1>Products</h1>
+<p class="lede">What the business sells, in each size, with the modifiers that change what it
+uses. This list is yours: a POS catalog is matched to it, never the other way round.</p>
+
+{% if edit %}<p><a class="btn small" href="/app/products/new">Add a product</a></p>{% endif %}
+<p class="small">{% if show_all %}<a href="/app/products">On sale</a> · <strong>All</strong>{% else %}<strong>On sale</strong> · <a href="/app/products?show=all">All</a>{% endif %}</p>
+
+{% if not products %}
+<div class="card"><p style="margin:0;">No products yet.{% if edit %} Add what you sell, with a size for each way you sell it.{% endif %}</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Product</th><th>Category</th><th>Sizes</th></tr></thead>
+  <tbody>
+  {% for p in products %}
+    <tr>
+      <td><a href="/app/products/{{ p.id }}"><strong>{{ p.name }}</strong></a>{% if not p.is_active %} <span class="pill info">inactive</span>{% endif %}</td>
+      <td class="small">{{ p.category or "" }}</td>
+      <td class="small">{% for v in p.variations if v.is_active %}{{ v.name }}{% if costs and v.price_cents is not none %} {{ v.price_cents|money(currency) }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2 id="modifiers" style="margin-top:28px;">Modifiers</h2>
+<p class="small muted">A modifier either changes nothing in stock, scales the recipe (light ice at
+1.15 uses 115 % of each line) or adds its own ingredients, which you list with recipes.</p>
+{% if modifiers %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Modifier</th><th>Group</th><th>Effect</th>{% if edit %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for m in modifiers %}
+    {% if edit %}
+    <tr>
+      <td colspan="4">
+        <form method="post" action="/app/modifiers/{{ m.id }}" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">{{ csrf_field(request) }}
+          <input name="name" value="{{ m.name }}" aria-label="Name" style="min-width:140px;">
+          <input name="group" value="{{ m.group_name or '' }}" aria-label="Group" placeholder="Group" style="width:120px;">
+          <select name="effect" aria-label="Effect">{% for e in effects %}<option value="{{ e }}"{% if e == m.effect %} selected{% endif %}>{{ effect_labels[e] }}</option>{% endfor %}</select>
+          <input name="scale_factor" value="{{ m.scale_factor|num if m.scale_factor is not none else '' }}" aria-label="Scale" placeholder="Scale, e.g. 1.15" inputmode="decimal" style="width:120px;">
+          <label class="small" style="display:flex; gap:4px; align-items:center;"><input type="checkbox" name="active" value="yes"{% if m.is_active %} checked{% endif %}> On</label>
+          <button class="btn small secondary" type="submit">Save</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td>{{ m.name }}{% if not m.is_active %} <span class="pill info">inactive</span>{% endif %}</td>
+      <td class="small">{{ m.group_name or "" }}</td>
+      <td class="small">{{ effect_labels[m.effect] }}{% if m.effect == "scale" %} &times; {{ m.scale_factor|num }}{% endif %}</td>
+    </tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="small muted">No modifiers yet.</p>
+{% endif %}
+
+{% if edit %}
+<form method="post" action="/app/modifiers" class="card" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-top:12px;">{{ csrf_field(request) }}
+  <div class="field" style="margin:0;"><label for="m-name">New modifier</label><input id="m-name" name="name" required placeholder="e.g. Light ice"></div>
+  <div class="field" style="margin:0;"><label for="m-group">Group</label><input id="m-group" name="group" placeholder="e.g. Ice"></div>
+  <div class="field" style="margin:0;"><label for="m-effect">Effect</label><select id="m-effect" name="effect">{% for e in effects %}<option value="{{ e }}">{{ effect_labels[e] }}</option>{% endfor %}</select></div>
+  <div class="field" style="margin:0;"><label for="m-scale">Scale <span class="muted small">(when it scales)</span></label><input id="m-scale" name="scale_factor" inputmode="decimal" placeholder="1.15"></div>
+  <button class="btn" type="submit">Add modifier</button>
+</form>
+{% endif %}
+{% endblock %}
