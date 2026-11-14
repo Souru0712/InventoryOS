@@ -36,6 +36,39 @@
 </div>
 {% endif %}
 
+{% if cost %}
+<h2 style="margin-top:28px;">Cost{% if cost_places|length > 1 %} at {{ cost_place.name }}{% endif %}</h2>
+{% if cost_places|length > 1 %}<p class="small">{% for p in cost_places %}{% if p.id == cost_place.id %}<strong>{{ p.name }}</strong>{% else %}<a href="?location={{ p.id }}">{{ p.name }}</a>{% endif %}{% if not loop.last %} &middot; {% endif %}{% endfor %}</p>{% endif %}
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Ingredient</th><th>Amount</th><th>Cost</th><th>Line</th></tr></thead>
+    <tbody>
+    {% for c in cost.lines %}
+      {% set it = cost_items[c.line.inventory_item_id] %}
+      <tr>
+        <td>{{ it.name }}{% if c.line.is_packaging %} <span class="pill info">packaging</span>{% endif %}</td>
+        <td class="small">{{ c.line.quantity|num }} {{ c.line.unit|unit }}</td>
+        <td class="small">{% if c.unit_cost is not none %}{{ c.unit_cost|unit_cost(it.display_unit, currency) }}{% else %}<span class="pill warning">no cost</span>{% endif %}</td>
+        <td>{% if c.cost_cents is not none %}{{ c.cost_cents|money(currency) }}{% else %}<span class="muted">&ndash;</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="small" style="margin:10px 0 0;">Ingredients {{ cost.ingredient_cents|money(currency) }} &middot; packaging {{ cost.packaging_cents|money(currency) }}
+  &middot; <strong>{% if kind == "item" %}a batch of {{ current.yield_quantity|num }} {{ current.yield_unit|unit }} costs {{ cost.total_cents|money(currency) }}{% else %}{{ cost.per_yield_cents|money(currency) }} a serving{% endif %}</strong>{% if not cost.complete %} (at least){% endif %}</p>
+  {% if not cost.complete %}<div class="notice warn" style="margin:10px 0 0;">No cost yet for {% for i in cost.missing %}{{ cost_items[i].name }}{% if not loop.last %}, {% endif %}{% endfor %}: the cost above leaves {{ "it" if cost.missing|length == 1 else "them" }} out. Receive a delivery or set a cost on the item.</div>{% endif %}
+  {% if margin %}
+  <p style="margin:10px 0 0;">
+    {% if margin.price_cents is none %}No price set for this size, so no margin.
+    {% elif not margin.complete %}Price {{ margin.price_cents|money(currency) }}; the margin is unknown until every ingredient has a cost.
+    {% else %}Price {{ margin.price_cents|money(currency) }} &middot; <strong>margin {{ margin.amount_cents|money(currency) }}{% if margin.percent is not none %} ({{ margin.percent }}%){% endif %}</strong>, {{ margin.label }}.{% endif %}
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if history %}
 <h2 style="margin-top:28px;">Versions</h2>
 <p class="small muted">Every save is a new version. Each sale, waste or prep uses the version in effect when it happened, so editing never changes the past.</p>

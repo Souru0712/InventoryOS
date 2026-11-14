@@ -9,6 +9,20 @@
     {% endif %}
   </div>
 {% endif %}
+{% if cost_changes %}
+<div class="card" style="margin-bottom:16px;">
+  <h2 style="margin-top:0;">What this delivery changed in costs</h2>
+  <ul style="margin:0; padding-left:18px;">
+  {% for c in cost_changes %}
+    <li class="small" style="margin-bottom:4px;">
+      <strong>{{ c.item.name }}</strong>:
+      {% if c.before is none %}first cost {{ c.after|unit_cost(c.item.display_unit, currency) }}{% else %}{{ c.before|unit_cost(c.item.display_unit, currency) }} to {{ c.after|unit_cost(c.item.display_unit, currency) }}{% if c.after > c.before %} <span class="pill warning">up</span>{% elif c.after < c.before %} <span class="pill ok">down</span>{% endif %}{% endif %}
+      {% if c.recipes %} &middot; <a href="/app/catalog/{{ c.item.id }}/recipes?location={{ c.location_id }}">{{ c.recipes }} recipe{{ "s" if c.recipes != 1 else "" }} affected</a>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
 {% if request.query_params.get("error") == "already_applied" %}
   <div class="notice error">This delivery has already been received.</div>
 {% endif %}

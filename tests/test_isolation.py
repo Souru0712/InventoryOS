@@ -157,6 +157,7 @@ CASES = {
     },
     ("GET", "/app/receiving/{document_id}"): lambda ids: {},
     ("GET", "/app/products/{product_id}"): lambda ids: {},
+    ("GET", "/app/catalog/{inventory_item_id}/recipes"): lambda ids: {},
     ("GET", "/app/recipes/{kind}/{owner_id}"): lambda ids: {},
     ("GET", "/app/recipes/{kind}/{owner_id}/edit"): lambda ids: {},
     ("POST", "/app/recipes/{kind}/{owner_id}"): lambda ids: {

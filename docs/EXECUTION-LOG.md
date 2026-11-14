@@ -5,6 +5,99 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-13 — T2.03 Recipe costing, margins, completeness
+
+**Implemented**
+- **Pure costing** (`app/transform/costing.py`, ADR-0052):
+  - each line costs its base quantity × the ingredient's cost basis;
+  - ingredients and packaging are totalled apart, then divided by the yield;
+  - an ingredient with no cost is listed and left out, never zero;
+  - the margin is price − cost per serving, "estimated at today's costs", and claimed only
+    with no gaps and a price.
+- **`app/costing.py`** (read-only):
+  - costs at one location, the one asked for or else the first;
+  - a prepared item with no cost of its own is costed from its production recipe, and unknown
+    if any input is;
+  - `size_costs()`, `recipes_using()` (directly or through prepared items), `impact()`,
+    `cost_changes_from()` and `sold_without_recipe()`.
+- **Screens** (costs only with `inventory.view_costs`):
+  - the recipe card's cost panel: line costs, ingredients and packaging, cost per serving (or
+    per batch), gaps, price and estimated margin;
+  - cost and margin on each size of the product page;
+  - `/app/catalog/{item}/recipes`: the item's latest cost change and every affected recipe,
+    with cost and margin before and after;
+  - a received delivery's page lists the cost changes it made and links to that view;
+  - `/app/products` lists the sizes sold in the last 30 days with no recipe, with counts and a
+    link to write it (POS-counted items left out);
+  - the item page links to its recipes.
+- An isolation case for the new id route.
+
+**Verified (locally, SQLite)**
+- `tests/test_costing.py` (4):
+  - **the pure rules:** 104 cents of ingredients + 10 of packaging = 114. A line without a
+    cost is listed. Two servings halve the cost. The margin is $6.93 (92.4%), estimated; a gap
+    or a missing price claims no margin. An unknown input makes a prepared item unknown;
+  - **AC-RCP-03:**
+    - the 16 oz card shows "Ingredients $1.04", "packaging $0.10" and "$1.14 a serving (at
+      least)", and names Ginger juice as having no cost, with no margin claimed;
+    - once the juice has a production recipe (450 g of ginger making 0.5 l), the card shows
+      $1.68 a serving and a $5.82 (77.6%) margin, and the product page shows the same;
+    - an Employee sees neither page with any money;
+  - **AC-RCP-07:** a receipt moving milk from 0.2 to 0.5 cents a ml is listed on the delivery
+    page as "1 recipe affected". The view shows the 12 oz going from $0.40 to $1.00, and its
+    margin from $6.10 to $5.50. An Employee gets 403;
+  - **AC-RCP-08:** a mango smoothie (7) and water (3) are listed; a 40-day-old sale and a
+    POS-counted cola are not. Writing the smoothie's recipe removes it, and only roles that
+    can edit see "Write the recipe".
+- **By hand, in the preview, on the demo database:**
+  - the 16 oz card shows $0.58 a serving and a 92.2% estimated margin;
+  - after setting Whole milk to $1.40/L, its recipes page listed six recipes with before,
+    after and margins;
+  - at 375 px wide, no horizontal scroll;
+  - no console or server errors.
+  - The walk-through found two problems, both fixed here: a first cost compared against
+    nothing, and a change that did not match the rounded figures beside it.
+- Full suite 1022 passed, 27 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:**
+  - `app/transform/costing.py`, `app/costing.py`, `app/web/costing.py`;
+  - the template `item_recipes.html`;
+  - `tests/test_costing.py`, ADR-0052.
+- **Changed:**
+  - `app/web/recipes.py`, `app/web/products.py`, `app/web/receiving.py`, `app/main.py`;
+  - the templates `recipe.html`, `product.html`, `products.html`, `receiving_review.html` and
+    `catalog_item.html`;
+  - `tests/test_isolation.py`;
+  - CLAUDE.md, the ADR index, the task index (T2.02 → Completed, T2.03 → In review) and this
+    log.
+
+**Decisions and findings**
+- Costs are per location, with a switch, rather than averaged; ADR-0052 records why.
+- Until T2.05, the dashboard's completeness banner still follows `recipe_components` (what
+  velocity uses), while the products list follows the new recipes.
+
+**Next task**
+- T2.04 Sales model and sources.
+
+---
+
+## 2026-11-13 — T2.02 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #52 (T2.02-b) was merged with a merge commit
+  (`417d143`).
+- CI on its head `04b7226`, all five required jobs green:
+  - SQLite: 1017 passed, 27 skipped;
+  - PostgreSQL 16: 1044 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; the task index (T2.02 → Completed).
+
+---
+
 ## 2026-11-13 — T2.02-b Versioned recipes: editor and staff card
 
 **Implemented**

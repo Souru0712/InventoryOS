@@ -25,6 +25,7 @@ from app.web import (
     auth,
     billing,
     catalog,
+    costing,
     counts,
     dashboard,
     exceptions,
@@ -110,6 +111,7 @@ app.include_router(valuation.router)
 app.include_router(catalog.router)
 app.include_router(products.router)
 app.include_router(recipes.router)
+app.include_router(costing.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

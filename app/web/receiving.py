@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
 from app.access import OrgContext, get_scoped, select_scoped
+from app.access.permissions import VIEW_COSTS
 from app.catalog import active_stock
+from app.costing import cost_changes_from
 from app.db import get_db
 from app.extract.invoice import SUPPORTED_MEDIA
 from app.jobs import enqueue
@@ -27,6 +29,7 @@ from app.orchestration.receiving import (
     record_correction,
     save_upload,
 )
+from app.orchestration.views import tenant_currency
 from app.security import (
     require_permission,
     require_tenant,
@@ -157,6 +160,12 @@ def review_document(
             "lines": sorted(document.lines, key=lambda line: line.line_no),
             "items": {item.id: item for item in items},
             "item_list": sorted(items, key=lambda item: item.name),
+            "cost_changes": (
+                cost_changes_from(db, org, document.id)
+                if org.can(VIEW_COSTS) and document.status is DocumentStatus.APPLIED
+                else []
+            ),
+            "currency": tenant_currency(db, org),
         },
     )
 

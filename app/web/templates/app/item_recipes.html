@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+{% set item = impact.item %}
+<p class="small"><a href="/app/catalog/{{ item.id }}">&larr; {{ item.name }}</a></p>
+<h1>Recipes using {{ item.name }}</h1>
+<p class="lede">
+  {% if impact.after is none %}{{ item.name }} has no cost at {{ impact.location.name }} yet, so the recipes below leave it out.
+  {% elif impact.before is none %}Its first cost at {{ impact.location.name }} is {{ impact.after|unit_cost(item.display_unit, currency) }}.
+  {% else %}At {{ impact.location.name }} its cost went from {{ impact.before|unit_cost(item.display_unit, currency) }} to <strong>{{ impact.after|unit_cost(item.display_unit, currency) }}</strong>{% if impact.changed_at %} on {{ impact.changed_at.strftime("%d %b %Y") }}{% endif %}.{% endif %}
+  Costs and margins are estimated at today's costs.
+</p>
+{% if places|length > 1 %}<p class="small">{% for p in places %}{% if p.id == impact.location.id %}<strong>{{ p.name }}</strong>{% else %}<a href="?location={{ p.id }}">{{ p.name }}</a>{% endif %}{% if not loop.last %} &middot; {% endif %}{% endfor %}</p>{% endif %}
+
+{% if not impact.rows %}
+<div class="card"><p style="margin:0;">No recipe uses {{ item.name }}.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  {% set compare = impact.before is not none %}
+  <thead><tr><th>Recipe</th>{% if compare %}<th>Cost before</th>{% endif %}<th>Cost now</th>{% if compare %}<th>Change</th><th>Margin before</th>{% endif %}<th>Margin now</th></tr></thead>
+  <tbody>
+  {% for row in impact.rows %}
+    {% set batch = row.owner.kind == "item" %}
+    {% set before, now = row.figures(batch) %}
+    <tr>
+      <td><a href="/app/recipes/{{ row.owner.kind }}/{{ row.owner.id }}">{{ names[row.recipe.id] }}</a>{% if batch %} <span class="small muted">a batch</span>{% endif %}</td>
+      {% if compare %}<td class="small">{{ before|money(currency) }}{% if not row.before.complete %}+{% endif %}</td>{% endif %}
+      <td>{{ now|money(currency) }}{% if not row.after.complete %}+{% endif %}</td>
+      {% if compare %}
+      <td class="small">{% if now > before %}<span style="color:var(--warn);">+{{ (now - before)|money(currency) }}</span>{% elif now < before %}-{{ (before - now)|money(currency) }}{% else %}<span class="muted">none</span>{% endif %}</td>
+      <td class="small">{% if row.margin_before.known %}{{ row.margin_before.amount_cents|money(currency) }}{% if row.margin_before.percent is not none %} ({{ row.margin_before.percent }}%){% endif %}{% else %}<span class="muted">&ndash;</span>{% endif %}</td>
+      {% endif %}
+      <td class="small">{% if row.margin_after.known %}<strong>{{ row.margin_after.amount_cents|money(currency) }}</strong>{% if row.margin_after.percent is not none %} ({{ row.margin_after.percent }}%){% endif %}{% else %}<span class="muted">&ndash;</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="small muted">A + means another ingredient has no cost yet, so the figure leaves it out. Margins show for sizes with a price.</p>
+{% endif %}
+{% endblock %}
