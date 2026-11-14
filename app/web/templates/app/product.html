@@ -21,13 +21,14 @@
           {% if costs %}<input name="price" value="{{ '%.2f'|format(v.price_cents / 100) if v.price_cents is not none else '' }}" aria-label="Price" inputmode="decimal" placeholder="Price" style="width:110px;">{% endif %}
           <label class="small" style="display:flex; gap:4px; align-items:center;"><input type="checkbox" name="active" value="yes"{% if v.is_active %} checked{% endif %}> On sale</label>
           <button class="btn small secondary" type="submit">Save</button>
+          <a class="small" href="/app/recipes/variation/{{ v.id }}">Recipe</a>
           {% if v.source_sold_item_id %}<span class="small muted">from your POS sales</span>{% endif %}
         </form>
       </td>
     </tr>
     {% else %}
     <tr>
-      <td>{{ v.name }}</td>
+      <td>{{ v.name }} &middot; <a class="small" href="/app/recipes/variation/{{ v.id }}">Recipe</a></td>
       {% if costs %}<td>{% if v.price_cents is not none %}{{ v.price_cents|money(currency) }}{% else %}<span class="muted">&ndash;</span>{% endif %}</td>{% endif %}
       <td class="small">{{ "On sale" if v.is_active else "Off sale" }}</td>
     </tr>

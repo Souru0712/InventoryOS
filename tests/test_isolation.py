@@ -157,6 +157,11 @@ CASES = {
     },
     ("GET", "/app/receiving/{document_id}"): lambda ids: {},
     ("GET", "/app/products/{product_id}"): lambda ids: {},
+    ("GET", "/app/recipes/{kind}/{owner_id}"): lambda ids: {},
+    ("GET", "/app/recipes/{kind}/{owner_id}/edit"): lambda ids: {},
+    ("POST", "/app/recipes/{kind}/{owner_id}"): lambda ids: {
+        "data": {"item": ids["inventory_item"], "quantity": "1", "unit": ""}
+    },
     ("POST", "/app/products/{product_id}"): lambda ids: {
         "data": {"name": "House juice", "category": "Juices"}
     },
@@ -263,6 +268,8 @@ PATH_ROWS = {
     "product_id": "product",
     "variation_id": "variation",
     "modifier_id": "modifier",
+    "kind": "kind",
+    "owner_id": "variation",
 }
 
 
@@ -382,6 +389,7 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     db.add(size)
     db.flush()
     return {
+        "kind": "variation",
         "product": juice.id,
         "variation": size.id,
         "modifier": ice.id,

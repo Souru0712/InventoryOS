@@ -34,6 +34,7 @@ from app.transform.recipes import (
     scale_lines,
     size_ratio,
     version_at,
+    what_changed,
 )
 
 D = Decimal
@@ -95,8 +96,31 @@ def test_sizes_scale_by_the_amounts_their_names_give():
     assert size_ratio("500ml", "750 ml") == D("1.5")
     assert size_ratio("Small", "Large") == 1  # nothing comparable: start unscaled
     assert size_ratio("12 oz", "500 ml") == 1
-    [scaled] = scale_lines([Line(1, D(12), "g", D(12))], D(16) / D(12))
+    scaled, cup = scale_lines(
+        [Line(1, D(12), "g", D(12)), Line(2, D(1), "each", D(1), is_packaging=True)],
+        D(16) / D(12),
+    )
     assert (scaled.quantity, scaled.qty_base) == (D("16.0000"), D("16.0000"))
+    assert (cup.quantity, cup.qty_base) == (D(1), D(1))  # still one cup
+
+
+def test_what_changed_lists_each_difference_between_versions():
+    names = {1: "Milk", 2: "Cup", 3: "Syrup"}
+    before = [Line(1, D(200), "ml", D(200)), Line(2, D(1), "each", D(1))]
+    after = [
+        Line(1, D(240), "ml", D(240)),
+        Line(2, D(1), "each", D(1), is_packaging=True),
+        Line(3, D(15), "ml", D(15)),
+    ]
+    assert what_changed(None, after, names) == ["First version"]
+    assert what_changed(before, after, names, ("1 serving", "2 servings"), True) == [
+        "Milk 200 ml to 240 ml",
+        "Cup now counted as packaging",
+        "Added Syrup 15 ml",
+        "Yield 1 serving to 2 servings",
+        "Instructions changed",
+    ]
+    assert what_changed(after, before, names)[-1] == "Removed Syrup"
 
 
 def test_a_circle_through_prepared_items_is_found():

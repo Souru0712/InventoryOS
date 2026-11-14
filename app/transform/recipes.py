@@ -120,9 +120,12 @@ def size_ratio(from_name: str, to_name: str) -> Decimal:
 
 
 def scale_lines(lines: Iterable[Line], factor: Decimal) -> list[Line]:
-    """Lines scaled by a factor, kept to four places, for "start from" (AC-RCP-06)."""
+    """Lines scaled by a factor, kept to four places, for "start from" (AC-RCP-06). Packaging
+    keeps its amount: a bigger drink still takes one cup and one lid."""
     return [
-        replace(
+        line
+        if line.is_packaging
+        else replace(
             line,
             quantity=(line.quantity * factor).quantize(PLACES),
             qty_base=(line.qty_base * factor).quantize(PLACES),
@@ -146,3 +149,39 @@ def same_recipe(
         )
 
     return key(a) == key(b) and a_extra == b_extra
+
+
+def _amount(line: Line) -> str:
+    return f"{line.quantity.normalize():f} {line.unit}"
+
+
+def what_changed(
+    before: Sequence[Line] | None,
+    after: Sequence[Line],
+    names: Mapping[int, str],
+    yields: tuple[str, str] = ("", ""),
+    instructions_changed: bool = False,
+) -> list[str]:
+    """How a version differs from the one before it, line by line (RCP-FR-08)."""
+    if before is None:
+        return ["First version"]
+    old = {ln.inventory_item_id: ln for ln in before}
+    new = {ln.inventory_item_id: ln for ln in after}
+    notes = []
+    for item_id, line in new.items():
+        name = names.get(item_id, "an item")
+        if item_id not in old:
+            notes.append(f"Added {name} {_amount(line)}")
+        elif (old[item_id].quantity, old[item_id].unit) != (line.quantity, line.unit):
+            notes.append(f"{name} {_amount(old[item_id])} to {_amount(line)}")
+        if item_id in old and old[item_id].is_packaging != line.is_packaging:
+            notes.append(
+                f"{name} {'now' if line.is_packaging else 'no longer'} counted as packaging"
+            )
+    for item_id in old.keys() - new.keys():
+        notes.append(f"Removed {names.get(item_id, 'an item')}")
+    if yields[0] != yields[1]:
+        notes.append(f"Yield {yields[0]} to {yields[1]}")
+    if instructions_changed:
+        notes.append("Instructions changed")
+    return notes or ["No change to the lines"]
