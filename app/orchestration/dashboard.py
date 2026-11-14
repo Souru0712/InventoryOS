@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, select_scoped
 from app.exceptions import ExceptionView, listing
 from app.ledger.history import MovementTotal, movement_totals
-from app.models import Location, RecipeComponent, SalesDaily, SoldItem, StockItem, TrackMode
+from app.models import Location, RecipeComponent, SoldItem, StockItem, TrackMode
+from app.sales import daily_sales
 from app.transform.business_days import business_date, business_day_end, business_day_start
 from app.transform.dashboard import DateRange, completeness_note
 
@@ -82,17 +83,14 @@ def sales_without_recipe(
     products: set[int] = set()
     for location in places(db, org, location_id):
         first, last = _days(location, period, now)
-        sales = select_scoped(org, SalesDaily).where(
-            SalesDaily.location_id == location.id, SalesDaily.dt >= first, SalesDaily.dt <= last
-        )
-        for row in db.scalars(sales):
-            if row.sold_item_id in with_recipe or (
-                (location.id, provider_ids.get(row.sold_item_id)) in counted_by_pos
-            ):
+        for sale in daily_sales(db, org, first, last, location.id):
+            if sale.sold_item_id is None or sale.sold_item_id in with_recipe:
                 continue
-            if row.units and row.units > 0:
-                units += Decimal(row.units)
-                products.add(row.sold_item_id)
+            if (location.id, provider_ids.get(sale.sold_item_id)) in counted_by_pos:
+                continue
+            if sale.units > 0:
+                units += sale.units
+                products.add(sale.sold_item_id)
     return completeness_note(units, len(products))
 
 

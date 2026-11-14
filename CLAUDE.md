@@ -134,6 +134,11 @@ implementation sessions; the detail lives in `docs/`.
   from the version in effect and today's cost basis; a missing cost is listed, never zero,
   and a margin is "estimated at today's costs". Cost panels sit behind
   `inventory.view_costs`.
+- Every sale is a sales transaction (DR-30, ADR-0053), recorded only by `app/sales.py`
+  (`record_sale()`), with its origin from its source (DR-34); everything that reads sales
+  goes through `daily_sales()`. A location has one source of record per business date: a
+  sale from another source is kept, never counted, and raises `sales_source_overlap`
+  (DR-31). `sales_daily` is frozen history (DM-7): nothing writes it (a test enforces it).
 - JuJu (`C:\Users\oscar\.vscode\JuJu`) and the snack-box project are separate repositories: never
   modify them from here.
 

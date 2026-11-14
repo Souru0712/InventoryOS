@@ -26,7 +26,6 @@ from app.models import (
     Membership,
     ProductIdentifier,
     RecipeComponent,
-    SalesDaily,
     SoldItem,
     StockBatch,
     StockItem,
@@ -56,6 +55,7 @@ from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
 from app.products import products_from_sold_items
 from app.recipes import recipes_from_components
+from app.sales import DayOfSales, record_daily_pos_sales
 from app.security import hash_password, revoke_sessions
 from app.transform.barcodes import check_digit
 from app.transform.reports import money
@@ -491,6 +491,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
         products_from_sold_items(db, OrgContext.system(tenant.id))
         recipes_from_components(db, OrgContext.system(tenant.id))
 
+        sales_days = []
         for offset in range(args.days):
             day = today - timedelta(days=offset)
             weekend = day.weekday() >= 5
@@ -500,17 +501,13 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 if units == 0:
                     continue
                 gross = units * price
-                db.add(
-                    SalesDaily(
-                        tenant_id=tenant.id,
-                        sold_item_id=sold[name].id,
-                        location_id=location.id,
-                        dt=day,
-                        units=Decimal(units),
-                        gross_cents=gross,
-                        net_cents=int(gross * 0.96),
+                sales_days.append(
+                    DayOfSales(
+                        location.id, day, sold[name], Decimal(units), gross, int(gross * 0.96)
                     )
                 )
+        # The demo's sales arrive as its POS would send them: one daily transaction a day.
+        record_daily_pos_sales(db, OrgContext.system(tenant.id), "demo", sales_days)
         db.flush()
 
         # Sales do not consume stock until the consumption engine (T2.05), so each lot is a

@@ -18,7 +18,6 @@ from app.main import app
 from app.models import (
     Membership,
     RecipeComponent,
-    SalesDaily,
     SoldItem,
     StockBatch,
     StockItem,
@@ -34,6 +33,7 @@ from app.transform.exceptions import Finding, attention_key
 from app.transform.ledger import Line
 from app.units import Dimension
 from tests.ledger_helpers import opened
+from tests.sales_helpers import sold_on
 
 D = Decimal
 PASSWORD = "a-good-password"  # noqa: S105 (the test accounts', as in conftest)
@@ -250,15 +250,7 @@ def test_ac_cmd_02_sales_without_a_recipe_are_named_and_use_is_labelled_incomple
         (flat, today, 7),
         (latte, today - timedelta(20), 9),
     ):
-        db.add(
-            SalesDaily(
-                tenant_id=tenant.id,
-                sold_item_id=sold.id,
-                location_id=location.id,
-                dt=day,
-                units=D(units),
-            )
-        )
+        sold_on(db, location, sold, day, units)
     db.commit()
 
     owner = signed_in()
