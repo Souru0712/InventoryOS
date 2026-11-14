@@ -39,6 +39,12 @@ from app.transform.ledger import (
     TRANSACTION_KINDS,
 )
 from app.transform.products import MODIFIER_EFFECTS
+from app.transform.sales import (
+    CONSUMPTION_STATUSES,
+    RETURN_STATUSES,
+    SALES_ORIGINS,
+    TRANSACTION_STATUSES,
+)
 from app.units import BASE_UNIT, Dimension
 
 
@@ -923,6 +929,181 @@ class SalesDaily(Base):
     units: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
     gross_cents: Mapped[int] = mapped_column(Integer, default=0)
     net_cents: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class SalesSource(Base):
+    """Where a location's sales come from over a run of business days (T2.04, DR-31): a POS
+    adapter, entries by hand, a file import, the API or InventoryOS POS. A location has one
+    source of record per business date; its operating mode follows from it (POS-FR-18)."""
+
+    __tablename__ = "sales_sources"
+    __table_args__ = (
+        one_of("sales_sources", "kind", SALES_ORIGINS),
+        CheckConstraint(
+            "active_to IS NULL OR active_to >= active_from", name="ck_sales_sources_span"
+        ),
+        Index("ix_sales_sources_location", "location_id", "active_from"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    kind: Mapped[str] = mapped_column(String(16))
+    provider: Mapped[str | None] = mapped_column(String(32))  # a POS adapter's, e.g. "square"
+    active_from: Mapped[date] = mapped_column(Date)
+    active_to: Mapped[date | None] = mapped_column(Date)
+    # Whether its sales count for its days. A POS left connected while sales are entered by
+    # hand is not: its sales are kept and flagged, never counted (DR-31).
+    of_record: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class SalesTransaction(Base):
+    """One sale, or one day's sales entered as a whole, from one source (T2.04, POS-FR-17,
+    DR-30). Its origin is its source's kind and never changes (DR-34). A changed resend is the
+    next revision; the one before it is marked corrected. A sale from a source that is not the
+    source of record for its location and business date is kept but never counted (DR-31)."""
+
+    __tablename__ = "sales_transactions"
+    __table_args__ = (
+        UniqueConstraint(
+            "sales_source_id", "source_reference", "revision", name="uq_sales_transactions_ref"
+        ),
+        one_of("sales_transactions", "origin", SALES_ORIGINS),
+        one_of("sales_transactions", "status", TRANSACTION_STATUSES),
+        positive("sales_transactions", "revision"),
+        Index("ix_sales_transactions_day", "location_id", "business_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    sales_source_id: Mapped[int] = mapped_column(ref("sales_sources.id"), index=True)
+    origin: Mapped[str] = mapped_column(String(16))
+    source_reference: Mapped[str] = mapped_column(String(200))  # order id, entry, file rows
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    occurred_at: Mapped[datetime | None] = mapped_column(UTCDateTime)  # None: a day's entry
+    business_date: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(12), default="completed")
+    of_record: Mapped[bool] = mapped_column(Boolean, default=True)
+    gross_cents: Mapped[int | None] = mapped_column(Integer)
+    discount_cents: Mapped[int | None] = mapped_column(Integer)
+    net_cents: Mapped[int | None] = mapped_column(Integer)
+    tax_cents: Mapped[int | None] = mapped_column(Integer)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    lines: Mapped[list[SalesTransactionLine]] = relationship(
+        back_populates="sales_transaction", order_by="SalesTransactionLine.id"
+    )
+
+
+class SalesTransactionLine(Base):
+    """A line of a sale: an owned product variation, or a POS item not mapped yet (kept with
+    its reference so it can be mapped and reprocessed), how many, and what consumption did
+    with it (T2.05 records the recipe version it used)."""
+
+    __tablename__ = "sales_transaction_lines"
+    __table_args__ = (
+        UniqueConstraint("sales_transaction_id", "line_key", name="uq_sales_transaction_lines_key"),
+        not_negative("sales_transaction_lines", "quantity"),
+        one_of("sales_transaction_lines", "consumption_status", CONSUMPTION_STATUSES),
+        CheckConstraint(
+            "product_variation_id IS NOT NULL OR external_ref IS NOT NULL",
+            name="ck_sales_transaction_lines_what",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    sales_transaction_id: Mapped[int] = mapped_column(owned_by("sales_transactions.id"), index=True)
+    line_key: Mapped[str] = mapped_column(String(120))
+    product_variation_id: Mapped[int | None] = mapped_column(
+        ref("product_variations.id"), index=True
+    )
+    external_ref: Mapped[str | None] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(String(300), default="")
+    quantity: Mapped[Decimal] = mapped_column(Qty)
+    gross_cents: Mapped[int | None] = mapped_column(Integer)
+    net_cents: Mapped[int | None] = mapped_column(Integer)
+    consumption_status: Mapped[str] = mapped_column(String(8), default="pending")
+    recipe_version_id: Mapped[int | None] = mapped_column(ref("recipe_versions.id"))
+
+    sales_transaction: Mapped[SalesTransaction] = relationship(back_populates="lines")
+    modifiers: Mapped[list[SalesLineModifier]] = relationship(
+        back_populates="line", order_by="SalesLineModifier.id"
+    )
+
+
+class SalesLineModifier(Base):
+    """A modifier chosen on a sold line, and how many times (e.g. two extra shots)."""
+
+    __tablename__ = "sales_line_modifiers"
+    __table_args__ = (
+        UniqueConstraint(
+            "sales_transaction_line_id", "modifier_id", name="uq_sales_line_modifiers_modifier"
+        ),
+        positive("sales_line_modifiers", "quantity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    sales_transaction_id: Mapped[int] = mapped_column(owned_by("sales_transactions.id"), index=True)
+    sales_transaction_line_id: Mapped[int] = mapped_column(
+        owned_by("sales_transaction_lines.id"), index=True
+    )
+    modifier_id: Mapped[int] = mapped_column(ref("modifiers.id"))
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+
+    line: Mapped[SalesTransactionLine] = relationship(back_populates="modifiers")
+
+
+class SalesReturn(Base):
+    """A refund or return from a source (T2.04; refunds and voids arrive with T3.07). It never
+    puts stock back by itself (DR-26): a person classifies it as restock or waste (R1.1)."""
+
+    __tablename__ = "sales_returns"
+    __table_args__ = (
+        UniqueConstraint("sales_source_id", "source_reference", name="uq_sales_returns_ref"),
+        one_of("sales_returns", "origin", SALES_ORIGINS),
+        one_of("sales_returns", "status", RETURN_STATUSES),
+        CheckConstraint(
+            "classification IS NULL OR classification IN ('restock', 'waste')",
+            name="ck_sales_returns_classification",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    sales_source_id: Mapped[int] = mapped_column(ref("sales_sources.id"), index=True)
+    sales_transaction_id: Mapped[int | None] = mapped_column(ref("sales_transactions.id"))
+    origin: Mapped[str] = mapped_column(String(16))
+    source_reference: Mapped[str] = mapped_column(String(200))
+    business_date: Mapped[date] = mapped_column(Date)
+    amount_cents: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(12), default="recorded")
+    classification: Mapped[str | None] = mapped_column(String(8))
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    lines: Mapped[list[SalesReturnLine]] = relationship(
+        back_populates="sales_return", order_by="SalesReturnLine.id"
+    )
+
+
+class SalesReturnLine(Base):
+    """What came back: a line of the original sale where known, and how many."""
+
+    __tablename__ = "sales_return_lines"
+    __table_args__ = (positive("sales_return_lines", "quantity"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    sales_return_id: Mapped[int] = mapped_column(owned_by("sales_returns.id"), index=True)
+    sales_transaction_line_id: Mapped[int | None] = mapped_column(ref("sales_transaction_lines.id"))
+    quantity: Mapped[Decimal] = mapped_column(Qty)
+    amount_cents: Mapped[int | None] = mapped_column(Integer)
+
+    sales_return: Mapped[SalesReturn] = relationship(back_populates="lines")
 
 
 class Alert(Base):

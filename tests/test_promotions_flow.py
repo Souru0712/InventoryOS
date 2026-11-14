@@ -13,7 +13,6 @@ from app.models import (
     Location,
     Promotion,
     PromotionStatus,
-    SalesDaily,
     SoldItem,
     StockBatch,
     StockItem,
@@ -22,6 +21,7 @@ from app.models import (
 )
 from app.orchestration.promotions import accept, dismiss, end, running, snooze, suggestions_for
 from app.units import Dimension
+from tests.sales_helpers import sold_on
 
 TODAY = date(2026, 9, 13)
 
@@ -49,15 +49,7 @@ def gatorade(db, tenant, location):
     db.flush()
     for back in range(28):
         if back % 5:
-            db.add(
-                SalesDaily(
-                    tenant_id=tenant.id,
-                    sold_item_id=sold.id,
-                    location_id=location.id,
-                    dt=TODAY - timedelta(days=back),
-                    units=Decimal("1.5"),
-                )
-            )
+            sold_on(db, location, sold, TODAY - timedelta(days=back), "1.5")
     db.add(
         StockBatch(
             tenant_id=tenant.id,
@@ -129,13 +121,7 @@ def test_a_running_markdown_reports_what_sales_did(db, tenant, location, gatorad
     sold = db.query(SoldItem).one()
     for back in range(3):
         day = TODAY - timedelta(days=back)
-        row = db.query(SalesDaily).filter(SalesDaily.dt == day).one_or_none()
-        if row is None:
-            row = SalesDaily(
-                tenant_id=tenant.id, sold_item_id=sold.id, location_id=location.id, dt=day
-            )
-            db.add(row)
-        row.units = Decimal("6")  # four times the usual rate since the markdown started
+        sold_on(db, location, sold, day, "6")  # four times the usual rate since the markdown
     db.commit()
 
     [live] = running(db, OrgContext.system(tenant.id), TODAY)

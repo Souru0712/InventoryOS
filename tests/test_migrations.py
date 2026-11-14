@@ -642,6 +642,85 @@ def test_dm8_alerts_become_exceptions_and_the_downgrade_leaves_alerts_alone(fres
         engine.dispose()
 
 
+BEFORE_SALES = "7a3c9d2e4f18"
+
+
+def test_sales_daily_becomes_daily_transactions_and_the_downgrade_keeps_it(fresh_url):
+    """T2.04, DM-7: each location's days of `sales_daily` become daily transactions from a
+    POS source of record, one line per sold item; `sales_daily` itself is untouched."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_SALES)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-13 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active,"
+                    " business_day_cutoff_hour, open_days) VALUES (1, 'Main', 'UTC', 'USD',"
+                    " true, 0, 127)"
+                )
+            )
+            for ref, name in (("v1", "Latte - 12 oz"), ("v2", "Muffin")):
+                connection.execute(
+                    text(
+                        "INSERT INTO sold_items (tenant_id, provider, provider_item_id, name,"
+                        " price_cents, currency, sell_unit, is_active) VALUES (1, 'square',"
+                        " :ref, :name, 400, 'USD', 'each', true)"
+                    ),
+                    {"ref": ref, "name": name},
+                )
+            for sold_id, day, units in (
+                (1, "2026-11-09", "5"),
+                (2, "2026-11-09", "2"),
+                (1, "2026-11-10", "7"),
+            ):
+                connection.execute(
+                    text(
+                        "INSERT INTO sales_daily (tenant_id, sold_item_id, location_id, dt,"
+                        " units, gross_cents, net_cents) VALUES (1, :sold, 1, :day, :units,"
+                        " 100, 90)"
+                    ),
+                    {"sold": sold_id, "day": day, "units": units},
+                )
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            source = connection.execute(
+                text("SELECT kind, provider, active_from, of_record FROM sales_sources")
+            ).one()
+            rows = connection.execute(
+                text(
+                    "SELECT t.business_date, t.origin, t.source_reference, l.external_ref,"
+                    " l.quantity FROM sales_transaction_lines l JOIN sales_transactions t"
+                    " ON t.id = l.sales_transaction_id ORDER BY t.business_date, l.external_ref"
+                )
+            ).all()
+        assert (source[0], source[1], str(source[2]), bool(source[3])) == (
+            "pos_adapter",
+            "square",
+            "2026-11-09",
+            True,
+        )
+        assert [(str(d), o, r, e, str(q).rstrip("0").rstrip(".")) for d, o, r, e, q in rows] == [
+            ("2026-11-09", "pos_adapter", "daily:2026-11-09", "v1", "5"),
+            ("2026-11-09", "pos_adapter", "daily:2026-11-09", "v2", "2"),
+            ("2026-11-10", "pos_adapter", "daily:2026-11-10", "v1", "7"),
+        ]
+        command.downgrade(config, BEFORE_SALES)
+        with engine.connect() as connection:
+            assert "sales_transactions" not in inspect(connection).get_table_names()
+            kept = connection.execute(text("SELECT COUNT(*) FROM sales_daily")).scalar()
+        assert kept == 3
+    finally:
+        engine.dispose()
+
+
 BEFORE_RECIPES = "5e0b7c41d2a9"
 
 

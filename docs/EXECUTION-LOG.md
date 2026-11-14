@@ -5,6 +5,99 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-14 — T2.04 Sales model and sources
+
+**Implemented**
+- **Six tables** (migration `9c4e1b7a2d05`, ADR-0053):
+  - `sales_sources`: kind, provider, business days from and to, whether it is the source of
+    record;
+  - `sales_transactions`: source reference, revision, time or business date, status, money;
+  - `sales_transaction_lines` with `sales_line_modifiers`: an owned variation or an unmapped
+    POS item by reference, quantity, money, consumption status, and the recipe version slot for
+    T2.05;
+  - `sales_returns` with `sales_return_lines`.
+- **`app/sales.py`, the only writer:**
+  - a transaction's business date is its location's;
+  - its origin comes from its source and never changes (DR-34);
+  - a resend that changes nothing adds nothing, and a changed one is the next revision;
+  - `daily_sales()` is the one reader.
+- **One source of record per location and business date** (DR-31): an overlapping source of
+  record is refused. A sale from a source that is not of record is kept, its lines skipped,
+  never counted, and raises `sales_source_overlap`.
+- **DM-7 freeze:**
+  - **Writers moved:** the legacy Square sync and the demo seed record each day as one daily
+    transaction (from a POS source created on first use, extended back if older days arrive
+    later).
+  - **Readers moved:** velocity, Square-tracked depletion, reports, the dashboard banner and
+    the sold-without-a-recipe list read `daily_sales()`.
+  - Nothing writes `sales_daily`.
+- **History:** each location's `sales_daily` days were backfilled as daily transactions.
+- **Tests:** they now record sales through `tests/sales_helpers.sold_on()`.
+
+**Verified (locally, SQLite)**
+- `tests/test_sales.py` (9):
+  - the pure rules (one source per date, a shared day refused, line checks);
+  - **the acceptance:** a manual source overlapping the POS is refused. After the POS stops
+    on the 11th, manual takes over on the 12th, and a POS sale for the 12th is kept but
+    skipped. It raises `sales_source_overlap` for that location and day, and only the
+    counted sale is read;
+  - a repeated resend adds nothing, and a changed one is revision 2 with the first marked
+    corrected; modifiers are kept;
+  - 02:30 in New York with a 04:00 cutoff belongs to the evening before;
+  - the legacy Square feed becomes daily transactions: once, nothing on the next sync, and a
+    revision when a day changes;
+  - a return is one per source reference;
+  - sales are written in one place.
+- `tests/test_ledger_writers.py`: `sales_daily` joins the frozen tables.
+- `tests/test_migrations.py`: the backfill (source, days, lines) and the downgrade keeping
+  `sales_daily`.
+- The six tests that wrote `sales_daily` (velocity, expiry, health, promotions, costing,
+  dashboard) pass through the new model.
+- **Parity:** on the migrated demo database, the 126 item-days read through `daily_sales()`
+  equal `sales_daily` exactly, and velocity computes.
+- Full suite 1031 passed, 28 skipped (the Postgres-only tests); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- **New:**
+  - `app/transform/sales.py`, `app/sales.py`;
+  - migration `9c4e1b7a2d05`;
+  - `tests/test_sales.py`, `tests/sales_helpers.py`, ADR-0053.
+- **Changed:**
+  - `app/models.py`, `app/access/scoped.py`;
+  - `app/load/upsert.py`, `app/cli.py` (demo), `app/orchestration/views.py`,
+    `app/orchestration/dashboard.py`, `app/costing.py`;
+  - six test files moved onto the helper, `tests/test_ledger_writers.py`,
+    `tests/test_migrations.py`;
+  - CLAUDE.md, the data migration roadmap (DM-7 invariant), ADR-0052 → Accepted, the ADR
+    index, the task index (T2.03 → Completed, T2.04 → In review) and this log.
+
+**Decisions (for the owner, ADR-0053)**
+- **Writer and reader moved, not dropped:** freezing `sales_daily` means moving its writer and
+  readers, not just dropping the writer. Otherwise Square sales would stop reaching velocity and
+  reorder until T3.05.
+- **History copied:** `sales_daily` history is backfilled into the new model so the figures
+  continue. Nothing is replayed into the ledger.
+
+**Next task**
+- T2.05 Consumption engine.
+
+---
+
+## 2026-11-14 — T2.03 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #53 was merged with a merge commit (`73011f1`).
+- CI on its head `b4896b6`, all five required jobs green:
+  - SQLite: 1022 passed, 27 skipped;
+  - PostgreSQL 16: 1049 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- The same five were green on `main` after the merge.
+
+**Files changed**
+- This log; ADR-0052 → Accepted; the task index (T2.03 → Completed).
+
+---
+
 ## 2026-11-13 — T2.03 Recipe costing, margins, completeness
 
 **Implemented**
