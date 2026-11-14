@@ -29,6 +29,25 @@ uses. This list is yours: a POS catalog is matched to it, never the other way ro
 </div>
 {% endif %}
 
+{% if unrecipied %}
+<h2 style="margin-top:28px;">Sold without a recipe</h2>
+<p class="small muted">Sold in the last 30 days with no recipe, so what they use is not counted. Most sold first.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Size</th><th>Sold</th><th></th></tr></thead>
+  <tbody>
+  {% for u in unrecipied %}
+    <tr>
+      <td>{{ u.name }}</td>
+      <td>{{ u.units|num }}</td>
+      <td class="small">{% if u.variation_id %}<a href="/app/recipes/variation/{{ u.variation_id }}{% if can(request, 'recipe.edit') %}/edit{% endif %}">{% if can(request, "recipe.edit") %}Write the recipe{% else %}Open{% endif %}</a>{% else %}<span class="muted">not in the catalog yet</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
 <h2 id="modifiers" style="margin-top:28px;">Modifiers</h2>
 <p class="small muted">A modifier either changes nothing in stock, scales the recipe (light ice at
 1.15 uses 115 % of each line) or adds its own ingredients, which you list with recipes.</p>

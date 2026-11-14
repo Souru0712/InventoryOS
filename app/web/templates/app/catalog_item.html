@@ -137,6 +137,7 @@
 
 {% if can(request, "inventory.view_costs") %}
 <h2>Cost</h2>
+{% if can(request, "inventory.view_costs") %}<p class="small"><a href="/app/catalog/{{ item.id }}/recipes">Recipes using {{ item.name }}</a>, and what its last cost change did to them.</p>{% endif %}
 <p class="small muted">The current cost is the latest receipt's, unless someone sets it here. Past figures keep the cost
 they were posted at.</p>
 {% for place in row.places %}

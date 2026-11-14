@@ -130,6 +130,10 @@ implementation sessions; the detail lives in `docs/`.
   next version, effective now or later, never earlier, and anything that happened reads the
   version in effect at its own time (`effective_version()`, DR-16). Lines convert through
   `entered_base` (DR-11); prepared items never form a circle (DR-17).
+- Recipe costs come from `app/costing.py` (ADR-0052): computed when asked, at one location,
+  from the version in effect and today's cost basis; a missing cost is listed, never zero,
+  and a margin is "estimated at today's costs". Cost panels sit behind
+  `inventory.view_costs`.
 - JuJu (`C:\Users\oscar\.vscode\JuJu`) and the snack-box project are separate repositories: never
   modify them from here.
 

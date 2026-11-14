@@ -5,7 +5,7 @@
 {% set costs = can(request, "inventory.view_costs") %}
 <p class="small"><a href="/app/products">&larr; Products</a></p>
 <h1>{{ product.name }}{% if not product.is_active %} <span class="pill info">inactive</span>{% endif %}</h1>
-<p class="lede">{{ product.category or "No category" }} &middot; {{ product.variations|selectattr("is_active")|list|length }} size{{ "s" if product.variations|selectattr("is_active")|list|length != 1 else "" }} on sale. Its recipes come with the recipe screens.</p>
+<p class="lede">{{ product.category or "No category" }} &middot; {{ product.variations|selectattr("is_active")|list|length }} size{{ "s" if product.variations|selectattr("is_active")|list|length != 1 else "" }} on sale.{% if cost_place %} Costs and margins are {{ "estimated at today's costs" }}{% if sizes %} at {{ cost_place.name }}{% endif %}; a + means an ingredient has no cost yet.{% endif %}</p>
 
 <h2>Sizes</h2>
 <div class="table-wrap">
@@ -22,6 +22,7 @@
           <label class="small" style="display:flex; gap:4px; align-items:center;"><input type="checkbox" name="active" value="yes"{% if v.is_active %} checked{% endif %}> On sale</label>
           <button class="btn small secondary" type="submit">Save</button>
           <a class="small" href="/app/recipes/variation/{{ v.id }}">Recipe</a>
+          {% set s = sizes.get(v.id) %}{% if s and s.cost %}<span class="small muted">costs {{ s.cost.per_yield_cents|money(currency) }}{% if not s.cost.complete %}+{% endif %}{% if s.margin and s.margin.known %} &middot; margin {{ s.margin.amount_cents|money(currency) }}{% if s.margin.percent is not none %} ({{ s.margin.percent }}%){% endif %}{% endif %}</span>{% elif s %}<span class="small muted">no recipe yet</span>{% endif %}
           {% if v.source_sold_item_id %}<span class="small muted">from your POS sales</span>{% endif %}
         </form>
       </td>

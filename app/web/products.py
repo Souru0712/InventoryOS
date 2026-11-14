@@ -6,11 +6,15 @@ subscription's write rule. Prices are money, so only a role with cost access see
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext
+from app.access.permissions import VIEW_COSTS
+from app.costing import costing_location, size_costs, sold_without_recipe
 from app.db import get_db
 from app.models import Tenant
 from app.orchestration.views import tenant_currency
@@ -70,6 +74,7 @@ def products_page(
             "tenant": tenant,
             "message": pop_flash(request),
             "products": list_products(db, org, inactive=show == "all"),
+            "unrecipied": sold_without_recipe(db, org, datetime.now(UTC)),
             "show_all": show == "all",
             "modifiers": list_modifiers(db, org),
             "effects": MODIFIER_EFFECTS,
@@ -145,6 +150,8 @@ def product_page(
         product = get_product(db, org, product_id)
     except NotFound as exc:
         raise HTTPException(status_code=404, detail="product not found") from exc
+    place = costing_location(db, org) if org.can(VIEW_COSTS) else None
+    sizes = {s.variation.id: s for s in size_costs(db, org, product, place.id)} if place else {}
     return templates.TemplateResponse(
         request,
         "app/product.html",
@@ -153,6 +160,8 @@ def product_page(
             "tenant": tenant,
             "message": pop_flash(request),
             "product": product,
+            "sizes": sizes,
+            "cost_place": place,
             "categories": categories(db, org),
             "currency": tenant_currency(db, org),
         },

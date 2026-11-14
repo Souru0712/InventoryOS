@@ -19,7 +19,9 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
 from app.access import OrgContext, get_scoped, select_scoped
+from app.access.permissions import VIEW_COSTS
 from app.access.scoped import members
+from app.costing import costing_location, version_cost
 from app.db import get_db
 from app.models import (
     InventoryItem,
@@ -42,8 +44,9 @@ from app.recipes import (
     start_from,
     versions,
 )
-from app.security import require_permission, require_tenant, require_writable
+from app.security import location_filter, require_permission, require_tenant, require_writable
 from app.throttle import client_ip
+from app.transform.costing import margin_of
 from app.transform.recipes import OWNER_KINDS, Line, RecipeRuleError, what_changed
 from app.units import UNITS
 from app.web.flash import flash, pop_flash
@@ -133,6 +136,7 @@ def recipe_card(
     request: Request,
     kind: str,
     owner_id: int,
+    location: int | None = Depends(location_filter),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_permission("recipe.view")),
@@ -175,8 +179,43 @@ def recipe_card(
             "back_label": back_label,
             "can_edit": org.can("recipe.edit")
             and (kind != "item" or org.can("production_recipe.edit")),
+            **_cost_panel(db, org, owner, current, location),
         },
     )
+
+
+def _cost_panel(
+    db: Session,
+    org: OrgContext,
+    owner: Owner,
+    current: RecipeVersion | None,
+    location_id: int | None,
+) -> dict:
+    """The cost of the version in use and its estimated margin, for a role with cost access
+    only (RCP-FR-10, -11, -17); nothing at all reaches the page otherwise (AC-RCP-09)."""
+    if current is None or not org.can(VIEW_COSTS):
+        return {}
+    place = costing_location(db, org, location_id)
+    if place is None:
+        return {}
+    cost = version_cost(db, org, current, place.id)
+    price = None
+    if owner.kind == "variation":
+        variation = get_scoped(db, org, ProductVariation, owner.id)
+        price = variation.price_cents if variation else None
+    places = list(
+        db.scalars(
+            select_scoped(org, Location).where(Location.is_active.is_(True)).order_by(Location.name)
+        )
+    )
+    return {
+        "cost": cost,
+        "margin": margin_of(price, cost) if owner.kind == "variation" else None,
+        "cost_place": place,
+        "cost_places": places,
+        "cost_items": {ln.inventory_item_id: ln.item for ln in current.lines},
+        "currency": place.currency,
+    }
 
 
 def _sizes_to_start_from(db: Session, org: OrgContext, owner: Owner) -> list[ProductVariation]:
