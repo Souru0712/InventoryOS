@@ -5,6 +5,81 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-18 — T2.06-a Movement-level batch allocation
+
+**Implemented**
+- A movement names its batch and a batch holds the sum of its movements (`batch_remaining()`).
+  The posting service splits any decrease posted without a batch across the item's batches at
+  that location, under the balance lock, in the item's `batch_order`:
+  - soonest expiry first (FEFO, the default) or first received first (FIFO);
+  - each part marked `inferred`; a batch chosen by a person is `explicit`;
+  - what no batch holds leaves undated; a reversal gives stock back to the batches it took from.
+  - Sales consumption (T2.05) is now allocated this way (WF-12 step 6, moved here by the owner).
+- `batch_assignment`, a net-zero kind and movement type, moves stock between a batch and
+  undated stock (`assign_batch()`).
+- `app/batches.py`: a dated receipt (receiving, barcode scan) creates its batch and receives
+  into it; `date_stock()` dates stock on the shelf, only what no batch holds; `undate_batch()`
+  moves a wrongly dated batch's stock back to undated, and the batch stays (probe R6 retired).
+- Expiry positions, coverage and the items list read each batch's remaining from the ledger.
+- Migration `77e8f4d7dad6` (DM-10): `inventory_items.batch_order`, `stock_batches.lot_code`, the
+  new kind and type in the ledger CHECKs, and one assignment per existing batch giving it what
+  the product showed it holding; no balance changes.
+
+**Verified**
+- `tests/test_batches.py`:
+  - FEFO/FIFO order and taking across batches with a shortfall (pure);
+  - AC-BAT-01: a dated delivery is one batch holding what arrived, received explicitly;
+  - AC-BAT-02: a sale takes the sooner-expiring batch (FEFO) or the first received (FIFO);
+  - AC-BAT-03: sales inferred, a chosen batch explicit;
+  - a sale beyond every batch leaves undated stock short; a reversal gives stock back;
+  - dating stock on the shelf and removing a wrong date keep every batch (also through the page);
+  - DR-14/AC-BAT-05: an expired batch stays an exception until a count accounts for it, then
+    resolves;
+  - AC-BAT-04 as a property over random sequences: no batch below zero, the stock row equals
+    the movements, nothing leaves undated while a batch holds stock.
+- `tests/test_migrations.py`: DM-10 gives two lots 6 and 24 of 30 on hand; the downgrade clears it.
+- Tests that made batches as bare rows now date ledger stock (`tests/batch_helpers.py`); tests
+  that changed quantities by hand now count through the ledger.
+- Full suite, ruff, mypy and the docs checker on this branch; CI evidence in the pull request.
+
+**Decisions**
+- ADR-0056 (Proposed); ADR-0055 → Accepted.
+
+**Open issues**
+- T2.06-b: batch history with running remaining (AC-BAT-08), a batch's own count (BAT-FR-13),
+  `batch_shortfall` for undated stock of batch-tracked items (DR-13), the batch order on the item
+  form.
+
+**Files changed**
+- `app/transform/batches.py`, `app/batches.py` (new); `app/ledger/posting.py`,
+  `app/transform/ledger.py`, `app/transform/expiry.py`, `app/models.py`,
+  `app/orchestration/views.py`, `app/orchestration/receiving.py`,
+  `app/orchestration/scanning.py`, `app/web/dashboard.py`, `app/web/templates/app/expiring.html`,
+  `app/items.py`, `app/cli.py`; migration `77e8f4d7dad6`; `tests/test_batches.py`,
+  `tests/batch_helpers.py` (new) and the tests that made batches; the R6 probe retired; ADR-0055,
+  ADR-0056 and the index; the task index; CLAUDE.md; this log.
+
+**Next task**
+- T2.06-b.
+
+---
+
+## 2026-11-18 — T2.05 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #57 (T2.05-b) was merged with a merge commit
+  (`5c5fab8`).
+- CI on its head `4c1d2ec`, all five required jobs green:
+  - SQLite: 1052 passed, 28 skipped;
+  - PostgreSQL 16: 1080 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- On `main` at `5c5fab8` after the merge, all five required jobs passed.
+
+**Files changed**
+- This log; ADR-0055 → Accepted; the task index (T2.05 → Completed).
+
+---
+
 ## 2026-11-18 — T2.05-b Sale consumption posting
 
 **Owner's decisions** ("Yes, as proposed", 2026-11-18)

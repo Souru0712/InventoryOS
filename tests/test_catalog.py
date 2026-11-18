@@ -18,11 +18,11 @@ from app.models import (
     ItemLocation,
     Location,
     Membership,
-    StockBatch,
     StockItem,
     User,
 )
 from app.security import hash_password
+from tests.batch_helpers import dated
 
 PASSWORD = "a-good-password"
 
@@ -251,14 +251,7 @@ def test_items_are_found_by_name_category_supplier_status_level_and_date(
     add(owner, "Flour", [harbor.id], display_unit="kg", quantity="10", category="Dry goods")
     add(owner, "Butter", [location.id], display_unit="kg", quantity="5", category="Dairy")
     butter = stock_of(the_item("Butter").id)[0]
-    db.add(
-        StockBatch(
-            tenant_id=butter.tenant_id,
-            stock_item_id=butter.id,
-            received_qty_base=Decimal("5000"),
-            expires_on=date.today() + timedelta(days=3),
-        )
-    )
+    dated(db, butter, 5000, date.today() + timedelta(days=3))
     db.commit()
     dairy = the_item("Oat milk").category_id
 

@@ -1,6 +1,6 @@
 """Markdowns against real stock: suggested from the shelf, decided by a person, measured after."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -8,19 +8,20 @@ from fastapi.testclient import TestClient
 
 from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
+from app.ledger.posting import post_count
 from app.main import app
 from app.models import (
     Location,
     Promotion,
     PromotionStatus,
     SoldItem,
-    StockBatch,
     StockItem,
     Tenant,
     TrackMode,
 )
 from app.orchestration.promotions import accept, dismiss, end, running, snooze, suggestions_for
 from app.units import Dimension
+from tests.batch_helpers import dated
 from tests.sales_helpers import sold_on
 
 TODAY = date(2026, 9, 13)
@@ -50,15 +51,7 @@ def gatorade(db, tenant, location):
     for back in range(28):
         if back % 5:
             sold_on(db, location, sold, TODAY - timedelta(days=back), "1.5")
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            received_qty_base=Decimal("24"),
-            expires_on=TODAY + timedelta(days=9),
-            cost_per_base_cents=Decimal("80"),
-        )
-    )
+    dated(db, item, 24, TODAY + timedelta(days=9), cost=80)
     db.commit()
     return item
 
@@ -77,8 +70,23 @@ def test_an_item_with_no_selling_price_is_never_suggested(db, tenant, gatorade):
     assert suggestions_for(db, OrgContext.system(tenant.id), TODAY) == []
 
 
+def _counted(db, item, qty) -> None:
+    """A count finds `qty`; what is gone leaves the batch first (T2.06)."""
+    post_count(
+        db,
+        OrgContext.system(item.tenant_id),
+        location_id=item.location_id,
+        inventory_item_id=item.inventory_item_id,
+        counted=Decimal(qty),
+        source_type="test",
+        source_id="recount",
+        idempotency_key=f"count:{item.id}:{qty}",
+        occurred_at=datetime.now(UTC),
+    )
+
+
 def test_stock_that_clears_in_time_is_not_suggested(db, tenant, gatorade):
-    gatorade.qty_base = Decimal("4")
+    _counted(db, gatorade, "4")
     db.commit()
     assert suggestions_for(db, OrgContext.system(tenant.id), TODAY) == []
 
@@ -177,15 +185,7 @@ def signed_up_with_risk(client, name="Rosewood", email="o@rosewood.test") -> int
             retail_per_base_cents=Decimal("249"),
         )
         db.add(item)
-        db.flush()
-        db.add(
-            StockBatch(
-                tenant_id=tenant.id,
-                stock_item_id=item.id,
-                received_qty_base=Decimal("24"),
-                expires_on=date.today() + timedelta(days=9),
-            )
-        )
+        dated(db, item, 24, date.today() + timedelta(days=9))
         db.commit()
         return item.id
 
@@ -233,7 +233,7 @@ def test_a_price_that_is_not_a_number_is_refused(client):
 def test_acting_on_a_suggestion_that_no_longer_applies_is_refused(client):
     item_id = signed_up_with_risk(client)
     with SessionLocal() as db:
-        db.get(StockItem, item_id).qty_base = Decimal("0")  # the shelf cleared meanwhile
+        _counted(db, db.get(StockItem, item_id), "0")  # the shelf cleared meanwhile
         db.commit()
     assert client.post("/app/promotions/accept", data={"stock_item_id": item_id}).status_code == 404
 

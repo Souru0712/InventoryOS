@@ -1,25 +1,13 @@
-"""Audit probes: each test asserts the CURRENT (suspected-defective) behaviour, so a pass confirms the finding."""
-from datetime import date
-from decimal import Decimal
+"""Audit probes: each test asserts the CURRENT (suspected-defective) behaviour, so a pass confirms the finding.
 
-from fastapi.testclient import TestClient
-
-from app.models import StockBatch, StockItem, TrackMode
-from app.units import Dimension
+Every probe in this file has been retired; each note below names the CI test that now asserts the
+fixed behaviour.
+"""
 
 
 # R1 (count-day sales never deducted) and R2 (recipe consumption ignores location) retired in
 # T1.18: the derived engine is gone and sales move no stock until the consumption engine (T2.05);
 # tests/test_ledger_writers.py::test_r1_r2_sales_never_change_stock_without_a_movement.
-
-
-def _provider_item(db, tenant, location, qty="10"):
-    item = StockItem(tenant_id=tenant.id, location_id=location.id, slug="cups", name="Cups",
-                     dimension=Dimension.COUNT, stock_unit="each", track_mode=TrackMode.PROVIDER,
-                     provider_variation_id="VAR1", qty_base=Decimal(qty))
-    db.add(item)
-    db.commit()
-    return item
 
 
 # R3 (failed Square push on receipt swallowed, then overwritten) retired in T0.08: nothing is
@@ -36,19 +24,9 @@ def _provider_item(db, tenant, location, qty="10"):
 # tests/test_ledger_writers.py::test_r5_a_square_count_never_changes_stock_and_a_repeat_is_harmless.
 
 
-def test_R6_batch_removal_is_a_hard_delete(db, tenant, location):
-    item = _provider_item(db, tenant, location)
-    db.add(StockBatch(tenant_id=tenant.id, stock_item_id=item.id, received_qty_base=Decimal("5"),
-                      expires_on=date(2026, 12, 1), source="label"))
-    db.commit()
-    from app.main import app
-    with TestClient(app) as client:
-        client.post("/login", data={"email": "owner@rosewood.test", "password": "a-good-password"})
-        batch_id = db.query(StockBatch).one().id
-        r = client.post(f"/app/expiring/{batch_id}/remove", follow_redirects=False)
-        assert r.status_code == 303
-    db.expire_all()
-    assert db.query(StockBatch).count() == 0
+# R6 (batch removal is a hard delete) retired in T2.06: a removed date moves what the batch
+# held back to undated stock and the batch stays with its history (DR-24);
+# tests/test_batches.py::test_removing_a_date_through_the_page_keeps_the_batch.
 
 
 # R7 (invoice image served with the uploader's Content-Type) retired in T0.06: the finding is fixed

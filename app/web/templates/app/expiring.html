@@ -8,6 +8,8 @@
   <div class="notice ok">Noted. That item is out of the coverage figure from now on.</div>
 {% elif request.query_params.get("error") == "invalid" %}
   <div class="notice error">Enter a quantity above zero and a valid date.</div>
+{% elif request.query_params.get("error") == "undated" %}
+  <div class="notice error">That is more than the stock without a date. Only stock that no batch holds can be given a date.</div>
 {% endif %}
 
 <h1>Expiring</h1>
@@ -122,9 +124,10 @@ from the last four weeks of sales.</p>
   </tbody>
 </table>
 </div>
-<p class="small muted">Sales are assumed to take the soonest-dated stock first. Stock with no date
-is treated as the oldest on the shelf, so dating it gives a sharper projection. Recording a count
-re-sets everything from what is actually there.</p>
+<p class="small muted">Each lot shows what it still holds: sales and counts that find less take
+stock from the soonest-dated lot first. Stock with no date is treated as the oldest on the shelf,
+so dating it gives a sharper projection. A lot past its date stays here until a count or disposal
+accounts for it.</p>
 {% endif %}
 
 <h2>Expiration tracking coverage</h2>

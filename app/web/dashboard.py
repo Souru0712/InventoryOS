@@ -12,9 +12,11 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext, get_scoped, select_scoped, update_scoped
+from app.access import OrgContext, get_scoped, select_scoped
 from app.access.permissions import VIEW_COSTS, without_costs
 from app.audit import record_audit
+from app.batches import NotFound as BatchNotFound
+from app.batches import date_stock, undate_batch
 from app.config import get_settings
 from app.costs import value_stock
 from app.db import get_db
@@ -23,9 +25,7 @@ from app.items import entered_base
 from app.ledger.posting import post_count
 from app.models import (
     Location,
-    Promotion,
     ProviderConnection,
-    StockBatch,
     StockItem,
     SyncRun,
     SyncStatus,
@@ -61,6 +61,7 @@ from app.security import (
 )
 from app.throttle import client_ip
 from app.transform.alerts import counts_as_waste_risk
+from app.transform.batches import BatchRuleError
 from app.transform.dashboard import DEFAULT_RANGE, DateRange, RangeError, check_range
 from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
@@ -301,16 +302,10 @@ def label_stock(
         return RedirectResponse("/app/expiring?error=invalid", status_code=303)
     if qty_base <= 0:
         return RedirectResponse("/app/expiring?error=invalid", status_code=303)
-
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            received_qty_base=qty_base,
-            expires_on=expiry,
-            source="label",
-        )
-    )
+    try:
+        date_stock(db, org, item, qty_base, expiry)
+    except BatchRuleError:
+        return RedirectResponse("/app/expiring?error=undated", status_code=303)
     db.commit()
     return RedirectResponse("/app/expiring?labelled=1", status_code=303)
 
@@ -339,17 +334,12 @@ def remove_batch(
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("count.record")),
 ):
-    """Undo a wrongly entered date. Stock is untouched: a batch is only a date on it."""
-    batch = get_scoped(db, org, StockBatch, batch_id)
-    if batch is None:
-        raise HTTPException(status_code=404, detail="batch not found")
-    # A markdown decided against this lot stays on record; it keeps its own end date.
-    db.execute(
-        update_scoped(org, Promotion)
-        .where(Promotion.stock_batch_id == batch.id)
-        .values(stock_batch_id=None)
-    )
-    db.delete(batch)
+    """Undo a wrongly entered date. Stock is untouched: what the batch held goes back to undated
+    stock, and the batch stays with its history (DR-24)."""
+    try:
+        undate_batch(db, org, batch_id)
+    except BatchNotFound as exc:
+        raise HTTPException(status_code=404, detail="batch not found") from exc
     db.commit()
     return RedirectResponse("/app/expiring?removed=1", status_code=303)
 

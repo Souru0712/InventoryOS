@@ -35,7 +35,6 @@ from app.models import (
     ProductVariation,
     Promotion,
     PromotionStatus,
-    StockBatch,
     StockCount,
     StockItem,
     Tenant,
@@ -46,6 +45,7 @@ from app.security import hash_password
 from app.storage import get_storage
 from app.units import Dimension
 from tests.accounts import confirm_email
+from tests.batch_helpers import dated
 from tests.sample_files import jpeg
 from tests.test_async_correctness import api_routes
 
@@ -309,12 +309,7 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
 
     bars = item("bars", f"{tag} protein bars")
     brew = item("brew", f"{tag} cold brew")
-    batch = StockBatch(
-        tenant_id=tenant_id,
-        stock_item_id=bars.id,
-        received_qty_base=Decimal("24"),
-        expires_on=date.today() + timedelta(days=9),
-    )
+    batch = dated(db, bars, 24, date.today() + timedelta(days=9))
     promotion = Promotion(
         tenant_id=tenant_id,
         stock_item_id=brew.id,
@@ -323,7 +318,6 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     )
     db.add_all(
         [
-            batch,
             promotion,
             ProductIdentifier(tenant_id=tenant_id, stock_item_id=bars.id, value=code),
         ]

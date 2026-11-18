@@ -2,6 +2,7 @@
 
 import os
 from datetime import UTC
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -901,6 +902,75 @@ def test_cost_history_starts_from_each_current_cost_and_the_downgrade_keeps_them
                 .all()
             )
         assert [str(c).rstrip("0").rstrip(".") for c in costs] == ["80", "0"]
+    finally:
+        engine.dispose()
+
+
+BEFORE_DM10 = "1da987c1c195"
+
+
+def test_dm10_each_batch_holds_what_it_held_and_the_downgrade_clears_it(fresh_url):
+    """T2.06, DM-10: 30 on hand over two lots of 24 (the soonest-dated drained first) gives the
+    later lot 24 and the sooner 6, by assignments from undated stock; no balance changes."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                    " VALUES (1, 'Main', 'UTC', 'USD', true)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension,"
+                    " stock_unit, track_mode, qty_base, reorder_point_base, cost_per_base_cents,"
+                    " lead_time_days, receive_unit, is_active) VALUES (1, 1, 'gatorade',"
+                    " 'Gatorade', 'COUNT', 'each', 'MANUAL', '30.0000', '0.0000', '150.0000', 2,"
+                    " 'each', true)"
+                )
+            )
+            for expires in ("2026-12-01", "2027-01-15"):
+                connection.execute(
+                    text(
+                        "INSERT INTO stock_batches (tenant_id, stock_item_id, received_qty_base,"
+                        " expires_on, date_type, source, received_at) VALUES (1, 1, '24.0000',"
+                        " :expires, 'unknown', 'receipt', '2026-11-01 09:00:00')"
+                    ),
+                    {"expires": expires},
+                )
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            held = dict(
+                connection.execute(
+                    text(
+                        "SELECT batch_id, SUM(CAST(qty_base AS NUMERIC)) FROM inventory_movements"
+                        " WHERE batch_id IS NOT NULL GROUP BY batch_id"
+                    )
+                ).all()
+            )
+            total = connection.execute(
+                text("SELECT SUM(CAST(qty_base AS NUMERIC)) FROM inventory_movements")
+            ).scalar()
+            balance = connection.execute(text("SELECT qty_base FROM stock_balances")).scalar()
+        assert {k: Decimal(str(v)) for k, v in held.items()} == {1: Decimal(6), 2: Decimal(24)}
+        assert Decimal(str(total)) == Decimal(str(balance)) == Decimal(30)
+        command.downgrade(config, BEFORE_DM10)
+        with engine.connect() as connection:
+            kinds = connection.execute(text("SELECT kind FROM inventory_transactions")).scalars()
+            assert list(kinds) == ["opening"]
+            assert Decimal(
+                str(connection.execute(text("SELECT qty_base FROM stock_balances")).scalar())
+            ) == Decimal(30)
     finally:
         engine.dispose()
 
