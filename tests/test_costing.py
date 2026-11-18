@@ -17,7 +17,6 @@ from app.models import (
     Document,
     DocumentStatus,
     Membership,
-    SalesDaily,
     SoldItem,
     StockItem,
     TrackMode,
@@ -30,6 +29,7 @@ from app.transform.business_days import business_date
 from app.transform.costing import cost_recipe, margin_of, per_base_cost
 from app.transform.recipes import Line
 from app.units import Dimension
+from tests.sales_helpers import sold_on
 
 D = Decimal
 PASSWORD = "a-good-password"  # noqa: S105 (the test accounts', as in conftest)
@@ -254,15 +254,7 @@ def test_ac_rcp_08_sizes_sold_without_a_recipe_are_listed_with_counts_and_a_link
         ("Water", today - timedelta(days=40), 50),  # outside 30 days
         ("Cola can", today, 24),
     ):
-        db.add(
-            SalesDaily(
-                tenant_id=tenant.id,
-                sold_item_id=sold[name],
-                location_id=location.id,
-                dt=day,
-                units=D(units),
-            )
-        )
+        sold_on(db, location, db.get(SoldItem, sold[name]), day, units)
     db.commit()
     found = [(u.name, u.units) for u in sold_without_recipe(db, org, datetime.now(UTC))]
     assert found == [("Mango smoothie Large", D(7)), ("Water Regular", D(3))]

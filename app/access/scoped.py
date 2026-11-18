@@ -45,6 +45,11 @@ from app.models import (
     RecipeComponent,
     RecipeLine,
     RecipeVersion,
+    SalesLineModifier,
+    SalesReturn,
+    SalesReturnLine,
+    SalesTransaction,
+    SalesTransactionLine,
     SoldItem,
     StockAlias,
     StockBatch,
@@ -116,6 +121,9 @@ LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
         )
     },
     DocumentLine: ("document_id", Document),
+    SalesTransactionLine: ("sales_transaction_id", SalesTransaction),
+    SalesLineModifier: ("sales_transaction_id", SalesTransaction),
+    SalesReturnLine: ("sales_return_id", SalesReturn),
     StockCountLine: ("stock_count_id", StockCount),
     ExtractionCorrection: ("document_id", Document),
 }

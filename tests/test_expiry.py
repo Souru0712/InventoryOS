@@ -6,6 +6,7 @@ from decimal import Decimal
 from app.access import OrgContext
 from app.transform.expiry import Batch, allocate_fefo, fefo_order, project_batches
 from app.units import to_base
+from tests.sales_helpers import sold_on
 
 TODAY = date(2026, 9, 10)
 
@@ -153,7 +154,6 @@ from app.models import (  # noqa: E402
     EmailLog,
     ExceptionRecord,
     Location,
-    SalesDaily,
     SoldItem,
     StockBatch,
     StockItem,
@@ -187,15 +187,7 @@ def red_bull(db, tenant, location):
     db.add_all([item, sold])
     db.flush()
     for back in range(28):
-        db.add(
-            SalesDaily(
-                tenant_id=tenant.id,
-                sold_item_id=sold.id,
-                location_id=location.id,
-                dt=TODAY - timedelta(days=back),
-                units=Decimal("4"),
-            )
-        )
+        sold_on(db, location, sold, TODAY - timedelta(days=back), "4")
     db.add(
         StockBatch(
             tenant_id=tenant.id,
@@ -220,15 +212,7 @@ def test_sales_at_another_location_do_not_count(db, tenant, location, red_bull):
     db.add(other)
     db.flush()
     sold = db.query(SoldItem).one()
-    db.add(
-        SalesDaily(
-            tenant_id=tenant.id,
-            sold_item_id=sold.id,
-            location_id=other.id,
-            dt=TODAY,
-            units=Decimal("280"),
-        )
-    )
+    sold_on(db, other, sold, TODAY, "280")
     db.commit()
     assert velocity_map(db, OrgContext.system(tenant.id), TODAY)[red_bull.id] == Decimal("4")
 

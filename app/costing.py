@@ -26,12 +26,12 @@ from app.models import (
     ProductVariation,
     Recipe,
     RecipeVersion,
-    SalesDaily,
     SoldItem,
     StockItem,
     TrackMode,
 )
 from app.recipes import Owner, effective_version
+from app.sales import daily_sales
 from app.transform.business_days import business_date
 from app.transform.costing import Margin, RecipeCost, cost_recipe, margin_of, per_base_cost
 from app.transform.dashboard import DateRange
@@ -313,31 +313,33 @@ def sold_without_recipe(
             )
         )
     }
-    units: dict[int, Decimal] = {}
+    variations = {v.id: v for v in by_sold.values()}
+    for v in db.scalars(select_scoped(org, ProductVariation)):
+        variations.setdefault(v.id, v)
+    # Keyed by the owned size where the line names one, else by the POS sale item.
+    units: dict[tuple[str, int], Decimal] = {}
     for place in db.scalars(select_scoped(org, Location).where(Location.is_active.is_(True))):
         today = business_date(now, place.timezone, place.business_day_cutoff_hour)
         first, last = span.days_at(today)
-        for row in db.scalars(
-            select_scoped(org, SalesDaily).where(
-                SalesDaily.location_id == place.id, SalesDaily.dt >= first, SalesDaily.dt <= last
+        for sale in daily_sales(db, org, first, last, place.id):
+            variation = variations.get(sale.product_variation_id or 0) or by_sold.get(
+                sale.sold_item_id or 0
             )
-        ):
-            variation = by_sold.get(row.sold_item_id)
             if variation is not None and variation.id in with_recipe:
                 continue
-            if (place.id, provider_ids.get(row.sold_item_id)) in counted_by_pos:
+            if (
+                sale.sold_item_id is not None
+                and (place.id, provider_ids.get(sale.sold_item_id)) in counted_by_pos
+            ):
                 continue
-            if row.units and row.units > 0:
-                units[row.sold_item_id] = units.get(row.sold_item_id, Decimal(0)) + Decimal(
-                    row.units
-                )
+            key = ("v", variation.id) if variation else ("s", sale.sold_item_id or 0)
+            if sale.units > 0:
+                units[key] = units.get(key, Decimal(0)) + sale.units
     found = []
-    for sold_id, count in units.items():
-        variation = by_sold.get(sold_id)
-        name = (
-            f"{variation.product.name} {variation.name}"
-            if variation is not None
-            else names.get(sold_id, "A POS item")
-        )
-        found.append(Unrecipied(name, variation.id if variation else None, count))
+    for (kind, ident), count in units.items():
+        if kind == "v":
+            size = variations[ident]
+            found.append(Unrecipied(f"{size.product.name} {size.name}", size.id, count))
+        else:
+            found.append(Unrecipied(names.get(ident, "A POS item"), None, count))
     return sorted(found, key=lambda u: (-u.units, u.name))

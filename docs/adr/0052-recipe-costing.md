@@ -1,6 +1,6 @@
 # ADR-0052: Recipe costing, margins and completeness
 
-- **Status:** Proposed, 2026-11-13 (in the T2.03 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-14 (owner: "Yes, merge it"; PR #53, T2.03)
 - **Decision ID:** none (implements T2.03: RCP-FR-10..13, -17, AC-RCP-03, -07, -08)
 - **Tasks:** T2.03; T2.09 (production) gives prepared items a cost of their own
 

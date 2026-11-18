@@ -13,12 +13,12 @@ from app.catalog import active_stock, by_item_name
 from app.models import (
     Location,
     RecipeComponent,
-    SalesDaily,
     SoldItem,
     StockBatch,
     StockItem,
     TrackMode,
 )
+from app.sales import daily_sales
 from app.transform.business_days import business_date
 from app.transform.expiry import (
     Batch,
@@ -86,13 +86,15 @@ def tenant_currency(db: Session, org: OrgContext) -> str:
 
 
 def sale_rows(db: Session, org: OrgContext, since: date | None = None) -> list[SaleRow]:
-    query = select_scoped(org, SalesDaily)
-    if since is not None:
-        query = query.where(SalesDaily.dt >= since)
-    return [
-        SaleRow(row.sold_item_id, row.dt, Decimal(row.units or 0), row.net_cents)
-        for row in db.scalars(query)
-    ]
+    """Counted sales per POS sale item and day, read from the sales model (DR-30)."""
+    by_item: dict[tuple[int, date], list] = {}
+    for sale in daily_sales(db, org, since):
+        if sale.sold_item_id is None:
+            continue
+        total = by_item.setdefault((sale.sold_item_id, sale.day), [Decimal(0), 0])
+        total[0] += sale.units
+        total[1] += sale.net_cents
+    return [SaleRow(item, day, units, net) for (item, day), (units, net) in by_item.items()]
 
 
 def sold_item_names(db: Session, org: OrgContext) -> dict[int, str]:
@@ -129,15 +131,13 @@ def provider_consumption(
     provider_ids = {
         sold.id: sold.provider_item_id for sold in db.scalars(select_scoped(org, SoldItem))
     }
-    query = select_scoped(org, SalesDaily)
-    if since is not None:
-        query = query.where(SalesDaily.dt >= since)
-
     result: dict[int, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
-    for row in db.scalars(query):
-        item_id = stock.get((row.location_id, provider_ids.get(row.sold_item_id)))
+    for sale in daily_sales(db, org, since):
+        if sale.sold_item_id is None:
+            continue
+        item_id = stock.get((sale.location_id, provider_ids.get(sale.sold_item_id)))
         if item_id is not None:
-            result[item_id][row.dt] += Decimal(row.units or 0)
+            result[item_id][sale.day] += sale.units
     return {item_id: dict(days) for item_id, days in result.items()}
 
 

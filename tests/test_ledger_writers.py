@@ -31,7 +31,6 @@ from app.models import (
     InventoryTransaction,
     Location,
     RecipeComponent,
-    SalesDaily,
     SoldItem,
     StockBalance,
     StockItem,
@@ -51,6 +50,7 @@ from app.transform import inventory
 from app.transform.ledger import Line
 from app.units import Dimension
 from tests.ledger_helpers import opened
+from tests.sales_helpers import sold_on
 from tests.sample_files import jpeg
 
 D = Decimal
@@ -179,12 +179,14 @@ def test_nothing_outside_the_posting_service_assigns_a_quantity():
 
 
 def test_the_legacy_tables_are_frozen():
-    """DM-7: counts and stock events before the ledger stay as history; nothing adds to them."""
+    """DM-7: counts and stock events before the ledger, and daily sales before the sales model
+    (T2.04), stay as history; nothing adds to them."""
+    frozen = {"InventoryCount", "InventoryEvent", "SalesDaily"}
     found = [
         f"{path.as_posix()}:{node.lineno} {_callee(node)}("
         for path, tree in _sources()
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and _callee(node) in {"InventoryCount", "InventoryEvent"}
+        if isinstance(node, ast.Call) and _callee(node) in frozen
     ]
     assert not found, found
 
@@ -400,15 +402,7 @@ def test_r1_r2_sales_never_change_stock_without_a_movement(db, tenant, location)
         )
     )
     for place, day in ((location, date(2026, 11, 4)), (other, date(2026, 11, 5))):
-        db.add(
-            SalesDaily(
-                tenant_id=tenant.id,
-                sold_item_id=latte.id,
-                location_id=place.id,
-                dt=day,
-                units=D(10),
-            )
-        )
+        sold_on(db, place, latte, day, 10)
     db.commit()
 
     evaluate_and_store(db, OrgContext.system(tenant.id))

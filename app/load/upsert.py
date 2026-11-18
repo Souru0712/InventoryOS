@@ -10,15 +10,16 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access import OrgContext
 from app.models import (
     IdentifierType,
     Location,
     ProductIdentifier,
-    SalesDaily,
     SoldItem,
     StockItem,
     TrackMode,
 )
+from app.sales import DayOfSales, record_daily_pos_sales
 from app.transform.barcodes import canonical
 from app.units import Dimension, to_base
 
@@ -213,51 +214,36 @@ def apply_provider_counts(db: Session, tenant_id: int, rows: list[dict]) -> int:
     return seen
 
 
-def upsert_sales_daily(db: Session, tenant_id: int, rows: list[dict]) -> int:
+def upsert_sales_daily(
+    db: Session, tenant_id: int, rows: list[dict], provider: str = "square"
+) -> int:
+    """The POS's sales summed by day, recorded as daily sales transactions (DM-7: `sales_daily`
+    is frozen; order lines replace this with T3.05). Returns the days new or changed."""
     location_ids = {
         loc.provider_location_id: loc.id
         for loc in db.scalars(select(Location).where(Location.tenant_id == tenant_id))
     }
-    sold_ids = {
-        item.provider_item_id: item.id
+    sold = {
+        item.provider_item_id: item
         for item in db.scalars(select(SoldItem).where(SoldItem.tenant_id == tenant_id))
     }
-    existing = {
-        (row.sold_item_id, row.location_id, row.dt): row
-        for row in db.scalars(select(SalesDaily).where(SalesDaily.tenant_id == tenant_id))
-    }
-
-    written = 0
+    days = []
     for row in rows:
-        sold_item_id = sold_ids.get(row["provider_item_id"])
+        item = sold.get(row["provider_item_id"])
         location_id = location_ids.get(row["provider_location_id"])
-        if sold_item_id is None or location_id is None:
+        if item is None or location_id is None:
             continue
-        key = (sold_item_id, location_id, row["dt"])
-        values = {
-            "units": row["units"],
-            "gross_cents": row["gross_cents"],
-            "net_cents": row["net_cents"],
-        }
-        current = existing.get(key)
-        if current is None:
-            db.add(
-                SalesDaily(
-                    tenant_id=tenant_id,
-                    sold_item_id=sold_item_id,
-                    location_id=location_id,
-                    dt=row["dt"],
-                    **values,
-                )
+        days.append(
+            DayOfSales(
+                location_id,
+                row["dt"],
+                item,
+                Decimal(row["units"]),
+                int(row["gross_cents"] or 0),
+                int(row["net_cents"] or 0),
             )
-            written += 1
-            continue
-        for field, value in values.items():
-            if getattr(current, field) != value:
-                setattr(current, field, value)
-                written += 1
-    db.flush()
-    return written
+        )
+    return record_daily_pos_sales(db, OrgContext.system(tenant_id), provider, days)
 
 
 def sync_identifiers_from_catalog(db: Session, tenant_id: int, catalog_rows: list[dict]) -> int:

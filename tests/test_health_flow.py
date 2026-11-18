@@ -16,7 +16,6 @@ from app.models import (
     HealthSnapshot,
     Location,
     Plan,
-    SalesDaily,
     SoldItem,
     StockBatch,
     StockItem,
@@ -27,6 +26,7 @@ from app.orchestration.health import current, expiry_figures, over_time, record_
 from app.orchestration.views import expiry_positions
 from app.units import Dimension
 from app.web.dashboard import _expiry_summary
+from tests.sales_helpers import sold_on
 
 NOW = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 TODAY = NOW.date()
@@ -63,15 +63,7 @@ def sells(db, tenant, location, item, per_day, days=28, today=TODAY):
     db.add(sold)
     db.flush()
     for back in range(days):
-        db.add(
-            SalesDaily(
-                tenant_id=tenant.id,
-                sold_item_id=sold.id,
-                location_id=location.id,
-                dt=today - timedelta(days=back),
-                units=Decimal(per_day),
-            )
-        )
+        sold_on(db, location, sold, today - timedelta(days=back), per_day)
 
 
 # --- the score from live stock ------------------------------------------------------------------
