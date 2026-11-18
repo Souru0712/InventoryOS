@@ -18,6 +18,7 @@ from app.audit import changes, record_audit
 from app.models import Modifier, Product, ProductVariation, SoldItem
 from app.transform.products import (
     NAME_LIMIT,
+    PRODUCTION_MODES,
     VARIATION_LIMIT,
     ProductRuleError,
     check_modifier,
@@ -134,16 +135,24 @@ def update_product(
     *,
     name: str,
     category: str,
+    production_mode: str | None = None,
     ip: str | None = None,
 ) -> Product:
     product = get_product(db, org, product_id)
     name = clean_label(name, NAME_LIMIT, "the product")
     if _product_taken(db, org, name, other_than=product.id):
         raise ProductRuleError(f"There is already a product called {name}.")
-    was = {"name": product.name, "category": product.category}
-    product.name, product.category = name, _category(category)
+    mode = product.production_mode if production_mode is None else production_mode
+    if mode not in PRODUCTION_MODES:
+        raise ProductRuleError("Choose whether it is made to order or made ahead.")
+
+    def state() -> dict:
+        return {"name": product.name, "category": product.category, "mode": product.production_mode}
+
+    was = state()
+    product.name, product.category, product.production_mode = name, _category(category), mode
     db.flush()
-    before, after = changes(was, {"name": product.name, "category": product.category})
+    before, after = changes(was, state())
     if after:
         record_audit(
             db,

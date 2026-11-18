@@ -54,6 +54,11 @@
     <input id="category" name="category" list="product-categories" value="{{ product.category or '' }}">
     <datalist id="product-categories">{% for c in categories %}<option value="{{ c }}">{% endfor %}</datalist>
   </div>
+  <div class="field">
+    <label for="production_mode">How it is made</label>
+    <select id="production_mode" name="production_mode">{% for key, label in modes.items() %}<option value="{{ key }}"{% if key == product.production_mode %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <p class="small muted" style="margin:4px 0 0;">Decides what a sale uses when its recipe has a prepared item, such as a juice: the juice itself (made ahead) or what the juice is made of (made to order). Never both.</p>
+  </div>
   <button class="btn secondary" type="submit">Save</button>
 </form>
 

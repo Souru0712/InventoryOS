@@ -38,7 +38,7 @@ from app.transform.ledger import (
     MOVEMENT_TYPES,
     TRANSACTION_KINDS,
 )
-from app.transform.products import MODIFIER_EFFECTS
+from app.transform.products import MODIFIER_EFFECTS, PRODUCTION_MODES
 from app.transform.sales import (
     CONSUMPTION_STATUSES,
     RETURN_STATUSES,
@@ -746,12 +746,17 @@ class Product(Base):
     onto it (T3.03, T3.04), never the reverse. Deactivated, never deleted (DR-24)."""
 
     __tablename__ = "products"
-    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_products_name"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_products_name"),
+        one_of("products", "production_mode", PRODUCTION_MODES),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(200))
     category: Mapped[str | None] = mapped_column(String(200))
+    # PRD-FR-11, DR-18: whether a sale uses a prepared item in the recipe or that item's recipe.
+    production_mode: Mapped[str] = mapped_column(String(16), default="made_to_order")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 

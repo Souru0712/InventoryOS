@@ -134,6 +134,12 @@ implementation sessions; the detail lives in `docs/`.
   from the version in effect and today's cost basis; a missing cost is listed, never zero,
   and a margin is "estimated at today's costs". Cost panels sit behind
   `inventory.view_costs`.
+- What a sale used comes from one resolver (ADR-0054): `resolve()` in
+  `app/transform/consumption.py`, loaded by `app/consumption.py` with every recipe version in
+  effect at the sale's moment (`sale_moment()`). Scale modifiers leave packaging alone, add
+  modifiers add their own recipe per item, and the product's production mode decides between a
+  prepared item and what it is made of, never both (DR-18). What it cannot resolve is a gap,
+  never a dropped sale.
 - Every sale is a sales transaction (DR-30, ADR-0053), recorded only by `app/sales.py`
   (`record_sale()`), with its origin from its source (DR-34); everything that reads sales
   goes through `daily_sales()`. A location has one source of record per business date: a

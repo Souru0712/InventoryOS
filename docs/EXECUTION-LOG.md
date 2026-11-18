@@ -5,6 +5,68 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-18 — T2.05-a Consumption resolver and production mode
+
+**Implemented**
+- `app/transform/consumption.py` (pure): one sold line becomes what it used, in base units
+  (WF-12 steps 1 to 5).
+  - The size's recipe divided by its yield; scale modifiers multiply its lines but never
+    packaging; add modifiers add their own recipe per time chosen, per item, unscaled.
+  - Made to order replaces a prepared item by what its recipe is made of, recursively; made
+    ahead uses the prepared item. Never both (DR-18).
+  - Gaps: `unmapped_product`, `no_recipe`, `add_without_recipe`, `no_production_recipe`. The
+    rest of the line still resolves.
+- `app/consumption.py`: loads a recorded sale's lines with every recipe version in effect at
+  the sale's moment (`occurred_at`, or the end of its business day for a day entered whole).
+- Production mode per product (PRD-FR-11): `products.production_mode` (migration
+  `b3f5d8e2a147`), set on the product page and audited.
+- Nothing posts to the ledger yet: that is T2.05-b.
+
+**Verified**
+- `tests/test_consumption.py`: AC-RCP-04 (light ice x 1.15 with the cup unscaled, two pumps as
+  an add-in), AC-PRD-04 (made ahead uses the juice, made to order its ginger, never both), a
+  prepared item inside a prepared item, every gap, the recipe in effect at the sale's moment,
+  and an unmapped POS line kept as a gap.
+- `tests/test_products.py`: a Manager sets a product made ahead on its page; a wrong value is
+  refused.
+- Full suite, ruff, mypy and the docs checker on this branch; CI evidence in the pull request.
+
+**Decisions**
+- ADR-0054 (Proposed).
+
+**Open issues**
+- **Owner's decision needed before T2.05-b:**
+  - dropping `sales_daily` and `recipe_components` (DM-7 and DM-9 contract) is destructive;
+  - WF-12 step 6 (batch allocation, FEFO marked inferred) needs T2.06's movement-level
+    batches. Proposed: T2.05-b posts without batches; T2.06 adds inferred allocation for
+    sales.
+
+**Files changed**
+- `app/transform/consumption.py`, `app/consumption.py` (new); `app/transform/products.py`,
+  `app/models.py`, `app/products.py`, `app/web/products.py`,
+  `app/web/templates/app/product.html`; migration `b3f5d8e2a147`;
+  `tests/test_consumption.py` (new), `tests/test_products.py`; ADR-0054 and its index; the
+  task index; CLAUDE.md; this log.
+
+**Next task**
+- T2.05-b: posting `sale_consumption`, reprocessing and gaps as exceptions.
+
+---
+
+## 2026-11-18 — Fix completed: the dated job test
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #55 was merged with a merge commit (`1084eb5`).
+- CI on `main` at `1084eb5`, all five required jobs green:
+  - SQLite: 1031 passed, 28 skipped;
+  - PostgreSQL 16: 1059 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+
+**Files changed**
+- This log.
+
+---
+
 ## 2026-11-18 — Fix: a job test that failed once its fixed date had passed
 
 **Found**

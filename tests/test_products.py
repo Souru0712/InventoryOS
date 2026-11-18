@@ -246,3 +246,23 @@ def test_the_demo_cafe_owns_a_product_for_each_thing_it_sells():
             .where(ProductVariation.source_sold_item_id.is_not(None))
         )
         assert sold and linked == sold
+
+
+def test_a_manager_says_a_product_is_made_ahead(db, tenant, location):
+    member(db, tenant, "manager")
+    client = signed_in("manager@rosewood.test")
+    client.post("/app/products/new", data={"name": "Golden State", "variation_name": ["16 oz"]})
+    product = db.scalars(select(Product)).one()
+    page = client.get(f"/app/products/{product.id}").text
+    assert '<option value="made_to_order" selected>' in page  # the default
+    saved = client.post(
+        f"/app/products/{product.id}",
+        data={"name": "Golden State", "production_mode": "made_ahead"},
+    )
+    assert "Saved." in saved.text and '<option value="made_ahead" selected>' in saved.text
+    db.expire_all()
+    assert db.get(Product, product.id).production_mode == "made_ahead"
+    refused = client.post(
+        f"/app/products/{product.id}", data={"name": "Golden State", "production_mode": "frozen"}
+    )
+    assert "made to order or made ahead" in refused.text

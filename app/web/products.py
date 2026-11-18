@@ -34,7 +34,12 @@ from app.products import (
 )
 from app.security import require_permission, require_tenant, require_writable
 from app.throttle import client_ip
-from app.transform.products import EFFECT_LABELS, MODIFIER_EFFECTS, ProductRuleError
+from app.transform.products import (
+    EFFECT_LABELS,
+    MODE_LABELS,
+    MODIFIER_EFFECTS,
+    ProductRuleError,
+)
 from app.web.flash import flash, pop_flash
 from app.web.templating import templates
 
@@ -164,6 +169,7 @@ def product_page(
             "cost_place": place,
             "categories": categories(db, org),
             "currency": tenant_currency(db, org),
+            "modes": MODE_LABELS,
         },
     )
 
@@ -174,6 +180,7 @@ def edit_product(
     product_id: int,
     name: str = Form(""),
     category: str = Form(""),
+    production_mode: str | None = Form(None),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("product.edit")),
@@ -182,7 +189,15 @@ def edit_product(
     return _act(
         request,
         db,
-        lambda: update_product(db, org, product_id, name=name, category=category, ip=ip),
+        lambda: update_product(
+            db,
+            org,
+            product_id,
+            name=name,
+            category=category,
+            production_mode=production_mode,
+            ip=ip,
+        ),
         "Saved.",
         f"{BASE}/{product_id}",
     )
