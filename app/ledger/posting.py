@@ -355,6 +355,37 @@ def reversed_by(db: Session, org: OrgContext, transaction_id: int) -> InventoryT
     ).first()
 
 
+def standing(
+    db: Session, org: OrgContext, source_type: str, source_id: str
+) -> list[InventoryTransaction]:
+    """A source record's postings that have not been reversed, oldest first: what it still
+    holds in stock (a sale's consumption until it is corrected or reprocessed)."""
+    postings = db.scalars(
+        select_scoped(org, InventoryTransaction)
+        .where(
+            InventoryTransaction.source_type == source_type[:40],
+            InventoryTransaction.source_id == str(source_id)[:80],
+            InventoryTransaction.kind != "reversal",
+        )
+        .order_by(InventoryTransaction.id)
+    )
+    return [p for p in postings if reversed_by(db, org, p.id) is None]
+
+
+def posted_count(db: Session, org: OrgContext, source_type: str, source_id: str) -> int:
+    """How many postings a source record has had, reversed or not: a reprocessed record's
+    next posting needs a key of its own."""
+    return len(
+        db.scalars(
+            select_scoped(org, InventoryTransaction).where(
+                InventoryTransaction.source_type == source_type[:40],
+                InventoryTransaction.source_id == str(source_id)[:80],
+                InventoryTransaction.kind != "reversal",
+            )
+        ).all()
+    )
+
+
 def balance(db: Session, org: OrgContext, location_id: int, item_id: int) -> Decimal:
     """The recorded quantity (the projection); zero before the first movement."""
     row = db.scalars(

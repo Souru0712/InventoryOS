@@ -5,6 +5,79 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-18 — T2.05-b Sale consumption posting
+
+**Owner's decisions** ("Yes, as proposed", 2026-11-18)
+- Drop `sales_daily` now (DM-7 contract; destructive, approved).
+- Keep `recipe_components` until T2.15 moves velocity to ledger usage.
+- Post sales without batches; T2.06 adds inferred FEFO allocation for sales.
+
+**Implemented**
+- `consume_sale()` in `app/consumption.py`, run by a `consume_sale` job that `record_sale()`
+  queues:
+  - only the latest revision of a sale, completed and counted, holds stock; an earlier
+    revision's posting is reversed at its own moment;
+  - the latest's lines are resolved at the sale's moment and posted as one `sale` transaction
+    (`sale:<id>:r<rev>`) of `sale_consumption` at its location, costed at that moment;
+  - each line records its recipe version and becomes `posted` or `gap`; a repeat posts nothing;
+    a failure leaves the lines `pending` for the queue's retry.
+- Gaps raise `unmapped_product` on what to fix (the POS item, the size, the add-in, the
+  prepared item, or the item a location does not stock), adding to the open one per sale;
+  uncosted use raises `missing_cost`. The exceptions link to the product or item.
+- `reprocess_sale()` reverses what a sale holds and posts it afresh (`:p<n>`).
+- `standing()` and `posted_count()` in `app/ledger/posting.py`: a source's unreversed postings.
+- Migration `1da987c1c195`: the `consume_sale` job kind; lines recorded before it marked
+  `skipped` (history is never replayed); `sales_daily` dropped, its downgrade rebuilding it.
+- `record_sale(consume=False)` keeps history unconsumed: the demo's past days use it.
+
+**Verified**
+- `tests/test_consumption.py` (posting):
+  - a sale posts once, at its moment and location, and a repeat posts nothing;
+  - a sale at one location never touches another's stock;
+  - a sale after a same-day count is consumed;
+  - a correction gives back what the first revision took;
+  - every gap is an exception and the rest still posts;
+  - reprocessing after the gap is fixed posts again once;
+  - uncounted and history sales are never consumed;
+  - a failure leaves the lines pending and the retry posts them.
+- `tests/test_migrations.py`: the T2.04 round trip still restores `sales_daily` (now rebuilt
+  by this downgrade).
+- Full suite, ruff, mypy and the docs checker on this branch; CI evidence in the pull request.
+
+**Decisions**
+- ADR-0055 (Proposed); ADR-0054 → Accepted.
+
+**Open issues**
+- A sale that arrives after a later count of its items still posts at its own moment; late
+  order sales against counts are decided with Square order lines (T3.05).
+
+**Files changed**
+- `app/consumption.py`, `app/sales.py`, `app/jobs.py`, `app/transform/jobs.py`,
+  `app/ledger/posting.py`, `app/exceptions.py`, `app/models.py` (`SalesDaily` removed),
+  `app/cli.py`; migration `1da987c1c195`; `tests/test_consumption.py`,
+  `tests/test_ledger_writers.py`; ADR-0054, ADR-0055 and the index; the task index (T2.05,
+  T2.06); DATA_MIGRATION_ROADMAP (DM-7, DM-9); CLAUDE.md; this log.
+
+**Next task**
+- T2.06 Batch allocation refactor, or the next task the owner chooses.
+
+---
+
+## 2026-11-18 — T2.05-a completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #56 was merged with a merge commit (`d7b5a77`).
+- CI on its head `0dc82d3`, all five required jobs green:
+  - SQLite: 1044 passed, 28 skipped;
+  - PostgreSQL 16: 1072 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- On `main` at `d7b5a77` after the merge, all five required jobs passed.
+
+**Files changed**
+- This log; ADR-0054 → Accepted.
+
+---
+
 ## 2026-11-18 — T2.05-a Consumption resolver and production mode
 
 **Implemented**

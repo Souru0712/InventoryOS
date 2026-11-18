@@ -83,6 +83,7 @@ def _waiting(db: Session, org: OrgContext, kind: str, dedupe_key: str | None) ->
 
 def _handlers() -> dict[str, Handler]:
     # Imported here: these modules queue follow-up work through this one.
+    from app.consumption import consume_sale
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
     from app.orchestration.alerts import evaluate_and_store, send_alert_digest
@@ -126,8 +127,12 @@ def _handlers() -> dict[str, Handler]:
                 ", ".join(f"{d.inventory_item_id}:{d.location_id}" for d in found),
             )
 
+    def consume(db: Session, org: OrgContext, payload: dict) -> None:
+        consume_sale(db, org, int(payload["sales_transaction_id"]))
+
     return {
         "evaluate_exceptions": evaluate,
+        "consume_sale": consume,
         "verify_ledger": verify,
         "send_alert_digest": digest,
         "send_weekly_report": weekly,
