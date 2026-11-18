@@ -5,6 +5,46 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-18 — Fix: a job test that failed once its fixed date had passed
+
+**Found**
+- After PR #54 merged, `main`'s CI failed on both databases with one test:
+  `tests/test_jobs.py::test_a_failing_job_retries_with_back_off_then_dead_letters_into_an_exception`.
+  - SQLite: 1 failed, 1030 passed, 28 skipped.
+  - PostgreSQL 16: 1 failed, 1058 passed.
+- **Cause** (in T1.20's test, not in T2.04): the test drains on a fixed clock at
+  2026-11-16 07:00, but queued its job at the real time. From 16 Nov on, the job was not yet
+  due on the test's clock, so nothing ran.
+
+**Fixed**
+- The test queues both its jobs at its own clock (`run_at=clock.now`). Nothing in the app
+  changes.
+
+**Verified**
+- `tests/test_jobs.py`: 11 passed, 1 skipped (the Postgres-only test), on 2026-11-18.
+- The full suite on this branch's CI is recorded in the pull request.
+
+**Files changed**
+- `tests/test_jobs.py`; this log.
+
+---
+
+## 2026-11-18 — T2.04 completed
+
+**Verified**
+- At the owner's request ("Yes, merge it"), PR #54 was merged with a merge commit (`961fa27`).
+- CI on its head `b9839e4`, all five required jobs green:
+  - SQLite: 1031 passed, 28 skipped;
+  - PostgreSQL 16: 1059 passed, 0 skipped;
+  - Lint and types, dependency audit and Docker image also passed.
+- On `main` after the merge, both test jobs failed on one date-dependent job test. The fix
+  above corrects it; the other three jobs passed.
+
+**Files changed**
+- This log; ADR-0053 → Accepted; the task index (T2.04 → Completed).
+
+---
+
 ## 2026-11-14 — T2.04 Sales model and sources
 
 **Implemented**

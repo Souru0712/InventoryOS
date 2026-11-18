@@ -84,4 +84,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0050](0050-owned-product-catalog.md) | Owned product catalog | T2.01 | Accepted |
 | [ADR-0051](0051-versioned-recipes.md) | Versioned recipes | T2.02 | Accepted |
 | [ADR-0052](0052-recipe-costing.md) | Recipe costing, margins and completeness | T2.03 | Accepted |
-| [ADR-0053](0053-sales-model.md) | Sales model and sources | T2.04 | Proposed |
+| [ADR-0053](0053-sales-model.md) | Sales model and sources | T2.04 | Accepted |

@@ -129,9 +129,11 @@ def test_a_job_runs_and_its_work_commits_with_it(db, tenant):
 
 def test_a_failing_job_retries_with_back_off_then_dead_letters_into_an_exception(db, tenant):
     """Acceptance: a failing job retries then dead-letters into an exception."""
-    enqueue(db, OrgContext.system(tenant.id), "send_alert_digest")
-    db.commit()
     clock = Clock(NOW)
+    # Queued on the test's clock, not the wall clock: once the real date passed NOW the job
+    # was not due yet and nothing ran (the test failed from 2026-11-16 on).
+    enqueue(db, OrgContext.system(tenant.id), "send_alert_digest", run_at=clock.now)
+    db.commit()
 
     def broken(session, org, payload):
         session.get(Tenant, org.tenant_id).name = "half done"
@@ -165,7 +167,7 @@ def test_a_failing_job_retries_with_back_off_then_dead_letters_into_an_exception
     assert "unreachable" not in exception.title  # the error itself stays with the job
 
     # The kind's next success clears it (REC-FR-14).
-    enqueue(db, OrgContext.system(tenant.id), "send_alert_digest")
+    enqueue(db, OrgContext.system(tenant.id), "send_alert_digest", run_at=clock.now)
     db.commit()
     drain(handlers={"send_alert_digest": lambda *_: None}, clock=clock)
     db.expire_all()
