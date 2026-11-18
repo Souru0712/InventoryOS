@@ -140,6 +140,12 @@ implementation sessions; the detail lives in `docs/`.
   modifiers add their own recipe per item, and the product's production mode decides between a
   prepared item and what it is made of, never both (DR-18). What it cannot resolve is a gap,
   never a dropped sale.
+- It leaves stock through `consume_sale()` (ADR-0055), a job `record_sale()` queues: one `sale`
+  transaction keyed `sale:<id>:r<rev>` at the sale's location and moment; only a sale's
+  latest revision, completed and counted, holds stock, and a correction reverses the one
+  before. Gaps raise `unmapped_product`, uncosted use `missing_cost`. `reprocess_sale()`
+  reverses and posts again (`:p<n>`). Sales recorded with `consume=False` (history) and lines
+  from before T2.05 are never consumed.
 - Every sale is a sales transaction (DR-30, ADR-0053), recorded only by `app/sales.py`
   (`record_sale()`), with its origin from its source (DR-34); everything that reads sales
   goes through `daily_sales()`. A location has one source of record per business date: a

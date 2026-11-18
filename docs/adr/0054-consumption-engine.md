@@ -1,6 +1,6 @@
 # ADR-0054: Consumption engine
 
-- **Status:** Proposed, 2026-11-18 (in the T2.05-a pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-18 (owner: "Yes, merge it"; PR #56, T2.05-a)
 - **Decision ID:** none (implements T2.05: WF-12, POS-FR-07 shared part, PRD-FR-11, DR-18,
   AC-PRD-04, AC-RCP-04)
 - **Tasks:** T2.05 (`-a` resolver and production mode, `-b` posting and reprocessing); T2.07

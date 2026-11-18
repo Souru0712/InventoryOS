@@ -507,11 +507,12 @@ def cmd_demo(args: argparse.Namespace) -> int:
                     )
                 )
         # The demo's sales arrive as its POS would send them: one daily transaction a day.
-        record_daily_pos_sales(db, OrgContext.system(tenant.id), "demo", sales_days)
+        # They are its history from before the opening balances, so they are kept for velocity
+        # and reports but never consumed: the opening quantities already reflect them.
+        record_daily_pos_sales(db, OrgContext.system(tenant.id), "demo", sales_days, consume=False)
         db.flush()
 
-        # Sales do not consume stock until the consumption engine (T2.05), so each lot is a
-        # share of the opening quantity.
+        # The history above consumed nothing, so each lot is a share of the opening quantity.
         for name, share, days in DEMO_LOTS:
             item = stock[name]
             step = Decimal("1") if item.dimension is Dimension.COUNT else Decimal("0.0001")

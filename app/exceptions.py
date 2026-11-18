@@ -25,6 +25,8 @@ from app.models import (
     InventoryAdjustment,
     InventoryItem,
     Location,
+    Modifier,
+    ProductVariation,
     StockCountLine,
     StockItem,
 )
@@ -361,8 +363,9 @@ def _subjects(
     db: Session, org: OrgContext, rows: Sequence[ExceptionRecord]
 ) -> dict[int, tuple[str | None, str]]:
     """Each exception's subject as a person knows it, and where its own record opens: the item,
-    its dated stock, the adjustment's history or the count. A subject with no screen yet (a POS
-    product) has no link and keeps its kind as its name."""
+    its dated stock, the adjustment's history, the count, or the product or modifier a sale
+    could not use. A subject with no screen yet (a POS product) has no link and keeps its kind
+    as its name."""
 
     def ids(kind: str) -> list[int]:
         return [int(r.subject_id) for r in rows if r.subject_type == kind]
@@ -387,9 +390,22 @@ def _subjects(
             select_scoped(org, StockCountLine).where(StockCountLine.id.in_(ids("count_line")))
         )
     }
+    sizes = {
+        v.id: (v.product_id, f"{v.product.name} {v.name}")
+        for v in db.scalars(
+            select_scoped(org, ProductVariation).where(
+                ProductVariation.id.in_(ids("product_variation"))
+            )
+        )
+    }
+    modifiers = {
+        m.id: m.name
+        for m in db.scalars(select_scoped(org, Modifier).where(Modifier.id.in_(ids("modifier"))))
+    }
     item_ids = {
         *adjusted.values(),
         *(item for _, item in counted.values()),
+        *ids("item"),
         *(int(r.subject_id.split(":", 1)[0]) for r in rows if r.subject_type == "item_location"),
     }
     names = {
@@ -417,4 +433,11 @@ def _subjects(
         elif kind == "count_line" and int(subject) in counted:
             count_id, item_id = counted[int(subject)]
             found[row.id] = (f"/app/counts/{count_id}", names.get(item_id, "count line"))
+        elif kind == "item" and int(subject) in names:
+            found[row.id] = (f"/app/catalog/{subject}", names[int(subject)])
+        elif kind == "product_variation" and int(subject) in sizes:
+            product_id, name = sizes[int(subject)]
+            found[row.id] = (f"/app/products/{product_id}", name)
+        elif kind == "modifier" and int(subject) in modifiers:
+            found[row.id] = ("/app/products", modifiers[int(subject)])
     return found

@@ -76,7 +76,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.02 | Versioned recipes | P0 | L | M3 | T2.01, T1.15 | Completed (2026-11-13; immutable versions, editor, staff card, start from) |
 | T2.03 | Recipe costing, margins, completeness | P1 | M | M3 | T2.02, T1.24 | Completed (2026-11-14; cost panel, margins, affected recipes, sold without a recipe) |
 | T2.04 | Sales model and sources | P0 | M | M3 | T2.01, T1.04 | Completed (2026-11-18; sales sources and transactions, one source of record per day, sales_daily frozen) |
-| T2.05 | Consumption engine | P0 | L | M3 | T2.02, T2.04, T1.18 | In progress (T2.05-a resolver and production mode: PR open; T2.05-b posting next) |
+| T2.05 | Consumption engine | P0 | L | M3 | T2.02, T2.04, T1.18 | In review (T2.05-a merged; T2.05-b posting, reprocessing and the `sales_daily` drop: PR open; CI evidence in the execution log) |
 | T2.06 | Batch allocation refactor | P1 | L | M3 | T1.18 | Not started |
 | T2.07 | Waste module | P1 | M | M3 | T2.06, T2.02 | Not started |
 | T2.08 | Expiry queue and auto-dispose | P1 | M | M3 | T2.07 | Not started |
@@ -691,13 +691,16 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Depends on:** T2.02, T2.04, T1.18.
 - **Acceptance:** AC-PRD-04, AC-RCP-04; a sale at location B never consumes location A's stock; sales made after a same-day count are consumed.
 - **Tests:** table-driven resolver tests (JuJu examples: ice scaling, pumps as add modifiers); idempotency and reprocess integration tests.
+- **Owner decisions (2026-11-18):** batch inference for sales moves to T2.06; `sales_daily` is
+  dropped here (DM-7 contract); `recipe_components` is dropped once velocity reads ledger usage
+  (T2.15).
 - **Done when:** sub-tasks `-a` resolver, `-b` posting + reprocess complete.
 
 ### T2.06 Batch allocation refactor · P1 · L
 - **Objective:** batch remaining comes from movement allocations; batches never disappear.
 - **Business reason:** expiry losses must be traceable; batches are hard-deleted today (C9, probe R6).
 - **Requirements:** BAT-FR-01..08, BAT-FR-12, BAT-FR-13, DR-13..15, AC-BAT-01..05, -08.
-- **Technical:** movement-level batch with allocation mode (explicit, inferred); statuses active, depleted, expired; Σ batch remaining = balance; lot code; source reference; batch history; batch count adjustment; hard delete removed.
+- **Technical:** movement-level batch with allocation mode (explicit, inferred); statuses active, depleted, expired; Σ batch remaining = balance; lot code; source reference; batch history; batch count adjustment; hard delete removed; sales consumption allocated FEFO and marked inferred (WF-12 step 6, moved from T2.05 by the owner, 2026-11-18).
 - **Existing code:** `StockBatch` (`app/models.py:479-501`), `allocate_fefo` (`app/transform/expiry.py`), `app/web/dashboard.py:271-284`.
 - **DB:** columns on batches and movements. **API · UI:** batch history view.
 - **Security:** none.

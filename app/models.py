@@ -917,25 +917,6 @@ class InventoryCount(Base):
     counted_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
-class SalesDaily(Base):
-    """Curated per-day sales, one row per sold item / location / day."""
-
-    __tablename__ = "sales_daily"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "sold_item_id", "location_id", "dt"),
-        Index("ix_sales_tenant_dt", "tenant_id", "dt"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
-    sold_item_id: Mapped[int] = mapped_column(ref("sold_items.id"), index=True)
-    location_id: Mapped[int] = mapped_column(ref("locations.id"), index=True)
-    dt: Mapped[date] = mapped_column(Date)
-    units: Mapped[Decimal] = mapped_column(Qty, default=Decimal("0"))
-    gross_cents: Mapped[int] = mapped_column(Integer, default=0)
-    net_cents: Mapped[int] = mapped_column(Integer, default=0)
-
-
 class SalesSource(Base):
     """Where a location's sales come from over a run of business days (T2.04, DR-31): a POS
     adapter, entries by hand, a file import, the API or InventoryOS POS. A location has one

@@ -179,9 +179,9 @@ def test_nothing_outside_the_posting_service_assigns_a_quantity():
 
 
 def test_the_legacy_tables_are_frozen():
-    """DM-7: counts and stock events before the ledger, and daily sales before the sales model
-    (T2.04), stay as history; nothing adds to them."""
-    frozen = {"InventoryCount", "InventoryEvent", "SalesDaily"}
+    """DM-7: counts and stock events before the ledger stay as history; nothing adds to them.
+    Daily sales before the sales model (`sales_daily`) were dropped at T2.05."""
+    frozen = {"InventoryCount", "InventoryEvent"}
     found = [
         f"{path.as_posix()}:{node.lineno} {_callee(node)}("
         for path, tree in _sources()

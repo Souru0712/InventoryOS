@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
+from app.consumption import queue_consumption
 from app.exceptions import record_exception
 from app.models import (
     Location,
@@ -191,12 +192,17 @@ def record_sale(
     discount_cents: int | None = None,
     net_cents: int | None = None,
     tax_cents: int | None = None,
+    consume: bool = True,
 ) -> SalesTransaction | None:
     """Record a sale (or a day's sales) from a source; None when a resend changes nothing.
 
     Its business date is its location's for `occurred_at` (ADR-0027), or the day given for a
     daily entry. A sale from a source that is not the source of record that day is kept,
-    flagged `sales_source_overlap` and never counted (DR-31)."""
+    flagged `sales_source_overlap` and never counted (DR-31).
+
+    What it used leaves stock in the background (T2.05, `consume_sale`), and a correction
+    gives back what the revision before it took. `consume=False` keeps history for reference
+    only (the demo's past days): it is recorded and never consumed."""
     location = get_scoped(db, org, Location, source.location_id)
     if location is None:
         raise NotFound(source.location_id)
@@ -261,7 +267,7 @@ def record_sale(
             quantity=line.quantity,
             gross_cents=line.gross_cents,
             net_cents=line.net_cents,
-            consumption_status="pending" if counted else "skipped",
+            consumption_status="pending" if counted and consume else "skipped",
         )
         db.add(row)
         db.flush()
@@ -276,6 +282,8 @@ def record_sale(
                 )
             )
     db.flush()
+    if consume:
+        queue_consumption(db, org, transaction)
     if not counted:
         record_exception(
             db,
@@ -417,7 +425,12 @@ def _pos_source(
 
 
 def record_daily_pos_sales(
-    db: Session, org: OrgContext, provider: str, days: Iterable[DayOfSales]
+    db: Session,
+    org: OrgContext,
+    provider: str,
+    days: Iterable[DayOfSales],
+    *,
+    consume: bool = True,
 ) -> int:
     """A POS's sales summed by day, recorded as one daily transaction per location and day
     (reference "daily:<date>"), a line per sale item: what the legacy Square sync and the demo
@@ -460,6 +473,7 @@ def record_daily_pos_sales(
             day=day,
             gross_cents=sum(e.gross_cents for e in entries),
             net_cents=sum(e.net_cents for e in entries),
+            consume=consume,
         )
         written += made is not None
     log.info("recorded %d days of %s sales for tenant %s", written, provider, org.tenant_id)
