@@ -1,6 +1,6 @@
 # ADR-0053: Sales model and sources
 
-- **Status:** Proposed, 2026-11-14 (in the T2.04 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-18 (owner: "Yes, merge it"; PR #54, T2.04)
 - **Decision ID:** none (implements T2.04: POS-FR-17, -18, DR-29..31, DR-34; DM-7's `sales_daily`
   freeze, split to T2.04 by the owner on 2026-11-12)
 - **Tasks:** T2.04; T2.05 (consumption reads lines), T2.12 and T2.13 (manual entry and import
