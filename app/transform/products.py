@@ -14,6 +14,13 @@ from decimal import Decimal, InvalidOperation
 # RCP-FR-03 in R1: "none" changes nothing, "scale" multiplies the base recipe, "add" adds the
 # modifier's own lines (its recipe, T2.02). "remove" and "substitute" arrive in R1.1.
 MODIFIER_EFFECTS = ("none", "scale", "add")
+# PRD-FR-11, DR-18: how a sale uses a prepared item in its recipe. Made-ahead: the prepared item
+# itself, made earlier by production. Made-to-order: that item's own recipe, made for this sale.
+PRODUCTION_MODES = ("made_to_order", "made_ahead")
+MODE_LABELS = {
+    "made_to_order": "Made to order: a sale uses the raw ingredients",
+    "made_ahead": "Made ahead: a sale uses the prepared item",
+}
 EFFECT_LABELS = {
     "none": "No effect on stock",
     "scale": "Scales the recipe",
