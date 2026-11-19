@@ -38,6 +38,9 @@ issues · decisions · next task.
   - AC-BAT-04 as a property over random sequences: no batch below zero, the stock row equals
     the movements, nothing leaves undated while a batch holds stock.
 - `tests/test_migrations.py`: DM-10 gives two lots 6 and 24 of 30 on hand; the downgrade clears it.
+  - The first CI run failed on PostgreSQL in this downgrade: it deleted the assignment
+    movements while `stock_balances.last_movement_id` still named them (SQLite does not
+    enforce that key). The downgrade now re-points each balance first.
 - Tests that made batches as bare rows now date ledger stock (`tests/batch_helpers.py`); tests
   that changed quantities by hand now count through the ledger.
 - Full suite, ruff, mypy and the docs checker on this branch; CI evidence in the pull request.

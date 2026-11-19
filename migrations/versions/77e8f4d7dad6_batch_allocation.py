@@ -229,19 +229,21 @@ def upgrade() -> None:
 def downgrade() -> None:
     connection = op.get_bind()
     assigned = sa.select(transactions.c.id).where(transactions.c.kind == "batch_assignment")
-    # Every assignment nets to zero, so no balance moves; the last movement is re-pointed.
-    connection.execute(sa.delete(movements).where(movements.c.transaction_id.in_(assigned)))
-    connection.execute(sa.delete(transactions).where(transactions.c.kind == "batch_assignment"))
+    # Every assignment nets to zero, so no balance moves. Each balance's last movement is
+    # re-pointed past the assignments first: the foreign key refuses deleting one it names.
     connection.execute(
         sa.update(balances).values(
             last_movement_id=sa.select(sa.func.max(movements.c.id))
             .where(
                 movements.c.location_id == balances.c.location_id,
                 movements.c.inventory_item_id == balances.c.inventory_item_id,
+                movements.c.transaction_id.not_in(assigned),
             )
             .scalar_subquery()
         )
     )
+    connection.execute(sa.delete(movements).where(movements.c.transaction_id.in_(assigned)))
+    connection.execute(sa.delete(transactions).where(transactions.c.kind == "batch_assignment"))
     _ledger_checks(EITHER_WAY, KINDS)
     with op.batch_alter_table("stock_batches") as batch:
         batch.drop_column("lot_code")

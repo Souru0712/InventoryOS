@@ -968,6 +968,16 @@ def test_dm10_each_batch_holds_what_it_held_and_the_downgrade_clears_it(fresh_ur
         with engine.connect() as connection:
             kinds = connection.execute(text("SELECT kind FROM inventory_transactions")).scalars()
             assert list(kinds) == ["opening"]
+            # Every balance still names a movement that exists. (Postgres also refuses the
+            # deletes if a balance still names an assignment; the Postgres run covers that.)
+            dangling = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM stock_balances b LEFT JOIN inventory_movements m"
+                    " ON m.id = b.last_movement_id"
+                    " WHERE b.last_movement_id IS NOT NULL AND m.id IS NULL"
+                )
+            ).scalar()
+            assert dangling == 0
             assert Decimal(
                 str(connection.execute(text("SELECT qty_base FROM stock_balances")).scalar())
             ) == Decimal(30)
