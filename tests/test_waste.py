@@ -202,13 +202,14 @@ def test_ac_wst_05_the_logger_voids_for_30_minutes_then_a_manager_with_a_reason(
 ):
     _owner, staff, manager, carrots, why = kitchen
     first = _waste(db, staff, location, why, carrots, "1", now=T0)
-    void_waste(db, staff, first.id, now=T0 + timedelta(minutes=10))
+    # The window runs from when the entry was recorded, which is the clock's now, not T0.
+    void_waste(db, staff, first.id, now=first.recorded_at + timedelta(minutes=10))
     assert first.status == "voided"
     assert balance(db, staff, location.id, carrots.id) == to_base("10", "lb")
     assert logged(db, staff, since=TODAY, until=TODAY) == []  # a voided entry nets to nothing
 
     second = _waste(db, staff, location, why, carrots, "1", now=T0)
-    later = T0 + timedelta(minutes=31)
+    later = second.recorded_at + timedelta(minutes=31)
     with pytest.raises(WasteRuleError, match="a Manager voids it"):
         void_waste(db, staff, second.id, now=later)
     with pytest.raises(WasteRuleError, match="Say why"):

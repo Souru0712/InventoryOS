@@ -227,6 +227,7 @@
         {% if can(request, "inventory.view") %}{{ nav("/app/counts", "Counts") }}{{ nav("/app/expiring", "Expiring") }}{% endif %}
         {% if can(request, "sales.record") %}{{ nav("/app/sales/daily", "Sales") }}{% endif %}
         {% if can(request, "sales.import") %}{{ nav("/app/sales/import", "Import") }}{% endif %}
+        {% if can(request, "sales.record") %}{{ nav("/app/usage", "Usage") }}{% endif %}
         {% if can(request, "production.record") %}{{ nav("/app/production", "Production") }}{% endif %}
         {% if can(request, "waste.record") %}{{ nav("/app/waste", "Waste") }}{% endif %}
         {% if can(request, "exception.view") %}{{ nav("/app/exceptions", "Exceptions") }}{% endif %}

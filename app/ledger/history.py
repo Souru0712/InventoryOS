@@ -162,6 +162,9 @@ class PeriodMovement:
     movement_type: str
     qty_base: Decimal
     unit_cost: Decimal  # cents per base unit, as posted
+    occurred_at: datetime | None = None
+    actor_user_id: int | None = None
+    reason: str | None = None
 
 
 def movements_in(
@@ -201,6 +204,9 @@ def movements_in(
                     movement.movement_type,
                     Decimal(movement.qty_base),
                     Decimal(movement.unit_cost_snapshot),
+                    movement.occurred_at,
+                    transaction.actor_user_id,
+                    movement.reason or transaction.reason,
                 )
             )
     return found

@@ -158,6 +158,16 @@ CASES = {
     ("POST", "/app/sales/daily"): lambda ids: {
         "data": {"location_id": ids["location"], "day": "2026-11-02"}
     },
+    ("GET", "/app/usage"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/usage"): lambda ids: {
+        "data": {
+            "location_id": ids["location"],
+            "token": "a" * 32,
+            "reason": "staff_meal",
+            "item_1": ids["inventory_item"],
+            "qty_1": "1",
+        }
+    },
     ("POST", "/app/deliveries"): lambda ids: {
         "data": {"location_id": ids["location"], "supplier_id": ids["supplier"]}
     },

@@ -180,6 +180,9 @@ implementation sessions; the detail lives in `docs/`.
   transaction `day:<date>` per location and day, a changed day needs a reason (carried to the
   reversal), a POS day is refused; `sales_missing` for open hand-entry days with no sales.
   A member's permissions are `member_permissions()` (PD-37 adds `sales.record` for Employees).
+- Ingredients used without a sale are recorded only by `app/usage.py` (ADR-0065): one `usage`
+  transaction of `manual_consumption` keyed `usage:<form token>`, a reason required, below zero
+  refused without the override (DR-08); `consumption()` keeps sales use and manual usage apart.
 - Sales files are imported through `app/sales_import.py` (ADR-0064): CSV read by
   `app/transform/imports.py`, kept tenant-scoped, columns saved per header
   (`import_mappings`), names learned (`import_names`); one `file_import` transaction

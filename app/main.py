@@ -46,6 +46,7 @@ from app.web import (
     stock,
     suppliers,
     team,
+    usage,
     valuation,
     waste,
     webhooks,
@@ -124,6 +125,7 @@ app.include_router(suppliers.router)
 app.include_router(deliveries.router)
 app.include_router(daily_sales.router)
 app.include_router(sales_import.router)
+app.include_router(usage.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

@@ -5,6 +5,33 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.14 Direct usage records (built on branch)
+
+**Implemented**
+- `app/transform/usage.py`: reasons, the form token, `UsageRuleError`.
+- `app/usage.py`: `record_usage()` (one `usage` transaction of `manual_consumption` movements keyed
+  `usage:<token>`, reason required, below zero refused without the override, `missing_cost` and
+  `negative_balance` as for waste), `consumption()` (sales and manual usage kept apart per item),
+  `records()`.
+- `movements_in()` also carries each movement's time, person and reason.
+- `/app/usage` (`sales.record`): the form, the week's consumption split, the records; "Usage" in
+  the menu; isolation cases.
+
+**Verified**
+- `tests/test_usage.py`: stock changes and the record shows as manual usage beside sales use,
+  one post per form, reason and quantity rules, below zero, the page; isolation, ledger,
+  permissions, security headers, async, waste, daily sales, scoped access, consumption, docs.
+- Fixed a timing flake in `tests/test_waste.py` (AC-WST-05): the void window is measured from the
+  entry's `recorded_at`, not the module's `T0`, so a long run no longer fails it.
+
+**Decisions**
+- ADR-0065 (Proposed).
+
+**Open issues**
+- No void for a usage record (corrected by an adjustment or a count).
+
+---
+
 ## 2026-11-19 — T2.13 Sales file import (built on branch)
 
 **Implemented**

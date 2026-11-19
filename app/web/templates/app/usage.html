@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Usage</h1>
+{% if places|length > 1 %}
+<p class="small">{% for p in places %}{% if p.id == place.id %}<strong>{{ p.name }}</strong>{% else %}<a href="/app/usage?location={{ p.id }}">{{ p.name }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+<p class="small muted">Ingredients used without a sale: staff meals, samples, catering by weight. They leave stock as manual usage.</p>
+
+<form method="post" action="/app/usage" class="card">{{ csrf_field(request) }}
+  <input type="hidden" name="location_id" value="{{ place.id }}">
+  <input type="hidden" name="token" value="{{ token }}">
+  <datalist id="unit-list">{% for u in units %}<option value="{{ u }}">{% endfor %}</datalist>
+  {% for n in rows %}
+  <div class="row">
+    <div class="field"><label for="item_{{ n }}">Ingredient</label>
+      <select id="item_{{ n }}" name="item_{{ n }}"><option value=""></option>{% for i in items %}<option value="{{ i.id }}">{{ i.name }} ({{ i.display_unit|unit }})</option>{% endfor %}</select>
+    </div>
+    <div class="field"><label for="qty_{{ n }}">How much</label><input id="qty_{{ n }}" name="qty_{{ n }}" inputmode="decimal"></div>
+    <div class="field"><label for="unit_{{ n }}">Unit (empty: its own)</label><input id="unit_{{ n }}" name="unit_{{ n }}" list="unit-list" maxlength="40"></div>
+  </div>
+  {% endfor %}
+  <div class="row">
+    <div class="field"><label for="reason">Why</label>
+      <select id="reason" name="reason" required><option value="">Choose a reason</option>{% for key, label in reasons.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+    </div>
+    <div class="field"><label for="note">Note (needed for Other)</label><input id="note" name="note" maxlength="200"></div>
+  </div>
+  <button class="btn" type="submit">Record usage</button>
+</form>
+
+<h2>Since {{ since.strftime("%a %d %b") }}</h2>
+{% if used %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Ingredient</th><th>Used by sales</th><th>Manual usage</th></tr></thead>
+  <tbody>{% for u in used %}{% set i = names.get(u.inventory_item_id) %}<tr><td>{{ i.name if i else "item" }}</td><td>{{ u.from_sales|qty(i.display_unit if i else "") }}</td><td>{{ u.manual|qty(i.display_unit if i else "") }}</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p class="muted">Nothing used yet this week.</p>{% endif %}
+
+{% if records %}
+<h2>Manual usage records</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>When</th><th>What</th><th>Why</th><th>By</th></tr></thead>
+  <tbody>{% for r in records %}<tr>
+    <td class="small">{{ r.occurred_at.strftime("%a %d %b %H:%M") if r.occurred_at else "" }}</td>
+    <td class="small">{% for item_id, qty in r.used.items() %}{% set i = names.get(item_id) %}{{ qty|qty(i.display_unit if i else "") }} {{ i.name if i else "item" }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+    <td class="small">{{ r.reason or "" }}</td>
+    <td class="small">{{ r.recorded_by }}</td>
+  </tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

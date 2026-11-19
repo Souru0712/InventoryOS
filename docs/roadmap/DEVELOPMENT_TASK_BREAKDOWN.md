@@ -85,7 +85,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.11 | Receiving on the ledger | P1 | L | M3 | T2.10, T2.06, T1.20 | Built on branch, not merged (receivings, exactly-once posting, discrepancies, price checks, corrections, DM-12; invoices recorded as receivings, daily reading cap, cost flags) |
 | T2.12 | Standalone daily sales entry | P1 | M | M4 | T2.05 | Built on branch, not merged (daily entry grid, corrections with reason, POS days refused, sales_missing, PD-37 setting) |
 | T2.13 | Sales file import | P1 | M | M4 | T2.12 | Built on branch, not merged (CSV upload, saved columns, learned names, preview, daily file_import transactions; XLSX awaits openpyxl) |
-| T2.14 | Direct usage records | P1 | S | M4 | T2.05 | Not started |
+| T2.14 | Direct usage records | P1 | S | M4 | T2.05 | Built on branch, not merged (usage form, manual_consumption with a reason, consumption split sales / manual usage) |
 | T2.15 | Reorder suggestions on ledger usage | P1 | M | M4 | T2.10, T2.05 | Not started |
 | T2.16 | Reports I: consumption, waste, expiry, variance | P1 | M | M4 | T2.07, T1.23 | Not started |
 | T2.17 | Reports II: margin, cost of sales, receiving, count-based usage, CSV | P1 | M | M4 | T2.16, T2.03, T2.11 | Not started |
