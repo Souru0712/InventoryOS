@@ -114,6 +114,7 @@ def _apply_form(ids):
 
 
 SALES_CSV = b"date,item,qty\r\n2026-11-02,Bars,3\r\n"
+ITEMS_CSV = b"Name,Unit,Quantity\r\nFresh basil,g,100\r\n"
 
 CASES = {
     ("GET", "/app"): lambda ids: {"params": {"location": ids["location"]}},
@@ -161,6 +162,15 @@ CASES = {
     },
     ("GET", "/app/usage"): lambda ids: {"params": {"location": ids["location"]}},
     ("GET", "/app/reports"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/items/import"): lambda ids: {
+        "data": {"location_id": ids["location"]},
+        "files": {"file": ("items.csv", ITEMS_CSV, "text/csv")},
+    },
+    ("GET", "/app/items/import/{digest}"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/items/import/{digest}"): lambda ids: {"data": {"location_id": ids["location"]}},
+    ("POST", "/app/items/quick-add"): lambda ids: {
+        "data": {"location_id": ids["location"], "name_1": "Fresh mint"}
+    },
     ("GET", "/app/reports.csv"): lambda ids: {
         "params": {"location": ids["location"], "table": "consumption"}
     },
@@ -377,6 +387,7 @@ PATH_ROWS = {
     "receiving_id": "receiving",
     "line_id": "receiving_line",
     "import_id": "sales_import",
+    "digest": "item_file",
 }
 
 
@@ -558,7 +569,11 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     )
     db.add(sheet)
     db.flush()
+    # Each business's item file sits under its own name in its own storage (T2.20-a).
+    item_file = hashlib.sha256(f"items-{tenant_id}".encode()).hexdigest()
+    get_storage().put(f"{tenant_id}/imports/items-{item_file}.csv", ITEMS_CSV, "text/csv")
     return {
+        "item_file": item_file,
         "sales_import": sheet.id,
         "receiving": delivery.id,
         "receiving_line": arrived.id,

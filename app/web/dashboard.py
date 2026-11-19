@@ -32,6 +32,7 @@ from app.models import (
     Tenant,
     User,
 )
+from app.onboarding import checklist
 from app.orchestration.alerts import proposals_for
 from app.orchestration.dashboard import (
     ATTENTION_SHOWN,
@@ -231,6 +232,8 @@ def dashboard(
             "range_error": range_error,
             "completeness": sales_without_recipe(db, org, chosen, now, location),
             "currency": tenant_currency(db, org),
+            # Setup is the Owner's and Administrator's; the card goes once every step is done.
+            "checklist": checklist(db, org) if org.can("settings.manage") else [],
             **context,
         },
     )

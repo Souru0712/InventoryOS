@@ -184,6 +184,9 @@ implementation sessions; the detail lives in `docs/`.
   builds the windows, `app/transform/analytics.py` works out the figures per movement at its
   snapshot cost; never sum events, lines or today's costs for a past figure. Every report table
   exports through `/app/reports.csv` (ADR-0068) from the same report objects as its page.
+- Items come in from a file or the quick-add grid through `app/item_import.py` (ADR-0071), each
+  row tried through `create_item()`; the onboarding checklist (`app/onboarding.py`) is computed
+  from the business's records, never stored.
 - Business settings are written only by `app/business_settings.py` (ADR-0070), audited as
   `settings.*`, and read where they act (review thresholds, alert email hour, default production
   mode, units). A modifier's scale factor is dated (`modifier_scales`, append-only): a sale reads

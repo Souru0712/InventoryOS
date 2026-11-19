@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
 {% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+{% set left = checklist|rejectattr("done")|list %}
+{% if left %}
+<div class="card" style="margin-bottom:16px;">
+  <p style="margin:0 0 8px;"><strong>Getting set up</strong> <span class="small muted">{{ checklist|length - left|length }} of {{ checklist|length }} done. Skip anything; it all works as you go.</span></p>
+  <ol class="small" style="margin:0; padding-left:20px;">
+    {% for step in checklist %}
+    <li style="margin:4px 0;{% if step.done %} color:var(--muted, #5d6f67);{% endif %}">
+      {% if step.done %}<s>{{ step.title }}</s>{% else %}<a href="{{ step.link }}"><strong>{{ step.title }}</strong></a> <span class="muted">{{ step.hint }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</div>
+{% endif %}
 {% if request.query_params.get("connected") %}
   <div class="notice ok">Square is connected and your first sync has run.</div>
 {% endif %}

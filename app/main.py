@@ -33,6 +33,7 @@ from app.web import (
     deliveries,
     exceptions,
     health,
+    item_import,
     locations,
     marketing,
     mfa,
@@ -130,6 +131,7 @@ app.include_router(sales_import.router)
 app.include_router(usage.router)
 app.include_router(reports.router)
 app.include_router(business_settings.router)
+app.include_router(item_import.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

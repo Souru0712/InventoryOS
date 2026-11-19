@@ -91,7 +91,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.17 | Reports II: margin, cost of sales, receiving, count-based usage, CSV | P1 | M | M4 | T2.16, T2.03, T2.11 | Built on branch, not merged (margins, cost of sales with coverage, receiving discrepancies and price changes, count-based usage per interval, CSV of every report table) |
 | T2.18 | Weekly summary email | P1 | S | M4 | T2.16 | Built on branch, not merged (stock value, waste cost, money at risk, low stock, open exceptions; Owners and cost-seeing members; due on the business's clock; AC-ANL-07 staging check pending) |
 | T2.19 | Settings module | P1 | M | M3 | T1.04, T1.12 | Built on branch, not merged (business and alert settings screens, business_settings, dated modifier scale factors; adjustment reasons still fixed) |
-| T2.20 | Onboarding flow | P1 | L | M4 | T2.12, T2.13, T1.14 | Not started |
+| T2.20 | Onboarding flow | P1 | L | M4 | T2.12, T2.13, T1.14 | In progress (-a built on branch, not merged: item CSV import with preview and row errors, quick-add, checklist; -b step 0 and opening count next) |
 | T2.21 | Employee home and floor screens | P1 | M | M3 | T2.07, T2.09 | Not started |
 | T2.22 | Standalone end-to-end suite | P0 | M | M4 | T2.20 | Not started |
 | T3.01 | Adapter interface and boundary check | P1 | M | M5 | T2.04 | Not started |

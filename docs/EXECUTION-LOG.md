@@ -5,6 +5,32 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.20-a Item import, quick-add and checklist (built on branch)
+
+**Implemented**
+- `app/transform/item_import.py` (columns by common names, row checks), `app/item_import.py`
+  (file kept by digest; every row tried through `create_item()` in a savepoint, rolled back for
+  the preview, kept on import; quick-add through the same path).
+- `/app/items/import` (upload, template CSV, preview with row errors, import) and
+  `/app/items/quick-add`; `app/onboarding.py` `checklist()` computed from the business's records,
+  on the dashboard for Owners and Administrators until done; isolation cases.
+
+**Verified**
+- `tests/test_item_import.py`: AC-INV-12 (150 rows, 3 bad: 147 imported, rows 149–151 reported
+  with reasons, nothing kept by the preview), column names, refused files, a name already taken,
+  the checklist, the pages; isolation, permissions, dashboard, catalog, headers, async, scoped
+  access, web, health flow, entitlements, accounts; the checklist and an import checked on the demo
+  database.
+
+**Decisions**
+- ADR-0071 (Proposed).
+
+**Open issues**
+- T2.20-b: step 0 ("How do you take payments today?"), the one-screen opening count, skipping a
+  step.
+
+---
+
 ## 2026-11-19 — T2.19 Settings module (built on branch)
 
 **Implemented**
