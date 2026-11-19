@@ -12,9 +12,8 @@ from app.access import OrgContext, select_scoped
 from app.catalog import active_stock, by_item_name
 from app.ledger.history import item_moves
 from app.ledger.posting import batch_remaining
-from app.models import Location, SoldItem, StockBatch, StockItem
+from app.models import Location, StockBatch, StockItem
 from app.recipes import ingredients_in_effect
-from app.sales import daily_sales
 from app.transform.business_days import business_date, business_day_start
 from app.transform.expiry import (
     Batch,
@@ -23,7 +22,7 @@ from app.transform.expiry import (
     coverage,
     project_batches,
 )
-from app.transform.inventory import ZERO, SaleRow, StockView, daily_velocity
+from app.transform.inventory import ZERO, StockView, daily_velocity
 from app.transform.reorder import USAGE_TYPES
 
 VELOCITY_WINDOW_DAYS = 28
@@ -72,22 +71,6 @@ def tenant_currency(db: Session, org: OrgContext) -> str:
         select_scoped(org, Location).where(Location.is_active.is_(True)).limit(1)
     ).first()
     return location.currency if location else "USD"
-
-
-def sale_rows(db: Session, org: OrgContext, since: date | None = None) -> list[SaleRow]:
-    """Counted sales per POS sale item and day, read from the sales model (DR-30)."""
-    by_item: dict[tuple[int, date], list] = {}
-    for sale in daily_sales(db, org, since):
-        if sale.sold_item_id is None:
-            continue
-        total = by_item.setdefault((sale.sold_item_id, sale.day), [Decimal(0), 0])
-        total[0] += sale.units
-        total[1] += sale.net_cents
-    return [SaleRow(item, day, units, net) for (item, day), (units, net) in by_item.items()]
-
-
-def sold_item_names(db: Session, org: OrgContext) -> dict[int, str]:
-    return {item.id: item.name for item in db.scalars(select_scoped(org, SoldItem))}
 
 
 def stock_ids(db: Session, org: OrgContext) -> dict[tuple[int, int], int]:

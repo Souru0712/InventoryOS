@@ -5,6 +5,30 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.18 Weekly summary email (built on branch)
+
+**Implemented**
+- `app/transform/reports.py`: `WeeklySummary`, `low_stock()`; `app/orchestration/reporting.py`:
+  stock value, last week's waste cost at snapshot, money at risk, low stock, open exceptions;
+  `recipients()` (Owners and members who see costs and financial reports, who want it).
+- Email templates (HTML and text) and `/app/report` rewritten; the CLI `report` prints the new
+  figures; `send_due_reports()` is due at the report day and hour on the tenant's clock.
+- The old sales inputs (`sale_rows()`, `sold_item_names()`, `SaleRow`) removed.
+
+**Verified**
+- `tests/test_email.py` (the figures in the text and HTML parts, the subject, recipients by
+  role), `tests/test_jobs.py` (due at 07:00 New York time, not 07:00 UTC), deployment, web,
+  permissions, dashboard, reports, health flow, expiry, alerts, inventory, recipes, isolation,
+  headers, async, entitlements, billing.
+
+**Decisions**
+- ADR-0069 (Proposed).
+
+**Open issues**
+- AC-ANL-07 (delivery through the email provider) is a staging check at merge.
+
+---
+
 ## 2026-11-19 — T2.17 Reports II (built on branch)
 
 **Implemented**

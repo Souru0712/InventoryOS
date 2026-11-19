@@ -317,15 +317,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             return 0
         report = weekly_report(db, OrgContext.system(args.tenant))
     print(f"week {report.period_start} to {report.period_end}")
-    print(f"  net sales        {money(report.net_cents)}")
-    print(f"  inventory value  {money(report.inventory_value_cents)}")
-    print(f"  alerts           {len(report.alerts)}")
-    for roll in report.by_dimension:
-        print(
-            f"  {roll.dimension:<7} {roll.item_count:>3} items  {money(roll.value_cents):>10}  {roll.at_risk} at risk"
-        )
-    for alert in report.alerts[:10]:
-        print(f"  ! {alert.message}")
+    print(f"  stock value      {money(report.stock_value_cents)}")
+    print(f"  waste cost       {money(report.waste_cents)}")
+    print(f"  money at risk    {money(report.at_risk_cents)}")
+    print(f"  low stock        {report.low_stock_count}")
+    print(f"  open exceptions  {report.exceptions_open}")
+    for e in report.exceptions:
+        print(f"  ! {e.title}")
     return 0
 
 

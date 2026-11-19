@@ -56,16 +56,6 @@ class StockView:
         return format_qty(self.reorder_point_base, self.stock_unit)
 
 
-@dataclass(frozen=True)
-class SaleRow:
-    """One sold item on one day, in sold units."""
-
-    sold_item_id: int
-    dt: date
-    units: Decimal
-    net_cents: int = 0
-
-
 def daily_velocity(daily: dict[date, Decimal], window_days: int, today: date) -> Decimal:
     """Mean base units consumed per day over the trailing window."""
     if window_days <= 0:

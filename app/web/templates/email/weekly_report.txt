@@ -1,26 +1,25 @@
 {{ tenant.name }}
 Week of {{ report.period_start.strftime("%d %b") }} to {{ report.period_end.strftime("%d %b") }}
 
-Net sales: {{ money(report.net_cents) }}{% if report.net_change_pct is not none %} ({{ report.net_change_pct }}% vs last week){% endif %}
+Stock value: {{ money(report.stock_value_cents) }}{% if report.items_without_cost %} ({{ report.items_without_cost }} items have no cost yet){% endif %}
+Waste cost last week: {{ money(report.waste_cents) }}{% if report.waste_uncosted %} plus some with no cost{% endif %}
+Money at risk: {{ money(report.at_risk_cents) }}
+Low stock: {{ report.low_stock_count }}
+Open exceptions: {{ report.exceptions_open }}
 
-Stock on hand: {{ money(report.inventory_value_cents) }}
-Needing attention: {{ report.alerts|length }}
-
-{% if alerts %}
-ORDER THIS WEEK
-{% for alert in alerts %}
-* {{ alert.name }} - {{ alert.message }}{% if alert.suggested %}
-  Order about {{ alert.suggested }}{% endif %}
-
+{% if report.low_stock %}
+LOW STOCK
+{% for item in report.low_stock %}
+* {{ item.name }}: {{ qty(item.qty_base, item.unit) }} (reorder at {{ qty(item.reorder_point_base, item.unit) }})
 {% endfor %}
 {% endif %}
-{% if report.top_sellers %}
-TOP SELLERS
-{% for seller in report.top_sellers %}
-* {{ seller.name }}: {{ seller.units }} sold, {{ money(seller.net_cents) }}
+{% if report.exceptions %}
+NEEDS ATTENTION
+{% for e in report.exceptions %}
+* {{ e.title }}{% if e.money_cents %} ({{ money(e.money_cents) }}){% endif %}
 {% endfor %}
 {% endif %}
 
-The full report: {{ base_url }}/app/report
+The full reports: {{ base_url }}/app/reports
 
 Delivered by StockPulse. Choose which emails you get at {{ base_url }}/app/settings

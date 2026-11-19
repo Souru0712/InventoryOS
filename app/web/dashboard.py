@@ -553,15 +553,14 @@ def report(
     tenant: Tenant = Depends(require_tenant),
     org: OrgContext = Depends(require_permission("reports.financial")),
 ):
-    items = {item.id: item for item in stock_views(db, org)}
     return templates.TemplateResponse(
         request,
         "app/report.html",
         {
-            "title": "Weekly report",
+            "title": "Weekly summary",
             "tenant": tenant,
             "report": weekly_report(db, org),
-            "items": items,
+            "currency": tenant_currency(db, org),
         },
     )
 
