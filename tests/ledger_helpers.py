@@ -13,8 +13,9 @@ from app.ledger.posting import SYSTEM, post_opening
 from app.models import StockItem
 
 
-def opened(db, *items: StockItem) -> None:
-    """Post each row's quantity as its opening balance (once; a zero needs none)."""
+def opened(db, *items: StockItem, at: datetime | None = None) -> None:
+    """Post each row's quantity as its opening balance (once; a zero needs none), now or at
+    `at` (a test whose counts happen at a fixed instant opens its stock before it)."""
     db.flush()
     for item in items:
         post_opening(
@@ -25,7 +26,7 @@ def opened(db, *items: StockItem) -> None:
             qty_base=Decimal(item.qty_base or 0),
             source_type="test",
             source_id=str(item.id),
-            occurred_at=datetime.now(UTC),
+            occurred_at=at or datetime.now(UTC),
             actor_user_id=SYSTEM,
         )
     db.flush()
