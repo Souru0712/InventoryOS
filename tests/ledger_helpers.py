@@ -29,3 +29,53 @@ def opened(db, *items: StockItem) -> None:
             actor_user_id=SYSTEM,
         )
     db.flush()
+
+
+def consumed_on(db, stock: StockItem, day, qty) -> None:
+    """What sales took of the stock on a day, as sale consumption posts it: velocity reads use
+    from the ledger (T2.15). The item is opened first if it is not yet."""
+    from datetime import time
+    from uuid import uuid4
+
+    from app.ledger.posting import post_transaction
+    from app.transform.ledger import Line
+
+    opened(db, stock)
+    key = uuid4().hex
+    post_transaction(
+        db,
+        OrgContext.system(stock.tenant_id),
+        kind="sale",
+        source_type="test_sale",
+        source_id=key,
+        idempotency_key=f"test-sale:{key}",
+        lines=[
+            Line(stock.location_id, stock.inventory_item_id, "sale_consumption", -Decimal(str(qty)))
+        ],
+        occurred_at=datetime.combine(day, time(12), tzinfo=UTC),
+        actor_user_id=SYSTEM,
+    )
+    db.flush()
+
+
+def counted_to(db, stock: StockItem, qty, at: datetime | None = None) -> None:
+    """A count that finds the shelf holding qty (post them in time order: a count compares
+    with the balance as it stands)."""
+    from uuid import uuid4
+
+    from app.ledger.posting import post_count
+
+    key = uuid4().hex
+    post_count(
+        db,
+        OrgContext.system(stock.tenant_id),
+        location_id=stock.location_id,
+        inventory_item_id=stock.inventory_item_id,
+        counted=Decimal(str(qty)),
+        source_type="test",
+        source_id=key,
+        idempotency_key=f"count:test:{key}",
+        occurred_at=at or datetime.now(UTC),
+        actor_user_id=SYSTEM,
+    )
+    db.flush()

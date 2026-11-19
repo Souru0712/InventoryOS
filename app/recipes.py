@@ -132,6 +132,17 @@ def effective_version(
     return next((v for v in rows if v.version_no == number), None)
 
 
+def ingredients_in_effect(db: Session, org: OrgContext, at: datetime | None = None) -> set[int]:
+    """Items some recipe in effect uses: their use shows up in the ledger, so no use recorded
+    means none, not unknown."""
+    return {
+        line.inventory_item_id
+        for recipe in db.scalars(select_scoped(org, Recipe))
+        if (version := effective_version(db, org, recipe, at)) is not None
+        for line in version.lines
+    }
+
+
 def _lines_of(version: RecipeVersion) -> list[Line]:
     return [
         Line(

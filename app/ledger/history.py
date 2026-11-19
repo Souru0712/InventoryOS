@@ -269,3 +269,88 @@ def movement_totals(
             before.value_cents + movement_value_cents(Decimal(qty), Decimal(cost or 0)),
         )
     return totals
+
+
+@dataclass(frozen=True)
+class ItemMove:
+    """One movement of an item, as usage and count-based usage read it (ROR-FR-01, AC-ANL-08)."""
+
+    location_id: int
+    inventory_item_id: int
+    occurred_at: datetime
+    transaction_id: int
+    kind: str  # the transaction's kind: sale, count, receipt...
+    source_type: str
+    movement_type: str  # a reversal carries the type of the movement it undid
+    qty_base: Decimal
+
+
+def item_moves(
+    db: Session, org: OrgContext, windows: Mapping[int, tuple[datetime, datetime]]
+) -> list[ItemMove]:
+    """Every movement at each location within its window (both ends included), in the order
+    stock moved. A reversal takes the type of what it undid, so the two net out by type."""
+    found: list[tuple[InventoryMovement, InventoryTransaction]] = []
+    for location_id, (start, end) in windows.items():
+        found.extend(
+            db.execute(
+                select_scoped(org, InventoryMovement)
+                .add_columns(InventoryTransaction)
+                .join(
+                    InventoryTransaction,
+                    InventoryTransaction.id == InventoryMovement.transaction_id,
+                )
+                .where(
+                    InventoryMovement.location_id == location_id,
+                    InventoryMovement.occurred_at >= start,
+                    InventoryMovement.occurred_at <= end,
+                )
+            ).tuples()
+        )
+    undone = {m.reverses_movement_id for m, _ in found if m.reverses_movement_id is not None}
+    original: dict[int, str] = {}
+    if undone:
+        original = {
+            movement_id: kind
+            for movement_id, kind in db.execute(
+                select_scoped(org, InventoryMovement)
+                .with_only_columns(InventoryMovement.id, InventoryMovement.movement_type)
+                .where(InventoryMovement.id.in_(undone))
+            ).tuples()
+        }
+    found.sort(key=lambda pair: (pair[0].occurred_at, pair[0].id))
+    return [
+        ItemMove(
+            m.location_id,
+            m.inventory_item_id,
+            m.occurred_at,
+            t.id,
+            t.kind,
+            t.source_type,
+            original.get(m.reverses_movement_id, m.movement_type)
+            if m.reverses_movement_id is not None
+            else m.movement_type,
+            Decimal(m.qty_base),
+        )
+        for m, t in found
+    ]
+
+
+def balances_before(
+    db: Session, org: OrgContext, windows: Mapping[int, tuple[datetime, datetime]]
+) -> dict[tuple[int, int], Decimal]:
+    """What each item held at each location just before its window opened."""
+    result: dict[tuple[int, int], Decimal] = {}
+    for location_id, (start, _end) in windows.items():
+        rows = db.execute(
+            select_scoped(org, InventoryMovement)
+            .with_only_columns(InventoryMovement.inventory_item_id, InventoryMovement.qty_base)
+            .where(
+                InventoryMovement.location_id == location_id,
+                InventoryMovement.occurred_at < start,
+            )
+        ).tuples()
+        for item_id, qty in rows:
+            key = (location_id, item_id)
+            result[key] = result.get(key, Decimal(0)) + Decimal(qty)
+    return result
