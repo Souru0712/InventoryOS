@@ -39,6 +39,7 @@ from app.models import (
     PromotionStatus,
     Receiving,
     ReceivingLine,
+    SalesImport,
     StockCount,
     StockItem,
     Supplier,
@@ -111,6 +112,8 @@ def _apply_form(ids):
     }
 
 
+SALES_CSV = b"date,item,qty\r\n2026-11-02,Bars,3\r\n"
+
 CASES = {
     ("GET", "/app"): lambda ids: {"params": {"location": ids["location"]}},
     ("GET", "/app/expiring"): lambda ids: {"params": {"location": ids["location"]}},
@@ -140,6 +143,18 @@ CASES = {
         "data": {"inventory_item_id": ids["inventory_item"], "pack_quantity": "2"}
     },
     ("GET", "/app/sales/daily"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/sales/import"): lambda ids: {
+        "data": {"location_id": ids["location"]},
+        "files": {"file": ("sales.csv", SALES_CSV, "text/csv")},
+    },
+    ("GET", "/app/sales/import/{import_id}"): lambda ids: {},
+    ("POST", "/app/sales/import/{import_id}/mapping"): lambda ids: {
+        "data": {"date_column": "date", "product_column": "item", "quantity_column": "qty"}
+    },
+    ("POST", "/app/sales/import/{import_id}/match"): lambda ids: {
+        "data": {"name": "Bars", "product_variation_id": ids["variation"]}
+    },
+    ("POST", "/app/sales/import/{import_id}/post"): lambda ids: {},
     ("POST", "/app/sales/daily"): lambda ids: {
         "data": {"location_id": ids["location"], "day": "2026-11-02"}
     },
@@ -346,6 +361,7 @@ PATH_ROWS = {
     "supplier_item_id": "supplier_item",
     "receiving_id": "receiving",
     "line_id": "receiving_line",
+    "import_id": "sales_import",
 }
 
 
@@ -517,7 +533,18 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     )
     db.add(arrived)
     db.flush()
+    get_storage().put(f"{tenant_id}/imports/iso.csv", SALES_CSV, "text/csv")
+    sheet = SalesImport(
+        tenant_id=tenant_id,
+        location_id=location.id,
+        filename="sales.csv",
+        sha256="d" * 64,
+        storage_key=f"{tenant_id}/imports/iso.csv",
+    )
+    db.add(sheet)
+    db.flush()
     return {
+        "sales_import": sheet.id,
         "receiving": delivery.id,
         "receiving_line": arrived.id,
         "supplier": vendor.id,

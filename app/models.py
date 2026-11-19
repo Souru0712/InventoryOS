@@ -1812,6 +1812,58 @@ class ReceivingLine(Base):
     receiving: Mapped[Receiving] = relationship(back_populates="lines")
 
 
+class ImportMapping(Base):
+    """Which columns of a sales export hold the date, product and quantity (T2.13, STD-FR-03),
+    saved per business for files with the same header."""
+
+    __tablename__ = "import_mappings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "header_key", name="uq_import_mappings_header"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    header_key: Mapped[str] = mapped_column(String(500))
+    date_column: Mapped[str] = mapped_column(String(120))
+    product_column: Mapped[str] = mapped_column(String(120))
+    quantity_column: Mapped[str] = mapped_column(String(120))
+    date_format: Mapped[str] = mapped_column(String(20), default="auto")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ImportName(Base):
+    """A product name from a sales file, matched once to a product size and remembered."""
+
+    __tablename__ = "import_names"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_import_names_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(300))  # normalized
+    product_variation_id: Mapped[int] = mapped_column(ref("product_variations.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class SalesImport(Base):
+    """An uploaded sales file, kept in the business's storage, previewed then posted."""
+
+    __tablename__ = "sales_imports"
+    __table_args__ = (one_of("sales_imports", "status", ("preview", "posted")),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    filename: Mapped[str] = mapped_column(String(200))
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_key: Mapped[str] = mapped_column(String(500))
+    mapping_id: Mapped[int | None] = mapped_column(ref("import_mappings.id"))
+    status: Mapped[str] = mapped_column(String(10), default="preview")
+    days_posted: Mapped[int] = mapped_column(Integer, default=0)
+    uploaded_by: Mapped[int | None] = mapped_column(ref("users.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    posted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class ProductionOrder(Base):
     """A production run (T2.09, WF-11): a prepared item or finished good made from its recipe in
     effect, times a multiplier. R1 records it completed in one step (PRD-FR-08); its ledger

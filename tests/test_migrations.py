@@ -136,8 +136,9 @@ def test_dm3_a_location_needs_no_pos_and_the_downgrade_gives_it_ids(fresh_url):
             connection.execute(
                 text(
                     "INSERT INTO tenants (name, plan, subscription_status, report_day, report_hour,"
-                    " timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING', 0, 7, 'UTC',"
-                    " '2026-11-06 12:00:00')"
+                    " timezone, created_at, expiry_alert_days, auto_dispose_prepared,"
+                    " employees_enter_sales) VALUES ('Corner', 'PRO', 'TRIALING', 0, 7, 'UTC',"
+                    " '2026-11-06 12:00:00', 2, false, false)"
                 )
             )
             connection.execute(

@@ -41,6 +41,7 @@ from app.web import (
     promotions,
     receiving,
     recipes,
+    sales_import,
     scanning,
     stock,
     suppliers,
@@ -122,6 +123,7 @@ app.include_router(production.router)
 app.include_router(suppliers.router)
 app.include_router(deliveries.router)
 app.include_router(daily_sales.router)
+app.include_router(sales_import.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

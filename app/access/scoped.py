@@ -22,6 +22,8 @@ from app.models import (
     EmailSuppression,
     ExtractionCorrection,
     HealthSnapshot,
+    ImportMapping,
+    ImportName,
     InventoryCategory,
     InventoryCount,
     InventoryEvent,
@@ -112,6 +114,8 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         WasteReason,
         Supplier,
         SupplierItem,
+        ImportMapping,
+        ImportName,
     }
 )
 

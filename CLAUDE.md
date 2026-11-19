@@ -180,6 +180,10 @@ implementation sessions; the detail lives in `docs/`.
   transaction `day:<date>` per location and day, a changed day needs a reason (carried to the
   reversal), a POS day is refused; `sales_missing` for open hand-entry days with no sales.
   A member's permissions are `member_permissions()` (PD-37 adds `sales.record` for Employees).
+- Sales files are imported through `app/sales_import.py` (ADR-0064): CSV read by
+  `app/transform/imports.py`, kept tenant-scoped, columns saved per header
+  (`import_mappings`), names learned (`import_names`); one `file_import` transaction
+  `import:<date>` per day, days another source owns skipped (DR-31).
 - Every sale is a sales transaction (DR-30, ADR-0053), recorded only by `app/sales.py`
   (`record_sale()`), with its origin from its source (DR-34); everything that reads sales
   goes through `daily_sales()`. A location has one source of record per business date: a

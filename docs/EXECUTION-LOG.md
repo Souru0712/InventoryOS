@@ -5,6 +5,34 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.13 Sales file import (built on branch)
+
+**Implemented**
+- `app/transform/imports.py` (pure): CSV reading, column guessing, date parsing, daily totals per
+  name, name matching.
+- `import_mappings`, `import_names`, `sales_imports` (migration `68df2db99f00`).
+- `app/sales_import.py`: `upload()` (type from bytes, Excel refused, stored tenant-scoped),
+  `save_mapping()`, `teach()`, `preview()` (days, unmatched names, days another source owns),
+  `post()` (one `file_import` transaction per day, consumption in the request, the import source
+  bounded by the next source of record).
+- `/app/sales/import`: upload, columns, matching, preview, post; "Import" in the menu.
+
+**Verified**
+- `tests/test_sales_import.py`: AC-SAL-04 (unmatched listed, matched days posted, re-import adds
+  nothing), learned names, saved columns, a hand-entered day skipped, file types, the pages;
+  isolation, sales, daily sales, permissions, scoped access, security headers, migrations,
+  consumption, sessions; ruff, mypy, docs checker.
+- Fixed `test_dm3_…` in `tests/test_migrations.py`: its raw tenant insert lacked the NOT NULL
+  columns added at T2.08 and T2.12.
+
+**Decisions**
+- ADR-0064 (Proposed).
+
+**Open issues**
+- XLSX is not read: needs `uv add openpyxl` (approved, ID-23) and a reader hook.
+
+---
+
 ## 2026-11-19 — T2.12 Standalone daily sales entry (built on branch)
 
 **Implemented**
