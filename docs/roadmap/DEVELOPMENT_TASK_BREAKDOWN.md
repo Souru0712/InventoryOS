@@ -88,7 +88,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.14 | Direct usage records | P1 | S | M4 | T2.05 | Built on branch, not merged (usage form, manual_consumption with a reason, consumption split sales / manual usage) |
 | T2.15 | Reorder suggestions on ledger usage | P1 | M | M4 | T2.10, T2.05 | Built on branch, not merged (velocity from the ledger, count-based fallback, ROR-FR-02 formula, count first, CSV ungated; recipe_components dropped) |
 | T2.16 | Reports I: consumption, waste, expiry, variance | P1 | M | M4 | T2.07, T1.23 | Built on branch, not merged (/app/reports: consumption split, count variance, expiry losses on business days; links waste report and as-of valuation) |
-| T2.17 | Reports II: margin, cost of sales, receiving, count-based usage, CSV | P1 | M | M4 | T2.16, T2.03, T2.11 | Not started |
+| T2.17 | Reports II: margin, cost of sales, receiving, count-based usage, CSV | P1 | M | M4 | T2.16, T2.03, T2.11 | Built on branch, not merged (margins, cost of sales with coverage, receiving discrepancies and price changes, count-based usage per interval, CSV of every report table) |
 | T2.18 | Weekly summary email | P1 | S | M4 | T2.16 | Not started |
 | T2.19 | Settings module | P1 | M | M3 | T1.04, T1.12 | Not started |
 | T2.20 | Onboarding flow | P1 | L | M4 | T2.12, T2.13, T1.14 | Not started |

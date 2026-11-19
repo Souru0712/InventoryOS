@@ -182,7 +182,8 @@ implementation sessions; the detail lives in `docs/`.
   A member's permissions are `member_permissions()` (PD-37 adds `sales.record` for Employees).
 - Reports read the ledger over each location's business days (ADR-0067): `app/reports.py`
   builds the windows, `app/transform/analytics.py` works out the figures per movement at its
-  snapshot cost; never sum events, lines or today's costs for a past figure.
+  snapshot cost; never sum events, lines or today's costs for a past figure. Every report table
+  exports through `/app/reports.csv` (ADR-0068) from the same report objects as its page.
 - Velocity and reorder read ledger usage (ADR-0066): `consumption()` in
   `app/orchestration/views.py` sums sale, production and manual consumption per business day;
   `app/reorder.py` (`plan()`, rules in `app/transform/reorder.py`) falls back to use between two

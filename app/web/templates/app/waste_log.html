@@ -3,6 +3,7 @@
 {% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
 <p class="small"><a href="/app/waste">← Log waste</a></p>
 <h1>Waste log</h1>
+{% if can(request, "data.export") %}<p class="small"><a href="/app/reports.csv?table=waste&range=custom&from={{ filters.since.isoformat() }}&to={{ filters.until.isoformat() }}{% if filters.location %}&location={{ filters.location }}{% endif %}">Waste by reason, item, product and person as CSV</a></p>{% endif %}
 <p class="muted">Every figure here comes from the stock records, so each loss counts once. A voided entry is left out.</p>
 
 <form method="get" action="/app/waste/log" class="card">

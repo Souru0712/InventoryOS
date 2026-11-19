@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from app.transform.dashboard import movement_value_cents
@@ -184,3 +184,145 @@ def expiry_losses(moves: Iterable[Moved], at_risk: Iterable[AtRisk]) -> ExpiryRe
         risky,
         uncosted or any(r.cents is None for r in risky),
     )
+
+
+# --- count-based actual usage (ANL-FR-14, STD-FR-08, AC-ANL-08) -------------------------------
+
+# What a count interval explains, by line of the formula; anything else that moved stock between
+# two counts (sales, manual usage, losses nobody recorded) is what was used.
+EXPLAINED = {
+    "receipt": "received",
+    "production_output": "produced",
+    "production_input": "used_in_production",
+    "waste": "wasted",
+    "adjustment": "adjusted",
+    "opening_balance": "adjusted",
+    "transfer_in": "adjusted",
+    "transfer_out": "adjusted",
+}
+
+
+@dataclass(frozen=True)
+class Count:
+    """A count of the item's whole quantity."""
+
+    at: datetime
+    day: date
+    qty_base: Decimal
+
+
+@dataclass(frozen=True)
+class Timed:
+    """A movement with its instant, for placing it between two counts."""
+
+    at: datetime
+    movement_type: str
+    qty_base: Decimal
+
+
+@dataclass(frozen=True)
+class Interval:
+    """Actual usage between two consecutive counts: opening count + received + produced
+    - used in production - wasted +/- adjusted - closing count."""
+
+    opening: Count
+    closing: Count
+    parts: dict[str, Decimal]  # signed, as each moved stock
+
+    @property
+    def used(self) -> Decimal:
+        return self.opening.qty_base + sum(self.parts.values(), ZERO) - self.closing.qty_base
+
+    @property
+    def days(self) -> int:
+        return (self.closing.day - self.opening.day).days
+
+
+def count_intervals(moves: Iterable[Timed], counts: Iterable[Count]) -> list[Interval]:
+    """Usage per interval between consecutive counts (counts at the same instant are one).
+    It needs no sales data at all."""
+    ordered = sorted({c.at: c for c in counts}.values(), key=lambda c: c.at)
+    timed = sorted(moves, key=lambda m: m.at)
+    result = []
+    for opening, closing in zip(ordered, ordered[1:], strict=False):
+        parts = dict.fromkeys(dict.fromkeys(EXPLAINED.values()), ZERO)
+        for m in timed:
+            part = EXPLAINED.get(m.movement_type)
+            if part is not None and opening.at < m.at <= closing.at:
+                parts[part] += m.qty_base
+        result.append(Interval(opening, closing, parts))
+    return result
+
+
+# --- receiving: price changes (ANL-FR-08) -------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Price:
+    """What one posted receiving line paid per base unit of an item from a supplier."""
+
+    key: tuple[int, int]  # (supplier, item)
+    at: datetime
+    per_base_cents: Decimal
+    receiving_id: int
+
+
+@dataclass(frozen=True)
+class PriceChange:
+    key: tuple[int, int]
+    at: datetime
+    before_cents: Decimal
+    after_cents: Decimal
+    receiving_id: int
+
+    @property
+    def percent(self) -> Decimal:
+        return ((self.after_cents - self.before_cents) * 100 / self.before_cents).quantize(
+            Decimal("0.1")
+        )
+
+
+def price_changes(prices: Iterable[Price], since: datetime) -> list[PriceChange]:
+    """Each change from the previous price of the same item from the same supplier, for prices
+    paid from `since` on: (new - previous) / previous."""
+    by_key: dict[tuple[int, int], list[Price]] = {}
+    for price in sorted(prices, key=lambda p: (p.at, p.receiving_id)):
+        by_key.setdefault(price.key, []).append(price)
+    changes = []
+    for paid in by_key.values():
+        for before, after in zip(paid, paid[1:], strict=False):
+            if (
+                after.at >= since
+                and before.per_base_cents > ZERO
+                and (after.per_base_cents != before.per_base_cents)
+            ):
+                changes.append(
+                    PriceChange(
+                        after.key,
+                        after.at,
+                        before.per_base_cents,
+                        after.per_base_cents,
+                        after.receiving_id,
+                    )
+                )
+    return sorted(changes, key=lambda c: c.at)
+
+
+# --- realized ingredient cost of sales (ANL-FR-12, AC-ANL-04) -----------------------------------
+
+
+@dataclass(frozen=True)
+class CostOfSales:
+    """What sales took, at each movement's snapshot, and how much of what was sold had a recipe
+    that took it."""
+
+    cents: int
+    lines: int  # counted sale lines that should take stock
+    complete: int  # of those, the ones fully consumed through a recipe
+    uncosted: bool
+
+    @property
+    def coverage_percent(self) -> Decimal | None:
+        if not self.lines:
+            return None
+        return (Decimal(self.complete) * 100 / Decimal(self.lines)).quantize(Decimal("0.1"))

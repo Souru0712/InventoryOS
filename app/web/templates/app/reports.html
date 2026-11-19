@@ -31,9 +31,10 @@
   {% if can(request, "reports.financial") %} · <a href="/app/valuation">Inventory value, now or on a past day →</a> · <a href="/app/report">Weekly summary →</a>{% endif %}
 </p>
 
+{% macro csv_link(name) %}{% if can(request, "data.export") %} <a class="small" href="/app/reports.csv?table={{ name }}&{{ csv_query }}">CSV</a>{% endif %}{% endmacro %}
 {% macro amount(i, value) %}{{ value|qty(i.display_unit if i else "") }}{% endmacro %}
 
-<h2>Consumption</h2>
+<h2>Consumption{{ csv_link('consumption') }}</h2>
 <p class="small muted">What left stock, by where it went: sold (through recipes), used in production, wasted, and used by hand.</p>
 {% if consumption.rows %}
 <div class="table-wrap">
@@ -56,7 +57,36 @@
 {% if costs and consumption.uncosted %}<p class="small muted">Some of it had no cost when it moved, so the money is less than the whole.</p>{% endif %}
 {% else %}<p class="muted">Nothing left stock in this period.</p>{% endif %}
 
-<h2>Count variance</h2>
+
+<h2>Cost of sales{{ csv_link('cost_of_sales') }}</h2>
+<div class="card">
+  {% if costs %}<p style="margin:0;">Ingredients sold through recipes cost <strong>{{ cost_of_sales.cents|money(currency) }}</strong>{% if cost_of_sales.uncosted %} <span class="small muted">plus some with no cost</span>{% endif %}, at the cost recorded when each sale took them.</p>{% endif %}
+  <p class="small muted" style="margin:{{ '8px' if costs else '0' }} 0 0;">{% if cost_of_sales.lines %}{{ cost_of_sales.complete }} of {{ cost_of_sales.lines }} sold lines ({{ cost_of_sales.coverage_percent }} %) had a recipe that took their ingredients; the rest used nothing from stock.{% else %}No sales recorded in this period.{% endif %}</p>
+</div>
+
+<h2>Count-based usage{{ csv_link('count_usage') }}</h2>
+<p class="small muted">What was actually used between two counts: opening count + received + produced − used in production − wasted ± adjusted − closing count. It needs no sales data.</p>
+{% if count_usage %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>Between counts</th><th>Opening</th>{% for key, label in interval_parts %}<th>{{ label }}</th>{% endfor %}<th>Closing</th><th>Used</th></tr></thead>
+  <tbody>
+  {% for key, intervals in count_usage %}{% set i = items.get(key[1]) %}{% for interval in intervals %}
+    <tr>
+      <td>{{ i.name if i else "item" }}{% if places|length > 1 and not location %}<div class="small muted">{{ names.get(key[0], "") }}</div>{% endif %}</td>
+      <td class="small">{{ interval.opening.day.strftime("%d %b") }} to {{ interval.closing.day.strftime("%d %b") }}</td>
+      <td class="small">{{ amount(i, interval.opening.qty_base) }}</td>
+      {% for part, _label in interval_parts %}<td class="small">{% if interval.parts[part] %}{{ "+" if interval.parts[part] > 0 else "" }}{{ amount(i, interval.parts[part]) }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endfor %}
+      <td class="small">{{ amount(i, interval.closing.qty_base) }}</td>
+      <td class="small"><strong>{{ amount(i, interval.used) }}</strong></td>
+    </tr>
+  {% endfor %}{% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="muted">No item was counted twice in this period.</p>{% endif %}
+
+<h2>Count variance{{ csv_link('variance') }}</h2>
 <p class="small muted">What counts found against the record: below zero is stock that went missing, above is stock found.</p>
 {% if variance.rows %}
 <div class="table-wrap">
@@ -72,7 +102,7 @@
 </div>
 {% else %}<p class="muted">No count differed from the record in this period.</p>{% endif %}
 
-<h2>Expiry losses</h2>
+<h2>Expiry losses{{ csv_link('expiry') }}</h2>
 <p class="small muted">Waste logged as past its date in this period, and stock past its date still on the shelf{% if costs %} (an estimate, at the batch's cost){% endif %}.</p>
 {% if expiry.lost %}
 <div class="table-wrap">
@@ -84,7 +114,7 @@
 </div>
 {% else %}<p class="muted">Nothing was thrown away as past its date in this period.</p>{% endif %}
 {% if expiry.at_risk %}
-<h3>Past its date, still held</h3>
+<h3>Past its date, still held{{ csv_link('at_risk') }}</h3>
 <div class="table-wrap">
 <table>
   <thead><tr><th>Item</th><th>Dated</th><th>Holds</th>{% if costs %}<th>At risk</th>{% endif %}</tr></thead>
@@ -92,5 +122,38 @@
   {% if costs %}<tfoot><tr><th>Total</th><th></th><th></th><th class="small">{{ expiry.at_risk_cents|money(currency) }}</th></tr></tfoot>{% endif %}
 </table>
 </div>
+{% endif %}
+
+<h2>Receiving{{ csv_link('discrepancies') }}</h2>
+<p class="small muted">Deliveries posted in this period whose quantities did not match the invoice, or were not all accepted.</p>
+{% if receiving.shortfalls %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Posted</th><th>Supplier</th><th>Item</th><th>What happened</th></tr></thead>
+  <tbody>{% for s in receiving.shortfalls %}{% set i = items.get(s.item_id) %}<tr><td class="small">{{ s.posted_at.strftime("%d %b") }}</td><td class="small">{{ s.supplier or "No supplier" }}</td><td>{{ i.name if i else "item" }}</td><td class="small">{{ s.found.describe(s.unit)|join(", ") }}</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p class="muted">Every delivery posted in this period matched.</p>{% endif %}
+{% if costs %}
+<h3>Price changes{{ csv_link('price_changes') }}</h3>
+{% if receiving.changes %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Paid on</th><th>Supplier</th><th>Item</th><th>Before</th><th>After</th><th>Change</th></tr></thead>
+  <tbody>{% for c in receiving.changes %}{% set i = items.get(c.key[1]) %}<tr><td class="small">{{ c.at.strftime("%d %b") }}</td><td class="small">{{ receiving.suppliers.get(c.key[0], "") }}</td><td>{{ i.name if i else "item" }}</td><td class="small">{{ c.before_cents|unit_cost(i.display_unit if i else "each", currency) }}</td><td class="small">{{ c.after_cents|unit_cost(i.display_unit if i else "each", currency) }}</td><td class="small">{{ "+" if c.percent > 0 else "" }}{{ c.percent }} %</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p class="muted">No supplier price changed in this period.</p>{% endif %}
+
+<h2>Margins{{ csv_link('margins') }}</h2>
+<p class="small muted">Recipe cost and estimated gross margin by size{% if margin_place %} at {{ margin_place.name }}{% endif %}, estimated at today's costs.</p>
+{% if margins %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Product</th><th>Price</th><th>Recipe cost</th><th>Margin</th></tr></thead>
+  <tbody>{% for m in margins %}<tr><td>{{ m.product }} <span class="muted">{{ m.size }}</span></td><td class="small">{{ m.price_cents|money(currency) if m.price_cents is not none else "–" }}</td><td class="small">{% if m.cost_cents is none %}<span class="muted">no recipe</span>{% else %}{{ m.cost_cents|money(currency) }}{% if not m.complete %} <span class="muted">+ uncosted</span>{% endif %}{% endif %}</td><td class="small">{{ (m.percent ~ " %") if m.percent is not none else "–" }}</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p class="muted">No products yet.</p>{% endif %}
 {% endif %}
 {% endblock %}

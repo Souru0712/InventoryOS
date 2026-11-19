@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Inventory value</h1>
+{% if can(request, "data.export") %}<p class="small"><a href="/app/reports.csv?table=valuation{% if as_of %}&as_of={{ as_of.isoformat() }}{% endif %}{% if selected_location %}&location={{ selected_location }}{% endif %}">Download as CSV</a></p>{% endif %}
 <p class="lede">{% if as_of %}What was held at the end of {{ as_of.strftime("%d %b %Y") }} (each location's business day), at the cost in effect then.{% else %}What is held now, at each item's current cost.{% endif %}
 Cost basis: {{ valuation.basis }}. Stock below zero counts as nothing.</p>
 

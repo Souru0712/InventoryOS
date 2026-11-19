@@ -275,14 +275,21 @@ def require_tenant(org: OrgContext = Depends(require_org), db: Session = Depends
 
 
 def location_filter(
-    location: int | None = None,
+    location: str | None = None,
     db: Session = Depends(get_db),
     org: OrgContext = Depends(require_org),
 ) -> int | None:
-    """An optional ?location= narrowing a page; a location outside the organization is not found."""
-    if location is not None and get_scoped(db, org, Location, location) is None:
+    """An optional ?location= narrowing a page; empty means every location (a form's "All"),
+    and a location outside the organization, or no location at all, is not found."""
+    if location is None or not location.strip():
+        return None
+    try:
+        wanted = int(location)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="location not found") from exc
+    if get_scoped(db, org, Location, wanted) is None:
         raise HTTPException(status_code=404, detail="location not found")
-    return location
+    return wanted
 
 
 def require_writable(

@@ -75,7 +75,8 @@ def identifier_params(route) -> list[str]:
         for param in dependant.path_params:
             found.append(param.name)
         for param in dependant.query_params + dependant.body_params:
-            names_a_row = param.name == "id" or param.name.endswith("_id")
+            # location_filter reads ?location= as text so a form's "All" (empty) is accepted.
+            names_a_row = param.name in ("id", "location") or param.name.endswith("_id")
             if names_a_row or (
                 _is_int(param.field_info.annotation) and param.name not in NOT_IDENTIFIERS
             ):
@@ -160,6 +161,9 @@ CASES = {
     },
     ("GET", "/app/usage"): lambda ids: {"params": {"location": ids["location"]}},
     ("GET", "/app/reports"): lambda ids: {"params": {"location": ids["location"]}},
+    ("GET", "/app/reports.csv"): lambda ids: {
+        "params": {"location": ids["location"], "table": "consumption"}
+    },
     ("POST", "/app/usage"): lambda ids: {
         "data": {
             "location_id": ids["location"],

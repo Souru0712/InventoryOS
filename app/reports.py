@@ -7,27 +7,52 @@ figures are worked out in `app/transform/analytics.py`.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
-from app.ledger.history import ItemMove, item_moves
+from app.costing import costing_location, size_costs
+from app.counts import counted_lines
+from app.ledger.history import ItemMove, balances_before, item_moves
 from app.ledger.posting import batch_remaining
-from app.models import Location, StockBatch, StockItem, WasteEvent, WasteReason
+from app.models import (
+    Location,
+    Product,
+    Receiving,
+    SalesTransaction,
+    StockBatch,
+    StockItem,
+    Supplier,
+    WasteEvent,
+    WasteReason,
+)
+from app.receivings import discrepancies
 from app.transform.analytics import (
     AtRisk,
     ConsumptionReport,
+    CostOfSales,
+    Count,
     ExpiryReport,
+    Interval,
     Moved,
+    Price,
+    PriceChange,
+    Timed,
     VarianceReport,
     consumption,
+    count_intervals,
     count_variance,
     expiry_losses,
+    price_changes,
 )
 from app.transform.business_days import business_date, business_day_end, business_day_start
 from app.transform.dashboard import DateRange
 from app.transform.inventory import valuation_cents
+from app.transform.receivings import Discrepancies
+from app.transform.reorder import Move, Observation, observations
 
 EXPIRED_REASON = "expiration"  # the waste reason code for stock past its date (WST-FR-02)
 WASTE_SOURCE = "waste_event"
@@ -167,3 +192,217 @@ def expiry_report(
             )
         )
     return expiry_losses(_moved(db, org, period, now, location_id), risky)
+
+
+# --- Reports II (T2.17) -------------------------------------------------------------------------
+
+
+def cost_of_sales_report(
+    db: Session,
+    org: OrgContext,
+    period: DateRange,
+    *,
+    location_id: int | None = None,
+    now: datetime | None = None,
+) -> CostOfSales:
+    """Realized ingredient cost of sales (ANL-FR-12): what sale consumption took at each
+    movement's snapshot, with the share of counted sale lines fully consumed through a recipe
+    (AC-ANL-04). Lines kept as history and never meant to take stock are left out."""
+    now = now or datetime.now(UTC)
+    used = consumption_report(db, org, period, location_id=location_id, now=now)
+    statuses: list[str] = []
+    for location, (first, last) in days(db, org, period, now, location_id).items():
+        for sale in db.scalars(
+            select_scoped(org, SalesTransaction).where(
+                SalesTransaction.location_id == location,
+                SalesTransaction.business_date >= first,
+                SalesTransaction.business_date <= last,
+                SalesTransaction.status == "completed",
+                SalesTransaction.of_record.is_(True),
+            )
+        ):
+            statuses.extend(
+                line.consumption_status
+                for line in sale.lines
+                if line.consumption_status != "skipped" and Decimal(line.quantity) > 0
+            )
+    return CostOfSales(
+        used.totals_cents["sales"],
+        len(statuses),
+        sum(1 for status in statuses if status == "posted"),
+        any(row.uncosted and row.qty["sales"] > 0 for row in used.rows.values()),
+    )
+
+
+def count_usage_report(
+    db: Session,
+    org: OrgContext,
+    period: DateRange,
+    *,
+    location_id: int | None = None,
+    now: datetime | None = None,
+) -> dict[tuple[int, int], list[Interval]]:
+    """Actual usage per item per interval between consecutive counts in the period (ANL-FR-14,
+    STD-FR-08): it needs no sales data. Counts are count-session lines and quick counts."""
+    now = now or datetime.now(UTC)
+    places = {p.id: p for p in _places(db, org, location_id)}
+    windows = _windows(db, org, period, now, location_id)
+    opening = balances_before(db, org, windows)
+    by_item: dict[tuple[int, int], list[ItemMove]] = {}
+    for m in item_moves(db, org, windows):
+        by_item.setdefault((m.location_id, m.inventory_item_id), []).append(m)
+    sessions = counted_lines(db, org, windows)
+    result = {}
+    for key in set(by_item) | set(sessions):
+        place = places[key[0]]
+        zone, cutoff = place.timezone, place.business_day_cutoff_hour
+        moves = [
+            Move(
+                m.occurred_at,
+                business_date(m.occurred_at, zone, cutoff),
+                m.transaction_id,
+                m.kind,
+                m.source_type,
+                m.movement_type,
+                m.qty_base,
+            )
+            for m in by_item.get(key, [])
+        ]
+        seen = observations(
+            opening.get(key, Decimal(0)),
+            moves,
+            [
+                Observation(at, business_date(at, zone, cutoff), qty)
+                for at, qty in sessions.get(key, [])
+            ],
+        )
+        intervals = count_intervals(
+            [Timed(m.at, m.movement_type, m.qty_base) for m in moves],
+            [Count(o.at, o.day, o.qty_base) for o in seen],
+        )
+        if intervals:
+            result[key] = intervals
+    return result
+
+
+@dataclass(frozen=True)
+class Shortfall:
+    """A posted receiving line whose quantities did not match (ANL-FR-08)."""
+
+    location_id: int
+    receiving_id: int
+    supplier: str
+    item_id: int
+    unit: str
+    found: Discrepancies
+    posted_at: datetime
+
+
+@dataclass(frozen=True)
+class ReceivingReport:
+    shortfalls: tuple[Shortfall, ...]
+    changes: tuple[PriceChange, ...]
+    suppliers: dict[int, str]
+
+
+def receiving_report(
+    db: Session,
+    org: OrgContext,
+    period: DateRange,
+    *,
+    location_id: int | None = None,
+    now: datetime | None = None,
+) -> ReceivingReport:
+    """Receiving discrepancies posted in the period, and supplier price changes paid in it
+    (ANL-FR-08): (new - previous) / previous per base unit, from posted receiving lines."""
+    now = now or datetime.now(UTC)
+    windows = _windows(db, org, period, now, location_id)
+    suppliers = {s.id: s.name for s in db.scalars(select_scoped(org, Supplier))}
+    shortfalls = []
+    prices = []
+    for receiving in db.scalars(
+        select_scoped(org, Receiving).where(
+            Receiving.status == "posted", Receiving.location_id.in_(list(windows))
+        )
+    ):
+        posted = receiving.posted_at
+        if posted is None:
+            continue
+        start, end = windows[receiving.location_id]
+        for line in receiving.lines:
+            if line.status == "open":
+                continue
+            if (
+                receiving.supplier_id is not None
+                and line.unit_price_cents is not None
+                and Decimal(line.qty_base) > 0
+                and Decimal(line.accepted_qty) > 0
+                and posted <= end
+            ):
+                per_unit = Decimal(line.qty_base) / Decimal(line.accepted_qty)
+                prices.append(
+                    Price(
+                        (receiving.supplier_id, line.inventory_item_id),
+                        posted,
+                        (Decimal(line.unit_price_cents) / per_unit).quantize(Decimal("0.0001")),
+                        receiving.id,
+                    )
+                )
+            found = discrepancies(line)
+            if found.any and start <= posted <= end:
+                shortfalls.append(
+                    Shortfall(
+                        receiving.location_id,
+                        receiving.id,
+                        suppliers.get(receiving.supplier_id or 0, ""),
+                        line.inventory_item_id,
+                        line.unit,
+                        found,
+                        posted,
+                    )
+                )
+    since = min((start for start, _ in windows.values()), default=now)
+    return ReceivingReport(
+        tuple(sorted(shortfalls, key=lambda s: s.posted_at)),
+        tuple(price_changes(prices, since)),
+        suppliers,
+    )
+
+
+@dataclass(frozen=True)
+class MarginRow:
+    product: str
+    size: str
+    variation_id: int
+    price_cents: int | None
+    cost_cents: Decimal | None  # per serving; None without a recipe in effect
+    complete: bool
+    percent: Decimal | None
+
+
+def margin_report(
+    db: Session, org: OrgContext, *, location_id: int | None = None
+) -> tuple[Location | None, list[MarginRow]]:
+    """Recipe cost and estimated gross margin by product size at one location, at today's
+    costs (ANL-FR-06)."""
+    place = costing_location(db, org, location_id)
+    if place is None:
+        return None, []
+    rows = []
+    for product in db.scalars(select_scoped(org, Product).where(Product.is_active.is_(True))):
+        for sized in size_costs(db, org, product, place.id):
+            if not sized.variation.is_active:
+                continue
+            rows.append(
+                MarginRow(
+                    product.name,
+                    sized.variation.name,
+                    sized.variation.id,
+                    sized.variation.price_cents,
+                    sized.cost.per_yield_cents if sized.cost else None,
+                    bool(sized.margin and sized.margin.complete),
+                    sized.margin.percent if sized.margin else None,
+                )
+            )
+    rows.sort(key=lambda r: (r.product.lower(), r.size.lower()))
+    return place, rows

@@ -14,11 +14,10 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
+from app.counts import counted_lines
 from app.ledger.history import balances_before, item_moves
 from app.models import (
     Location,
-    StockCount,
-    StockCountLine,
     StockItem,
     Supplier,
     SupplierItem,
@@ -122,23 +121,17 @@ def plan(
             )
         )
     opening = balances_before(db, org, windows)
-    counted: dict[tuple[int, int], list[Observation]] = defaultdict(list)
-    for line, session in db.execute(
-        select_scoped(org, StockCountLine)
-        .add_columns(StockCount)
-        .join(StockCount, StockCount.id == StockCountLine.stock_count_id)
-        .where(StockCount.status == "posted", StockCount.location_id.in_(list(windows)))
-    ).tuples():
-        start, end = windows[session.location_id]
-        if start <= line.counted_at <= end:
-            place = places[session.location_id]
-            counted[(session.location_id, line.inventory_item_id)].append(
-                Observation(
-                    line.counted_at,
-                    business_date(line.counted_at, place.timezone, place.business_day_cutoff_hour),
-                    Decimal(line.counted_qty_base),
-                )
+    counted = {
+        key: [
+            Observation(
+                at,
+                business_date(at, places[key[0]].timezone, places[key[0]].business_day_cutoff_hour),
+                qty,
             )
+            for at, qty in lines
+        ]
+        for key, lines in counted_lines(db, org, windows).items()
+    }
     complete = {
         pid: _complete(
             db, org, places[pid], today[pid] - timedelta(days=window - 1), today[pid] - timedelta(1)

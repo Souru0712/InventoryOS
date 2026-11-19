@@ -5,6 +5,34 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.17 Reports II (built on branch)
+
+**Implemented**
+- `app/transform/analytics.py`: count-based usage per count interval, price changes, cost of
+  sales coverage. `app/reports.py`: `cost_of_sales_report()`, `count_usage_report()`,
+  `receiving_report()`, `margin_report()`; `counted_lines()` in `app/counts.py` (shared with
+  reorder).
+- `/app/reports`: cost of sales, count-based usage, receiving, price changes and margins
+  sections; `/app/reports.csv?table=…` for every report table, linked from the reports, waste
+  log and valuation pages.
+- `location_filter` accepts an empty value as every location (the dashboard's "All" used to
+  return 422); the isolation walker names `location`.
+
+**Verified**
+- `tests/test_reports_ii.py`: AC-ANL-08 worked example (pure and on the ledger, no sales),
+  AC-ANL-04 coverage, discrepancies and a 25 % price change, margins, every CSV table, money
+  columns only with cost access, CSV figures equal the page's, empty and bad location; reports,
+  reorder, isolation, permissions, web, dashboard, headers, async, counts, receiving, health
+  flow, waste; the page and every CSV link checked on the demo database.
+
+**Decisions**
+- ADR-0068 (Proposed).
+
+**Open issues**
+- Count-based usage has no money column yet.
+
+---
+
 ## 2026-11-19 — T2.16 Reports I (built on branch)
 
 **Implemented**

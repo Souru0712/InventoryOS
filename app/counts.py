@@ -11,6 +11,8 @@ open `count_variance_high` for a Manager after posting (R1, PD-12). Nothing here
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -348,3 +350,23 @@ def summaries(db: Session, org: OrgContext, location_id: int | None = None) -> l
             -(s.count.posted_at or s.count.started_at).timestamp(),
         ),
     )
+
+
+def counted_lines(
+    db: Session, org: OrgContext, windows: Mapping[int, tuple[datetime, datetime]]
+) -> dict[tuple[int, int], list[tuple[datetime, Decimal]]]:
+    """What posted count sessions found of each item at each location within its window, as
+    (counted at, quantity): every line, including counts that matched and posted nothing."""
+    found: dict[tuple[int, int], list[tuple[datetime, Decimal]]] = defaultdict(list)
+    for line, session in db.execute(
+        select_scoped(org, StockCountLine)
+        .add_columns(StockCount)
+        .join(StockCount, StockCount.id == StockCountLine.stock_count_id)
+        .where(StockCount.status == "posted", StockCount.location_id.in_(list(windows)))
+    ).tuples():
+        start, end = windows[session.location_id]
+        if start <= line.counted_at <= end:
+            found[(session.location_id, line.inventory_item_id)].append(
+                (line.counted_at, Decimal(line.counted_qty_base))
+            )
+    return dict(found)

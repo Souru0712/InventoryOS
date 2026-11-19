@@ -99,3 +99,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0065](0065-direct-usage-records.md) | Direct usage records | T2.14 | Proposed |
 | [ADR-0066](0066-reorder-on-ledger-usage.md) | Reorder suggestions on ledger usage | T2.15 | Proposed |
 | [ADR-0067](0067-operational-reports.md) | Operational reports on the ledger | T2.16 | Proposed |
+| [ADR-0068](0068-reports-ii-and-csv.md) | Reports II and CSV of every report table | T2.17 | Proposed |
