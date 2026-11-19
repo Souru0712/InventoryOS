@@ -240,3 +240,29 @@ def test_ac_ror_05_nothing_orders_from_the_reorder_screens():
         for method in getattr(route, "methods", set())
     }
     assert methods <= {"GET", "HEAD"}
+
+
+def test_without_a_supplier_item_the_receiving_pack_is_the_purchase_unit(db, tenant, location):
+    org = OrgContext(tenant_id=tenant.id, permissions=role_permissions("owner"))
+    oil = create_item(
+        db,
+        org,
+        NewItem(
+            name="Olive oil",
+            location_ids=[location.id],
+            dimension="volume",
+            display_unit="ml",
+            quantity="1000",
+            reorder_point="2000",
+            receive_unit="l",
+            pack_size="3000",
+        ),
+    )
+    stock = db.scalars(select(StockItem).where(StockItem.inventory_item_id == oil.id)).one()
+    stock.last_counted_at = NOW - timedelta(hours=1)
+    db.commit()
+    [group] = plan(db, org, now=NOW)
+    [line] = group.lines
+    assert group.supplier == ""
+    assert line.purchase_unit == "l" and line.inputs.pack == D(3000)
+    assert line.suggestion is not None and line.suggestion.packs == 1

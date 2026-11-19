@@ -145,12 +145,13 @@ def plan(
         )
         for pid in windows
     }
-    catalog = {row.id: row.inventory_item_id for row in db.scalars(select_scoped(org, StockItem))}
+    rows = {row.id: row for row in db.scalars(select_scoped(org, StockItem))}
     suppliers = _suppliers(db, org)
 
     lines = []
     for view in stock_views(db, org, location_id):
-        item_id = catalog.get(view.id)
+        row = rows.get(view.id)
+        item_id = row.inventory_item_id if row is not None else None
         if item_id is None or view.location_id not in windows:
             continue
         key = (view.location_id, item_id)
@@ -160,6 +161,14 @@ def plan(
             recorded_use(found), window, complete[view.location_id], count_based_use(found, counts)
         )
         supplier, offer = suppliers.get(item_id, (None, None))
+        # Without a supplier item, the stock row's own receiving pack is the purchase unit.
+        pack, purchase_unit = (
+            (Decimal(offer.pack_size_base), offer.purchase_unit)
+            if offer is not None
+            else (Decimal(row.pack_size_base), row.receive_unit)
+            if row is not None and row.pack_size_base
+            else (None, None)
+        )
         inputs = Inputs(
             per_day=usage.per_day,
             lead_days=supplier.lead_time_days if supplier is not None else view.lead_time_days,
@@ -167,7 +176,7 @@ def plan(
             safety_percent=safety_percent,
             reorder_point=Decimal(view.reorder_point_base),
             on_hand=Decimal(view.qty_base),
-            pack=Decimal(offer.pack_size_base) if offer is not None else None,
+            pack=pack,
             whole_units=view.dimension is Dimension.COUNT,
         )
         if not needs_order(inputs):
@@ -180,7 +189,7 @@ def plan(
                 location_name=view.location_name,
                 unit=view.stock_unit,
                 supplier=supplier.name if supplier is not None else (view.supplier or ""),
-                purchase_unit=offer.purchase_unit if offer is not None else None,
+                purchase_unit=purchase_unit,
                 usage=usage,
                 inputs=inputs,
                 order_by=order_by(

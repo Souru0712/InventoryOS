@@ -46,7 +46,6 @@ from app.models import (
     Receiving,
     ReceivingLine,
     Recipe,
-    RecipeComponent,
     RecipeLine,
     RecipeVersion,
     SalesLineModifier,
@@ -129,7 +128,6 @@ LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
             InventoryEvent,
             ProductIdentifier,
             Promotion,
-            RecipeComponent,
             StockAlias,
             StockBatch,
         )

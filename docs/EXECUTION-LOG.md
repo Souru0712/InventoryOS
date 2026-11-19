@@ -5,6 +5,38 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.15 Reorder suggestions on ledger usage (built on branch)
+
+**Implemented**
+- Velocity reads the ledger (`item_moves()`, `consumption()` in `app/orchestration/views.py`):
+  sales, production and usage records, reversals netted; the sales signal is recipe ingredients
+  in effect or items used. Health, expiry, promotions and alerts read it.
+- `app/transform/reorder.py` and `app/reorder.py` (`plan()`): ROR-FR-02 formula rounded to the
+  purchase unit, count-based use when sales are incomplete or nothing recorded use (STD-FR-09),
+  count first, order-by from lead time and delivery days, grouped by supplier.
+- `/app/reorder`: window, cover and safety on the page, "why this number"; CSV grouped by
+  supplier on every plan (E-05).
+- `recipe_components` dropped (migration `2675519dc2bc`); the completeness notice reads recipes
+  in effect; the demo seeds first recipes from the start and consumes its sales history.
+
+**Verified**
+- `tests/test_reorder.py` (AC-ROR-01 example, AC-ANL-08 counts, count first, order-by, supplier
+  and receiving packs, CSV, no order path); health, expiry, promotions, alerts, dashboard,
+  permissions, entitlements, billing, recipes, ledger, migrations, isolation, web, scanning;
+  the demo reseeded and `/app/reorder` checked in the browser.
+- Fixtures that built velocity from POS sales now post ledger consumption
+  (`tests/ledger_helpers.py`: `consumed_on`, `counted_to`).
+
+**Decisions**
+- ADR-0066 (Proposed): par no longer sets the quantity; cover 7 days and safety 10 % by default,
+  set on the page (no schema in this task).
+
+**Open issues**
+- Cover and safety as business settings (needs a migration).
+- The completeness notice still treats a POS-counted item without a recipe as covered.
+
+---
+
 ## 2026-11-19 — T2.14 Direct usage records (built on branch)
 
 **Implemented**

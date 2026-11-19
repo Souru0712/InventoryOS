@@ -2,10 +2,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from app.transform.inventory import (
-    Component,
-    SaleRow,
     StockView,
-    consumption_by_day,
     daily_velocity,
     days_of_cover,
     stale_after,
@@ -31,17 +28,6 @@ def view(**overrides) -> StockView:
         lead_time_days=3,
     )
     return StockView(**{**defaults, **overrides})
-
-
-def test_sales_explode_into_base_units_per_stock_item():
-    sales = [SaleRow(sold_item_id=10, dt=TODAY, units=Decimal("100"))]
-    components = [
-        Component(10, 1, to_base(220, "ml")),  # milk
-        Component(10, 2, to_base(18, "g")),  # beans
-    ]
-    daily = consumption_by_day(sales, components)
-    assert daily[1][TODAY] == Decimal("22000.0000")  # 22 litres
-    assert daily[2][TODAY] == Decimal("1800.0000")  # 1.8 kg
 
 
 def test_velocity_and_cover_use_the_trailing_window():

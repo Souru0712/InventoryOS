@@ -97,3 +97,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0063](0063-daily-sales-entry.md) | Daily sales entry | T2.12 | Proposed |
 | [ADR-0064](0064-sales-file-import.md) | Sales file import | T2.13 | Proposed |
 | [ADR-0065](0065-direct-usage-records.md) | Direct usage records | T2.14 | Proposed |
+| [ADR-0066](0066-reorder-on-ledger-usage.md) | Reorder suggestions on ledger usage | T2.15 | Proposed |

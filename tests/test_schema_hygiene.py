@@ -18,8 +18,6 @@ from app.models import (
     InventoryCount,
     Location,
     ProductIdentifier,
-    RecipeComponent,
-    SoldItem,
     StockBatch,
     StockItem,
     Tenant,
@@ -144,24 +142,6 @@ def test_the_database_refuses_an_impossible_row(db, tenant, location, case):
     db.rollback()
 
 
-def test_a_recipe_must_consume_something(db, tenant, location):
-    item = _item(db, tenant, location)
-    sold = SoldItem(tenant_id=tenant.id, provider="demo", provider_item_id="latte", name="Latte")
-    db.add(sold)
-    db.flush()
-    db.add(
-        RecipeComponent(
-            tenant_id=tenant.id,
-            sold_item_id=sold.id,
-            stock_item_id=item.id,
-            qty_base_per_sale=Decimal("0"),
-        )
-    )
-    with pytest.raises(IntegrityError):
-        db.commit()
-    db.rollback()
-
-
 def test_what_the_rules_allow_is_still_accepted(db, tenant, location):
     """A recorded balance may go negative (DR-08); minus zero is zero; nulls mean not set."""
     item = _item(
@@ -238,27 +218,6 @@ def test_deleting_a_document_takes_its_lines_and_corrections(db, tenant, locatio
     db.commit()
     assert db.scalar(select(func.count()).select_from(DocumentLine)) == 0
     assert db.scalar(select(func.count()).select_from(ExtractionCorrection)) == 0
-
-
-def test_deleting_a_sold_item_takes_its_recipe(db, tenant, location):
-    item = _item(db, tenant, location)
-    sold = SoldItem(tenant_id=tenant.id, provider="demo", provider_item_id="latte", name="Latte")
-    db.add(sold)
-    db.flush()
-    db.add(
-        RecipeComponent(
-            tenant_id=tenant.id,
-            sold_item_id=sold.id,
-            stock_item_id=item.id,
-            qty_base_per_sale=Decimal("200"),
-        )
-    )
-    db.commit()
-
-    db.execute(delete(SoldItem).where(SoldItem.id == sold.id))
-    db.commit()
-    assert db.scalar(select(func.count()).select_from(RecipeComponent)) == 0
-    assert db.get(StockItem, item.id) is not None
 
 
 # --- forms say no before the database has to ------------------------------------------------------

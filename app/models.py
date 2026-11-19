@@ -476,10 +476,6 @@ class SoldItem(Base):
     sell_unit: Mapped[str] = mapped_column(String(16), default="each")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    components: Mapped[list[RecipeComponent]] = relationship(
-        back_populates="sold_item", cascade="all, delete-orphan"
-    )
-
 
 class SplitField:
     """A stock item field that now lives on its split row (C-38, ADR-0036).
@@ -739,24 +735,6 @@ class StockItem(Base):
     reorder_point_base = SplitField("_reorder_point_base", "item_location", "reorder_point_base")
     par_level_base = SplitField("_par_level_base", "item_location", "par_level_base")
     is_active = SplitField("_is_active", "item_location", "is_active")
-
-
-class RecipeComponent(Base):
-    """How much base-unit stock one sold unit consumes."""
-
-    __tablename__ = "recipe_components"
-    __table_args__ = (
-        UniqueConstraint("sold_item_id", "stock_item_id"),
-        positive("recipe_components", "qty_base_per_sale"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
-    sold_item_id: Mapped[int] = mapped_column(owned_by("sold_items.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
-    qty_base_per_sale: Mapped[Decimal] = mapped_column(Qty)
-
-    sold_item: Mapped[SoldItem] = relationship(back_populates="components")
 
 
 class Product(Base):

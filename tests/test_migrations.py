@@ -727,7 +727,8 @@ BEFORE_RECIPES = "5e0b7c41d2a9"
 
 
 def test_recipe_components_become_version_1_and_the_downgrade_keeps_them(fresh_url):
-    """T2.02, DM-9: each sold item's components are version 1 of its variation's recipe."""
+    """T2.02, DM-9: each sold item's components are version 1 of its variation's recipe; T2.15
+    drops the table, and its downgrade rebuilds the components from those versions."""
     config = alembic_config(fresh_url)
     command.upgrade(config, BEFORE_DM5)
     engine = create_engine(fresh_url, poolclass=NullPool)
@@ -773,6 +774,7 @@ def test_recipe_components_become_version_1_and_the_downgrade_keeps_them(fresh_u
                 )
         command.upgrade(config, "head")
         with engine.connect() as connection:
+            assert "recipe_components" not in inspect(connection).get_table_names()
             rows = connection.execute(
                 text(
                     "SELECT v.name, rv.version_no, ii.name, rl.unit, rl.qty_base"

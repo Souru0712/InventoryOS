@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, select_scoped
 from app.exceptions import ExceptionView, listing
 from app.ledger.history import MovementTotal, movement_totals
-from app.models import Location, RecipeComponent, SoldItem, StockItem, TrackMode
+from app.models import Location, ProductVariation, Recipe, SoldItem, StockItem, TrackMode
+from app.recipes import effective_version
 from app.sales import daily_sales
 from app.transform.business_days import business_date, business_day_end, business_day_start
 from app.transform.dashboard import DateRange, completeness_note
@@ -65,8 +66,17 @@ def sales_without_recipe(
     db: Session, org: OrgContext, period: DateRange, now: datetime, location_id: int | None = None
 ) -> str | None:
     """The completeness notice (CMD-FR-13): units sold over the period of products that use no
-    stock, because they have no recipe and are not a POS-counted item themselves."""
-    with_recipe = {row.sold_item_id for row in db.scalars(select_scoped(org, RecipeComponent))}
+    stock, because they have no recipe in effect and are not a POS-counted item themselves."""
+    with_recipe = {
+        r.product_variation_id
+        for r in db.scalars(select_scoped(org, Recipe))
+        if r.product_variation_id is not None and effective_version(db, org, r) is not None
+    }
+    by_sold = {
+        v.source_sold_item_id: v.id
+        for v in db.scalars(select_scoped(org, ProductVariation))
+        if v.source_sold_item_id is not None
+    }
     counted_by_pos = {
         (item.location_id, item.provider_variation_id)
         for item in db.scalars(
@@ -84,13 +94,14 @@ def sales_without_recipe(
     for location in places(db, org, location_id):
         first, last = _days(location, period, now)
         for sale in daily_sales(db, org, first, last, location.id):
-            if sale.sold_item_id is None or sale.sold_item_id in with_recipe:
+            size = sale.product_variation_id or by_sold.get(sale.sold_item_id or 0)
+            if size is not None and size in with_recipe:
                 continue
-            if (location.id, provider_ids.get(sale.sold_item_id)) in counted_by_pos:
+            if (location.id, provider_ids.get(sale.sold_item_id or 0)) in counted_by_pos:
                 continue
             if sale.units > 0:
                 units += sale.units
-                products.add(sale.sold_item_id)
+                products.add(size or -(sale.sold_item_id or 0))
     return completeness_note(units, len(products))
 
 

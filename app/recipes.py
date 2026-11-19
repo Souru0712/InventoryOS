@@ -25,10 +25,8 @@ from app.models import (
     Modifier,
     ProductVariation,
     Recipe,
-    RecipeComponent,
     RecipeLine,
     RecipeVersion,
-    StockItem,
 )
 from app.transform.items import ItemRuleError
 from app.transform.recipes import (
@@ -183,12 +181,17 @@ def save_recipe(
     yield_unit: str = "",
     instructions: str = "",
     effective_from: datetime | None = None,
+    from_the_start: bool = False,
     ip: str | None = None,
 ) -> RecipeVersion | None:
-    """Add the next version of the owner's recipe; None when nothing changed (RCP-FR-07)."""
+    """Add the next version of the owner's recipe; None when nothing changed (RCP-FR-07).
+    from_the_start makes a first recipe the one in effect for everything already recorded, as
+    DM-9's migration did: for seeding a business's history (the demo), never for an edit."""
     now = datetime.now(UTC)
     target = _owner_row(db, org, owner)
-    starts = check_effective_from(effective_from, now)
+    starts = FROM_THE_START if from_the_start else check_effective_from(effective_from, now)
+    if from_the_start and recipe_of(db, org, owner) is not None:
+        raise RecipeRuleError("Only a first recipe can be in effect from the start.")
     items: dict[int, InventoryItem] = {}
     checked: list[Line] = []
     for new in lines:
@@ -322,63 +325,3 @@ def start_from(
 
 
 # --- version 1 from the old recipe components ----------------------------------------------------
-
-
-def recipes_from_components(db: Session, org: OrgContext) -> int:
-    """Version 1, from the start of time, for variations whose sold item has components and
-    no recipe yet (DM-9's rule, as the migration applies it): the number made. Used by the
-    demo seed after the catalog exists."""
-    by_sold = {
-        v.source_sold_item_id: v
-        for v in db.scalars(select_scoped(org, ProductVariation))
-        if v.source_sold_item_id is not None
-    }
-    have = {
-        r.product_variation_id
-        for r in db.scalars(select_scoped(org, Recipe))
-        if r.product_variation_id is not None
-    }
-    stock = {s.id: s for s in db.scalars(select_scoped(org, StockItem))}
-    wanted: dict[int, dict[int, tuple[Decimal, InventoryItem]]] = {}
-    for component in sorted(db.scalars(select_scoped(org, RecipeComponent)), key=lambda c: c.id):
-        variation = by_sold.get(component.sold_item_id)
-        place = stock.get(component.stock_item_id)
-        if variation is None or variation.id in have or place is None:
-            continue
-        if place.inventory_item is None:
-            continue
-        lines = wanted.setdefault(variation.id, {})
-        lines.setdefault(
-            place.inventory_item.id, (Decimal(component.qty_base_per_sale), place.inventory_item)
-        )
-    for variation_id, lines in wanted.items():
-        recipe = Recipe(tenant_id=org.tenant_id, product_variation_id=variation_id)
-        db.add(recipe)
-        db.flush()
-        version = RecipeVersion(
-            tenant_id=org.tenant_id,
-            recipe_id=recipe.id,
-            version_no=1,
-            effective_from=FROM_THE_START,
-            yield_quantity=Decimal(1),
-            yield_unit=SERVING,
-            yield_base=Decimal(1),
-        )
-        db.add(version)
-        db.flush()
-        for position, (qty, item) in enumerate(lines.values()):
-            amount = qty.quantize(Decimal("0.0001"))
-            db.add(
-                RecipeLine(
-                    tenant_id=org.tenant_id,
-                    recipe_version_id=version.id,
-                    position=position,
-                    inventory_item_id=item.id,
-                    quantity=amount,
-                    unit=item.base_unit,
-                    qty_base=amount,
-                    is_packaging=item.item_type == "packaging",
-                )
-            )
-    db.flush()
-    return len(wanted)

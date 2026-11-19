@@ -180,6 +180,10 @@ implementation sessions; the detail lives in `docs/`.
   transaction `day:<date>` per location and day, a changed day needs a reason (carried to the
   reversal), a POS day is refused; `sales_missing` for open hand-entry days with no sales.
   A member's permissions are `member_permissions()` (PD-37 adds `sales.record` for Employees).
+- Velocity and reorder read ledger usage (ADR-0066): `consumption()` in
+  `app/orchestration/views.py` sums sale, production and manual consumption per business day;
+  `app/reorder.py` (`plan()`, rules in `app/transform/reorder.py`) falls back to use between two
+  counts when sales are incomplete, says which, and never orders. `recipe_components` is gone.
 - Ingredients used without a sale are recorded only by `app/usage.py` (ADR-0065): one `usage`
   transaction of `manual_consumption` keyed `usage:<form token>`, a reason required, below zero
   refused without the override (DR-08); `consumption()` keeps sales use and manual usage apart.
