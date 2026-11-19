@@ -10,8 +10,8 @@ from sqlalchemy import select
 
 from app.access import OrgContext
 from app.access.permissions import role_permissions
-from app.batches import date_stock, undate_batch, undated_stock
-from app.items import NewItem, create_item
+from app.batches import batch_view, count_batch, date_stock, undate_batch, undated_stock
+from app.items import NewItem, create_item, update_item
 from app.ledger.posting import (
     balance,
     batch_remaining,
@@ -21,6 +21,7 @@ from app.ledger.posting import (
     reverse_transaction,
 )
 from app.models import (
+    AuditEvent,
     ExceptionRecord,
     InventoryItem,
     InventoryMovement,
@@ -41,6 +42,7 @@ from app.transform.batches import (
     take,
     undated,
 )
+from app.transform.items import ItemRuleError
 from app.transform.ledger import Line
 
 D = Decimal
@@ -316,3 +318,101 @@ def test_removing_a_date_through_the_page_keeps_the_batch(db, shelf, location):
     assert db.get(StockBatch, batch.id) is not None
     assert _held_now(db, org, batch) == [D(0)]
     assert balance(db, org, location.id, item.id) == D(5)  # the stock itself is unchanged
+
+
+# --- T2.06-b: a batch's history, its own count, shortfalls, the order setting -----------------
+
+
+def test_ac_bat_08_a_batch_lists_every_movement_with_what_it_held_after(db, shelf, location):
+    org, item, stock = shelf
+    batch = _receive(db, org, stock, 10, 9, T0)
+    _sell(db, org, location, item, 4, "h1")
+    assert count_batch(db, org, batch.id, D(5)) == D(-1)  # one found missing
+    view = batch_view(db, org, batch.id)
+    assert view.remaining == D(5) and view.status == "active"
+    assert [(r.kind, r.qty_base, r.running_base, r.allocation_mode) for r in view.history] == [
+        ("count", D(-1), D(5), "explicit"),
+        ("sale", D(-4), D(6), "inferred"),
+        ("receipt", D(10), D(10), "explicit"),
+    ]
+    assert balance(db, org, location.id, item.id) == D(5)  # the item's stock moved with it
+    assert count_batch(db, org, batch.id, D(5)) == D(0)  # a matching count posts nothing
+    with pytest.raises(BatchRuleError):
+        count_batch(db, org, batch.id, D(-1))
+
+
+def test_a_batch_page_shows_its_history_and_takes_a_count(db, shelf):
+    org, item, stock = shelf
+    batch = _receive(db, org, stock, 6, 4, T0)
+    db.commit()
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        client.post("/login", data={"email": "owner@rosewood.test", "password": "a-good-password"})
+        page = client.get(f"/app/expiring/batches/{batch.id}")
+        assert page.status_code == 200 and "Every movement" in page.text and "Received" in page.text
+        counted = client.post(f"/app/expiring/batches/{batch.id}/count", data={"quantity": "4"})
+        assert "Counted." in counted.text
+        refused = client.post(f"/app/expiring/batches/{batch.id}/count", data={"quantity": "x"})
+        assert "Enter the quantity you counted" in refused.text
+    db.expire_all()
+    assert _held_now(db, org, batch) == [D(4)]
+
+
+def test_dr_13_stock_no_batch_holds_is_a_shortfall_until_dated_or_counted(db, shelf, location):
+    org, item, stock = shelf
+    db.get(InventoryItem, item.id).tracks_batches = True
+    _receive(db, org, stock, 6, 5, T0)
+    receive_scanned(db, org, stock, D(4), now=T0)  # a delivery with no date
+    db.commit()
+    evaluate_and_store(db, org)
+    db.commit()
+    short = db.scalars(
+        select(ExceptionRecord).where(ExceptionRecord.type == "batch_shortfall")
+    ).one()
+    assert short.status == "open" and short.quantity_base == D(4)
+    assert "is in no batch" in short.title
+    date_stock(db, org, stock, D(4), TODAY + timedelta(days=8))
+    evaluate_and_store(db, org)
+    db.commit()
+    db.expire_all()
+    assert (short.status, short.resolution) == ("resolved", "system")
+    # A sale beyond every batch is a shortfall the other way, until a count settles it.
+    _sell(db, org, location, item, 12, "over")
+    evaluate_and_store(db, org)
+    db.commit()
+    again = db.scalars(
+        select(ExceptionRecord).where(
+            ExceptionRecord.type == "batch_shortfall", ExceptionRecord.status == "open"
+        )
+    ).one()
+    assert "more than its batches held" in again.title
+
+
+def test_an_item_says_which_batch_is_used_first(db, shelf):
+    org, item, stock = shelf
+
+    def save(order):
+        return update_item(
+            db,
+            org,
+            item.id,
+            name="Milk",
+            item_type="raw",
+            category="",
+            dimension="count",
+            display_unit="each",
+            notes="",
+            shelf_life_days="",
+            tracks_expiry=True,
+            batch_order=order,
+        )
+
+    assert save(FIFO).batch_order == FIFO
+    assert save(None).batch_order == FIFO  # left as it is
+    with pytest.raises(ItemRuleError, match="which batch is used first"):
+        save("lifo")
+    audited = db.scalars(select(AuditEvent).where(AuditEvent.action == "item.updated")).first()
+    assert audited.after.get("batch order") == FIFO

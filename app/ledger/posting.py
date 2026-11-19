@@ -441,6 +441,54 @@ def reversed_by(db: Session, org: OrgContext, transaction_id: int) -> InventoryT
     ).first()
 
 
+def post_batch_count(
+    db: Session,
+    org: OrgContext,
+    *,
+    location_id: int,
+    inventory_item_id: int,
+    batch_id: int,
+    counted: Decimal,
+    idempotency_key: str,
+    occurred_at: datetime,
+    reason: str | None = None,
+) -> InventoryTransaction | None:
+    """Count one batch (BAT-FR-13): the difference from what the batch holds, worked out while
+    the item's balance is locked, posts as one count_variance on that batch. None when the
+    count matches."""
+    key = idempotency_key.strip()
+    earlier = _by_key(db, org, key)
+    if earlier is not None:
+        return earlier
+    _check_stocked(db, org, [(location_id, inventory_item_id)])
+    # Held until the request commits, so no posting takes from the batch in between.
+    _locked_balance(db, org, location_id, inventory_item_id)
+    held = batch_remaining(db, org, [batch_id]).get(batch_id, Decimal("0"))
+    variance = places(counted) - held
+    if variance == 0:
+        return None
+    return post_transaction(
+        db,
+        org,
+        kind="count",
+        source_type="batch",
+        source_id=str(batch_id),
+        idempotency_key=key,
+        lines=[
+            Line(
+                location_id,
+                inventory_item_id,
+                "count_variance",
+                variance,
+                batch_id=batch_id,
+                reason=reason,
+            )
+        ],
+        occurred_at=occurred_at,
+        reason=reason,
+    )
+
+
 def assign_batch(
     db: Session,
     org: OrgContext,

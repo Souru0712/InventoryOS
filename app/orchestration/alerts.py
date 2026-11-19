@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, get_scoped, select_scoped, team
 from app.access.permissions import VIEW_COSTS
 from app.adjustments import negative_finding
+from app.batches import shortfalls
 from app.config import get_settings
 from app.entitlements import allows
 from app.exceptions import apply_findings, mark_notified
@@ -70,7 +71,11 @@ def evaluate_and_store(db: Session, org: OrgContext, now: datetime | None = None
             findings.append(
                 negative_finding(row.inventory_item, locations[row.location_id], row.qty_base)
             )
-    return apply_findings(db, org, findings, STOCK_TYPES | {"negative_balance"}, now)
+    # Stock of a batch-tracked item that no batch holds (DR-13); it clears once dated or counted.
+    findings.extend(shortfalls(db, org))
+    return apply_findings(
+        db, org, findings, STOCK_TYPES | {"negative_balance", "batch_shortfall"}, now
+    )
 
 
 def send_alert_digest(db: Session, org: OrgContext, now: datetime | None = None) -> bool:

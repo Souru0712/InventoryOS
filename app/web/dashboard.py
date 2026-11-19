@@ -16,7 +16,7 @@ from app.access import OrgContext, get_scoped, select_scoped
 from app.access.permissions import VIEW_COSTS, without_costs
 from app.audit import record_audit
 from app.batches import NotFound as BatchNotFound
-from app.batches import date_stock, undate_batch
+from app.batches import batch_view, count_batch, date_stock, undate_batch
 from app.config import get_settings
 from app.costs import value_stock
 from app.db import get_db
@@ -70,6 +70,7 @@ from app.transform.ledger import LedgerRuleError
 from app.units import UnitError, format_amount, format_change, to_base
 from app.web.exceptions import FIX_LINKS
 from app.web.flash import flash, pop_flash
+from app.web.stock import KIND_LABELS
 from app.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -342,6 +343,55 @@ def remove_batch(
         raise HTTPException(status_code=404, detail="batch not found") from exc
     db.commit()
     return RedirectResponse("/app/expiring?removed=1", status_code=303)
+
+
+@router.get("/app/expiring/batches/{batch_id}", response_class=HTMLResponse)
+def batch_page(
+    request: Request,
+    batch_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_permission("inventory.view")),
+):
+    """One batch: what it holds, its status, and every movement allocated to it (AC-BAT-08)."""
+    try:
+        view = batch_view(db, org, batch_id)
+    except BatchNotFound as exc:
+        raise HTTPException(status_code=404, detail="batch not found") from exc
+    return templates.TemplateResponse(
+        request,
+        "app/batch.html",
+        {
+            "title": f"{view.stock.name}: batch",
+            "tenant": tenant,
+            "view": view,
+            "kind_labels": KIND_LABELS,
+        },
+    )
+
+
+@router.post("/app/expiring/batches/{batch_id}/count")
+def count_one_batch(
+    batch_id: int,
+    quantity: str = Form(""),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("count.record")),
+):
+    """Count one batch (BAT-FR-13); the difference moves the item's stock too."""
+    try:
+        view = batch_view(db, org, batch_id)
+    except BatchNotFound as exc:
+        raise HTTPException(status_code=404, detail="batch not found") from exc
+    page = f"/app/expiring/batches/{batch_id}"
+    try:
+        counted = to_base(quantity, view.stock.stock_unit)
+        count_batch(db, org, batch_id, counted)
+    except (UnitError, ValueError, ArithmeticError, BatchRuleError):
+        db.rollback()
+        return RedirectResponse(f"{page}?error=invalid", status_code=303)
+    db.commit()
+    return RedirectResponse(f"{page}?counted=1", status_code=303)
 
 
 @router.get("/app/items/new")

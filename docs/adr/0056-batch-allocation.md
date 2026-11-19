@@ -1,6 +1,6 @@
 # ADR-0056: Batch allocation
 
-- **Status:** Proposed, 2026-11-18 (in the T2.06-a pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "merge now"; PR #58, T2.06-a)
 - **Decision ID:** none (implements T2.06-a: BAT-FR-01, -05, -06, -08, DR-13..15, AC-BAT-01..04;
   DM-10; WF-12 step 6, moved from T2.05 by the owner on 2026-11-18)
 - **Tasks:** T2.06 (`-a` allocation, `-b` batch history, batch counts, `batch_shortfall`, the

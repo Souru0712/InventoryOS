@@ -38,6 +38,7 @@ from app.models import (
     TrackMode,
 )
 from app.orchestration.scanning import CodeInUse, link_code
+from app.transform.batches import BATCH_ORDERS
 from app.transform.business_days import business_date
 from app.transform.conversions import (
     Conversion,
@@ -428,9 +429,11 @@ def update_item(
     notes: str,
     shelf_life_days: str,
     tracks_expiry: bool | None,
+    batch_order: str | None = None,
     ip: str | None = None,
 ) -> InventoryItem:
-    """Change an item's definition for every location at once (INV-FR-02, INV-FR-14)."""
+    """Change an item's definition for every location at once (INV-FR-02, INV-FR-14). A
+    batch order of None leaves it as it is."""
     row = item_row(db, org, inventory_item_id)
     item = row.item
     name = clean_name(name)
@@ -448,6 +451,8 @@ def update_item(
         raise ItemRuleError("Shelf life is a number of days.") from exc
     if shelf_life is not None and shelf_life < 0:
         raise ItemRuleError("Shelf life cannot be negative.")
+    if batch_order is not None and batch_order not in BATCH_ORDERS:
+        raise ItemRuleError("Choose which batch is used first.")
     was = _definition(item)
     item.name = name
     item.item_type = known_item_type(item_type)
@@ -457,6 +462,8 @@ def update_item(
     item.default_shelf_life_days = shelf_life
     item.tracks_expiry = tracks_expiry
     item.tracks_batches = bool(tracks_expiry)
+    if batch_order is not None:
+        item.batch_order = batch_order
     db.flush()
     before, after = changes(was, _definition(item))
     if after:
@@ -484,6 +491,7 @@ def _definition(item: InventoryItem) -> dict:
         "notes": item.notes,
         "shelf life (days)": item.default_shelf_life_days,
         "tracks expiry": item.tracks_expiry,
+        "batch order": item.batch_order,
     }
 
 
