@@ -213,6 +213,17 @@ def require_verified(user: User = Depends(require_user)) -> User:
     return user
 
 
+def member_permissions(db: Session, membership: Membership) -> frozenset[str]:
+    """The role's permissions, with what the business allows on top: an Employee enters daily
+    sales when the Owner says so (PD-37)."""
+    granted = role_permissions(membership.role)
+    if membership.role == "employee":
+        business = db.get(Tenant, membership.tenant_id)
+        if business is not None and business.employees_enter_sales:
+            granted = granted | {"sales.record"}
+    return granted
+
+
 def require_membership(
     request: Request, user: User = Depends(require_user), db: Session = Depends(get_db)
 ) -> Membership:
@@ -228,16 +239,18 @@ def require_membership(
     # For the switcher in the page header: (membership id, business name, is it this one).
     request.state.businesses = [(m.id, name, m.id == membership.id) for m, name in options]
     # For templates: menus and cost columns follow the role (USER_ROLES_AND_PERMISSIONS §5).
-    request.state.permissions = role_permissions(membership.role)
+    request.state.permissions = member_permissions(db, membership)
     # Owners and Administrators without two-step sign-in see a prompt on every page (PD-20).
     request.state.mfa_prompt = membership.role in PROMPTED_ROLES and user.mfa_enabled_at is None
     bind(tenant_id=membership.tenant_id)
     return membership
 
 
-def require_org(membership: Membership = Depends(require_membership)) -> OrgContext:
+def require_org(
+    membership: Membership = Depends(require_membership), db: Session = Depends(get_db)
+) -> OrgContext:
     """The member's scope; every product query in the request runs in it (C-33)."""
-    return OrgContext.for_membership(membership)
+    return OrgContext.for_membership(membership, member_permissions(db, membership))
 
 
 def require_permission(key: str):

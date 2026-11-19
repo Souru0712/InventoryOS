@@ -44,5 +44,5 @@ exactly-once posting, and corrections that keep the original.
 
 ## Consequences
 
-- **T2.11-b:** invoice review creates and posts a receiving (so documents stop posting on their
-  own), extraction as a job with a per-business daily cap, Employee cost changes flagged.
+- Invoices keep their own receipt posting; their receivings are the record beside it (see the
+  addendum), so the two never post twice.

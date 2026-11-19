@@ -176,6 +176,10 @@ implementation sessions; the detail lives in `docs/`.
   before. Gaps raise `unmapped_product`, uncosted use `missing_cost`. `reprocess_sale()`
   reverses and posts again (`:p<n>`). Sales recorded with `consume=False` (history) and lines
   from before T2.05 are never consumed.
+- Daily sales by hand go through `app/daily_sales.py` (`save_day()`, ADR-0063): one manual
+  transaction `day:<date>` per location and day, a changed day needs a reason (carried to the
+  reversal), a POS day is refused; `sales_missing` for open hand-entry days with no sales.
+  A member's permissions are `member_permissions()` (PD-37 adds `sales.record` for Employees).
 - Every sale is a sales transaction (DR-30, ADR-0053), recorded only by `app/sales.py`
   (`record_sale()`), with its origin from its source (DR-34); everything that reads sales
   goes through `daily_sales()`. A location has one source of record per business date: a

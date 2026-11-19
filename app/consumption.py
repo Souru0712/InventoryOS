@@ -373,10 +373,13 @@ def _post(db: Session, org: OrgContext, transaction: SalesTransaction) -> bool:
     return True
 
 
-def consume_sale(db: Session, org: OrgContext, transaction_id: int) -> bool:
+def consume_sale(
+    db: Session, org: OrgContext, transaction_id: int, reason: str | None = None
+) -> bool:
     """WF-12 for one recorded sale; safe to run again. Earlier revisions give back what they
-    posted; the latest, if it is completed and counted, posts what its lines used. True when
-    something was posted."""
+    posted, with the person's reason when a correction gave one (STD-FR-05); the latest, if it
+    is completed and counted, posts what its lines used. True when something was posted."""
+    correction = reason
     transaction = get_scoped(db, org, SalesTransaction, transaction_id)
     if transaction is None:
         return False
@@ -386,7 +389,11 @@ def consume_sale(db: Session, org: OrgContext, transaction_id: int) -> bool:
         if revision is latest and _counts(revision):
             continue
         if revision is not latest:
-            reason = f"Sale corrected: revision {latest.revision} replaces it"
+            reason = (
+                f"Sale corrected: {why}"
+                if (why := (correction or "").strip())
+                else f"Sale corrected: revision {latest.revision} replaces it"
+            )
         elif revision.status == "voided":
             reason = "Sale voided"
         else:
@@ -416,13 +423,18 @@ def reprocess_sale(db: Session, org: OrgContext, transaction_id: int, *, reason:
     return consume_sale(db, org, transaction.id)
 
 
-def queue_consumption(db: Session, org: OrgContext, transaction: SalesTransaction) -> None:
+def queue_consumption(
+    db: Session, org: OrgContext, transaction: SalesTransaction, reason: str | None = None
+) -> None:
     """Consume a sale in the background: a failure leaves its lines pending and is retried
     (WF-12), and never holds up recording it."""
+    payload: dict = {"sales_transaction_id": transaction.id}
+    if reason:
+        payload["reason"] = reason[:200]
     enqueue(
         db,
         org,
         "consume_sale",
-        {"sales_transaction_id": transaction.id},
+        payload,
         dedupe_key=f"sale:{transaction.id}",
     )

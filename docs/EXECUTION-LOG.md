@@ -5,6 +5,31 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.12 Standalone daily sales entry (built on branch)
+
+**Implemented**
+- `app/daily_sales.py`: `save_day()` (one manual daily transaction per location and day, the same
+  values record nothing, a changed day needs a reason carried to the reversal, consumption posted
+  in the request with the job as the net, POS days refused, a manual source started or extended
+  back), `missing_days()` (`sales_missing` for open hand-entry days of the last week).
+- `extend_source()` in `app/sales.py`; the correction reason through `record_sale()`,
+  `queue_consumption()` and `consume_sale()`.
+- PD-37: `tenants.employees_enter_sales` (migration `e557269f9eb1`) and `member_permissions()`,
+  used by `require_org()` and the menus.
+- `/app/sales/daily`: the grid, most sold first, and the Employee setting.
+
+**Verified**
+- `tests/test_daily_sales.py`: AC-SAL-02, -03, -05, -06, PD-37, the page; permissions, team,
+  sessions, sales, consumption, jobs, alerts and the full isolation suite.
+
+**Decisions**
+- ADR-0063 (Proposed).
+
+**Open issues**
+- Optional modifier counts on the daily grid (PD-38) are not on the screen.
+
+---
+
 ## 2026-11-19 — T2.11-b Invoices as receivings and the reading cap (built on branch)
 
 **Implemented**

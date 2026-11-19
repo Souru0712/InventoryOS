@@ -202,6 +202,8 @@ class Tenant(Base):
     # expired prepared batches are written off at day close (BAT-FR-11; off by default, PD-29).
     expiry_alert_days: Mapped[int] = mapped_column(Integer, default=2)
     auto_dispose_prepared: Mapped[bool] = mapped_column(Boolean, default=False)
+    # PD-37: daily sales are entered by Managers and above unless the Owner lets Employees.
+    employees_enter_sales: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     users: Mapped[list[User]] = relationship(back_populates="tenant")

@@ -133,7 +133,7 @@ def _handlers() -> dict[str, Handler]:
             )
 
     def consume(db: Session, org: OrgContext, payload: dict) -> None:
-        consume_sale(db, org, int(payload["sales_transaction_id"]))
+        consume_sale(db, org, int(payload["sales_transaction_id"]), payload.get("reason"))
 
     return {
         "evaluate_exceptions": evaluate,

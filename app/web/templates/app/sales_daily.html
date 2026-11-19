@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Daily sales</h1>
+<p class="small muted">Entered by hand. How many of each size sold on the day; saving takes what they used out of stock.</p>
+{% if places|length > 1 %}
+<p class="small">{% for p in places %}{% if p.id == place.id %}<strong>{{ p.name }}</strong>{% else %}<a href="/app/sales/daily?location={{ p.id }}&day={{ day.isoformat() }}">{{ p.name }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+<p><strong>{{ day.strftime("%A %d %B %Y") }}</strong></p>
+<form method="get" action="/app/sales/daily" class="inline-form">
+  <input type="hidden" name="location" value="{{ place.id }}">
+  <label for="day-pick">Another day</label>
+  <input id="day-pick" type="date" name="day" value="{{ day.isoformat() }}">
+  <button class="btn small secondary" type="submit">Show</button>
+</form>
+
+{% if not sizes %}
+  <div class="card"><p style="margin:0;">No products yet. Add what you sell under Products first.</p></div>
+{% else %}
+<form method="post" action="/app/sales/daily">{{ csrf_field(request) }}
+  <input type="hidden" name="location_id" value="{{ place.id }}">
+  <input type="hidden" name="day" value="{{ day.isoformat() }}">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Product</th><th>Sold</th></tr></thead>
+    <tbody>
+    {% for v in sizes %}
+      <tr>
+        <td><label for="qty-{{ v.id }}">{{ v.product.name }} {{ v.name }}</label></td>
+        <td><input id="qty-{{ v.id }}" name="qty_{{ v.id }}" inputmode="numeric" style="width:6em;" value="{{ values[v.id]|num if v.id in values else '' }}"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if values %}
+  <div class="field">
+    <label for="reason">Why are you changing this day?</label>
+    <input id="reason" name="reason" maxlength="200" placeholder="Needed only if the numbers change">
+  </div>
+  {% endif %}
+  <button class="btn" type="submit">Save the day</button>
+</form>
+{% endif %}
+
+{% if can(request, "settings.manage") %}
+<form method="post" action="/app/sales/daily/settings" class="inline-form" style="margin-top:16px;">{{ csrf_field(request) }}
+  <label for="employees">Who enters daily sales</label>
+  <select id="employees" name="employees">
+    <option value="no"{% if not tenant.employees_enter_sales %} selected{% endif %}>Managers and above</option>
+    <option value="yes"{% if tenant.employees_enter_sales %} selected{% endif %}>Employees too</option>
+  </select>
+  <button class="btn small secondary" type="submit">Save</button>
+</form>
+{% endif %}
+{% endblock %}

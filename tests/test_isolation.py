@@ -139,6 +139,10 @@ CASES = {
     ("POST", "/app/suppliers/{supplier_id}/items"): lambda ids: {
         "data": {"inventory_item_id": ids["inventory_item"], "pack_quantity": "2"}
     },
+    ("GET", "/app/sales/daily"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/sales/daily"): lambda ids: {
+        "data": {"location_id": ids["location"], "day": "2026-11-02"}
+    },
     ("POST", "/app/deliveries"): lambda ids: {
         "data": {"location_id": ids["location"], "supplier_id": ids["supplier"]}
     },

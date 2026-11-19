@@ -27,6 +27,7 @@ from app.web import (
     catalog,
     costing,
     counts,
+    daily_sales,
     dashboard,
     deliveries,
     exceptions,
@@ -120,6 +121,7 @@ app.include_router(waste.router)
 app.include_router(production.router)
 app.include_router(suppliers.router)
 app.include_router(deliveries.router)
+app.include_router(daily_sales.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

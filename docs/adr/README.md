@@ -94,3 +94,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0060](0060-production-runs.md) | Production runs | T2.09 | Proposed |
 | [ADR-0061](0061-suppliers.md) | Suppliers and supplier items | T2.10 | Proposed |
 | [ADR-0062](0062-receivings.md) | Receivings on the ledger | T2.11 | Proposed |
+| [ADR-0063](0063-daily-sales-entry.md) | Daily sales entry | T2.12 | Proposed |
