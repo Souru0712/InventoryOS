@@ -101,3 +101,13 @@ def history(
         query = query.where(AuditEvent.at < before)
     rows = db.execute(query.order_by(AuditEvent.at.desc(), AuditEvent.id.desc()).limit(PAGE))
     return [(event, email) for event, email in rows]
+
+
+def has_event(db: Session, org: OrgContext, actions: tuple[str, ...]) -> bool:
+    """Whether org's history holds any event of these actions (the onboarding checklist asks)."""
+    found = db.scalars(
+        select(AuditEvent.id)
+        .where(*scope_filter(org, AuditEvent), AuditEvent.action.in_(actions))
+        .limit(1)
+    ).first()
+    return found is not None

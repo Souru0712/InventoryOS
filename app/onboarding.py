@@ -19,11 +19,10 @@ from sqlalchemy import Numeric, cast
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, members, select_scoped
-from app.audit import record_audit
+from app.audit import has_event, record_audit
 from app.items import entered_base
 from app.ledger.posting import has_moved, post_count, post_opening
 from app.models import (
-    AuditEvent,
     InventoryItem,
     Invitation,
     ItemLocation,
@@ -145,12 +144,7 @@ def checklist(db: Session, org: OrgContext) -> list[Step]:
             "Set your alerts",
             "Reorder points, expiry warnings and when the alert email goes out.",
             "/app/settings/alerts",
-            _any(
-                db,
-                select_scoped(org, AuditEvent).where(
-                    AuditEvent.action.in_(("settings.alerts_changed", "settings.expiry_changed"))
-                ),
-            )
+            has_event(db, org, ("settings.alerts_changed", "settings.expiry_changed"))
             or _any(
                 db,
                 select_scoped(org, ItemLocation).where(

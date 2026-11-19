@@ -69,7 +69,8 @@ jobs:
   postgres:
     name: Tests (PostgreSQL 16)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # The full suite took about 35 minutes on Postgres by T2.22 (run #142 was cut off at 83 %).
+    timeout-minutes: 45
     # The steps run in a container on the database's Docker network and reach it by service
     # name, so no host port is published (run #2 failed starting Docker's port proxy).
     container: python:3.12-slim
