@@ -1,7 +1,7 @@
 """Business settings (T2.19; ADM-FR-01, -03..06, AC-ADM-02).
 
-The only writer of `business_settings`, and of the tenant's profile, report schedule and expiry
-window from the settings screens. Every change is audited (`settings.*`). The rules are in
+The only writer of `business_settings`, and of the tenant's report schedule and expiry window
+from the settings screens (the profile has its own form on /app/settings, T1.04). Every change is audited (`settings.*`). The rules are in
 `app/transform/settings.py`; what reads a setting reads it when it runs, so a change takes
 effect on the next evaluation, count or sale.
 """
@@ -21,7 +21,6 @@ from app.transform.settings import (
     Alerts,
     check_alerts,
     check_defaults,
-    check_profile,
     check_schedule,
 )
 
@@ -63,28 +62,6 @@ def _audit(
         ip=ip,
     )
     return True
-
-
-def save_profile(
-    db: Session,
-    org: OrgContext,
-    *,
-    name: str,
-    address: str,
-    contact_email: str,
-    ip: str | None = None,
-) -> bool:
-    """ADM-FR-01: the business's name, address and contact email. True when something changed."""
-    profile = check_profile(name, address, contact_email)
-    tenant = _tenant(db, org)
-    was = {"name": tenant.name, "address": tenant.address, "contact email": tenant.contact_email}
-    tenant.name, tenant.address, tenant.contact_email = (
-        profile.name,
-        profile.address,
-        profile.contact_email,
-    )
-    now = {"name": tenant.name, "address": tenant.address, "contact email": tenant.contact_email}
-    return _audit(db, org, "profile_changed", "Changed the business profile", was, now, ip)
 
 
 def save_schedule(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -19,31 +18,10 @@ SYSTEM_UNITS = {
 DEFAULT_COUNT_REVIEW_CENTS = 2500
 DEFAULT_COUNT_REVIEW_PERCENT = 20
 DEFAULT_ADJUSTMENT_REVIEW_CENTS = 5000
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class SettingsRuleError(ValueError):
     """A setting that cannot be saved, with the reason to show."""
-
-
-@dataclass(frozen=True)
-class Profile:
-    name: str
-    address: str | None
-    contact_email: str | None
-
-
-def check_profile(name: str, address: str, contact_email: str) -> Profile:
-    cleaned = " ".join(name.split())
-    if not cleaned:
-        raise SettingsRuleError("The business needs a name.")
-    if len(cleaned) > 200:
-        raise SettingsRuleError("Keep the name under 200 characters.")
-    email = contact_email.strip().lower() or None
-    if email is not None and (len(email) > 255 or not _EMAIL.match(email)):
-        raise SettingsRuleError("That contact email does not look right.")
-    place = " ".join(address.split())[:300] or None
-    return Profile(cleaned, place, email)
 
 
 def check_schedule(day: int, hour: int) -> tuple[int, int]:

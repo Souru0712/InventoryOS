@@ -12,7 +12,6 @@ from app.business_settings import (
     alert_email_key,
     save_alerts,
     save_defaults,
-    save_profile,
     save_schedule,
     settings_for,
 )
@@ -34,26 +33,16 @@ def org(tenant):
     return OrgContext(tenant_id=tenant.id, permissions=role_permissions("owner"))
 
 
-def test_profile_and_schedule_are_saved_and_audited(db, tenant, org):
-    assert save_profile(
-        db, org, name="Rosewood Coffee", address="1 High St", contact_email="Hi@Rosewood.test"
-    )
+def test_the_schedule_is_saved_and_audited(db, tenant, org):
     assert save_schedule(db, org, day=4, hour=16)
     db.commit()
     row = db.get(Tenant, tenant.id)
-    assert (row.name, row.contact_email, row.report_day, row.report_hour) == (
-        "Rosewood Coffee",
-        "hi@rosewood.test",
-        4,
-        16,
-    )
+    assert (row.report_day, row.report_hour) == (4, 16)
     actions = {e.action for e in db.scalars(select(AuditEvent))}
-    assert {"settings.profile_changed", "settings.schedule_changed"} <= actions
+    assert "settings.schedule_changed" in actions
     assert save_schedule(db, org, day=4, hour=16) is False  # nothing changed, nothing recorded
-    with pytest.raises(SettingsRuleError, match="name"):
-        save_profile(db, org, name=" ", address="", contact_email="")
-    with pytest.raises(SettingsRuleError, match="email"):
-        save_profile(db, org, name="R", address="", contact_email="not an email")
+    with pytest.raises(SettingsRuleError):
+        save_schedule(db, org, day=7, hour=16)
 
 
 def test_ac_adm_02_alert_settings_take_effect_on_the_next_check(db, tenant, org):

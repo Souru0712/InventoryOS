@@ -1,8 +1,8 @@
 """Business settings screens (T2.19; ADM-FR-01, -03..06): /app/settings/business and
 /app/settings/alerts.
 
-The business page (Owner, Administrator) holds the profile, the weekly summary's schedule and the
-defaults, and links the settings that live with what they configure: locations, the team,
+The business page (Owner, Administrator) holds the weekly summary's schedule and the defaults
+(the profile keeps its form on /app/settings), and links the settings that live with what they configure: locations, the team,
 categories, waste reasons, modifiers. The alert page (also Managers) holds the expiry window, the
 alert email's hour and the review thresholds, and shows who receives which email.
 """
@@ -19,7 +19,6 @@ from app.business_settings import (
     DAYS,
     save_alerts,
     save_defaults,
-    save_profile,
     save_schedule,
     settings_for,
 )
@@ -71,31 +70,6 @@ def business_page(
             "systems": SYSTEM_LABELS,
             "modes": MODE_LABELS,
         },
-    )
-
-
-@router.post(BUSINESS + "/profile")
-def business_profile(
-    request: Request,
-    name: str = Form(""),
-    address: str = Form(""),
-    contact_email: str = Form(""),
-    db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_writable),
-    org: OrgContext = Depends(require_permission("settings.manage")),
-):
-    return _done(
-        request,
-        db,
-        BUSINESS,
-        lambda: save_profile(
-            db,
-            org,
-            name=name,
-            address=address,
-            contact_email=contact_email,
-            ip=client_ip(request),
-        ),
     )
 
 

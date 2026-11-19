@@ -17,8 +17,9 @@ recorded or reprocessed after a change read the new factor even for an earlier m
 1. **`business_settings`**, one row per business made on first read, written only by
    `app/business_settings.py`: units offered first (metric or US), default production mode, the
    alert email's hour (none: as soon as something is found), the count review amount and share,
-   the adjustment review amount. The profile, schedule and expiry window stay on the tenant row
-   where they began; the same service writes them from the settings screens. Every change is a
+   the adjustment review amount. The schedule and expiry window stay on the tenant row where they
+   began, and the same service writes them; the profile keeps its one writer, the form on
+   `/app/settings` (T1.04). Every change is a
    `settings.*` audit event with what changed.
 2. **Where they take effect**, read when they run (AC-ADM-02): counts and adjustments pass the
    thresholds to `needs_review()`; the evaluation job queues the alert email only in the chosen
@@ -29,7 +30,7 @@ recorded or reprocessed after a change read the new factor even for an earlier m
    moment (the latest set by then, else the first ever set), so a change applies to later sales
    and a reprocessed earlier sale keeps its factor (AC-ADM-06). Existing factors are backfilled
    as in effect from the start.
-4. **Two screens**: `/app/settings/business` (`settings.manage`: profile, schedule, defaults, links
+4. **Two screens**: `/app/settings/business` (`settings.manage`: schedule, defaults, links
    to locations, team, categories, waste reasons, modifiers, Employee sales entry) and
    `/app/settings/alerts` (`alerts.configure`, so Managers too: expiry window, alert email hour,
    thresholds, and who receives which email). Recipients stay each person's own choice: a person

@@ -5,15 +5,7 @@
 <h1>Business settings</h1>
 <p class="small muted">Every change here is kept in the business's history.</p>
 
-<h2>Profile</h2>
-<form method="post" action="/app/settings/business/profile" class="card">{{ csrf_field(request) }}
-  <div class="row">
-    <div class="field"><label for="name">Business name</label><input id="name" name="name" value="{{ tenant.name }}" maxlength="200" required></div>
-    <div class="field"><label for="contact_email">Contact email</label><input id="contact_email" name="contact_email" type="email" value="{{ tenant.contact_email or '' }}" maxlength="255"></div>
-  </div>
-  <div class="field"><label for="address">Address</label><input id="address" name="address" value="{{ tenant.address or '' }}" maxlength="300"></div>
-  <button class="btn secondary" type="submit">Save the profile</button>
-</form>
+<p class="small">The business name, address and contact email are on <a href="/app/settings">your settings page</a>.</p>
 
 <h2>Weekly summary</h2>
 <form method="post" action="/app/settings/business/schedule" class="card">{{ csrf_field(request) }}
