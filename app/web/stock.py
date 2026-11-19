@@ -43,6 +43,7 @@ KIND_LABELS = {
     "transfer": "Transfer",
     "pos_correction": "POS correction",
     "reversal": "Reversal",
+    "batch_assignment": "Dated",
 }
 
 

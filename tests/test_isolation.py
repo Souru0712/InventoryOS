@@ -116,6 +116,8 @@ CASES = {
         "data": {"stock_item_id": ids["item"], "perishable": "yes"}
     },
     ("POST", "/app/expiring/{batch_id}/remove"): lambda ids: {},
+    ("GET", "/app/expiring/batches/{batch_id}"): lambda ids: {},
+    ("POST", "/app/expiring/batches/{batch_id}/count"): lambda ids: {"data": {"quantity": "1"}},
     ("GET", "/app/catalog"): lambda ids: {"params": {"category": ids["category"]}},
     ("POST", "/app/catalog/new"): lambda ids: {
         "data": {"name": "Oat milk", "location_ids": [ids["location"]], "display_unit": "each"}

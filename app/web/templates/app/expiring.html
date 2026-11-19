@@ -79,7 +79,7 @@ from the last four weeks of sales.</p>
         {% endif %}
       </td>
       <td style="white-space:nowrap;">
-        {{ p.batch.expires_on.strftime("%d %b") }}
+        <a href="/app/expiring/batches/{{ p.batch.id }}" title="This batch and every movement">{{ p.batch.expires_on.strftime("%d %b") }}</a>
         <div class="small muted">
           {% if p.days_left < 0 %}{{ -p.days_left }} day{{ "s" if p.days_left != -1 else "" }} ago
           {% elif p.days_left == 0 %}today

@@ -9,22 +9,29 @@ with its history.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext, get_scoped
+from app.access import OrgContext, get_scoped, select_scoped
+from app.ledger.history import HistoryRow, batch_history
 from app.ledger.posting import (
     assign_batch,
     balance,
     batch_remaining,
     held_batches,
+    post_batch_count,
     posted_count,
 )
-from app.models import StockBatch, StockItem
-from app.transform.batches import BatchRuleError, undated
+from app.models import InventoryItem, Location, StockBatch, StockItem
+from app.transform.batches import BatchRuleError, status, undated
+from app.transform.business_days import business_date
+from app.transform.exceptions import Finding
 from app.transform.ledger import places
+from app.units import format_qty
 
 SOURCE = "batch"
 
@@ -153,3 +160,118 @@ def undate_batch(
             reason="Date removed: entered by mistake",
         )
     return batch
+
+
+@dataclass(frozen=True)
+class BatchView:
+    """One batch as its page shows it: what it holds, its status, and every movement."""
+
+    batch: StockBatch
+    stock: StockItem
+    location: Location
+    remaining: Decimal
+    status: str
+    history: list[HistoryRow]
+
+
+def _batch_and_stock(db: Session, org: OrgContext, batch_id: int) -> tuple[StockBatch, StockItem]:
+    batch = get_scoped(db, org, StockBatch, batch_id)
+    stock = get_scoped(db, org, StockItem, batch.stock_item_id) if batch is not None else None
+    if batch is None or stock is None or stock.inventory_item_id is None:
+        raise NotFound(batch_id)
+    return batch, stock
+
+
+def batch_view(
+    db: Session, org: OrgContext, batch_id: int, now: datetime | None = None
+) -> BatchView:
+    """A batch's page (BAT-FR-12, AC-BAT-08): what it holds now, its status at its location's
+    today, and every movement allocated to it with what it held after each."""
+    batch, stock = _batch_and_stock(db, org, batch_id)
+    place = get_scoped(db, org, Location, stock.location_id)
+    if place is None:
+        raise NotFound(batch_id)
+    held = batch_remaining(db, org, [batch.id]).get(batch.id, Decimal("0"))
+    today = business_date(now or datetime.now(UTC), place.timezone, place.business_day_cutoff_hour)
+    return BatchView(
+        batch,
+        stock,
+        place,
+        held,
+        status(held, batch.expires_on, today),
+        batch_history(db, org, place, batch.id),
+    )
+
+
+def count_batch(
+    db: Session,
+    org: OrgContext,
+    batch_id: int,
+    counted: Decimal,
+    *,
+    now: datetime | None = None,
+) -> Decimal:
+    """Count what one batch holds (BAT-FR-13): the difference posts as a count variance on that
+    batch, so the item's stock moves with it. Returns the difference (zero when it matched)."""
+    if counted < 0:
+        raise BatchRuleError("A count cannot be below zero.")
+    batch, stock = _batch_and_stock(db, org, batch_id)
+    if stock.inventory_item_id is None:  # _batch_and_stock refuses these; for the types
+        raise NotFound(batch_id)
+    before = batch_remaining(db, org, [batch.id]).get(batch.id, Decimal("0"))
+    post_batch_count(
+        db,
+        org,
+        location_id=stock.location_id,
+        inventory_item_id=stock.inventory_item_id,
+        batch_id=batch.id,
+        counted=counted,
+        idempotency_key=f"batch:{batch.id}:count:{uuid4().hex}",
+        occurred_at=now or datetime.now(UTC),
+        reason="Batch counted",
+    )
+    return places(counted) - before
+
+
+def shortfalls(db: Session, org: OrgContext) -> list[Finding]:
+    """DR-13: for an item that tracks batches, stock that no batch holds is explicit. Undated
+    stock (a delivery with no date, a count that found more) and stock taken beyond every batch
+    are each a `batch_shortfall` on the item at that location, until it is dated or counted."""
+    tracked = {
+        item.id: item
+        for item in db.scalars(
+            select_scoped(org, InventoryItem).where(InventoryItem.tracks_batches.is_(True))
+        )
+    }
+    if not tracked:
+        return []
+    places_by_id = {place.id: place for place in db.scalars(select_scoped(org, Location))}
+    found = []
+    for stock in db.scalars(
+        select_scoped(org, StockItem).where(StockItem.inventory_item_id.in_(list(tracked)))
+    ):
+        item = tracked[stock.inventory_item_id] if stock.inventory_item_id else None
+        place = places_by_id.get(stock.location_id)
+        if item is None or place is None:
+            continue
+        held = sum((h.remaining for h in held_batches(db, org, place.id, item.id)), Decimal("0"))
+        loose = balance(db, org, place.id, item.id) - held
+        if loose == 0:
+            continue
+        amount = format_qty(abs(loose), item.display_unit)
+        title = (
+            f"{amount} of {item.name} at {place.name} is in no batch: date it or count it."
+            if loose > 0
+            else f"{item.name} at {place.name} used {amount} more than its batches held: count it."
+        )
+        found.append(
+            Finding(
+                type="batch_shortfall",
+                subject_type="item_location",
+                subject_id=f"{item.id}:{place.id}",
+                title=title,
+                location_id=place.id,
+                quantity_base=loose,
+            )
+        )
+    return found

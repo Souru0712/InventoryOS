@@ -5,6 +5,57 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.06-b Batch history, batch counts and shortfall
+
+**Implemented**
+- Batch page `/app/expiring/batches/{id}` (`batch_view()`, `batch_history()`): what the batch
+  holds, its status, and every movement with what it held after and how its batch was chosen
+  (AC-BAT-08). Each lot on the expiry page links to it; item history labels assignments "Dated".
+- `count_batch()` / `post_batch_count()`: one batch counted on its own, the difference posted
+  under the balance lock as an explicit `count_variance` on it (BAT-FR-13).
+- `batch_shortfall` from the stock evaluation: stock of a batch-tracked item that no batch holds,
+  either way, until dated or counted (DR-13, AC-BAT-04).
+- "Batch used first" on the item form (`update_item(batch_order=...)`), audited (BAT-FR-05).
+
+**Verified**
+- `tests/test_batches.py`: history with running remaining and allocation modes; a batch count
+  moves the batch and the item, a matching count posts nothing; the page shows history and
+  takes a count; shortfall opens for undated stock and resolves once dated, and opens for a
+  sale beyond every batch; the batch order is saved and audited.
+- `tests/test_isolation.py`: both new routes refuse another business's batch.
+- Locally the touched areas only (batches, isolation, catalog, web, expiry, alerts, exceptions,
+  dashboard, health): all passed; ruff, mypy, the docs checker clean. CI runs the full suite.
+
+**Decisions**
+- ADR-0057 (Proposed); ADR-0056 → Accepted.
+
+**Files changed**
+- `app/batches.py`, `app/ledger/history.py`, `app/ledger/posting.py`,
+  `app/orchestration/alerts.py`, `app/items.py`, `app/web/dashboard.py`, `app/web/catalog.py`,
+  `app/web/stock.py`, templates `batch.html` (new), `expiring.html`, `catalog_item.html`;
+  `tests/test_batches.py`, `tests/test_isolation.py`; ADR-0056, ADR-0057 and the index; the task
+  index; CLAUDE.md; this log.
+
+**Next task**
+- After T2.06: T2.07 Waste module (depends on T2.06, T2.02).
+
+---
+
+## 2026-11-19 — T2.06-a completed
+
+**Verified**
+- At the owner's request ("merge now"), PR #58 was merged with a merge commit (`aa9766e`).
+- CI on its first head `61fd2cf` failed on PostgreSQL in the DM-10 downgrade; the fix
+  `4cd6bd6` passed all five required jobs (SQLite: 1064 passed, 29 skipped; PostgreSQL 16:
+  1093 passed, 0 skipped).
+- From here, by the owner's choice (2026-11-18), CI is checked once at merge and not watched
+  afterwards; `main`'s run after this merge was not followed.
+
+**Files changed**
+- This log; ADR-0056 → Accepted.
+
+---
+
 ## 2026-11-18 — T2.06-a Movement-level batch allocation
 
 **Implemented**

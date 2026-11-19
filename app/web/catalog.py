@@ -42,6 +42,7 @@ from app.items import (
 from app.models import Location, Tenant
 from app.security import location_filter, require_permission, require_tenant, require_writable
 from app.throttle import client_ip
+from app.transform.batches import ORDER_LABELS
 from app.transform.items import ITEM_TYPE_LABELS, ItemRuleError
 from app.units import UNITS, UNITS_BY_DIMENSION, Dimension
 from app.web.flash import flash, pop_flash
@@ -348,6 +349,7 @@ def _item_page(request, db, org, tenant, inventory_item_id: int, error=None, sta
             "tenant": tenant,
             "row": row,
             "item": row.item,
+            "batch_orders": ORDER_LABELS,
             "unit_label": UNITS[row.item.display_unit].label
             if row.item.display_unit in UNITS
             else row.item.display_unit,
@@ -395,6 +397,7 @@ def save_item(
     notes: str = Form(""),
     shelf_life_days: str = Form(""),
     tracks_expiry: str = Form(""),
+    batch_order: str = Form(""),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("item.edit")),
@@ -412,6 +415,7 @@ def save_item(
             notes=notes,
             shelf_life_days=shelf_life_days,
             tracks_expiry={"yes": True, "no": False}.get(tracks_expiry),
+            batch_order=batch_order or None,
             ip=client_ip(request),
         )
     except NotFound as exc:

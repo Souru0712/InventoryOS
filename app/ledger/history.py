@@ -35,6 +35,7 @@ class HistoryRow:
     reason: str | None
     source_type: str
     source_id: str
+    allocation_mode: str = "none"  # how its batch was chosen: explicit, inferred or none
 
 
 def history(
@@ -80,6 +81,7 @@ def history(
                 reason=movement.reason or transaction.reason,
                 source_type=transaction.source_type,
                 source_id=transaction.source_id,
+                allocation_mode=movement.allocation_mode,
             )
         )
     shown = [
@@ -91,6 +93,44 @@ def history(
         and (actor_user_id is None or row.actor_user_id == actor_user_id)
     ]
     return list(reversed(shown))
+
+
+def batch_history(
+    db: Session, org: OrgContext, location: Location, batch_id: int
+) -> list[HistoryRow]:
+    """Every movement that names a batch, newest first, each with what the batch held after it
+    (BAT-FR-12, AC-BAT-08)."""
+    rows = db.execute(
+        select_scoped(org, InventoryMovement)
+        .add_columns(InventoryTransaction)
+        .join(InventoryTransaction, InventoryTransaction.id == InventoryMovement.transaction_id)
+        .where(InventoryMovement.batch_id == batch_id)
+        .order_by(InventoryMovement.id)
+    ).all()
+    running = Decimal("0")
+    found: list[HistoryRow] = []
+    for movement, transaction in rows:
+        running += Decimal(movement.qty_base)
+        found.append(
+            HistoryRow(
+                movement_id=movement.id,
+                occurred_at=movement.occurred_at,
+                business_day=business_date(
+                    movement.occurred_at, location.timezone, location.business_day_cutoff_hour
+                ),
+                kind=transaction.kind,
+                movement_type=movement.movement_type,
+                qty_base=Decimal(movement.qty_base),
+                running_base=running,
+                unit_cost=Decimal(movement.unit_cost_snapshot),
+                actor_user_id=transaction.actor_user_id,
+                reason=movement.reason or transaction.reason,
+                source_type=transaction.source_type,
+                source_id=transaction.source_id,
+                allocation_mode=movement.allocation_mode,
+            )
+        )
+    return list(reversed(found))
 
 
 def snapshot_cost_at(

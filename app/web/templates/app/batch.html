@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+{% set unit = view.stock.stock_unit %}
+{% if request.query_params.get("counted") %}
+  <div class="notice ok">Counted. The batch and the item's stock now match the count.</div>
+{% elif request.query_params.get("error") == "invalid" %}
+  <div class="notice error">Enter the quantity you counted, zero or more.</div>
+{% endif %}
+<p class="small"><a href="/app/expiring">← Expiring</a></p>
+<h1>{{ view.stock.name }}</h1>
+<p class="muted">Batch at {{ view.location.name }}, {{ {"best_before": "best before", "use_by": "use by", "sell_by": "sell by"}.get(view.batch.date_type, "dated") }} {{ view.batch.expires_on.strftime("%d %b %Y") }}.
+  {% if view.batch.lot_code %}Lot {{ view.batch.lot_code }}.{% endif %}
+  Received {{ view.batch.received_at.strftime("%d %b %Y") }}: {{ view.batch.received_qty_base|qty(unit) }}.</p>
+
+<div class="card">
+  <p style="margin:0;">Holds <strong>{{ view.remaining|qty(unit) }}</strong> ·
+    {% if view.status == "expired" %}<span class="badge danger">Past its date</span> It stays here until a count or a disposal accounts for it.
+    {% elif view.status == "depleted" %}<span class="badge">Used up</span>
+    {% else %}<span class="badge ok">In date</span>{% endif %}</p>
+  <form method="post" action="/app/expiring/batches/{{ view.batch.id }}/count" style="margin-top:12px;">{{ csrf_field(request) }}
+    <div class="field">
+      <label for="quantity">Count this batch ({{ unit|unit }})</label>
+      <input id="quantity" name="quantity" inputmode="decimal" required>
+      <p class="small muted" style="margin:4px 0 0;">What you find of this batch alone. The difference changes the item's stock too.</p>
+    </div>
+    <button class="btn secondary" type="submit">Record the count</button>
+  </form>
+</div>
+
+<h2>Every movement</h2>
+{% if not view.history %}
+  <div class="card"><p style="margin:0;">Nothing has moved this batch yet.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Day</th><th>What</th><th>How</th><th>Change</th><th>Holds after</th><th>Why</th></tr></thead>
+  <tbody>
+  {% for m in view.history %}
+    <tr>
+      <td class="small" style="white-space:nowrap;">{{ m.business_day.strftime("%d %b %Y") }}<div class="muted">{{ m.occurred_at.strftime("%H:%M") }} UTC</div></td>
+      <td>{{ kind_labels.get(m.kind, m.kind) }}</td>
+      <td class="small muted">{{ {"inferred": "Soonest first, by the ledger", "explicit": "Chosen"}.get(m.allocation_mode, "") }}</td>
+      <td style="white-space:nowrap;">{{ "+" if m.qty_base > 0 else "" }}{{ m.qty_base|qty(unit) }}</td>
+      <td style="white-space:nowrap;">{{ m.running_base|qty(unit) }}</td>
+      <td class="small">{{ m.reason or "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

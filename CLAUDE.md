@@ -48,6 +48,9 @@ implementation sessions; the detail lives in `docs/`.
   removed, through `app/batches.py` (`date_stock()`, `undate_batch()`), as a net-zero
   `batch_assignment`. Tests date stock through `tests/batch_helpers.py`, never a bare
   `StockBatch`.
+  A batch is counted on its own through `count_batch()` (an explicit `count_variance` on it);
+  stock of a batch-tracked item that no batch holds raises `batch_shortfall` (DR-13,
+  ADR-0057).
 - An item's current cost changes only through `app/costs.py` (ADR-0048): `set_cost()` appends
   to `item_cost_history` (append-only) and mirrors `stock_items.cost_per_base_cents`; a hand
   change is `override_cost()` (audited). A test fails on any other assignment. Past figures
