@@ -25,19 +25,28 @@ from app.costs import cost_on
 from app.exceptions import record_exception
 from app.items import entered_base
 from app.ledger.history import movements_in
-from app.ledger.posting import balance, post_transaction, reverse_transaction, standing
+from app.ledger.posting import (
+    balance,
+    batch_remaining,
+    post_transaction,
+    reverse_transaction,
+    standing,
+)
 from app.models import (
     InventoryItem,
     ItemLocation,
     Location,
     ProductVariation,
+    SalesTransaction,
+    SalesTransactionLine,
     StockBatch,
     StockItem,
+    Tenant,
     WasteEvent,
     WasteLine,
     WasteReason,
 )
-from app.transform.business_days import business_day_end, business_day_start
+from app.transform.business_days import business_date, business_day_end, business_day_start
 from app.transform.exceptions import Finding
 from app.transform.items import ItemRuleError
 from app.transform.ledger import Line, places
@@ -531,3 +540,109 @@ def found_short(
         for item, amount in qty.items()
     ]
     return sorted(found, key=lambda s: (-(s.cost_cents or 0), s.item))
+
+
+# --- disposing of expired stock (T2.08; BAT-FR-10, -11, AC-BAT-07) ------------------------------
+
+
+def _expired_reason(db: Session, org: OrgContext) -> WasteReason:
+    by_code = {r.code: r for r in reasons(db, org, archived=True) or ensure_reasons(db, org)}
+    found = by_code.get("expiration")
+    if found is None:
+        ensure_reasons(db, org)
+        found = {r.code: r for r in reasons(db, org, archived=True)}.get("expiration")
+    if found is None:
+        raise WasteRuleError("The business has no reason for stock past its date.")
+    if not found.is_active:
+        found.is_active = True  # disposal needs it; the reason list keeps it from here
+    return found
+
+
+def dispose_batch(
+    db: Session, org: OrgContext, batch_id: int, *, note: str, now: datetime | None = None
+) -> WasteEvent:
+    """Write off everything a batch still holds as waste, reason past its date, from that
+    batch (BAT-FR-10's dispose action, BAT-FR-11)."""
+    batch = get_scoped(db, org, StockBatch, batch_id)
+    stock = get_scoped(db, org, StockItem, batch.stock_item_id) if batch is not None else None
+    if batch is None or stock is None or stock.inventory_item_id is None:
+        raise NotFound(batch_id)
+    item = get_scoped(db, org, InventoryItem, stock.inventory_item_id)
+    if item is None:
+        raise NotFound(batch_id)
+    held = batch_remaining(db, org, [batch.id]).get(batch.id, Decimal("0"))
+    if held <= 0:
+        raise WasteRuleError("That batch holds nothing to dispose of.")
+    return record_waste(
+        db,
+        org,
+        location_id=stock.location_id,
+        reason_id=_expired_reason(db, org).id,
+        inventory_item_id=item.id,
+        quantity=str(held),
+        unit=item.base_unit,
+        batch_id=batch.id,
+        note=note,
+        now=now,
+    )
+
+
+def dispose_expired(db: Session, org: OrgContext, now: datetime | None = None) -> int:
+    """At day close, write off expired prepared batches as waste by the system, if the business
+    turned it on (BAT-FR-11, PD-29). A location waits while any of its sales is still waiting to
+    be consumed, so the write-off never takes stock a sale already used (AC-BAT-07). Safe to
+    run again: a disposed batch holds nothing. Returns how many batches were written off."""
+    tenant = get_scoped(db, org, Tenant, org.tenant_id)
+    if tenant is None or not tenant.auto_dispose_prepared:
+        return 0
+    now = now or datetime.now(UTC)
+    prepared = {
+        i.id
+        for i in db.scalars(
+            select_scoped(org, InventoryItem).where(InventoryItem.item_type == "prepared")
+        )
+    }
+    if not prepared:
+        return 0
+    done = 0
+    for place in db.scalars(select_scoped(org, Location)):
+        waiting = db.scalars(
+            select_scoped(org, SalesTransactionLine)
+            .join(
+                SalesTransaction, SalesTransaction.id == SalesTransactionLine.sales_transaction_id
+            )
+            .where(
+                SalesTransaction.location_id == place.id,
+                SalesTransactionLine.consumption_status == "pending",
+            )
+            .limit(1)
+        ).first()
+        if waiting is not None:
+            continue
+        today = business_date(now, place.timezone, place.business_day_cutoff_hour)
+        stocks = {
+            s.id
+            for s in db.scalars(
+                select_scoped(org, StockItem).where(
+                    StockItem.location_id == place.id,
+                    StockItem.inventory_item_id.in_(prepared),
+                )
+            )
+        }
+        if not stocks:
+            continue
+        expired = list(
+            db.scalars(
+                select_scoped(org, StockBatch).where(
+                    StockBatch.stock_item_id.in_(stocks), StockBatch.expires_on < today
+                )
+            )
+        )
+        held = batch_remaining(db, org, [b.id for b in expired])
+        for batch in expired:
+            if held.get(batch.id, Decimal("0")) > 0:
+                dispose_batch(
+                    db, org, batch.id, note="Written off automatically at day close", now=now
+                )
+                done += 1
+    return done

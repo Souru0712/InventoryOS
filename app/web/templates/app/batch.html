@@ -12,6 +12,13 @@
   {% if view.batch.lot_code %}Lot {{ view.batch.lot_code }}.{% endif %}
   Received {{ view.batch.received_at.strftime("%d %b %Y") }}: {{ view.batch.received_qty_base|qty(unit) }}.</p>
 
+{% if view.item_type == "prepared" %}
+<div class="card" style="border-style:dashed;">
+  <p class="small muted" style="margin:0;">Label</p>
+  <p style="margin:4px 0 0; font-size:1.2em;"><strong>{{ view.stock.name }}</strong></p>
+  <p style="margin:0;">Use by <strong>{{ view.batch.expires_on.strftime("%a %d %b") }}</strong> · Batch {{ view.batch.id }}{% if view.batch.lot_code %} · Lot {{ view.batch.lot_code }}{% endif %}</p>
+</div>
+{% endif %}
 <div class="card">
   <p style="margin:0;">Holds <strong>{{ view.remaining|qty(unit) }}</strong> ·
     {% if view.status == "expired" %}<span class="badge danger">Past its date</span> It stays here until a count or a disposal accounts for it.

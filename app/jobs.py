@@ -89,8 +89,13 @@ def _handlers() -> dict[str, Handler]:
     from app.orchestration.alerts import evaluate_and_store, send_alert_digest
     from app.orchestration.receiving import parse_document
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
+    from app.waste import dispose_expired
 
     def evaluate(db: Session, org: OrgContext, payload: dict) -> None:
+        # Expired prepared batches leave first (BAT-FR-11), so their alerts clear in this run.
+        disposed = dispose_expired(db, org)
+        if disposed:
+            log.info("wrote off %d expired prepared batches for tenant %s", disposed, org.tenant_id)
         stats = evaluate_and_store(db, org)
         log.info("evaluated exceptions for tenant %s: %s", org.tenant_id, stats)
         enqueue(db, org, "send_alert_digest", dedupe_key="digest")

@@ -398,6 +398,7 @@ def save_item(
     shelf_life_days: str = Form(""),
     tracks_expiry: str = Form(""),
     batch_order: str = Form(""),
+    expiry_alert_days: str = Form(""),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("item.edit")),
@@ -416,6 +417,7 @@ def save_item(
             shelf_life_days=shelf_life_days,
             tracks_expiry={"yes": True, "no": False}.get(tracks_expiry),
             batch_order=batch_order or None,
+            expiry_alert_days=expiry_alert_days,
             ip=client_ip(request),
         )
     except NotFound as exc:

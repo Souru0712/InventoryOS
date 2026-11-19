@@ -194,6 +194,10 @@ class Tenant(Base):
     report_day: Mapped[int] = mapped_column(Integer, default=0)  # 0 = Monday
     report_hour: Mapped[int] = mapped_column(Integer, default=7)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    # Expiry (T2.08): how many days before a lot's date it is flagged (BAT-FR-09), and whether
+    # expired prepared batches are written off at day close (BAT-FR-11; off by default, PD-29).
+    expiry_alert_days: Mapped[int] = mapped_column(Integer, default=2)
+    auto_dispose_prepared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     users: Mapped[list[User]] = relationship(back_populates="tenant")
@@ -526,6 +530,7 @@ class InventoryCategory(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
+    expiry_alert_days: Mapped[int | None] = mapped_column(Integer)  # None: the business's
     archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
@@ -562,6 +567,7 @@ class InventoryItem(Base):
     # Which batch stock leaves first when no one chooses (BAT-FR-05): soonest expiry, or
     # first received for stock whose dates do not matter.
     batch_order: Mapped[str] = mapped_column(String(4), default="fefo")
+    expiry_alert_days: Mapped[int | None] = mapped_column(Integer)  # None: its category's
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

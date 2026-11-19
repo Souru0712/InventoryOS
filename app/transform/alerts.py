@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -13,6 +14,7 @@ from app.transform.inventory import (
     days_of_cover,
     stale_after,
     suggest_order_base,
+    valuation_cents,
 )
 from app.units import Dimension, format_amount, format_approx
 
@@ -135,7 +137,7 @@ def counts_as_waste_risk(position: BatchPosition, horizon_days: int) -> bool:
 
 
 def evaluate_expiry(
-    expiry: ItemExpiry, horizon_days: int = EXPIRY_HORIZON_DAYS
+    expiry: ItemExpiry, horizon_days: int = EXPIRY_HORIZON_DAYS, window_days: int | None = None
 ) -> list[AlertProposal]:
     """Up to two alerts per item: stock already past its date, and stock that will not sell in time.
 
@@ -161,6 +163,35 @@ def evaluate_expiry(
                 ZERO,
                 1,
                 sum(p.at_risk_cents for p in expired),
+            )
+        )
+
+    # BAT-FR-09, AC-BAT-06: a lot reaching its date within the item's alert window, counted in
+    # its location's days, so it opens at that location's day start.
+    soon = [
+        p
+        for p in expiry.positions
+        if window_days is not None
+        and not p.expired
+        and p.remaining_base > ZERO
+        and p.days_left <= window_days
+    ]
+    if soon:
+        quantity = sum((p.remaining_base for p in soon), ZERO)
+        first = min(soon, key=lambda p: p.days_left)
+        when = {0: "today", 1: "tomorrow"}.get(first.days_left, f"in {first.days_left} days")
+        proposals.append(
+            AlertProposal(
+                item.id,
+                "expiring",
+                f"{amount_of(quantity, item)} reaches its date on {first.batch.expires_on:%d %b} "
+                f"({when}). Use it first.",
+                quantity,
+                ZERO,
+                None,
+                ZERO,
+                3,
+                sum(valuation_cents(p.remaining_base, p.cost_per_base_cents) for p in soon),
             )
         )
 
@@ -193,8 +224,16 @@ def evaluate_expiry(
 
 
 def evaluate_expiries(
-    expiries: list[ItemExpiry], horizon_days: int = EXPIRY_HORIZON_DAYS
+    expiries: list[ItemExpiry],
+    horizon_days: int = EXPIRY_HORIZON_DAYS,
+    windows: Mapping[int, int] | None = None,
 ) -> list[AlertProposal]:
-    """Expiry alerts for every item with dated stock, largest loss first."""
-    proposals = [p for expiry in expiries for p in evaluate_expiry(expiry, horizon_days)]
+    """Expiry alerts for every item with dated stock, largest loss first. `windows` holds each
+    stock item's alert window in days; an item without one gets no expiring-soon alert."""
+    windows = windows or {}
+    proposals = [
+        p
+        for expiry in expiries
+        for p in evaluate_expiry(expiry, horizon_days, windows.get(expiry.item.id))
+    ]
     return sorted(proposals, key=lambda p: (p.severity, -(p.value_cents or 0)))

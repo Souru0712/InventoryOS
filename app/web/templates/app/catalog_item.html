@@ -58,6 +58,10 @@
       <input id="shelf_life_days" name="shelf_life_days" inputmode="numeric" value="{{ item.default_shelf_life_days if item.default_shelf_life_days is not none else '' }}">
     </div>
     <div class="field">
+      <label for="expiry_alert_days">Flag lots this many days before their date</label>
+      <input id="expiry_alert_days" name="expiry_alert_days" inputmode="numeric" placeholder="The business's setting" value="{{ item.expiry_alert_days if item.expiry_alert_days is not none else '' }}">
+    </div>
+    <div class="field">
       <label for="batch_order">Batch used first</label>
       <select id="batch_order" name="batch_order">{% for key, label in batch_orders.items() %}<option value="{{ key }}"{% if key == item.batch_order %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
     </div>

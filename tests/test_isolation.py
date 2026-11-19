@@ -118,6 +118,7 @@ CASES = {
         "data": {"stock_item_id": ids["item"], "perishable": "yes"}
     },
     ("POST", "/app/expiring/{batch_id}/remove"): lambda ids: {},
+    ("POST", "/app/expiring/{batch_id}/dispose"): lambda ids: {},
     ("GET", "/app/expiring/batches/{batch_id}"): lambda ids: {},
     ("POST", "/app/expiring/batches/{batch_id}/count"): lambda ids: {"data": {"quantity": "1"}},
     ("GET", "/app/waste"): lambda ids: {

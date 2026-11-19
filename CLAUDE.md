@@ -55,7 +55,9 @@ implementation sessions; the detail lives in `docs/`.
   posts `waste` movements keyed `waste:<id>`, a product through its recipe in effect
   (`resolve_variation()`); below zero refused without the override (DR-08). The logger voids
   for 30 minutes, afterwards `waste.void` with a reason. The log and report read the ledger
-  only (`logged()`, `found_short()`, DR-33): never sum events or lines.
+  only (`logged()`, `found_short()`, DR-33): never sum events or lines. Expired lots are
+  disposed through `dispose_batch()`; opt-in `dispose_expired()` writes off expired prepared
+  batches in the evaluation job, never while a location's sales are pending (ADR-0059).
 - An item's current cost changes only through `app/costs.py` (ADR-0048): `set_cost()` appends
   to `item_cost_history` (append-only) and mirrors `stock_items.cost_per_base_cents`; a hand
   change is `override_cost()` (audited). A test fails on any other assignment. Past figures

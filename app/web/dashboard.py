@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.access.permissions import VIEW_COSTS, without_costs
-from app.audit import record_audit
+from app.audit import changes, record_audit
 from app.batches import NotFound as BatchNotFound
 from app.batches import batch_view, count_batch, date_stock, undate_batch
 from app.config import get_settings
@@ -67,7 +67,10 @@ from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
 from app.transform.items import ItemRuleError
 from app.transform.ledger import LedgerRuleError
+from app.transform.waste import WasteRuleError
 from app.units import UnitError, format_amount, format_change, to_base
+from app.waste import NotFound as WasteNotFound
+from app.waste import dispose_batch
 from app.web.exceptions import FIX_LINKS
 from app.web.flash import flash, pop_flash
 from app.web.stock import KIND_LABELS
@@ -343,6 +346,63 @@ def remove_batch(
         raise HTTPException(status_code=404, detail="batch not found") from exc
     db.commit()
     return RedirectResponse("/app/expiring?removed=1", status_code=303)
+
+
+@router.post("/app/expiring/{batch_id}/dispose")
+def dispose_lot(
+    request: Request,
+    batch_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("waste.record")),
+):
+    """Throw away what a lot still holds: waste, reason past its date (BAT-FR-10)."""
+    try:
+        dispose_batch(db, org, batch_id, note="Disposed from the expiry queue")
+    except WasteNotFound as exc:
+        raise HTTPException(status_code=404, detail="batch not found") from exc
+    except WasteRuleError:
+        db.rollback()
+        return RedirectResponse("/app/expiring?error=empty", status_code=303)
+    db.commit()
+    return RedirectResponse("/app/expiring?disposed=1", status_code=303)
+
+
+@router.post("/app/expiring/settings")
+def expiry_settings(
+    request: Request,
+    alert_days: str = Form(""),
+    auto_dispose: str = Form("no"),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("alerts.configure")),
+):
+    """The expiry alert window and the auto-dispose policy (BAT-FR-09, -11)."""
+    try:
+        days = int(alert_days)
+    except ValueError:
+        return RedirectResponse("/app/expiring?error=days", status_code=303)
+    if not 0 <= days <= 60:
+        return RedirectResponse("/app/expiring?error=days", status_code=303)
+    before = {"alert days": tenant.expiry_alert_days, "auto-dispose": tenant.auto_dispose_prepared}
+    tenant.expiry_alert_days = days
+    tenant.auto_dispose_prepared = auto_dispose == "yes"
+    after = {"alert days": tenant.expiry_alert_days, "auto-dispose": tenant.auto_dispose_prepared}
+    was, became = changes(before, after)
+    if became:
+        record_audit(
+            db,
+            org,
+            "settings.expiry_changed",
+            "Changed the expiry settings",
+            subject_type="tenant",
+            subject_id=tenant.id,
+            before=was,
+            after=became,
+            ip=client_ip(request),
+        )
+    db.commit()
+    return RedirectResponse("/app/expiring?saved=1", status_code=303)
 
 
 @router.get("/app/expiring/batches/{batch_id}", response_class=HTMLResponse)

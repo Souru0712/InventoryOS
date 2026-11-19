@@ -430,6 +430,7 @@ def update_item(
     shelf_life_days: str,
     tracks_expiry: bool | None,
     batch_order: str | None = None,
+    expiry_alert_days: str | None = None,
     ip: str | None = None,
 ) -> InventoryItem:
     """Change an item's definition for every location at once (INV-FR-02, INV-FR-14). A
@@ -453,6 +454,14 @@ def update_item(
         raise ItemRuleError("Shelf life cannot be negative.")
     if batch_order is not None and batch_order not in BATCH_ORDERS:
         raise ItemRuleError("Choose which batch is used first.")
+    alert_days = None
+    if expiry_alert_days is not None and expiry_alert_days.strip():
+        try:
+            alert_days = int(expiry_alert_days)
+        except ValueError as exc:
+            raise ItemRuleError("The expiry alert is a number of days.") from exc
+        if not 0 <= alert_days <= 60:
+            raise ItemRuleError("The expiry alert is 0 to 60 days.")
     was = _definition(item)
     item.name = name
     item.item_type = known_item_type(item_type)
@@ -464,6 +473,8 @@ def update_item(
     item.tracks_batches = bool(tracks_expiry)
     if batch_order is not None:
         item.batch_order = batch_order
+    if expiry_alert_days is not None:
+        item.expiry_alert_days = alert_days
     db.flush()
     before, after = changes(was, _definition(item))
     if after:
@@ -492,6 +503,7 @@ def _definition(item: InventoryItem) -> dict:
         "shelf life (days)": item.default_shelf_life_days,
         "tracks expiry": item.tracks_expiry,
         "batch order": item.batch_order,
+        "expiry alert (days)": item.expiry_alert_days,
     }
 
 

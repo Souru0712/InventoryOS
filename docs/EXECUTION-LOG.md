@@ -5,6 +5,40 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.08 Expiry queue and auto-dispose (built on branch)
+
+By the owner's choice (2026-11-19, "skip PR's ... continue building"), tasks are now built one
+after another on the stacked branch from `t2.07-waste`, committed without a pull request; T2.08
+stands on T2.07, which is open as PR #60.
+
+**Implemented**
+- Alert window (BAT-FR-09): `tenants.expiry_alert_days` (2), item and category overrides
+  (migration `0662af2faff6`); the evaluation opens `expiring_soon` once per item when a lot
+  enters the window at its location's day (AC-BAT-06).
+- Dispose action on the queue (`dispose_batch()`, BAT-FR-10): waste, reason past its date,
+  from that batch.
+- Auto-dispose (`dispose_expired()`, BAT-FR-11, PD-29): off by default; writes off expired
+  prepared batches at the start of the evaluation job, by the system, and waits while a
+  location's sales are pending (AC-BAT-07).
+- Use-by label text on a prepared batch's page (BAT-FR-14); expiry settings on `/app/expiring`
+  (audited), the item's window on its form.
+
+**Verified**
+- `tests/test_expiry_actions.py`: AC-BAT-06 (once, item override, outside the window), AC-BAT-07
+  (off by default, prepared only, waits for pending sales), the Dispose route, settings and
+  audit, the use-by label.
+- Locally: expiry, alerts, waste, batches, jobs, catalog, exceptions, health, dashboard and the
+  isolation cases for the new route; ruff, mypy, the docs checker.
+
+**Decisions**
+- ADR-0059 (Proposed).
+
+**Open issues**
+- Category overrides are read but have no screen yet.
+- PD-14's "logged by" picker on shared devices (WST-FR-03) is still to build (noted at T2.07).
+
+---
+
 ## 2026-11-19 — T2.07 Waste module
 
 **Implemented**
