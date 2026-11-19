@@ -41,6 +41,8 @@ from app.transform.ledger import (
 )
 from app.transform.production import STATUSES as PRODUCTION_STATUSES
 from app.transform.products import MODIFIER_EFFECTS, PRODUCTION_MODES
+from app.transform.receivings import LINE_STATUSES as RECEIVING_LINE_STATUSES
+from app.transform.receivings import STATUSES as RECEIVING_STATUSES
 from app.transform.sales import (
     CONSUMPTION_STATUSES,
     RETURN_STATUSES,
@@ -1740,6 +1742,72 @@ class SupplierItem(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     supplier: Mapped[Supplier] = relationship(back_populates="items")
+
+
+class Receiving(Base):
+    """A delivery as received (T2.11, RCV-FR-01): from a supplier, by hand or from an invoice
+    document. A draft until posted, which happens exactly once (DR-07, AC-RCV-05)."""
+
+    __tablename__ = "receivings"
+    __table_args__ = (
+        one_of("receivings", "status", RECEIVING_STATUSES),
+        UniqueConstraint("document_id", name="uq_receivings_document"),
+        Index("ix_receivings_location_time", "location_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    supplier_id: Mapped[int | None] = mapped_column(ref("suppliers.id"), index=True)
+    document_id: Mapped[int | None] = mapped_column(ref("documents.id"))
+    status: Mapped[str] = mapped_column(String(10), default="draft")
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    posted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    posted_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+
+    lines: Mapped[list[ReceivingLine]] = relationship(
+        back_populates="receiving", order_by="ReceivingLine.id"
+    )
+
+
+class ReceivingLine(Base):
+    """One line of a delivery: invoiced, arrived and accepted, in the unit it came in; what was
+    accepted enters stock through its own receipt transaction (RCV-FR-09). A correction is a new
+    line that names the one it corrects (RCV-FR-12)."""
+
+    __tablename__ = "receiving_lines"
+    __table_args__ = (
+        one_of("receiving_lines", "status", RECEIVING_LINE_STATUSES),
+        not_negative("receiving_lines", "arrived_qty"),
+        not_negative("receiving_lines", "accepted_qty"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    receiving_id: Mapped[int] = mapped_column(owned_by("receivings.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    supplier_item_id: Mapped[int | None] = mapped_column(ref("supplier_items.id"))
+    description: Mapped[str | None] = mapped_column(String(300))
+    ordered_qty: Mapped[Decimal | None] = mapped_column(Qty)  # with purchase orders (R1.1)
+    invoiced_qty: Mapped[Decimal | None] = mapped_column(Qty)
+    arrived_qty: Mapped[Decimal] = mapped_column(Qty)
+    accepted_qty: Mapped[Decimal] = mapped_column(Qty)
+    unit: Mapped[str] = mapped_column(String(40), default="")
+    qty_base: Mapped[Decimal] = mapped_column(Qty)  # accepted, in the item's base unit
+    unit_price_cents: Mapped[int | None] = mapped_column(Integer)  # per `unit`
+    expires_on: Mapped[date | None] = mapped_column(Date)
+    lot_code: Mapped[str | None] = mapped_column(String(80))
+    reject_reason: Mapped[str | None] = mapped_column(String(200))
+    price_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(10), default="open")
+    batch_id: Mapped[int | None] = mapped_column(ref("stock_batches.id"))
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+    corrects_line_id: Mapped[int | None] = mapped_column(earlier("receiving_lines.id"))
+    correction_reason: Mapped[str | None] = mapped_column(String(300))
+
+    receiving: Mapped[Receiving] = relationship(back_populates="lines")
 
 
 class ProductionOrder(Base):

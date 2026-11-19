@@ -1048,6 +1048,87 @@ def test_dm11_free_text_suppliers_become_suppliers_with_items(fresh_url):
         engine.dispose()
 
 
+BEFORE_DM12 = "30d75bcd3fd3"
+
+
+def test_dm12_applied_invoices_get_posted_receivings_and_no_new_movements(fresh_url):
+    """T2.11-a, DM-12: an applied document becomes a posted receiving with its applied lines,
+    linked to the receipt already posted for it; the ledger gains nothing."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                    " VALUES (1, 'Main', 'UTC', 'USD', true)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension,"
+                    " stock_unit, track_mode, qty_base, reorder_point_base, cost_per_base_cents,"
+                    " lead_time_days, receive_unit, is_active) VALUES (1, 1, 'milk', 'Milk',"
+                    " 'COUNT', 'each', 'MANUAL', '12.0000', '0.0000', '0.0000', 2, 'each', true)"
+                )
+            )
+        command.upgrade(config, BEFORE_DM12)
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO documents (tenant_id, location_id, kind, supplier, currency,"
+                    " storage_key, content_type, sha256, byte_size, status, uploaded_at,"
+                    " applied_at) VALUES (1, 1, 'invoice', 'Valley Farms', 'USD', '1/a.jpg',"
+                    " 'image/jpeg', :sha, 12, 'APPLIED', '2026-11-12 12:00:00',"
+                    " '2026-11-12 12:05:00')"
+                ),
+                {"sha": "b" * 64},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO document_lines (tenant_id, document_id, line_no, raw_text,"
+                    " parsed_name, parsed_qty, match_confidence, status, stock_item_id,"
+                    " received_qty_base) VALUES (1, 1, 1, '12 milk', 'milk', '12.0000',"
+                    " '1.0000', 'APPLIED', 1, '12.0000')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO inventory_transactions (tenant_id, location_id, kind, source_type,"
+                    " source_id, revision, idempotency_key, occurred_at, recorded_at) VALUES"
+                    " (1, 1, 'receipt', 'document', '1', 0, 'receipt:document:1',"
+                    " '2026-11-12 12:05:00', '2026-11-12 12:05:00')"
+                )
+            )
+            before = connection.execute(text("SELECT COUNT(*) FROM inventory_movements")).scalar()
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            receiving = connection.execute(text("SELECT status, document_id FROM receivings")).one()
+            line = connection.execute(
+                text("SELECT accepted_qty, status, transaction_id FROM receiving_lines")
+            ).one()
+            after = connection.execute(text("SELECT COUNT(*) FROM inventory_movements")).scalar()
+            posting = connection.execute(
+                text("SELECT id FROM inventory_transactions WHERE source_type = 'document'")
+            ).scalar()
+        assert tuple(receiving) == ("posted", 1)
+        assert (Decimal(str(line[0])), line[1], line[2]) == (Decimal(12), "posted", posting)
+        assert after == before
+        command.downgrade(config, BEFORE_DM12)
+        with engine.connect() as connection:
+            assert "receivings" not in inspect(connection).get_table_names()
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

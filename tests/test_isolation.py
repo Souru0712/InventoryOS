@@ -37,6 +37,8 @@ from app.models import (
     ProductVariation,
     Promotion,
     PromotionStatus,
+    Receiving,
+    ReceivingLine,
     StockCount,
     StockItem,
     Supplier,
@@ -136,6 +138,22 @@ CASES = {
     ("POST", "/app/suppliers/{supplier_id}/active"): lambda ids: {"data": {"active": "yes"}},
     ("POST", "/app/suppliers/{supplier_id}/items"): lambda ids: {
         "data": {"inventory_item_id": ids["inventory_item"], "pack_quantity": "2"}
+    },
+    ("POST", "/app/deliveries"): lambda ids: {
+        "data": {"location_id": ids["location"], "supplier_id": ids["supplier"]}
+    },
+    ("GET", "/app/deliveries/{receiving_id}"): lambda ids: {},
+    ("POST", "/app/deliveries/{receiving_id}/lines"): lambda ids: {
+        "data": {
+            "inventory_item_id": ids["inventory_item"],
+            "supplier_item_id": ids["supplier_item"],
+            "accepted": "1",
+        }
+    },
+    ("POST", "/app/deliveries/{receiving_id}/post"): lambda ids: {},
+    ("POST", "/app/deliveries/lines/{line_id}/remove"): lambda ids: {},
+    ("POST", "/app/deliveries/lines/{line_id}/correct"): lambda ids: {
+        "data": {"accepted": "1", "reason": "recount"}
     },
     ("POST", "/app/suppliers/items/{supplier_item_id}"): lambda ids: {
         "data": {"pack_quantity": "3"}
@@ -322,6 +340,8 @@ PATH_ROWS = {
     "order_id": "production_order",
     "supplier_id": "supplier",
     "supplier_item_id": "supplier_item",
+    "receiving_id": "receiving",
+    "line_id": "receiving_line",
 }
 
 
@@ -479,7 +499,23 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     )
     db.add(sells)
     db.flush()
+    delivery = Receiving(tenant_id=tenant_id, location_id=location.id, supplier_id=vendor.id)
+    db.add(delivery)
+    db.flush()
+    arrived = ReceivingLine(
+        tenant_id=tenant_id,
+        receiving_id=delivery.id,
+        inventory_item_id=bars.inventory_item_id,
+        arrived_qty=Decimal("2"),
+        accepted_qty=Decimal("2"),
+        unit="each",
+        qty_base=Decimal("2"),
+    )
+    db.add(arrived)
+    db.flush()
     return {
+        "receiving": delivery.id,
+        "receiving_line": arrived.id,
         "supplier": vendor.id,
         "supplier_item": sells.id,
         "production_order": run.id,

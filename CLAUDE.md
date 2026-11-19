@@ -66,6 +66,10 @@ implementation sessions; the detail lives in `docs/`.
 - Suppliers and supplier items are written only by `app/suppliers.py` (ADR-0061): deactivated,
   never deleted; packs convert through the item's units; `record_price()` raises
   `price_variance` at 10 % or more.
+- Deliveries are received through `app/receivings.py` (ADR-0062): a draft receiving posts
+  exactly once (conditional status change, `AlreadyPosted`), each accepted line its own
+  `receipt` keyed `receiving_line:<id>`; discrepancies open `receiving_discrepancy`; a posted
+  line is corrected by reversal and a new line, never edited.
 - An item's current cost changes only through `app/costs.py` (ADR-0048): `set_cost()` appends
   to `item_cost_history` (append-only) and mirrors `stock_items.cost_per_base_cents`; a hand
   change is `override_cost()` (audited). A test fails on any other assignment. Past figures

@@ -28,6 +28,7 @@ from app.web import (
     costing,
     counts,
     dashboard,
+    deliveries,
     exceptions,
     health,
     locations,
@@ -118,6 +119,7 @@ app.include_router(costing.router)
 app.include_router(waste.router)
 app.include_router(production.router)
 app.include_router(suppliers.router)
+app.include_router(deliveries.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

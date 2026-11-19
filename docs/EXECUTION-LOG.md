@@ -5,6 +5,30 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.11-a Receivings on the ledger (built on branch)
+
+**Implemented**
+- `receivings` and `receiving_lines` (migration `ebcbee00f30e`, DM-12 history for applied
+  documents with no new movements); `app/receivings.py`: drafts with invoiced/arrived/accepted
+  lines (supplier packs convert), posting exactly once, a `receipt` per accepted line into a
+  batch when dated, price into the item's cost and the supplier item's last price (flagged at
+  10 %), discrepancies into `receiving_discrepancy`, corrections by reversal and a new line.
+- `/app/deliveries`: start, add lines, post, correct; a Deliveries link in the menu.
+
+**Verified**
+- `tests/test_receivings.py`: AC-RCV-01, -05 (a second post is refused), -06, -07 with AC-PRC-02,
+  -08, a dated line's batch, the pages; the DM-12 migration test; isolation cases for the six
+  new routes; the existing receiving flow and supplier tests.
+
+**Decisions**
+- ADR-0062 (Proposed).
+
+**Open issues**
+- T2.11-b: invoice review through receivings, extraction as a capped job, Employee cost flags.
+- AC-RCV-05 is tested sequentially; the concurrent Postgres test comes with T2.11-b.
+
+---
+
 ## 2026-11-19 — T2.10 Suppliers and supplier items (built on branch)
 
 **Implemented**

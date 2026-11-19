@@ -41,6 +41,8 @@ from app.models import (
     ProductVariation,
     Promotion,
     ProviderConnection,
+    Receiving,
+    ReceivingLine,
     Recipe,
     RecipeComponent,
     RecipeLine,
@@ -135,6 +137,7 @@ LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
     StockCountLine: ("stock_count_id", StockCount),
     ExtractionCorrection: ("document_id", Document),
     WasteLine: ("waste_event_id", WasteEvent),
+    ReceivingLine: ("receiving_id", Receiving),
 }
 
 
