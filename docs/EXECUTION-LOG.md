@@ -5,6 +5,32 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.16 Reports I (built on branch)
+
+**Implemented**
+- `app/transform/analytics.py` (pure): consumption split (sales, production, waste, manual),
+  count variance (short and over), expiry losses and stock past its date; values per movement at
+  its snapshot.
+- `app/reports.py`: windows from each location's business days; waste reasons and batches read
+  for expiry. `item_moves()` carries snapshot cost, the reversal flag and the source id.
+- `/app/reports` (`reports.operational`, money behind cost access and financial reports), linking
+  the waste report, as-of valuation and the weekly summary; "Reports" in the menu.
+
+**Verified**
+- `tests/test_reports.py`: AC-ANL-03 (split and ledger totals), AC-ANL-05 (a 02:00 movement with
+  a 04:00 cutoff belongs to the day before), variance at snapshot unchanged by a cost override
+  (AC-ANL-01), expiry losses and at-risk batches, the page; isolation, permissions, web,
+  dashboard, waste, usage, reorder, ledger, headers, async, health flow; the page checked on the
+  demo database.
+
+**Decisions**
+- ADR-0067 (Proposed).
+
+**Open issues**
+- CSV of the report tables arrives with T2.17.
+
+---
+
 ## 2026-11-19 — T2.15 Reorder suggestions on ledger usage (built on branch)
 
 **Implemented**

@@ -283,6 +283,9 @@ class ItemMove:
     source_type: str
     movement_type: str  # a reversal carries the type of the movement it undid
     qty_base: Decimal
+    unit_cost: Decimal = Decimal(0)  # cents per base unit, as posted
+    reverses: bool = False
+    source_id: str = ""
 
 
 def item_moves(
@@ -331,6 +334,9 @@ def item_moves(
             if m.reverses_movement_id is not None
             else m.movement_type,
             Decimal(m.qty_base),
+            Decimal(m.unit_cost_snapshot),
+            m.reverses_movement_id is not None,
+            t.source_id,
         )
         for m, t in found
     ]
