@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from app.access import OrgContext
 from app.access.system import user_by_email
+from app.batches import date_stock
 from app.config import require_deployable
 from app.costs import set_cost
 from app.db import init_db, run_migrations, session_scope, stamp_migrations
@@ -27,7 +28,6 @@ from app.models import (
     ProductIdentifier,
     RecipeComponent,
     SoldItem,
-    StockBatch,
     StockItem,
     Tenant,
     TrackMode,
@@ -520,14 +520,13 @@ def cmd_demo(args: argparse.Namespace) -> int:
             if lot_base <= 0:
                 # Random demo sales can empty an item; a lot of nothing is not a lot.
                 continue
-            db.add(
-                StockBatch(
-                    tenant_id=tenant.id,
-                    stock_item_id=item.id,
-                    received_qty_base=lot_base,
-                    expires_on=today + timedelta(days=days),
-                    source="label",
-                )
+            date_stock(
+                db,
+                OrgContext.system(tenant.id),
+                item,
+                lot_base,
+                today + timedelta(days=days),
+                now=anchor,
             )
         db.flush()
         stats = evaluate_and_store(db, OrgContext.system(tenant.id))

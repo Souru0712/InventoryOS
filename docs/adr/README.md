@@ -86,4 +86,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0052](0052-recipe-costing.md) | Recipe costing, margins and completeness | T2.03 | Accepted |
 | [ADR-0053](0053-sales-model.md) | Sales model and sources | T2.04 | Accepted |
 | [ADR-0054](0054-consumption-engine.md) | Consumption engine | T2.05 | Accepted |
-| [ADR-0055](0055-sale-consumption-posting.md) | Sale consumption posting | T2.05 | Proposed |
+| [ADR-0055](0055-sale-consumption-posting.md) | Sale consumption posting | T2.05 | Accepted |
+| [ADR-0056](0056-batch-allocation.md) | Batch allocation | T2.06 | Proposed |

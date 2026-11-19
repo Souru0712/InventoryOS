@@ -1,6 +1,6 @@
 # ADR-0055: Sale consumption posting
 
-- **Status:** Proposed, 2026-11-18 (in the T2.05-b pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-18 (owner: "Yes, merge it"; PR #57, T2.05-b)
 - **Decision ID:** none (implements T2.05-b: WF-12 step 7, WF-28's reprocessing, POS-FR-14; the
   DM-7 contract, approved by the owner on 2026-11-18)
 - **Tasks:** T2.05; T2.06 (inferred batch allocation for sales, moved there by the owner),

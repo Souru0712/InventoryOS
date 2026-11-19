@@ -17,7 +17,6 @@ from app.models import (
     Location,
     Plan,
     SoldItem,
-    StockBatch,
     StockItem,
     Tenant,
     TrackMode,
@@ -26,6 +25,7 @@ from app.orchestration.health import current, expiry_figures, over_time, record_
 from app.orchestration.views import expiry_positions
 from app.units import Dimension
 from app.web.dashboard import _expiry_summary
+from tests.batch_helpers import dated
 from tests.sales_helpers import sold_on
 
 NOW = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
@@ -80,22 +80,9 @@ def test_health_and_the_expiring_page_agree_on_the_money(db, tenant, location):
         qty_base=Decimal("20"),
         cost_per_base_cents=Decimal("50"),
     )
-    db.add_all(
-        [
-            StockBatch(
-                tenant_id=tenant.id,
-                stock_item_id=milk.id,
-                received_qty_base=Decimal("8"),
-                expires_on=TODAY - timedelta(days=1),
-            ),
-            StockBatch(
-                tenant_id=tenant.id,
-                stock_item_id=milk.id,
-                received_qty_base=Decimal("12"),
-                expires_on=TODAY + timedelta(days=2),
-            ),
-        ]
-    )
+    db.add(milk)
+    dated(db, milk, 8, TODAY - timedelta(days=1))
+    dated(db, milk, 12, TODAY + timedelta(days=2))
     db.commit()
 
     horizon = get_settings().expiry_horizon_days

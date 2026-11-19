@@ -1,10 +1,10 @@
 """Pure expiry math: dated lots, first-expired-first-out, and what will not sell in time.
 
-A batch records what arrived: how much, when it expires, what it cost. How much of it is
-still on the shelf is never stored. It is derived from the item's own quantity, which Square
-sync, physical counts and receipts already keep current; a second ledger that every sale had
-to decrement would drift from that number within a week. Works identically for count,
-weight and volume because everything here is in base units.
+A batch records what arrived: how much, when it expires, what it cost. What it still holds is
+the sum of the ledger movements that name it (T2.06, DR-15): receipts fill it, sales and counts
+take from it soonest-expiry first, a disposal or count accounts for what is left. Stock that no
+batch holds is undated. Works identically for count, weight and volume because everything here
+is in base units.
 """
 
 from __future__ import annotations
@@ -149,34 +149,15 @@ def fefo_order(batches: list[Batch]) -> list[Batch]:
     return sorted(batches, key=lambda batch: (batch.expires_on, batch.id))
 
 
-def allocate_fefo(
-    on_hand_base: Decimal, batches: list[Batch]
-) -> tuple[list[tuple[Batch, Decimal]], Decimal]:
-    """Split the on-hand quantity across dated lots.
-
-    Returns (batch, remaining) pairs in FEFO order, plus the undated remainder. Sales take the
-    soonest-expiring stock first, so whatever is still on the shelf is the latest-dated: lots
-    are filled from the latest expiry backwards, each capped at what it arrived with. Stock
-    beyond every dated lot predates tracking, so it is treated as the oldest on the shelf.
-    """
-    ordered = fefo_order(batches)
-    left = max(Decimal(on_hand_base), ZERO)
-    remaining: dict[int, Decimal] = {}
-    for batch in reversed(ordered):
-        take = min(max(Decimal(batch.received_qty_base), ZERO), left)
-        remaining[batch.id] = take
-        left -= take
-    return [(batch, remaining[batch.id]) for batch in ordered], left
-
-
 def project_batches(
-    on_hand_base: Decimal,
-    batches: list[Batch],
+    lots: list[tuple[Batch, Decimal]],
+    undated_base: Decimal,
     velocity_per_day: Decimal | None,
     today: date,
     fallback_cost_per_base_cents: Decimal = ZERO,
 ) -> tuple[list[BatchPosition], Decimal]:
-    """Position every lot and project how much of it will still be here when it expires.
+    """Position every lot, given what each holds, and project how much of it will still be
+    here when it expires.
 
     Demand is served oldest first: undated stock, then lots by expiry. Expired stock cannot be
     sold, so it absorbs no demand, and the selling clock only advances by what actually sells,
@@ -184,7 +165,9 @@ def project_batches(
     to the expiry date with today counted as spent, so a borderline lot is flagged rather than
     missed. velocity_per_day of None means the item has no sales signal: nothing is projected.
     """
-    allocation, undated = allocate_fefo(on_hand_base, batches)
+    held = {batch.id: max(Decimal(qty), ZERO) for batch, qty in lots}
+    allocation = [(batch, held[batch.id]) for batch in fefo_order([b for b, _ in lots])]
+    undated = max(Decimal(undated_base), ZERO)
     live = [batch.id for batch, qty in allocation if qty > ZERO and batch.expires_on >= today]
     first_live = live[0] if live else None
 

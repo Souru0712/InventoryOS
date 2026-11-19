@@ -15,13 +15,13 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
+from app.batches import new_batch
 from app.extract.expiry import ExpiryReader, ExpiryReadError, get_reader
 from app.ledger.posting import post_transaction
 from app.models import (
     IdentifierType,
     Location,
     ProductIdentifier,
-    StockBatch,
     StockItem,
 )
 from app.transform.barcodes import canonical, has_valid_check_digit, is_numeric, lookup_keys
@@ -206,6 +206,21 @@ def receive_scanned(
         raise ValueError("that stock item is not linked to an item")
     now = now or datetime.now(UTC)
     received = places(qty_base)
+    batch = None
+    if expires_on is not None:
+        # The dated lot is its own batch, and the receipt fills it (BAT-FR-01).
+        batch = new_batch(
+            db,
+            org,
+            item,
+            received,
+            expires_on,
+            source="scan",
+            date_type=date_type,
+            date_confidence=date_confidence,
+            cost_per_base_cents=item.cost_per_base_cents or None,
+            received_at=now,
+        )
     # A scan has no document; each one is its own receipt.
     scan = uuid4().hex
     post_transaction(
@@ -215,26 +230,18 @@ def receive_scanned(
         source_type="scan",
         source_id=scan,
         idempotency_key=f"receipt:scan:{scan}",
-        lines=[Line(item.location_id, item.inventory_item_id, "receipt", received)],
+        lines=[
+            Line(
+                item.location_id,
+                item.inventory_item_id,
+                "receipt",
+                received,
+                batch_id=batch.id if batch is not None else None,
+            )
+        ],
         occurred_at=now,
         reason="Received by barcode scan",
     )
-
-    batch = None
-    if expires_on is not None:
-        batch = StockBatch(
-            tenant_id=item.tenant_id,
-            stock_item_id=item.id,
-            received_qty_base=received,
-            expires_on=expires_on,
-            date_type=date_type,
-            date_confidence=date_confidence,
-            cost_per_base_cents=item.cost_per_base_cents or None,
-            source="scan",
-            received_at=now,
-        )
-        db.add(batch)
-
     db.flush()
     return {"qty_after_base": item.qty_base, "dated": batch is not None}
 

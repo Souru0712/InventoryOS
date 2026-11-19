@@ -12,6 +12,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
+from app.batches import new_batch
 from app.catalog import active_stock
 from app.config import get_settings
 from app.costs import set_cost
@@ -32,7 +33,6 @@ from app.models import (
     LineStatus,
     ProductIdentifier,
     StockAlias,
-    StockBatch,
     StockItem,
 )
 from app.storage import StorageError, get_storage
@@ -379,6 +379,24 @@ def apply_document(
                 source_id=str(document.id),
                 effective_at=now,
             )
+        expires_on = decision.expires_on if decision.expires_on is not None else line.expires_on
+        record_correction(db, document, "expiry", was_expiry, expires_on, line.id, user_id)
+        batch = None
+        if expires_on is not None:
+            # A dated delivery is its own batch, and the receipt fills it (BAT-FR-01, AC-BAT-01).
+            batch = new_batch(
+                db,
+                org,
+                item,
+                Decimal(quantity),
+                expires_on,
+                source="receipt",
+                date_type="best_before",
+                cost_per_base_cents=cost,
+                document_line_id=line.id,
+                received_at=now,
+            )
+            batches += 1
         movements.append(
             Line(
                 item.location_id,
@@ -387,26 +405,9 @@ def apply_document(
                 quantity,
                 # What this delivery cost; the item's current cost when the invoice did not say.
                 unit_cost=cost if cost is not None and cost >= ZERO else None,
+                batch_id=batch.id if batch is not None else None,
             )
         )
-
-        expires_on = decision.expires_on if decision.expires_on is not None else line.expires_on
-        record_correction(db, document, "expiry", was_expiry, expires_on, line.id, user_id)
-        if expires_on is not None:
-            db.add(
-                StockBatch(
-                    tenant_id=document.tenant_id,
-                    stock_item_id=item.id,
-                    received_qty_base=Decimal(quantity),
-                    expires_on=expires_on,
-                    date_type="best_before",
-                    cost_per_base_cents=cost,
-                    source="receipt",
-                    document_line_id=line.id,
-                    received_at=now,
-                )
-            )
-            batches += 1
 
         line.stock_item_id = item.id
         line.received_qty_base = Decimal(quantity)

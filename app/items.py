@@ -22,7 +22,7 @@ from app.access import OrgContext, get_scoped, select_scoped, update_scoped
 from app.audit import changes, record_audit
 from app.catalog import category_named
 from app.costs import set_cost
-from app.ledger.posting import has_moved, post_opening
+from app.ledger.posting import batch_remaining, has_moved, post_opening
 from app.models import (
     InventoryCategory,
     InventoryCount,
@@ -113,15 +113,20 @@ def _stocked(db: Session, org: OrgContext, location_id: int | None = None) -> li
 
 
 def _expiring_stock_ids(db: Session, org: OrgContext, places: list[Stocked]) -> set[int]:
-    """Stock rows with a dated lot due within EXPIRING_DAYS of their location's today."""
+    """Stock rows with a dated lot still holding stock, due within EXPIRING_DAYS of their
+    location's today."""
     if not places:
         return set()
     by_id = {place.stock.id: place for place in places}
     now = datetime.now(UTC)
     found = set()
-    for batch in db.scalars(
-        select_scoped(org, StockBatch).where(StockBatch.stock_item_id.in_(list(by_id)))
-    ):
+    batches = list(
+        db.scalars(select_scoped(org, StockBatch).where(StockBatch.stock_item_id.in_(list(by_id))))
+    )
+    held = batch_remaining(db, org, [batch.id for batch in batches])
+    for batch in batches:
+        if held.get(batch.id, 0) <= 0:
+            continue
         location = by_id[batch.stock_item_id].location
         today = business_date(now, location.timezone, location.business_day_cutoff_hour)
         if batch.expires_on <= today + timedelta(days=EXPIRING_DAYS):

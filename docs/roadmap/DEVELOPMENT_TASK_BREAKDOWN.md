@@ -76,8 +76,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.02 | Versioned recipes | P0 | L | M3 | T2.01, T1.15 | Completed (2026-11-13; immutable versions, editor, staff card, start from) |
 | T2.03 | Recipe costing, margins, completeness | P1 | M | M3 | T2.02, T1.24 | Completed (2026-11-14; cost panel, margins, affected recipes, sold without a recipe) |
 | T2.04 | Sales model and sources | P0 | M | M3 | T2.01, T1.04 | Completed (2026-11-18; sales sources and transactions, one source of record per day, sales_daily frozen) |
-| T2.05 | Consumption engine | P0 | L | M3 | T2.02, T2.04, T1.18 | In review (T2.05-a merged; T2.05-b posting, reprocessing and the `sales_daily` drop: PR open; CI evidence in the execution log) |
-| T2.06 | Batch allocation refactor | P1 | L | M3 | T1.18 | Not started |
+| T2.05 | Consumption engine | P0 | L | M3 | T2.02, T2.04, T1.18 | Completed (2026-11-18; resolver, production mode, sale consumption posting and reprocessing; `sales_daily` dropped) |
+| T2.06 | Batch allocation refactor | P1 | L | M3 | T1.18 | In progress (T2.06-a movement-level allocation, DM-10, probe R6 retired: PR open; T2.06-b batch history, batch counts, `batch_shortfall` next) |
 | T2.07 | Waste module | P1 | M | M3 | T2.06, T2.02 | Not started |
 | T2.08 | Expiry queue and auto-dispose | P1 | M | M3 | T2.07 | Not started |
 | T2.09 | Production runs | P1 | L | M3 | T2.02, T2.06 | Not started |

@@ -20,6 +20,8 @@ DECREASES = frozenset(
 )
 EITHER_WAY = frozenset(
     {"opening_balance", "count_variance", "adjustment", "pos_correction", "reversal"}
+    # Moves stock between a batch and undated stock, net zero for the item (T2.06, ADR-0056).
+    | {"batch_assignment"}
 )
 MOVEMENT_TYPES = INCREASES | DECREASES | EITHER_WAY
 
@@ -36,6 +38,7 @@ TRANSACTION_KINDS: Mapping[str, frozenset[str]] = {
     "transfer": frozenset({"transfer_out", "transfer_in"}),
     "pos_correction": frozenset({"pos_correction"}),
     "reversal": frozenset({"reversal"}),
+    "batch_assignment": frozenset({"batch_assignment"}),
 }
 
 ALLOCATION_MODES = ("explicit", "inferred", "none")
@@ -78,6 +81,9 @@ class Line:
     unit_cost: Decimal | None = None  # cents per base unit; the item's current cost if None
     batch_id: int | None = None
     reason: str | None = None
+    # How its batch was chosen: by a person (explicit) or by the ledger, oldest first
+    # (inferred); None takes explicit for a line with a batch and none without (BAT-FR-06).
+    allocation: str | None = None
     reverses_movement_id: int | None = None  # set only by a reversal
     # When this movement happened, if not when its transaction did: a count session's lines
     # each happened when they were counted (T1.23).
@@ -97,6 +103,10 @@ def check_line(line: Line) -> None:
         raise LedgerRuleError(f"a {line.movement_type} removes stock: its quantity is negative")
     if line.unit_cost is not None and line.unit_cost < 0:
         raise LedgerRuleError("a unit cost cannot be negative")
+    if line.allocation is not None and line.allocation not in ALLOCATION_MODES:
+        raise LedgerRuleError(f"{line.allocation!r} is not an allocation mode")
+    if line.allocation in ("explicit", "inferred") and line.batch_id is None:
+        raise LedgerRuleError("an allocated movement names its batch")
 
 
 def check_transaction(kind: str, lines: Iterable[Line], idempotency_key: str) -> list[Line]:

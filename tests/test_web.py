@@ -86,9 +86,12 @@ def test_one_tenant_cannot_read_another_tenants_documents(client):
 from datetime import date, timedelta  # noqa: E402
 from decimal import Decimal  # noqa: E402
 
+from app.access import OrgContext  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
+from app.ledger.posting import batch_remaining  # noqa: E402
 from app.models import Location, StockBatch, StockItem, Tenant, TrackMode  # noqa: E402
 from app.units import Dimension  # noqa: E402
+from tests.ledger_helpers import opened  # noqa: E402
 
 
 def signed_up_with_stock(client, name="Rosewood Coffee", email="owner@rosewood.test") -> int:
@@ -115,6 +118,7 @@ def signed_up_with_stock(client, name="Rosewood Coffee", email="owner@rosewood.t
             cost_per_base_cents=Decimal("110"),
         )
         db.add(item)
+        opened(db, item)
         db.commit()
         return item.id
 
@@ -165,12 +169,15 @@ def test_a_wrongly_entered_date_can_be_removed(client):
         batch_id = db.query(StockBatch).one().id
     client.post(f"/app/expiring/{batch_id}/remove")
     with SessionLocal() as db:
-        assert db.query(StockBatch).count() == 0
+        # The date comes off; the batch stays with its history (DR-24, probe R6 retired).
+        assert db.query(StockBatch).count() == 1
+        org = OrgContext.system(db.get(StockItem, item_id).tenant_id)
+        assert batch_remaining(db, org, [batch_id]) == {batch_id: Decimal("0")}
         assert db.get(StockItem, item_id).qty_base == Decimal("10")
 
 
 def test_a_date_with_a_markdown_decided_on_it_can_still_be_removed(client):
-    """Postgres enforces the promotion's reference to the lot; the markdown stays on record."""
+    """The markdown stays on record, still pointing at its lot: a lot is never deleted."""
     from app.models import Promotion, PromotionStatus
 
     item_id = signed_up_with_stock(client)
@@ -196,9 +203,9 @@ def test_a_date_with_a_markdown_decided_on_it_can_still_be_removed(client):
         client.post(f"/app/expiring/{batch_id}/remove", follow_redirects=False).status_code == 303
     )
     with SessionLocal() as db:
-        assert db.query(StockBatch).count() == 0
+        assert db.query(StockBatch).count() == 1
         promotion = db.query(Promotion).one()
-        assert promotion.stock_batch_id is None
+        assert promotion.stock_batch_id == batch_id
         assert promotion.ends_on == date(2030, 1, 1)
 
 

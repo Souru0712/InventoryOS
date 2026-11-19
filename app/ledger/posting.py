@@ -9,12 +9,18 @@ again returns the first transaction and writes nothing.
 
 It is also the only writer of stock_items.qty_base (T1.18, ADR-0042): that column, which every
 screen reads, is kept equal to the balance in the same transaction, as its projection.
+
+Batches (T2.06, ADR-0056): a movement names the batch it moved, and a batch holds the sum of
+its movements (DR-15). Stock that leaves without a batch chosen is taken from the item's
+batches at that location in its order (FEFO or FIFO), marked inferred, while the balance is
+locked; what no batch holds leaves as undated stock (DR-13).
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Final
@@ -25,12 +31,15 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
 from app.models import (
+    InventoryItem,
     InventoryMovement,
     InventoryTransaction,
     ItemLocation,
     StockBalance,
+    StockBatch,
     StockItem,
 )
+from app.transform.batches import FEFO, Held, take
 from app.transform.ledger import (
     BelowZero,
     LedgerRuleError,
@@ -128,6 +137,80 @@ def _project(db: Session, org: OrgContext, location_id: int, item_id: int, qty: 
         stock.qty_base = qty
 
 
+def batch_remaining(db: Session, org: OrgContext, batch_ids: Sequence[int]) -> dict[int, Decimal]:
+    """What each batch holds: the sum of the movements that name it (DR-15)."""
+    if not batch_ids:
+        return {}
+    rows = db.execute(
+        select_scoped(org, InventoryMovement)
+        .with_only_columns(InventoryMovement.batch_id, InventoryMovement.qty_base)
+        .where(InventoryMovement.batch_id.in_(list(batch_ids)))
+    )
+    totals: dict[int, Decimal] = defaultdict(Decimal)
+    for batch_id, qty in rows:
+        if batch_id is not None:
+            totals[batch_id] += Decimal(qty)
+    return dict(totals)
+
+
+def held_batches(db: Session, org: OrgContext, location_id: int, item_id: int) -> list[Held]:
+    """The item's batches at the location that still hold stock, with what each holds."""
+    stock_ids = list(
+        db.scalars(
+            select_scoped(org, StockItem)
+            .with_only_columns(StockItem.id)
+            .where(StockItem.location_id == location_id, StockItem.inventory_item_id == item_id)
+        )
+    )
+    if not stock_ids:
+        return []
+    batches = list(
+        db.scalars(select_scoped(org, StockBatch).where(StockBatch.stock_item_id.in_(stock_ids)))
+    )
+    held = batch_remaining(db, org, [b.id for b in batches])
+    return [
+        Held(b.id, held[b.id], b.expires_on, b.received_at)
+        for b in batches
+        if held.get(b.id, Decimal("0")) > 0
+    ]
+
+
+def _allocate(db: Session, org: OrgContext, kind: str, lines: list[Line]) -> list[Line]:
+    """Stock leaving without a batch chosen is taken from the item's batches in its order and
+    marked inferred (BAT-FR-05, -06); what no batch holds leaves undated. A reversal names its
+    batches already, and an assignment moves between a batch and undated stock on purpose."""
+    if kind in ("reversal", "batch_assignment"):
+        return lines
+    held: dict[tuple[int, int], list[Held]] = {}
+    orders: dict[int, str] = {}
+    out: list[Line] = []
+    for line in lines:
+        if line.qty_base >= 0 or line.batch_id is not None:
+            out.append(line)
+            continue
+        pair = (line.location_id, line.inventory_item_id)
+        if pair not in held:
+            held[pair] = held_batches(db, org, *pair)
+        if not held[pair]:
+            out.append(line)
+            continue
+        if line.inventory_item_id not in orders:
+            item = db.scalars(
+                select_scoped(org, InventoryItem).where(InventoryItem.id == line.inventory_item_id)
+            ).first()
+            orders[line.inventory_item_id] = item.batch_order if item is not None else FEFO
+        taken, short = take(-line.qty_base, held[pair], orders[line.inventory_item_id])
+        parts = dict(taken)
+        for batch_id, qty in taken:
+            out.append(replace(line, qty_base=-qty, batch_id=batch_id, allocation="inferred"))
+        held[pair] = [
+            replace(h, remaining=h.remaining - parts.get(h.batch_id, 0)) for h in held[pair]
+        ]
+        if short > 0:
+            out.append(replace(line, qty_base=-short))
+    return out
+
+
 def post_transaction(
     db: Session,
     org: OrgContext,
@@ -170,6 +253,8 @@ def post_transaction(
     try:
         with db.begin_nested():
             balances = {pair: _locked_balance(db, org, *pair) for pair in pairs}
+            # Read under the balance locks, so two postings never take the same batch stock.
+            posting = _allocate(db, org, kind, accepted)
             if refuse_below_zero:
                 held = {pair: Decimal(row.qty_base) for pair, row in balances.items()}
                 if crosses_zero(held, accepted):
@@ -190,7 +275,7 @@ def post_transaction(
             db.add(transaction)
             db.flush()
             now = datetime.now(UTC)
-            for line in accepted:
+            for line in posting:
                 cost = line.unit_cost
                 if cost is None:
                     cost = _current_cost(db, org, line.location_id, line.inventory_item_id)
@@ -200,7 +285,8 @@ def post_transaction(
                     location_id=line.location_id,
                     inventory_item_id=line.inventory_item_id,
                     batch_id=line.batch_id,
-                    allocation_mode="explicit" if line.batch_id is not None else "none",
+                    allocation_mode=line.allocation
+                    or ("explicit" if line.batch_id is not None else "none"),
                     movement_type=line.movement_type,
                     qty_base=line.qty_base,
                     unit_cost_snapshot=cost,
@@ -353,6 +439,58 @@ def reversed_by(db: Session, org: OrgContext, transaction_id: int) -> InventoryT
             InventoryTransaction.reverses_transaction_id == transaction_id
         )
     ).first()
+
+
+def assign_batch(
+    db: Session,
+    org: OrgContext,
+    *,
+    location_id: int,
+    inventory_item_id: int,
+    qty_base: Decimal,
+    to_batch_id: int | None,
+    from_batch_id: int | None,
+    source_type: str,
+    source_id: str,
+    idempotency_key: str,
+    occurred_at: datetime,
+    reason: str,
+    actor_user_id: int | None | _Unset = _MEMBER,
+) -> InventoryTransaction:
+    """Move stock between a batch and undated stock, net zero for the item (ADR-0056): dating
+    stock already on the shelf, undoing a wrong date, or the DM-10 opening allocation."""
+    if (to_batch_id is None) == (from_batch_id is None):
+        raise LedgerRuleError("an assignment moves stock into a batch or out of one")
+    lines = [
+        Line(
+            location_id,
+            inventory_item_id,
+            "batch_assignment",
+            -qty_base,
+            batch_id=from_batch_id,
+            reason=reason,
+        ),
+        Line(
+            location_id,
+            inventory_item_id,
+            "batch_assignment",
+            qty_base,
+            batch_id=to_batch_id,
+            reason=reason,
+        ),
+    ]
+    return post_transaction(
+        db,
+        org,
+        kind="batch_assignment",
+        source_type=source_type,
+        source_id=source_id,
+        idempotency_key=idempotency_key,
+        lines=lines,
+        occurred_at=occurred_at,
+        actor_user_id=actor_user_id,
+        reason=reason,
+    )
 
 
 def standing(

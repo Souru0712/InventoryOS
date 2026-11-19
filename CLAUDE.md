@@ -40,6 +40,14 @@ implementation sessions; the detail lives in `docs/`.
   through `post_count()`, a new item's quantity through `post_opening()`, a receipt as a
   `receipt`; a test fails on any other assignment. Square's counts never change stock (C-34).
   `inventory_counts` and `inventory_events` are frozen history (DM-7): nothing creates them.
+- A movement names its batch, and a batch holds the sum of its movements (DR-15, ADR-0056):
+  `batch_remaining()`; nothing stores a remaining quantity, and a batch is never deleted. A
+  decrease posted without a batch is split by the posting service across the item's batches
+  in its `batch_order` (FEFO or FIFO), marked inferred; what no batch holds leaves undated. A
+  dated receipt receives into its own batch; stock on the shelf is dated, or a wrong date
+  removed, through `app/batches.py` (`date_stock()`, `undate_batch()`), as a net-zero
+  `batch_assignment`. Tests date stock through `tests/batch_helpers.py`, never a bare
+  `StockBatch`.
 - An item's current cost changes only through `app/costs.py` (ADR-0048): `set_cost()` appends
   to `item_cost_history` (append-only) and mirrors `stock_items.cost_per_base_cents`; a hand
   change is `override_cost()` (audited). A test fails on any other assignment. Past figures
@@ -150,7 +158,7 @@ implementation sessions; the detail lives in `docs/`.
   (`record_sale()`), with its origin from its source (DR-34); everything that reads sales
   goes through `daily_sales()`. A location has one source of record per business date: a
   sale from another source is kept, never counted, and raises `sales_source_overlap`
-  (DR-31). `sales_daily` is frozen history (DM-7): nothing writes it (a test enforces it).
+  (DR-31). `sales_daily` was dropped at T2.05 (DM-7 contract).
 - JuJu (`C:\Users\oscar\.vscode\JuJu`) and the snack-box project are separate repositories: never
   modify them from here.
 

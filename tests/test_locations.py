@@ -15,7 +15,6 @@ from app.models import (
     AlertKind,
     Location,
     Plan,
-    StockBatch,
     StockItem,
     SubscriptionStatus,
     Tenant,
@@ -24,6 +23,7 @@ from app.orchestration.alerts import all_proposals
 from app.orchestration.subscriptions import change_plan
 from app.orchestration.views import expiry_positions
 from app.units import Dimension
+from tests.batch_helpers import dated
 
 LA = "America/Los_Angeles"
 
@@ -272,15 +272,7 @@ def _dated_lot(db, tenant, location, expires_on: date) -> StockItem:
         qty_base=Decimal("6"),
     )
     db.add(item)
-    db.flush()
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            received_qty_base=Decimal("6"),
-            expires_on=expires_on,
-        )
-    )
+    dated(db, item, 6, expires_on)
     db.commit()
     return item
 

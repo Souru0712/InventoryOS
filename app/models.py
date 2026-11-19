@@ -25,6 +25,7 @@ from sqlalchemy.types import TypeDecorator
 
 from app.db import Base, Qty, UTCDateTime
 from app.transform.adjustments import ADJUSTMENT_REASONS
+from app.transform.batches import BATCH_ORDERS
 from app.transform.costs import COST_SOURCES
 from app.transform.counts import COUNT_SCOPES, COUNT_STATUSES, VARIANCE_REASONS
 from app.transform.exceptions import EXCEPTION_TYPES, RESOLUTIONS, SEVERITIES, STATUSES
@@ -540,6 +541,7 @@ class InventoryItem(Base):
         UniqueConstraint("tenant_id", "slug"),
         one_of("inventory_items", "item_type", ITEM_TYPES),
         one_of("inventory_items", "dimension", DIMENSIONS),
+        one_of("inventory_items", "batch_order", BATCH_ORDERS),
         not_negative("inventory_items", "default_shelf_life_days"),
     )
 
@@ -556,6 +558,9 @@ class InventoryItem(Base):
     tracks_batches: Mapped[bool] = mapped_column(Boolean, default=False)
     tracks_expiry: Mapped[bool | None] = mapped_column(Boolean)
     default_shelf_life_days: Mapped[int | None] = mapped_column(Integer)
+    # Which batch stock leaves first when no one chooses (BAT-FR-05): soonest expiry, or
+    # first received for stock whose dates do not matter.
+    batch_order: Mapped[str] = mapped_column(String(4), default="fefo")
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -1642,7 +1647,8 @@ class InventoryEvent(Base):
 
 
 class StockBatch(Base):
-    """A dated lot as it arrived. Remaining quantity is derived, never stored: transform/expiry."""
+    """A dated lot as it arrived. What it still holds is the sum of the ledger movements that
+    name it (DR-15, T2.06), never stored; a batch is never deleted (DR-24)."""
 
     __tablename__ = "stock_batches"
     __table_args__ = (
@@ -1665,6 +1671,7 @@ class StockBatch(Base):
     # "receipt" raised stock when it arrived; "label" dated stock that was already on the shelf;
     # "scan" was received by scanning its barcode.
     source: Mapped[str] = mapped_column(String(32), default="receipt")
+    lot_code: Mapped[str | None] = mapped_column(String(80))  # the supplier's, when known
     document_line_id: Mapped[int | None] = mapped_column(ref("document_lines.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
 from app.catalog import active_stock, by_item_name
+from app.ledger.posting import batch_remaining
 from app.models import (
     Location,
     RecipeComponent,
@@ -24,7 +25,6 @@ from app.transform.expiry import (
     Batch,
     Coverage,
     ItemExpiry,
-    allocate_fefo,
     coverage,
     project_batches,
 )
@@ -162,23 +162,38 @@ def sales_signal(db: Session, org: OrgContext) -> set[int]:
     return linked | {item.id for item in _provider_items(db, org)}
 
 
-def batches_by_item(db: Session, org: OrgContext) -> dict[int, list[Batch]]:
-    result: dict[int, list[Batch]] = defaultdict(list)
-    for row in db.scalars(select_scoped(org, StockBatch)):
+def batches_by_item(db: Session, org: OrgContext) -> dict[int, list[tuple[Batch, Decimal]]]:
+    """Every stock item's batches that still hold stock, with what each holds: the sum of the
+    ledger movements that name it (DR-15)."""
+    rows = list(db.scalars(select_scoped(org, StockBatch)))
+    held = batch_remaining(db, org, [row.id for row in rows])
+    result: dict[int, list[tuple[Batch, Decimal]]] = defaultdict(list)
+    for row in rows:
+        remaining = held.get(row.id, ZERO)
+        if remaining <= ZERO:
+            continue
         result[row.stock_item_id].append(
-            Batch(
-                id=row.id,
-                received_qty_base=Decimal(row.received_qty_base),
-                expires_on=row.expires_on,
-                cost_per_base_cents=(
-                    Decimal(row.cost_per_base_cents)
-                    if row.cost_per_base_cents is not None
-                    else None
+            (
+                Batch(
+                    id=row.id,
+                    received_qty_base=Decimal(row.received_qty_base),
+                    expires_on=row.expires_on,
+                    cost_per_base_cents=(
+                        Decimal(row.cost_per_base_cents)
+                        if row.cost_per_base_cents is not None
+                        else None
+                    ),
+                    received_at=row.received_at,
                 ),
-                received_at=row.received_at,
+                remaining,
             )
         )
     return dict(result)
+
+
+def _undated(item: StockView, lots: list[tuple[Batch, Decimal]]) -> Decimal:
+    """What no batch holds: the recorded quantity less what the batches hold (DR-13)."""
+    return max(Decimal(item.qty_base) - sum((qty for _, qty in lots), ZERO), ZERO)
 
 
 def business_dates(db: Session, org: OrgContext, now: datetime) -> dict[int, date]:
@@ -218,7 +233,7 @@ def expiry_positions(
         speed = velocity.get(item.id, ZERO) if item.id in signal else None
         day = today or days.get(item.location_id) or now.date()
         positions, undated = project_batches(
-            item.qty_base, lots, speed, day, item.cost_per_base_cents
+            lots, _undated(item, lots), speed, day, item.cost_per_base_cents
         )
         result.append(ItemExpiry(item, positions, undated))
     return result
@@ -244,6 +259,5 @@ def expiry_coverage(db: Session, org: OrgContext, location_id: int | None = None
     for item in stock_views(db, org, location_id):
         if item.tracks_expiry is False:
             continue
-        _, undated = allocate_fefo(item.qty_base, batches.get(item.id, []))
-        entries.append((item, undated))
+        entries.append((item, _undated(item, batches.get(item.id, []))))
     return coverage(entries)

@@ -4,11 +4,13 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from app.access import OrgContext
-from app.transform.expiry import Batch, allocate_fefo, fefo_order, project_batches
+from app.transform.expiry import Batch, fefo_order, project_batches
 from app.units import to_base
+from tests.batch_helpers import dated
 from tests.sales_helpers import sold_on
 
 TODAY = date(2026, 9, 10)
+D0 = Decimal("0")
 
 
 def lot(id: int, qty, days: int, cost=None) -> Batch:
@@ -24,33 +26,19 @@ def by_id(positions):
     return {p.batch.id: p for p in positions}
 
 
+def full(*lots):
+    """Each lot holding everything it arrived with."""
+    return [(b, b.received_qty_base) for b in lots]
+
+
 def test_fefo_order_is_soonest_expiry_then_earliest_receipt():
     ordered = fefo_order([lot(3, 1, 20), lot(2, 1, 5), lot(1, 1, 5)])
     assert [b.id for b in ordered] == [1, 2, 3]
 
 
-def test_sales_are_assumed_to_have_drained_the_soonest_lot_first():
-    # 48 Gatorade arrived in two dated lots; 18 have sold since.
-    allocation, undated = allocate_fefo(Decimal("30"), [lot(1, 24, 14), lot(2, 24, 63)])
-    assert [(b.id, q) for b, q in allocation] == [(1, Decimal("6")), (2, Decimal("24"))]
-    assert undated == Decimal("0")
-
-
-def test_a_lot_never_holds_more_than_it_arrived_with():
-    allocation, undated = allocate_fefo(Decimal("64"), [lot(1, 24, 10)])
-    assert allocation[0][1] == Decimal("24")
-    assert undated == Decimal("40")
-
-
-def test_a_count_below_zero_is_treated_as_empty():
-    allocation, undated = allocate_fefo(Decimal("-5"), [lot(1, 24, 10)])
-    assert allocation[0][1] == Decimal("0")
-    assert undated == Decimal("0")
-
-
 def test_the_red_bull_case_projects_the_cans_left_at_expiry():
     # 72 on hand, selling 4 a day, batch expires in 12 days: 48 sell, 24 do not.
-    positions, _ = project_batches(Decimal("72"), [lot(1, 72, 12, cost=110)], Decimal("4"), TODAY)
+    positions, _ = project_batches(full(lot(1, 72, 12, cost=110)), D0, Decimal("4"), TODAY)
     [position] = positions
     assert position.projected_leftover_base == Decimal("24")
     assert position.status == "at_risk"
@@ -58,7 +46,7 @@ def test_the_red_bull_case_projects_the_cans_left_at_expiry():
 
 
 def test_a_lot_that_sells_through_in_time_carries_no_risk():
-    positions, _ = project_batches(Decimal("20"), [lot(1, 20, 12)], Decimal("4"), TODAY)
+    positions, _ = project_batches(full(lot(1, 20, 12)), D0, Decimal("4"), TODAY)
     assert positions[0].projected_leftover_base == Decimal("0")
     assert positions[0].at_risk_cents == 0
     # Still the lot to sell first, because it is the soonest-dated one on the shelf.
@@ -67,16 +55,14 @@ def test_a_lot_that_sells_through_in_time_carries_no_risk():
 
 def test_undated_stock_is_sold_before_dated_lots():
     # 40 undated units take 10 days to sell, so the dated lot never gets a turn.
-    positions, undated = project_batches(Decimal("64"), [lot(1, 24, 10)], Decimal("4"), TODAY)
+    positions, undated = project_batches(full(lot(1, 24, 10)), Decimal("40"), Decimal("4"), TODAY)
     assert undated == Decimal("40")
     assert positions[0].projected_leftover_base == Decimal("24")
 
 
 def test_a_lot_that_expires_early_hands_its_demand_to_the_next_one():
     # Lot 1 can only sell 2 before it expires; its 8 unsold units do not block lot 2.
-    positions, _ = project_batches(
-        Decimal("30"), [lot(1, 10, 2), lot(2, 20, 10)], Decimal("1"), TODAY
-    )
+    positions, _ = project_batches(full(lot(1, 10, 2), lot(2, 20, 10)), D0, Decimal("1"), TODAY)
     got = by_id(positions)
     assert got[1].projected_leftover_base == Decimal("8")
     assert got[2].projected_leftover_base == Decimal("12")
@@ -84,7 +70,7 @@ def test_a_lot_that_expires_early_hands_its_demand_to_the_next_one():
 
 def test_expired_stock_still_on_the_shelf_is_all_at_risk():
     positions, _ = project_batches(
-        Decimal("30"), [lot(1, 12, -1, cost=50), lot(2, 18, 20)], Decimal("3"), TODAY
+        full(lot(1, 12, -1, cost=50), lot(2, 18, 20)), D0, Decimal("3"), TODAY
     )
     got = by_id(positions)
     assert got[1].status == "expired"
@@ -95,12 +81,12 @@ def test_expired_stock_still_on_the_shelf_is_all_at_risk():
 
 
 def test_nothing_selling_means_the_whole_lot_is_at_risk():
-    positions, _ = project_batches(Decimal("40"), [lot(1, 40, 45)], Decimal("0"), TODAY)
+    positions, _ = project_batches(full(lot(1, 40, 45)), D0, Decimal("0"), TODAY)
     assert positions[0].projected_leftover_base == Decimal("40")
 
 
 def test_without_a_sales_signal_nothing_is_projected():
-    positions, _ = project_batches(Decimal("24"), [lot(1, 24, 5, cost=80)], None, TODAY)
+    positions, _ = project_batches(full(lot(1, 24, 5, cost=80)), D0, None, TODAY)
     [position] = positions
     assert position.projected_leftover_base is None
     # Worst case stands in for the projection, so the owner still sees a number.
@@ -110,8 +96,8 @@ def test_without_a_sales_signal_nothing_is_projected():
 
 def test_cost_falls_back_to_the_item_when_the_invoice_had_no_price():
     positions, _ = project_batches(
-        Decimal("10"),
-        [lot(1, 10, 3)],
+        full(lot(1, 10, 3)),
+        D0,
         Decimal("0"),
         TODAY,
         fallback_cost_per_base_cents=Decimal("25"),
@@ -121,16 +107,15 @@ def test_cost_falls_back_to_the_item_when_the_invoice_had_no_price():
 
 def test_sell_first_marks_the_soonest_live_lot_only():
     positions, _ = project_batches(
-        Decimal("30"), [lot(1, 10, -2), lot(2, 10, 4), lot(3, 10, 30)], Decimal("5"), TODAY
+        full(lot(1, 10, -2), lot(2, 10, 4), lot(3, 10, 30)), D0, Decimal("5"), TODAY
     )
     got = by_id(positions)
     assert (got[1].sell_first, got[2].sell_first, got[3].sell_first) == (False, True, False)
 
 
 def test_a_lot_that_has_sold_through_is_reported_as_such():
-    positions, _ = project_batches(
-        Decimal("10"), [lot(1, 10, 3), lot(2, 10, 30)], Decimal("1"), TODAY
-    )
+    lots = [(lot(1, 10, 3), D0), (lot(2, 10, 30), Decimal("10"))]
+    positions, _ = project_batches(lots, D0, Decimal("1"), TODAY)
     assert by_id(positions)[1].status == "sold_through"
 
 
@@ -138,7 +123,7 @@ def test_volume_works_in_base_units_like_everything_else():
     # 4 cases of 6 x 1L oat milk, 1.5 L a day, best before in 10 days.
     received = to_base(24, "l")
     positions, _ = project_batches(
-        received, [lot(1, received, 10, cost="0.185")], to_base("1.5", "l"), TODAY
+        full(lot(1, received, 10, cost="0.185")), D0, to_base("1.5", "l"), TODAY
     )
     assert positions[0].projected_leftover_base == to_base(9, "l")
     assert positions[0].at_risk_cents == 1665
@@ -150,12 +135,12 @@ from datetime import UTC, datetime  # noqa: E402
 
 import pytest  # noqa: E402
 
+from app.ledger.posting import post_count  # noqa: E402
 from app.models import (  # noqa: E402
     EmailLog,
     ExceptionRecord,
     Location,
     SoldItem,
-    StockBatch,
     StockItem,
     TrackMode,
 )
@@ -188,15 +173,7 @@ def red_bull(db, tenant, location):
     db.flush()
     for back in range(28):
         sold_on(db, location, sold, TODAY - timedelta(days=back), "4")
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            received_qty_base=Decimal("72"),
-            expires_on=TODAY + timedelta(days=12),
-            cost_per_base_cents=Decimal("110"),
-        )
-    )
+    dated(db, item, 72, TODAY + timedelta(days=12), cost=110)
     db.commit()
     return item
 
@@ -234,15 +211,7 @@ def test_an_item_with_no_sales_signal_is_not_projected(db, tenant, location):
         qty_base=Decimal("10"),
     )
     db.add(item)
-    db.flush()
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            received_qty_base=Decimal("10"),
-            expires_on=TODAY + timedelta(days=20),
-        )
-    )
+    dated(db, item, 10, TODAY + timedelta(days=20))
     db.commit()
     [expiry] = expiry_positions(db, OrgContext.system(tenant.id), TODAY)
     # No recipe, not POS-tracked: zero velocity would be a guess, so nothing is projected.
@@ -270,7 +239,18 @@ def test_the_digest_leads_with_the_money(db, tenant, red_bull):
 def test_the_alert_resolves_once_the_stock_can_sell_in_time(db, tenant, red_bull):
     evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
-    red_bull.qty_base = Decimal("40")  # marked down and sold; Square sync brings the new count
+    # Marked down and sold: a count finds 40, and the batch gives up what is gone (T2.06).
+    post_count(
+        db,
+        OrgContext.system(tenant.id),
+        location_id=red_bull.location_id,
+        inventory_item_id=red_bull.inventory_item_id,
+        counted=Decimal("40"),
+        source_type="test",
+        source_id="recount",
+        idempotency_key="count:red-bull",
+        occurred_at=datetime.now(UTC),
+    )
     db.commit()
     evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
@@ -291,16 +271,7 @@ def test_expired_stock_raises_its_own_alert(db, tenant, location):
         qty_base=to_base(8, "l"),
     )
     db.add(item)
-    db.flush()
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=item.id,
-            received_qty_base=to_base(8, "l"),
-            expires_on=TODAY - timedelta(days=2),
-            cost_per_base_cents=Decimal("0.07"),
-        )
-    )
+    dated(db, item, to_base(8, "l"), TODAY - timedelta(days=2), cost="0.07")
     db.commit()
     evaluate_and_store(db, OrgContext.system(tenant.id), NOW)
     db.commit()
@@ -405,13 +376,6 @@ def test_dismissed_items_leave_the_figure_entirely(db, tenant, location):
     assert [row.item.name for row in result.rows] == ["Milk"]
     assert result.percent == 0
 
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=perishable.id,
-            received_qty_base=Decimal("10"),
-            expires_on=TODAY + timedelta(days=10),
-        )
-    )
+    dated(db, perishable, 10, TODAY + timedelta(days=10))
     db.commit()
     assert expiry_coverage(db, OrgContext.system(tenant.id)).percent == 100

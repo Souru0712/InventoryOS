@@ -19,7 +19,6 @@ from app.models import (
     Membership,
     RecipeComponent,
     SoldItem,
-    StockBatch,
     StockItem,
     TrackMode,
     User,
@@ -32,6 +31,7 @@ from app.transform.dashboard import DateRange, RangeError, check_range, complete
 from app.transform.exceptions import Finding, attention_key
 from app.transform.ledger import Line
 from app.units import Dimension
+from tests.batch_helpers import dated
 from tests.ledger_helpers import opened
 from tests.sales_helpers import sold_on
 
@@ -151,15 +151,7 @@ def test_ac_cmd_01_low_stock_an_expired_batch_and_an_unmapped_product_need_atten
     org = OrgContext.system(tenant.id)
     milk = stock(db, location, "Milk", qty="2", reorder="5")
     eggs = stock(db, location, "Eggs", qty="12")
-    db.add(
-        StockBatch(
-            tenant_id=tenant.id,
-            stock_item_id=eggs.id,
-            received_qty_base=D(12),
-            expires_on=date.today() - timedelta(days=3),
-            source="label",
-        )
-    )
+    dated(db, eggs, 12, date.today() - timedelta(days=3))
     latte = SoldItem(tenant_id=tenant.id, provider_item_id="sq-oat-latte", name="Oat latte")
     db.add(latte)
     db.flush()
