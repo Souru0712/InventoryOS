@@ -39,6 +39,7 @@ from app.transform.ledger import (
     MOVEMENT_TYPES,
     TRANSACTION_KINDS,
 )
+from app.transform.production import STATUSES as PRODUCTION_STATUSES
 from app.transform.products import MODIFIER_EFFECTS, PRODUCTION_MODES
 from app.transform.sales import (
     CONSUMPTION_STATUSES,
@@ -57,7 +58,7 @@ def utcnow() -> datetime:
 # Where a row may come from. The database refuses anything else (DB1).
 COUNT_SOURCES = ("manual", "opening", "receipt", "scan")
 IDENTIFIER_SOURCES = ("manual", "square", "scan")
-BATCH_SOURCES = ("receipt", "label", "scan")
+BATCH_SOURCES = ("receipt", "label", "scan", "production")
 SUPPRESSION_SOURCES = ("bounce", "complaint", "manual")
 # R1 role presets (USER_ROLES_AND_PERMISSIONS §2, PD-11); their permissions arrive in T1.06.
 MEMBERSHIP_ROLES = ("owner", "administrator", "manager", "employee", "read_only")
@@ -1681,6 +1682,43 @@ class StockBatch(Base):
     lot_code: Mapped[str | None] = mapped_column(String(80))  # the supplier's, when known
     document_line_id: Mapped[int | None] = mapped_column(ref("document_lines.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ProductionOrder(Base):
+    """A production run (T2.09, WF-11): a prepared item or finished good made from its recipe in
+    effect, times a multiplier. R1 records it completed in one step (PRD-FR-08); its ledger
+    transaction takes the inputs and puts the output into a new batch."""
+
+    __tablename__ = "production_orders"
+    __table_args__ = (
+        one_of("production_orders", "status", PRODUCTION_STATUSES),
+        positive("production_orders", "multiplier"),
+        positive("production_orders", "actual_yield_base"),
+        Index("ix_production_orders_location_time", "location_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))  # what was made
+    recipe_version_id: Mapped[int] = mapped_column(ref("recipe_versions.id"))
+    multiplier: Mapped[Decimal] = mapped_column(Qty)
+    expected_yield_base: Mapped[Decimal] = mapped_column(Qty)
+    actual_yield_base: Mapped[Decimal] = mapped_column(Qty)
+    variance_base: Mapped[Decimal] = mapped_column(Qty)  # actual - expected (PRD-FR-04)
+    # Per base unit of the output; None when an input had no cost (PRD-FR-06).
+    unit_cost: Mapped[Decimal | None] = mapped_column(Qty)
+    batch_code: Mapped[str] = mapped_column(String(40))
+    output_batch_id: Mapped[int | None] = mapped_column(ref("stock_batches.id"))
+    note: Mapped[str | None] = mapped_column(String(300))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+    status: Mapped[str] = mapped_column(String(10), default="completed")
+    voided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    voided_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    void_reason: Mapped[str | None] = mapped_column(String(300))
 
 
 class WasteReason(Base):

@@ -80,7 +80,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.06 | Batch allocation refactor | P1 | L | M3 | T1.18 | Completed (2026-11-19; movement-level batches, DM-10, batch history and counts, `batch_shortfall`; probe R6 retired) |
 | T2.07 | Waste module | P1 | M | M3 | T2.06, T2.02 | In review (waste entry, product expansion, void window, log, report and found short: PR #60 open) |
 | T2.08 | Expiry queue and auto-dispose | P1 | M | M3 | T2.07 | Built on branch, not merged (alert window, dispose action, opt-in auto-dispose, use-by label; stacked on T2.07 by the owner's choice) |
-| T2.09 | Production runs | P1 | L | M3 | T2.02, T2.06 | Not started |
+| T2.09 | Production runs | P1 | L | M3 | T2.02, T2.06 | Built on branch, not merged (runs, FEFO inputs, dated output batch, cost over yield, void, production screen) |
 | T2.10 | Suppliers and supplier items | P1 | M | M3 | T1.13 | Not started |
 | T2.11 | Receiving on the ledger | P1 | L | M3 | T2.10, T2.06, T1.20 | Not started |
 | T2.12 | Standalone daily sales entry | P1 | M | M4 | T2.05 | Not started |

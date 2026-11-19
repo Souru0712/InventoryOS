@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
 from app.main import app
 from app.models import (
@@ -32,6 +33,7 @@ from app.models import (
     Modifier,
     Product,
     ProductIdentifier,
+    ProductionOrder,
     ProductVariation,
     Promotion,
     PromotionStatus,
@@ -43,6 +45,7 @@ from app.models import (
     WasteEvent,
     WasteReason,
 )
+from app.recipes import NewLine, Owner, save_recipe
 from app.security import hash_password
 from app.storage import get_storage
 from app.units import Dimension
@@ -119,6 +122,13 @@ CASES = {
     },
     ("POST", "/app/expiring/{batch_id}/remove"): lambda ids: {},
     ("POST", "/app/expiring/{batch_id}/dispose"): lambda ids: {},
+    ("GET", "/app/production"): lambda ids: {
+        "params": {"item": ids["inventory_item"], "location": ids["location"]}
+    },
+    ("POST", "/app/production"): lambda ids: {
+        "data": {"location_id": ids["location"], "inventory_item_id": ids["inventory_item"]}
+    },
+    ("POST", "/app/production/{order_id}/void"): lambda ids: {},
     ("GET", "/app/expiring/batches/{batch_id}"): lambda ids: {},
     ("POST", "/app/expiring/batches/{batch_id}/count"): lambda ids: {"data": {"quantity": "1"}},
     ("GET", "/app/waste"): lambda ids: {
@@ -298,6 +308,7 @@ PATH_ROWS = {
     "owner_id": "variation",
     "event_id": "waste_event",
     "reason_id": "waste_reason",
+    "order_id": "production_order",
 }
 
 
@@ -424,7 +435,28 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     )
     db.add(wasted)
     db.flush()
+    version = save_recipe(
+        db,
+        OrgContext.system(tenant_id),
+        Owner("variation", size.id),
+        [NewLine(bars.inventory_item_id, "1", "")],
+    )
+    run = ProductionOrder(
+        tenant_id=tenant_id,
+        location_id=location.id,
+        inventory_item_id=bars.inventory_item_id,
+        recipe_version_id=version.id,
+        multiplier=Decimal("1"),
+        expected_yield_base=Decimal("1"),
+        actual_yield_base=Decimal("1"),
+        variance_base=Decimal("0"),
+        batch_code=f"{tag}-1",
+        occurred_at=datetime.now(UTC),
+    )
+    db.add(run)
+    db.flush()
     return {
+        "production_order": run.id,
         "waste_reason": spilled.id,
         "waste_event": wasted.id,
         "kind": "variation",

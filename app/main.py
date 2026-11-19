@@ -34,6 +34,7 @@ from app.web import (
     marketing,
     mfa,
     ops,
+    production,
     products,
     promotions,
     receiving,
@@ -114,6 +115,7 @@ app.include_router(products.router)
 app.include_router(recipes.router)
 app.include_router(costing.router)
 app.include_router(waste.router)
+app.include_router(production.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

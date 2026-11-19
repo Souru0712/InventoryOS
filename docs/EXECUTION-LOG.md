@@ -5,6 +5,29 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.09 Production runs (built on branch)
+
+**Implemented**
+- `production_orders` (migration `240830e94f98`, also `production` as a cost and batch source);
+  `app/production.py` (`propose()`, `record_run()`, `void_run()`): one `production` transaction
+  per run, inputs taken soonest-expiry first, the actual yield into a new batch with use-by and
+  a readable code, cost over actual yield (unknown if an input has none), set as the item's
+  cost; short inputs allowed with `negative_balance`; void by the recorder for 30 minutes, then
+  `production.void` with a reason.
+- `/app/production`: choose, multiplier, inputs against on hand, actual yield, the label.
+
+**Verified**
+- `tests/test_production.py`: AC-PRD-01, -02, -03, -05, -06, -07, PD-15 and the page;
+  isolation cases for the three new routes; costs, ledger writers, batches, consumption.
+
+**Decisions**
+- ADR-0060 (Proposed).
+
+**Open issues**
+- Yield correction after completion (PRD-FR-13, via WF-26) and planned orders (R2) are not built.
+
+---
+
 ## 2026-11-19 — T2.08 Expiry queue and auto-dispose (built on branch)
 
 By the owner's choice (2026-11-19, "skip PR's ... continue building"), tasks are now built one

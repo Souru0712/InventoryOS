@@ -58,6 +58,11 @@ implementation sessions; the detail lives in `docs/`.
   only (`logged()`, `found_short()`, DR-33): never sum events or lines. Expired lots are
   disposed through `dispose_batch()`; opt-in `dispose_expired()` writes off expired prepared
   batches in the evaluation job, never while a location's sales are pending (ADR-0059).
+- Production runs are recorded only by `app/production.py` (ADR-0060): one `production`
+  transaction keyed `production_order:<id>` takes the item's recipe inputs (batches inferred
+  by the ledger) and puts the actual yield into a new dated batch; output cost = inputs ÷
+  actual yield (unknown if an input has no cost), set as the item's cost; short inputs go
+  below zero with `negative_balance` (PD-15).
 - An item's current cost changes only through `app/costs.py` (ADR-0048): `set_cost()` appends
   to `item_cost_history` (append-only) and mirrors `stock_items.cost_per_base_cents`; a hand
   change is `override_cost()` (audited). A test fails on any other assignment. Past figures
