@@ -75,7 +75,7 @@ def check_modifier(effect: str, scale_factor: str) -> Decimal | None:
 
 def split_sold_name(name: str) -> tuple[str, str]:
     """A POS sale name as (product, variation). Square names a variation "Item - Variation"
-    (`square_normalize`); a name without one is a single "Regular" variation."""
+    (`app/providers/square/normalize.py`); a name without one is a single "Regular" variation."""
     clean = " ".join((name or "").split())
     product, sep, variation = clean.rpartition(" - ")
     if sep and product and variation:

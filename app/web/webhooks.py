@@ -16,6 +16,7 @@ from app.db import get_db
 from app.load.upsert import apply_provider_counts
 from app.models import Location, StockItem, SyncRun, TrackMode
 from app.orchestration.sync import NotConnected, sync_catalog
+from app.providers.square.normalize import normalize_counts
 from app.providers.square.webhooks import (
     CATALOG_VERSION_UPDATED,
     INVENTORY_COUNT_UPDATED,
@@ -23,7 +24,6 @@ from app.providers.square.webhooks import (
     merchant_id,
     verify_signature,
 )
-from app.transform.square_normalize import normalize_counts
 from app.web.inputs import raw_body
 
 log = logging.getLogger(__name__)

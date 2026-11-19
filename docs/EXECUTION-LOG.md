@@ -5,6 +5,32 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.22 Standalone end-to-end suite (built on branch)
+
+**Implemented**
+- `tests/test_standalone.py`: a business signs up and runs every R1 workflow through the pages
+  with every POS setting cleared and the Square client refusing to be built, ending with an exact
+  ledger reconciliation and a paid subscription; AC-SAL-07 static checks (provider imports only in
+  the three POS seams, no Square module outside `app/providers/`, the core never reaches the
+  seams).
+- `app/transform/square_normalize.py` moved to `app/providers/square/normalize.py`.
+- CI job "Standalone (no POS)" with every Square variable empty.
+- Found on the way: T2.19 had added a second business-profile form beside T1.04's; removed
+  (`59acd5f`).
+
+**Verified**
+- The suite (3 tests), settings, Square normalise, catalog and write-back, webhooks, deployment,
+  docs contract, locations, settings, permissions, isolation, web.
+
+**Decisions**
+- ADR-0074 (Proposed).
+
+**Open issues**
+- Making "Standalone (no POS)" a required check is a ruleset change for the owner; the M4 gate
+  review reads it.
+
+---
+
 ## 2026-11-19 — T2.21 Employee home and floor screens (built on branch)
 
 **Implemented**

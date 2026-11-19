@@ -120,6 +120,9 @@ implementation sessions; the detail lives in `docs/`.
   `app/throttle.py` (`locked_for`, `hit`, `clear`; ADR-0032); a refusal reveals nothing more
   than a success would.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
+  Only the POS seams import it (`app/orchestration/sync.py`, the connect routes in
+  `app/web/dashboard.py`, `app/web/webhooks.py`); `tests/test_standalone.py` runs every R1
+  workflow with no POS and enforces both (ADR-0074).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,
