@@ -56,6 +56,8 @@ from app.models import (
     StockCount,
     StockCountLine,
     StockItem,
+    Supplier,
+    SupplierItem,
     SyncRun,
     Tenant,
     User,
@@ -106,6 +108,8 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         HealthSnapshot,
         Job,
         WasteReason,
+        Supplier,
+        SupplierItem,
     }
 )
 

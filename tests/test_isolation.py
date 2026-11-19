@@ -39,6 +39,8 @@ from app.models import (
     PromotionStatus,
     StockCount,
     StockItem,
+    Supplier,
+    SupplierItem,
     Tenant,
     TrackMode,
     User,
@@ -129,6 +131,15 @@ CASES = {
         "data": {"location_id": ids["location"], "inventory_item_id": ids["inventory_item"]}
     },
     ("POST", "/app/production/{order_id}/void"): lambda ids: {},
+    ("GET", "/app/suppliers/{supplier_id}"): lambda ids: {},
+    ("POST", "/app/suppliers/{supplier_id}"): lambda ids: {"data": {"name": "Renamed"}},
+    ("POST", "/app/suppliers/{supplier_id}/active"): lambda ids: {"data": {"active": "yes"}},
+    ("POST", "/app/suppliers/{supplier_id}/items"): lambda ids: {
+        "data": {"inventory_item_id": ids["inventory_item"], "pack_quantity": "2"}
+    },
+    ("POST", "/app/suppliers/items/{supplier_item_id}"): lambda ids: {
+        "data": {"pack_quantity": "3"}
+    },
     ("GET", "/app/expiring/batches/{batch_id}"): lambda ids: {},
     ("POST", "/app/expiring/batches/{batch_id}/count"): lambda ids: {"data": {"quantity": "1"}},
     ("GET", "/app/waste"): lambda ids: {
@@ -309,6 +320,8 @@ PATH_ROWS = {
     "event_id": "waste_event",
     "reason_id": "waste_reason",
     "order_id": "production_order",
+    "supplier_id": "supplier",
+    "supplier_item_id": "supplier_item",
 }
 
 
@@ -454,8 +467,21 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
         occurred_at=datetime.now(UTC),
     )
     db.add(run)
+    vendor = Supplier(tenant_id=tenant_id, name=f"{tag} Farms")
+    db.add(vendor)
+    db.flush()
+    sells = SupplierItem(
+        tenant_id=tenant_id,
+        supplier_id=vendor.id,
+        inventory_item_id=bars.inventory_item_id,
+        purchase_unit="box",
+        pack_size_base=Decimal("12"),
+    )
+    db.add(sells)
     db.flush()
     return {
+        "supplier": vendor.id,
+        "supplier_item": sells.id,
         "production_order": run.id,
         "waste_reason": spilled.id,
         "waste_event": wasted.id,

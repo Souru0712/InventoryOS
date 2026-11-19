@@ -985,6 +985,69 @@ def test_dm10_each_batch_holds_what_it_held_and_the_downgrade_clears_it(fresh_ur
         engine.dispose()
 
 
+BEFORE_DM11 = "240830e94f98"
+
+
+def test_dm11_free_text_suppliers_become_suppliers_with_items(fresh_url):
+    """T2.10, DM-11: each business's distinct supplier names (trimmed, without case) become
+    suppliers; each stock item naming one gets a preferred supplier item with its pack."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM5)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    stock = (
+        "INSERT INTO stock_items (tenant_id, location_id, slug, name, dimension, stock_unit,"
+        " track_mode, qty_base, reorder_point_base, cost_per_base_cents, lead_time_days,"
+        " receive_unit, pack_size_base, supplier, is_active) VALUES (1, 1, :slug, :slug, 'VOLUME',"
+        " 'l', 'MANUAL', '0.0000', '0.0000', :cost, 3, 'case', :pack, :supplier, true)"
+    )
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-12 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, name, timezone, currency, is_active)"
+                    " VALUES (1, 'Main', 'UTC', 'USD', true)"
+                )
+            )
+            for slug, supplier, pack, cost in (
+                ("milk", "Valley Farms", "6000.0000", "0.2000"),
+                ("cream", " valley farms ", None, "0.0000"),
+                ("cups", None, None, "0.0000"),
+            ):
+                connection.execute(
+                    text(stock), {"slug": slug, "supplier": supplier, "pack": pack, "cost": cost}
+                )
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            suppliers = connection.execute(text("SELECT name, lead_time_days FROM suppliers")).all()
+            items = connection.execute(
+                text(
+                    "SELECT s.slug, si.purchase_unit, si.pack_size_base, si.last_price_cents,"
+                    " si.preferred FROM supplier_items si JOIN stock_items s"
+                    " ON s.inventory_item_id = si.inventory_item_id ORDER BY s.slug"
+                )
+            ).all()
+        assert [(n, d) for n, d in suppliers] == [("Valley Farms", 3)]
+        assert [
+            (slug, unit, Decimal(str(pack)), price, bool(pref))
+            for slug, unit, pack, price, pref in items
+        ] == [
+            ("cream", "case", Decimal(1), None, True),
+            ("milk", "case", Decimal(6000), 1200, True),
+        ]
+        command.downgrade(config, BEFORE_DM11)
+        with engine.connect() as connection:
+            assert "suppliers" not in inspect(connection).get_table_names()
+    finally:
+        engine.dispose()
+
+
 BEFORE_DM2 = "5c1d0f2a9b31"
 NOON = "2026-11-04 12:00:00"
 # Rows as they were stored before DM-2: naive UTC wall clocks (NOON). Literals, not binds, so both

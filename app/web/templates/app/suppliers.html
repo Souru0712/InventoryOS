@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Suppliers</h1>
+<p class="small">{% if show == "all" %}<a href="/app/suppliers">Active only</a>{% else %}<a href="/app/suppliers?show=all">Show deactivated too</a>{% endif %}</p>
+{% if not suppliers %}
+  <div class="card"><p style="margin:0;">No suppliers yet.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Supplier</th><th>Orders by</th><th>Delivers</th><th>Lead time</th><th>Items</th></tr></thead>
+  <tbody>
+  {% for s in suppliers %}
+    <tr>
+      <td><a href="/app/suppliers/{{ s.id }}">{{ s.name }}</a>{% if not s.is_active %} <span class="small muted">deactivated</span>{% endif %}</td>
+      <td class="small">{{ methods.get(s.ordering_method, s.ordering_method) }}</td>
+      <td class="small">{{ day_names(s.delivery_days)|map("capitalize")|join(", ") or "—" }}</td>
+      <td class="small">{{ s.lead_time_days }} day{{ "s" if s.lead_time_days != 1 else "" }}</td>
+      <td class="small">{{ s.items|selectattr("is_active")|list|length }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if can(request, "supplier.manage") %}
+<h2>Add a supplier</h2>
+<form method="post" action="/app/suppliers" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field"><label for="name">Name</label><input id="name" name="name" required maxlength="200"></div>
+    <div class="field"><label for="ordering_method">Orders by</label><select id="ordering_method" name="ordering_method">{% for key, label in methods.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="lead_time_days">Lead time (days)</label><input id="lead_time_days" name="lead_time_days" value="2" inputmode="numeric"></div>
+  </div>
+  <fieldset class="field"><legend>Delivery days</legend>{% for day in weekdays %}<label class="small" style="margin-right:8px;"><input type="checkbox" name="delivery_days" value="{{ day }}"> {{ day|capitalize }}</label>{% endfor %}</fieldset>
+  <button class="btn" type="submit">Add</button>
+</form>
+{% endif %}
+{% endblock %}

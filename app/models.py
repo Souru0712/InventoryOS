@@ -47,6 +47,7 @@ from app.transform.sales import (
     SALES_ORIGINS,
     TRANSACTION_STATUSES,
 )
+from app.transform.suppliers import ORDERING_METHODS
 from app.transform.waste import STATUSES as WASTE_STATUSES
 from app.units import BASE_UNIT, Dimension
 
@@ -1682,6 +1683,63 @@ class StockBatch(Base):
     lot_code: Mapped[str | None] = mapped_column(String(80))  # the supplier's, when known
     document_line_id: Mapped[int | None] = mapped_column(ref("document_lines.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class Supplier(Base):
+    """Someone the business buys from (T2.10, PRC-FR-01). Deactivated, never deleted: its
+    deliveries and history stay (AC-PRC-01)."""
+
+    __tablename__ = "suppliers"
+    __table_args__ = (
+        one_of("suppliers", "ordering_method", ORDERING_METHODS),
+        CheckConstraint("delivery_days BETWEEN 0 AND 127", name="ck_suppliers_delivery_days"),
+        not_negative("suppliers", "lead_time_days"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    contact_name: Mapped[str | None] = mapped_column(String(120))
+    phone: Mapped[str | None] = mapped_column(String(40))
+    email: Mapped[str | None] = mapped_column(String(255))
+    ordering_method: Mapped[str] = mapped_column(String(10), default="email")
+    delivery_days: Mapped[int] = mapped_column(Integer, default=0)  # Monday is bit 0
+    lead_time_days: Mapped[int] = mapped_column(Integer, default=2)
+    minimum_order_cents: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    items: Mapped[list[SupplierItem]] = relationship(
+        back_populates="supplier", order_by="SupplierItem.id"
+    )
+
+
+class SupplierItem(Base):
+    """An item as one supplier sells it (PRC-FR-02): its code and name, the purchase unit and how
+    much of the item it holds, the last price per purchase unit. An item may have several."""
+
+    __tablename__ = "supplier_items"
+    __table_args__ = (
+        positive("supplier_items", "pack_size_base"),
+        not_negative("supplier_items", "last_price_cents"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    supplier_id: Mapped[int] = mapped_column(owned_by("suppliers.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"), index=True)
+    code: Mapped[str | None] = mapped_column(String(80))
+    name: Mapped[str | None] = mapped_column(String(300))
+    purchase_unit: Mapped[str] = mapped_column(String(40), default="each")
+    pack_size_base: Mapped[Decimal] = mapped_column(Qty)
+    last_price_cents: Mapped[int | None] = mapped_column(Integer)
+    last_price_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    preferred: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    supplier: Mapped[Supplier] = relationship(back_populates="items")
 
 
 class ProductionOrder(Base):

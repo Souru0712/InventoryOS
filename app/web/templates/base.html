@@ -229,7 +229,7 @@
         {% if can(request, "waste.record") %}{{ nav("/app/waste", "Waste") }}{% endif %}
         {% if can(request, "exception.view") %}{{ nav("/app/exceptions", "Exceptions") }}{% endif %}
         {% if can(request, "reports.financial") %}{{ nav("/app/promotions", "Promotions") }}{% endif %}
-        {% if can(request, "reorder.view") %}{{ nav("/app/reorder", "Reorder") }}{% endif %}
+        {% if can(request, "reorder.view") %}{{ nav("/app/reorder", "Reorder") }}{{ nav("/app/suppliers", "Suppliers") }}{% endif %}
         {% if can(request, "reports.financial") %}{{ nav("/app/report", "Report") }}{% endif %}
         {{ nav("/app/settings", "Settings") }}
         {% set businesses = request.state.businesses or [] %}

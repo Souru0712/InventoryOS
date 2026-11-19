@@ -65,9 +65,7 @@ def upgrade() -> None:
         sa.Column("voided_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("voided_by_user_id", sa.Integer(), nullable=True),
         sa.Column("void_reason", sa.String(length=300), nullable=True),
-        sa.CheckConstraint(
-            "status IN ('completed', 'voided')", name="ck_production_orders_status"
-        ),
+        sa.CheckConstraint("status IN ('completed', 'voided')", name="ck_production_orders_status"),
         sa.CheckConstraint(
             "CAST(multiplier AS NUMERIC) > 0", name="ck_production_orders_multiplier_positive"
         ),

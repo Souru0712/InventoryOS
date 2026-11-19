@@ -92,3 +92,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0058](0058-waste.md) | Waste | T2.07 | Proposed |
 | [ADR-0059](0059-expiry-alerts-and-auto-dispose.md) | Expiry alert window and auto-dispose | T2.08 | Proposed |
 | [ADR-0060](0060-production-runs.md) | Production runs | T2.09 | Proposed |
+| [ADR-0061](0061-suppliers.md) | Suppliers and supplier items | T2.10 | Proposed |

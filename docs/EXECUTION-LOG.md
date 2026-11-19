@@ -5,6 +5,24 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.10 Suppliers and supplier items (built on branch)
+
+**Implemented**
+- `suppliers` and `supplier_items` (migration `30d75bcd3fd3`, DM-11 backfill from free-text names
+  on items and documents); `app/suppliers.py`: create, edit, deactivate, supplier items with
+  purchase unit and pack in base units, one preferred per item, `record_price()` with
+  `price_variance` at 10 % or more, purchase history from deliveries.
+- `/app/suppliers`: list, add, detail with items and deliveries; a Suppliers link in the menu.
+
+**Verified**
+- `tests/test_suppliers.py` (AC-PRC-01, -02, PRC-FR-08, the pages), the DM-11 migration test,
+  isolation cases for the five new routes.
+
+**Decisions**
+- ADR-0061 (Proposed).
+
+---
+
 ## 2026-11-19 — T2.09 Production runs (built on branch)
 
 **Implemented**
