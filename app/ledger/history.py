@@ -152,6 +152,61 @@ def snapshot_cost_at(
 
 
 @dataclass(frozen=True)
+class PeriodMovement:
+    """One movement in a period, with the record it came from: what reports read (DR-33)."""
+
+    source_type: str
+    source_id: str
+    location_id: int
+    inventory_item_id: int
+    movement_type: str
+    qty_base: Decimal
+    unit_cost: Decimal  # cents per base unit, as posted
+
+
+def movements_in(
+    db: Session,
+    org: OrgContext,
+    windows: Mapping[int, tuple[datetime, datetime]],
+    *,
+    source_type: str | None = None,
+    movement_type: str | None = None,
+) -> list[PeriodMovement]:
+    """The movements at each location within its own window (first and last instant, both
+    included), from one kind of record or of one type. A reversal carries the record of what it
+    undid, so a voided record nets to nothing."""
+    found: list[PeriodMovement] = []
+    for location_id, (start, end) in windows.items():
+        query = (
+            select_scoped(org, InventoryMovement)
+            .add_columns(InventoryTransaction)
+            .join(InventoryTransaction, InventoryTransaction.id == InventoryMovement.transaction_id)
+            .where(
+                InventoryMovement.location_id == location_id,
+                InventoryMovement.occurred_at >= start,
+                InventoryMovement.occurred_at <= end,
+            )
+        )
+        if source_type is not None:
+            query = query.where(InventoryTransaction.source_type == source_type)
+        if movement_type is not None:
+            query = query.where(InventoryMovement.movement_type == movement_type)
+        for movement, transaction in db.execute(query.order_by(InventoryMovement.id)):
+            found.append(
+                PeriodMovement(
+                    transaction.source_type,
+                    transaction.source_id,
+                    movement.location_id,
+                    movement.inventory_item_id,
+                    movement.movement_type,
+                    Decimal(movement.qty_base),
+                    Decimal(movement.unit_cost_snapshot),
+                )
+            )
+    return found
+
+
+@dataclass(frozen=True)
 class MovementTotal:
     """What moved of one kind over a period: how many movements and their value as posted."""
 

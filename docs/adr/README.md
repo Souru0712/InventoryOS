@@ -88,4 +88,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0054](0054-consumption-engine.md) | Consumption engine | T2.05 | Accepted |
 | [ADR-0055](0055-sale-consumption-posting.md) | Sale consumption posting | T2.05 | Accepted |
 | [ADR-0056](0056-batch-allocation.md) | Batch allocation | T2.06 | Accepted |
-| [ADR-0057](0057-batch-history-counts-and-shortfall.md) | Batch history, batch counts and shortfall | T2.06 | Proposed |
+| [ADR-0057](0057-batch-history-counts-and-shortfall.md) | Batch history, batch counts and shortfall | T2.06 | Accepted |
+| [ADR-0058](0058-waste.md) | Waste | T2.07 | Proposed |

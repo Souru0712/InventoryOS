@@ -46,6 +46,7 @@ from app.transform.sales import (
     SALES_ORIGINS,
     TRANSACTION_STATUSES,
 )
+from app.transform.waste import STATUSES as WASTE_STATUSES
 from app.units import BASE_UNIT, Dimension
 
 
@@ -1674,6 +1675,84 @@ class StockBatch(Base):
     lot_code: Mapped[str | None] = mapped_column(String(80))  # the supplier's, when known
     document_line_id: Mapped[int | None] = mapped_column(ref("document_lines.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class WasteReason(Base):
+    """Why stock was thrown away (WST-FR-02): the defaults and the business's own. Renamed or
+    archived, never deleted; each waste event keeps the name it had then, so reports stay
+    stable."""
+
+    __tablename__ = "waste_reasons"
+    __table_args__ = (UniqueConstraint("tenant_id", "code", name="uq_waste_reasons_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    code: Mapped[str] = mapped_column(String(40))
+    label: Mapped[str] = mapped_column(String(80))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class WasteEvent(Base):
+    """A loss as the business recorded it (T2.07, WST-FR-01): an item, or a sellable product
+    expanded to its recipe, how much, why, by whom and when. Its ledger entries are the stock
+    effect and the only source of quantities and costs in reports (DR-33)."""
+
+    __tablename__ = "waste_events"
+    __table_args__ = (
+        one_of("waste_events", "status", WASTE_STATUSES),
+        positive("waste_events", "qty_base"),
+        CheckConstraint(
+            "(inventory_item_id IS NULL) <> (product_variation_id IS NULL)",
+            name="ck_waste_events_what",
+        ),
+        Index("ix_waste_events_location_time", "location_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    reason_id: Mapped[int] = mapped_column(ref("waste_reasons.id"))
+    reason_label: Mapped[str] = mapped_column(String(80))  # as it was named then
+    inventory_item_id: Mapped[int | None] = mapped_column(ref("inventory_items.id"))
+    product_variation_id: Mapped[int | None] = mapped_column(ref("product_variations.id"))
+    recipe_version_id: Mapped[int | None] = mapped_column(ref("recipe_versions.id"))
+    quantity: Mapped[Decimal] = mapped_column(Qty)  # as entered, in `unit`
+    unit: Mapped[str] = mapped_column(String(16), default="")
+    qty_base: Mapped[Decimal] = mapped_column(Qty)  # the item's base unit, or products wasted
+    note: Mapped[str | None] = mapped_column(String(300))
+    # WST-FR-11: an optional link to the sale or production it came from.
+    related_type: Mapped[str | None] = mapped_column(String(20))
+    related_id: Mapped[str | None] = mapped_column(String(80))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+    status: Mapped[str] = mapped_column(String(10), default="recorded")
+    voided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    voided_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    void_reason: Mapped[str | None] = mapped_column(String(300))
+
+    lines: Mapped[list[WasteLine]] = relationship(back_populates="event", order_by="WasteLine.id")
+
+
+class WasteLine(Base):
+    """What a waste event takes out of stock: one item, how much, and the batch when someone
+    chose it (WST-FR-04). A product's event has a line per ingredient of its recipe. Reports
+    never sum these; they read the ledger (DR-33)."""
+
+    __tablename__ = "waste_lines"
+    __table_args__ = (positive("waste_lines", "qty_base"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    waste_event_id: Mapped[int] = mapped_column(owned_by("waste_events.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    qty_base: Mapped[Decimal] = mapped_column(Qty)
+    batch_id: Mapped[int | None] = mapped_column(ref("stock_batches.id"))
+
+    event: Mapped[WasteEvent] = relationship(back_populates="lines")
 
 
 class Promotion(Base):

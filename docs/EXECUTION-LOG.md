@@ -5,6 +5,65 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.07 Waste module
+
+**Implemented**
+- Migration `2f829ccb897e`: `waste_reasons`, `waste_events`, `waste_lines`; `app/waste.py` is
+  their only writer.
+- Recording (`record_waste()`): an item in any of its units or packages, or a product size
+  expanded through the recipe in effect (`resolve_variation()`, AC-WST-04); one `waste`
+  transaction keyed `waste:<id>`, costed at that moment; a chosen batch explicit, else the
+  soonest-expiring; below zero refused without the override (DR-08), a Manager's raises
+  `negative_balance`; no cost posts at zero and raises `missing_cost`.
+- Reasons: the twelve defaults written on first use, renamed, archived and added (audited as
+  settings); each event keeps the name it was logged with.
+- Void (`void_waste()`): a reversal at the waste's own moment; the logger for 30 minutes, then
+  `waste.void` with a reason (AC-WST-05).
+- Reading from the ledger only (DR-33): `logged()`, `report()` (reason, item, product, person,
+  top items by cost) and `found_short()` (counts' missing stock, shown apart).
+- Screens: `/app/waste` (choose, then quantity, reason, save; recent entries with Void) and
+  `/app/waste/log` (filters, entries, report, found short, reasons); a Waste link in the menu.
+
+**Verified**
+- `tests/test_waste.py`: AC-WST-02, -03/-08 (2 lb of carrots appear as exactly 2 lb and one
+  cost; never sales or production consumption), -04, -05, -06/-07, the chosen and inferred
+  batch, DR-08 for an Employee and a Manager, reasons, an uncosted item, and the pages.
+- `tests/test_isolation.py`: the four waste routes that take identifiers refuse another
+  business's.
+- Locally the touched areas and the cross-cutting rule tests; ruff, mypy, the docs checker.
+  CI runs the full suite.
+
+**Decisions**
+- ADR-0058 (Proposed); ADR-0057 → Accepted.
+
+**Open issues (not in T2.07)**
+- A photo on a waste entry (WST-FR-01, optional).
+- Choosing the person on a shared device (WST-FR-03, PD-14); the signed-in member is the actor.
+- Picking the related sale or production order on the form (WST-FR-11); the fields exist.
+
+**Files changed**
+- `app/transform/waste.py`, `app/waste.py`, `app/web/waste.py`, templates `waste.html`,
+  `waste_log.html` (new); `app/models.py`, `app/access/scoped.py`, `app/consumption.py`,
+  `app/ledger/history.py`, `app/main.py`, `app/web/templates/base.html`; migration
+  `2f829ccb897e`; `tests/test_waste.py` (new), `tests/test_isolation.py`; ADR-0057, ADR-0058 and
+  the index; the task index (T2.06 → Completed); CLAUDE.md; this log.
+
+**Next task**
+- T2.08 Expiry queue and auto-dispose (depends on T2.07), or T2.09 Production runs.
+
+---
+
+## 2026-11-19 — T2.06 completed
+
+**Verified**
+- At the owner's request ("Yes, merge when green"), PR #59 (T2.06-b) was merged with a merge
+  commit (`6fd3926`) after all five required jobs passed on `a170e27`.
+
+**Files changed**
+- This log; ADR-0057 → Accepted; the task index (T2.06 → Completed).
+
+---
+
 ## 2026-11-19 — T2.06-b Batch history, batch counts and shortfall
 
 **Implemented**

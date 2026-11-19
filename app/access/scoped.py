@@ -59,6 +59,9 @@ from app.models import (
     SyncRun,
     Tenant,
     User,
+    WasteEvent,
+    WasteLine,
+    WasteReason,
     WebhookEvent,
 )
 
@@ -102,6 +105,7 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         EmailLog,
         HealthSnapshot,
         Job,
+        WasteReason,
     }
 )
 
@@ -126,6 +130,7 @@ LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
     SalesReturnLine: ("sales_return_id", SalesReturn),
     StockCountLine: ("stock_count_id", StockCount),
     ExtractionCorrection: ("document_id", Document),
+    WasteLine: ("waste_event_id", WasteEvent),
 }
 
 

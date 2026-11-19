@@ -140,6 +140,22 @@ def resolve_line(
     )
 
 
+def resolve_variation(
+    db: Session, org: OrgContext, variation: ProductVariation, quantity: Decimal, at: datetime
+) -> Resolved:
+    """What that many of a product size uses by the recipes in effect at `at`, with no
+    modifiers: how waste of a sellable product expands (WST-FR-01, AC-WST-04)."""
+    return resolve(
+        LineIn(
+            quantity,
+            _version_of(db, org, Owner("variation", variation.id), at),
+            made_to_order=variation.product.production_mode == "made_to_order",
+        ),
+        prepared=lambda item_id: _version_of(db, org, Owner("item", item_id), at),
+        prepared_ids=made_in_house(db, org),
+    )
+
+
 def resolve_sale(
     db: Session, org: OrgContext, transaction: SalesTransaction
 ) -> dict[int, Resolved]:

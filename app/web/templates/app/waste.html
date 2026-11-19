@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Waste</h1>
+{% if places|length > 1 %}
+<p class="small">{% for p in places %}{% if p.id == place.id %}<strong>{{ p.name }}</strong>{% else %}<a href="/app/waste?location={{ p.id }}">{{ p.name }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+{% if can(request, "reports.operational") %}<p class="small"><a href="/app/waste/log">Waste log and report →</a></p>{% endif %}
+
+{% if item or size %}
+  <p class="small"><a href="/app/waste?location={{ place.id }}">← Choose something else</a></p>
+  <h2>{{ item.name if item else size.product.name ~ " " ~ size.name }}</h2>
+  {% if size %}<p class="small muted">The ingredients of its recipe leave stock, as the recipe was when it was wasted.</p>{% endif %}
+  <form method="post" action="/app/waste">{{ csrf_field(request) }}
+    <input type="hidden" name="location_id" value="{{ place.id }}">
+    {% if item %}<input type="hidden" name="inventory_item_id" value="{{ item.id }}">{% else %}<input type="hidden" name="product_variation_id" value="{{ size.id }}">{% endif %}
+    <div class="row">
+      <div class="field">
+        <label for="quantity">How much</label>
+        <input id="quantity" name="quantity" inputmode="decimal" required autofocus>
+      </div>
+      {% if item %}
+      <div class="field">
+        <label for="unit">Unit</label>
+        <select id="unit" name="unit">
+          <option value="">{{ item.display_unit|unit }}</option>
+          {% for package in item.packages %}<option value="{{ package.name }}">{{ package.name }}</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
+    </div>
+    <div class="field">
+      <label for="reason_id">Why</label>
+      <select id="reason_id" name="reason_id" required>
+        <option value="">Choose a reason</option>
+        {% for r in reasons %}<option value="{{ r.id }}">{{ r.label }}</option>{% endfor %}
+      </select>
+    </div>
+    {% if batches %}
+    <div class="field">
+      <label for="batch_id">Which batch</label>
+      <select id="batch_id" name="batch_id">
+        <option value="">The one that expires soonest</option>
+        {% for b, held in batches %}<option value="{{ b.id }}">Dated {{ b.expires_on.strftime("%d %b") }} · holds {{ held|qty(item.display_unit) }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="field">
+      <label for="note">Note (optional)</label>
+      <input id="note" name="note" maxlength="300">
+    </div>
+    <button class="btn" type="submit">Log waste</button>
+  </form>
+{% else %}
+  <p class="muted">Choose what was thrown away.</p>
+  {% if sizes %}
+  <h2>Products</h2>
+  <ul class="pick-list">{% for v in sizes %}<li><a href="/app/waste?product={{ v.id }}&location={{ place.id }}">{{ v.product.name }} {{ v.name }}</a></li>{% endfor %}</ul>
+  {% endif %}
+  <h2>Items</h2>
+  {% if items %}
+  <ul class="pick-list">{% for i in items %}<li><a href="/app/waste?item={{ i.id }}&location={{ place.id }}">{{ i.name }}</a></li>{% endfor %}</ul>
+  {% else %}<p class="muted">Nothing is stocked here yet.</p>{% endif %}
+{% endif %}
+
+{% if recent %}
+<h2>Your recent waste</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>When</th><th>What</th><th>How much</th><th>Why</th><th></th></tr></thead>
+  <tbody>
+  {% for e in recent %}
+    <tr>
+      <td class="small" style="white-space:nowrap;">{{ e.occurred_at.strftime("%H:%M") }} UTC</td>
+      <td>{{ labels.get(e.id, "") }}</td>
+      <td style="white-space:nowrap;">{{ e.quantity|num }} {{ e.unit|unit if e.unit else "" }}</td>
+      <td class="small">{{ e.reason_label }}{% if e.note %}: {{ e.note }}{% endif %}</td>
+      <td>
+        {% if e.status == "voided" %}<span class="small muted">Voided</span>
+        {% elif e.recorded_at >= void_until %}
+          <form method="post" action="/app/waste/{{ e.id }}/void">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Void</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

@@ -40,6 +40,8 @@ from app.models import (
     Tenant,
     TrackMode,
     User,
+    WasteEvent,
+    WasteReason,
 )
 from app.security import hash_password
 from app.storage import get_storage
@@ -118,6 +120,26 @@ CASES = {
     ("POST", "/app/expiring/{batch_id}/remove"): lambda ids: {},
     ("GET", "/app/expiring/batches/{batch_id}"): lambda ids: {},
     ("POST", "/app/expiring/batches/{batch_id}/count"): lambda ids: {"data": {"quantity": "1"}},
+    ("GET", "/app/waste"): lambda ids: {
+        "params": {"item": ids["inventory_item"], "location": ids["location"]}
+    },
+    ("POST", "/app/waste"): lambda ids: {
+        "data": {
+            "location_id": ids["location"],
+            "reason_id": ids["waste_reason"],
+            "inventory_item_id": ids["inventory_item"],
+            "quantity": "1",
+        }
+    },
+    ("POST", "/app/waste/{event_id}/void"): lambda ids: {},
+    ("GET", "/app/waste/log"): lambda ids: {
+        "params": {
+            "location": ids["location"],
+            "reason": ids["waste_reason"],
+            "item": ids["inventory_item"],
+        }
+    },
+    ("POST", "/app/waste/reasons/{reason_id}"): lambda ids: {"data": {"label": "Dropped"}},
     ("GET", "/app/catalog"): lambda ids: {"params": {"category": ids["category"]}},
     ("POST", "/app/catalog/new"): lambda ids: {
         "data": {"name": "Oat milk", "location_ids": [ids["location"]], "display_unit": "each"}
@@ -273,6 +295,8 @@ PATH_ROWS = {
     "modifier_id": "modifier",
     "kind": "kind",
     "owner_id": "variation",
+    "event_id": "waste_event",
+    "reason_id": "waste_reason",
 }
 
 
@@ -383,9 +407,25 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     db.add_all([juice, ice])
     db.flush()
     size = ProductVariation(tenant_id=tenant_id, product_id=juice.id, name="Regular")
-    db.add(size)
+    spilled = WasteReason(tenant_id=tenant_id, code="spilled", label="Spilled")
+    db.add_all([size, spilled])
+    db.flush()
+    wasted = WasteEvent(
+        tenant_id=tenant_id,
+        location_id=location.id,
+        reason_id=spilled.id,
+        reason_label="Spilled",
+        inventory_item_id=bars.inventory_item_id,
+        quantity=Decimal("1"),
+        unit="each",
+        qty_base=Decimal("1"),
+        occurred_at=datetime.now(UTC),
+    )
+    db.add(wasted)
     db.flush()
     return {
+        "waste_reason": spilled.id,
+        "waste_event": wasted.id,
         "kind": "variation",
         "product": juice.id,
         "variation": size.id,
