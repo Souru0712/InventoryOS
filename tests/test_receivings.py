@@ -216,3 +216,117 @@ def test_receiving_through_the_pages(db, dock, location):
         assert "Posted." in posted.text
     db.expire_all()
     assert balance(db, org, location.id, cups.id) == D(24)
+
+
+# --- T2.11-b: invoices become receivings; the reading cap ----------------------------------------
+
+
+def _invoice(db, org, location, stock, supplier, qty_base, total_cents):
+    from app.models import Document, DocumentLine, DocumentStatus, LineStatus
+
+    document = Document(
+        tenant_id=org.tenant_id,
+        location_id=location.id,
+        supplier=supplier,
+        storage_key="k",
+        sha256=str(qty_base).rjust(64, "c"),
+        status=DocumentStatus.PARSED,
+    )
+    db.add(document)
+    db.flush()
+    line = DocumentLine(
+        tenant_id=org.tenant_id,
+        document_id=document.id,
+        line_no=1,
+        raw_text="milk",
+        parsed_name="Milk 6x1L",
+        parsed_qty=D(1),
+        line_total_cents=total_cents,
+        stock_item_id=stock.id,
+        received_qty_base=qty_base,
+        status=LineStatus.MATCHED,
+    )
+    db.add(line)
+    db.flush()
+    return document, line
+
+
+def test_an_applied_invoice_is_a_posted_receiving_with_its_price_checked(db, dock, location):
+    from app.models import Receiving
+    from app.orchestration.receiving import LineDecision, apply_document
+
+    org, item = dock
+    milk = item("Milk", "volume", "l")
+    stock = db.scalars(select(StockItem).where(StockItem.inventory_item_id == milk.id)).one()
+    farm = create_supplier(db, org, SupplierFields(name="Valley Farms"))
+    add_supplier_item(
+        db,
+        org,
+        farm.id,
+        inventory_item_id=milk.id,
+        purchase_unit="case",
+        pack_quantity="6",
+        price="10.00",
+    )
+    document, line = _invoice(db, org, location, stock, "valley farms", D(6000), 1300)
+    apply_document(db, org, document.id, [LineDecision(line.id, stock.id, D(6000))])
+    db.commit()
+    receiving = db.scalars(select(Receiving).where(Receiving.document_id == document.id)).one()
+    assert (receiving.status, receiving.supplier_id) == ("posted", farm.id)
+    [received] = receiving.lines
+    assert received.qty_base == D(6000) and received.transaction_id is not None
+    assert received.price_flag  # 13.00 a case against 10.00
+    assert balance(db, org, location.id, milk.id) == D(6000)  # posted once, by the invoice
+
+
+def test_a_cost_changed_without_cost_rights_is_flagged(db, dock, tenant, location):
+    from app.models import Membership, User
+    from app.orchestration.receiving import LineDecision, apply_document
+    from app.security import hash_password
+
+    org, item = dock
+    cups = item("Cups")
+    stock = db.scalars(select(StockItem).where(StockItem.inventory_item_id == cups.id)).one()
+    user = User(
+        tenant_id=tenant.id, email="emp@rosewood.test", password_hash=hash_password("x" * 12)
+    )
+    db.add(user)
+    db.flush()
+    db.add(Membership(tenant_id=tenant.id, user_id=user.id, role="employee"))
+    staff = OrgContext(
+        tenant_id=tenant.id, user_id=user.id, permissions=role_permissions("employee")
+    )
+    document, line = _invoice(db, org, location, stock, "Corner Shop", D(100), 500)
+    apply_document(
+        db, staff, document.id, [LineDecision(line.id, stock.id, D(100), line_total_cents=200)]
+    )
+    db.commit()
+    flagged = db.scalars(
+        select(ExceptionRecord).where(ExceptionRecord.type == "receiving_discrepancy")
+    ).one()
+    assert "without cost rights" in flagged.title
+
+
+def test_reading_invoices_stops_at_the_daily_cap(db, dock, location, monkeypatch):
+    from app.config import get_settings
+    from app.models import Document, DocumentStatus
+    from app.web.receiving import read_later
+
+    org, _item = dock
+    monkeypatch.setattr(get_settings(), "extraction_daily_cap", 1)
+    first, second = (
+        Document(
+            tenant_id=org.tenant_id,
+            location_id=location.id,
+            storage_key=f"k{n}",
+            sha256=str(n) * 64,
+            status=DocumentStatus.UPLOADED,
+        )
+        for n in (1, 2)
+    )
+    db.add_all([first, second])
+    db.flush()
+    assert read_later(db, org, first) is True
+    db.flush()
+    assert read_later(db, org, second) is False
+    assert second.status is DocumentStatus.NEEDS_REVIEW and "by hand" in second.error

@@ -82,7 +82,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.08 | Expiry queue and auto-dispose | P1 | M | M3 | T2.07 | Built on branch, not merged (alert window, dispose action, opt-in auto-dispose, use-by label; stacked on T2.07 by the owner's choice) |
 | T2.09 | Production runs | P1 | L | M3 | T2.02, T2.06 | Built on branch, not merged (runs, FEFO inputs, dated output batch, cost over yield, void, production screen) |
 | T2.10 | Suppliers and supplier items | P1 | M | M3 | T1.13 | Built on branch, not merged (suppliers, supplier items and packs, price-change detection, DM-11 backfill, supplier screens) |
-| T2.11 | Receiving on the ledger | P1 | L | M3 | T2.10, T2.06, T1.20 | In progress (T2.11-a receivings, exactly-once posting, discrepancies, price checks, corrections, DM-12: built on branch; T2.11-b invoice review and extraction job next) |
+| T2.11 | Receiving on the ledger | P1 | L | M3 | T2.10, T2.06, T1.20 | Built on branch, not merged (receivings, exactly-once posting, discrepancies, price checks, corrections, DM-12; invoices recorded as receivings, daily reading cap, cost flags) |
 | T2.12 | Standalone daily sales entry | P1 | M | M4 | T2.05 | Not started |
 | T2.13 | Sales file import | P1 | M | M4 | T2.12 | Not started |
 | T2.14 | Direct usage records | P1 | S | M4 | T2.05 | Not started |

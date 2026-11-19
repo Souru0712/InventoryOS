@@ -25,6 +25,8 @@ from app.exceptions import record_exception
 from app.items import entered_base
 from app.ledger.posting import post_transaction, reverse_transaction
 from app.models import (
+    Document,
+    DocumentLine,
     InventoryItem,
     ItemLocation,
     Location,
@@ -392,3 +394,91 @@ def _base_of(db: Session, org: OrgContext, line: ReceivingLine, qty: Decimal) ->
         return places(entered_base(item, str(qty), line.unit))
     except ItemRuleError as exc:
         raise ReceivingRuleError(str(exc)) from exc
+
+
+# --- invoices (T2.11-b) ---------------------------------------------------------------------------
+
+
+def record_invoice(
+    db: Session,
+    org: OrgContext,
+    document: Document,
+    received: list[tuple[DocumentLine, StockItem, Decimal, Decimal | None, bool]],
+    transaction_id: int | None,
+    *,
+    now: datetime,
+) -> Receiving:
+    """The receiving record of an applied invoice, linked to the receipt it posted: its supplier,
+    a line per applied line, each price checked against the supplier item (RCV-FR-06), and a cost
+    changed by someone without cost rights flagged (T2.11-b). Writes no movement."""
+    name = (document.supplier or "").strip().casefold()
+    supplier = next(
+        (s for s in db.scalars(select_scoped(org, Supplier)) if s.name.casefold() == name),
+        None,
+    )
+    receiving = Receiving(
+        tenant_id=org.tenant_id,
+        location_id=document.location_id,
+        supplier_id=supplier.id if supplier else None,
+        document_id=document.id,
+        status="posted",
+        created_by_user_id=document.uploaded_by,
+        posted_at=now,
+        posted_by_user_id=org.user_id,
+    )
+    db.add(receiving)
+    db.flush()
+    issues = []
+    for doc_line, stock, qty, cost, cost_changed in received:
+        if stock.inventory_item_id is None:
+            continue
+        flagged = False
+        if supplier is not None and cost:
+            supplier_item = db.scalars(
+                select_scoped(org, SupplierItem).where(
+                    SupplierItem.supplier_id == supplier.id,
+                    SupplierItem.inventory_item_id == stock.inventory_item_id,
+                )
+            ).first()
+            if supplier_item is not None:
+                per_unit = int((cost * Decimal(supplier_item.pack_size_base)).quantize(Decimal(1)))
+                change = price_change(supplier_item.last_price_cents, per_unit)
+                flagged = bool(change and change.notable)
+                record_price(db, org, supplier_item.id, per_unit, at=now)
+        if cost_changed and not org.can(EDIT_COSTS):
+            flagged = True
+            issues.append(f"{stock.name}: cost entered without cost rights")
+        elif flagged:
+            issues.append(f"{stock.name}: price changed")
+        db.add(
+            ReceivingLine(
+                tenant_id=org.tenant_id,
+                receiving_id=receiving.id,
+                inventory_item_id=stock.inventory_item_id,
+                description=doc_line.parsed_name[:300] or None,
+                invoiced_qty=qty,
+                arrived_qty=qty,
+                accepted_qty=qty,
+                unit="",
+                qty_base=qty,
+                expires_on=doc_line.expires_on,
+                price_flag=flagged,
+                status="posted",
+                transaction_id=transaction_id,
+            )
+        )
+    if issues:
+        record_exception(
+            db,
+            org,
+            Finding(
+                type="receiving_discrepancy",
+                subject_type="receiving",
+                subject_id=str(receiving.id),
+                title=f"Delivery {receiving.id}: " + "; ".join(issues) + ".",
+                location_id=receiving.location_id,
+            ),
+            now=now,
+        )
+    db.flush()
+    return receiving

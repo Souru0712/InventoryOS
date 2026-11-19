@@ -32,6 +32,16 @@ exactly-once posting, and corrections that keep the original.
    existing receipt transaction; no movement is written.
 7. **Screens** `/app/deliveries` for receiving by hand; invoice photos keep `/app/receiving`.
 
+## Addendum (T2.11-b, 2026-11-19)
+
+- Applying an invoice keeps its proven single posting (`receipt:document:<id>`, claimed by a
+  conditional status change) and now also records a posted receiving linked to it
+  (`record_invoice()`): the supplier by name, a line per applied line, each cost per base unit
+  checked against the supplier item (flagged and recorded with `record_price()`), and a cost
+  changed by someone without `receiving.edit_costs` flagged in `receiving_discrepancy`.
+- Reading invoice photos stops at `extraction_daily_cap` (40) per business in any 24 hours;
+  beyond it the document waits for entry by hand, pointing to Deliveries (RCV-FR-14, S9).
+
 ## Consequences
 
 - **T2.11-b:** invoice review creates and posts a receiving (so documents stop posting on their

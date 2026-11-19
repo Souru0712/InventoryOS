@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     extractor_model: str = "claude-opus-5"
     # SEC-13: uploads are at most 15 MB.
     max_upload_mb: int = 15
+    # RCV-FR-14, S9: invoice photos read per business in any 24 hours; beyond it, by hand.
+    extraction_daily_cap: int = 40
 
     # Where invoice photos live. "local" is a directory, which must be a persistent volume when
     # deployed; "s3" is any S3-compatible bucket (AWS, R2, Backblaze, Spaces, MinIO).

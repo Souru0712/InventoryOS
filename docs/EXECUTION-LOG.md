@@ -5,6 +5,26 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.11-b Invoices as receivings and the reading cap (built on branch)
+
+**Implemented**
+- `apply_document()` records a posted receiving for the invoice (`record_invoice()`): supplier
+  by name, lines linked to the invoice's receipt transaction, prices checked against supplier
+  items, costs changed without `receiving.edit_costs` flagged in `receiving_discrepancy`.
+- `read_later()` stops queueing extraction at `extraction_daily_cap` (40) per business in 24
+  hours and points the document to entry by hand (RCV-FR-14).
+
+**Verified**
+- `tests/test_receivings.py`: an applied invoice is a posted receiving with its price flagged; an
+  Employee's cost change is flagged; the cap; with the existing receiving, invoice, scanning,
+  jobs and isolation tests.
+
+**Open issues**
+- Concurrency of two simultaneous posts is covered by the conditional update and tested
+  sequentially; a two-session Postgres test is still to add.
+
+---
+
 ## 2026-11-19 — T2.11-a Receivings on the ledger (built on branch)
 
 **Implemented**
