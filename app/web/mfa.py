@@ -25,7 +25,14 @@ from app.mfa import (
     regenerate_recovery_codes,
 )
 from app.models import Tenant, User
-from app.security import login_user, require_tenant, require_user, revoke_sessions, verify_password
+from app.security import (
+    landing,
+    login_user,
+    require_tenant,
+    require_user,
+    revoke_sessions,
+    verify_password,
+)
 from app.throttle import LOGIN_ACCOUNT, MFA_ACCOUNT, clear, hit, locked_for, retry_after
 from app.transform.mfa import grouped
 from app.web.templating import templates
@@ -204,4 +211,4 @@ def finish_sign_in(request: Request, code: str = Form(""), db: Session = Depends
     db.commit()
     if kind == "recovery":
         return RedirectResponse(f"{PAGE}?used=recovery", status_code=303)
-    return RedirectResponse("/app", status_code=303)
+    return RedirectResponse(landing(db, user), status_code=303)

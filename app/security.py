@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -246,11 +247,49 @@ def require_membership(
     return membership
 
 
+FLOOR_PERSON = "floor_person"  # the session key prefix for who is working a shared device
+
+
+def floor_person(request: Request, db: Session, membership: Membership) -> int | None:
+    """The person picked as working a shared floor device (PD-14, WST-FR-03), when one is: only
+    an Employee account is a shared device, and only an active member of the same business, with
+    an active account, can be picked."""
+    if membership.role != "employee":
+        return None
+    picked = request.session.get(f"{FLOOR_PERSON}:{membership.tenant_id}")
+    if not isinstance(picked, int) or picked == membership.user_id:
+        return None
+    found = db.scalars(
+        select(Membership.id)
+        .join(User, User.id == Membership.user_id)
+        .where(
+            Membership.tenant_id == membership.tenant_id,
+            Membership.user_id == picked,
+            Membership.status == "active",
+            User.is_active.is_(True),
+        )
+    ).first()
+    return picked if found is not None else None
+
+
 def require_org(
-    membership: Membership = Depends(require_membership), db: Session = Depends(get_db)
+    request: Request,
+    membership: Membership = Depends(require_membership),
+    db: Session = Depends(get_db),
 ) -> OrgContext:
-    """The member's scope; every product query in the request runs in it (C-33)."""
-    return OrgContext.for_membership(membership, member_permissions(db, membership))
+    """The member's scope; every product query in the request runs in it (C-33). On a shared
+    floor device the person picked is who the records name; the device's account keeps its own
+    permissions, and its own session (PD-14)."""
+    org = OrgContext.for_membership(membership, member_permissions(db, membership))
+    picked = floor_person(request, db, membership)
+    return replace(org, user_id=picked) if picked is not None else org
+
+
+def landing(db: Session, user: User) -> str:
+    """Where a person lands after signing in: an Employee on the floor screen (WF-23), everyone
+    else on the dashboard."""
+    first = next(iter(memberships_of(db, user.id)), None)
+    return "/app/floor" if first is not None and first[0].role == "employee" else "/app"
 
 
 def require_permission(key: str):

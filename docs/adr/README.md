@@ -104,3 +104,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0070](0070-settings-module.md) | Settings module | T2.19 | Proposed |
 | [ADR-0071](0071-item-import-and-checklist.md) | Item import, quick-add and the onboarding checklist | T2.20 | Proposed |
 | [ADR-0072](0072-step-0-and-opening-count.md) | Onboarding step 0 and the opening count | T2.20 | Proposed |
+| [ADR-0073](0073-employee-home-and-logged-by.md) | Employee home and the "logged by" picker | T2.21 | Proposed |

@@ -16,6 +16,7 @@ from app.security import (
     choose_membership,
     email_taken,
     hash_password,
+    landing,
     login_user,
     logout_user,
     require_user,
@@ -146,7 +147,7 @@ def login(
     clear(db, LOGIN_ACCOUNT, email)
     login_user(request, db, user)
     db.commit()
-    return RedirectResponse("/app", status_code=303)
+    return RedirectResponse(landing(db, user), status_code=303)
 
 
 @router.post("/logout")

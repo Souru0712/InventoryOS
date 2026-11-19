@@ -5,6 +5,30 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.21 Employee home and floor screens (built on branch)
+
+**Implemented**
+- `/app/floor` ("Today"): alerts without amounts, the floor tasks the role allows, large targets
+  and one column on a phone; Employees land there after signing in; "Today" leads the menu.
+- PD-14 "logged by" picker: on an Employee (shared) account the picked member is kept in the
+  signed session per business and becomes the request's actor (`floor_person()` in
+  `require_org()`); only active members, only from an Employee account.
+
+**Verified**
+- `tests/test_floor.py`: tasks by role (daily sales only once allowed), no money, where people
+  land, the picked person named on waste and the account itself after clearing, refusals; auth,
+  MFA, accounts, permissions, sessions, team, headers, async, isolation, waste, dashboard, web,
+  scoped access; the floor screen and the waste flow (AC-WST-01) checked at 375 px on the demo
+  database.
+
+**Decisions**
+- ADR-0073 (Proposed).
+
+**Open issues**
+- Playwright tests at 375 px (ID-08) wait for the browser test dependency.
+
+---
+
 ## 2026-11-19 — T2.20-b Step 0 and the opening count (built on branch)
 
 **Implemented**

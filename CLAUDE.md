@@ -85,6 +85,9 @@ implementation sessions; the detail lives in `docs/`.
   in `app/access/system.py`. A test fails on raw queries in `app/web` and `app/orchestration`.
   A new route that takes an identifier needs a case in `tests/test_isolation.py` (a test fails
   until it has one); an optional `?location=` goes through `location_filter`.
+- On a shared floor device (an Employee account) the member picked on `/app/floor` is the
+  request's actor (`floor_person()` in `require_org()`, ADR-0073); the account keeps its own
+  permissions. Never let another role pick, or pick someone without an active membership.
 - A person reaches a business only through an active membership (ADR-0028): the request's
   business is the session's membership, never `users.tenant_id`. Users are global; a business
   reaches its people through `members(db, org)`.
