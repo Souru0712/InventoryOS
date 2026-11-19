@@ -186,7 +186,9 @@ implementation sessions; the detail lives in `docs/`.
   exports through `/app/reports.csv` (ADR-0068) from the same report objects as its page.
 - Items come in from a file or the quick-add grid through `app/item_import.py` (ADR-0071), each
   row tried through `create_item()`; the onboarding checklist (`app/onboarding.py`) is computed
-  from the business's records, never stored.
+  from the business's records; only step 0's answer, skipped steps and the opening count's time
+  are stored (`onboarding`, ADR-0072). The opening count opens never-moved items with
+  `post_opening()` and counts the rest with `post_count()`.
 - Business settings are written only by `app/business_settings.py` (ADR-0070), audited as
   `settings.*`, and read where they act (review thresholds, alert email hour, default production
   mode, units). A modifier's scale factor is dated (`modifier_scales`, append-only): a sale reads

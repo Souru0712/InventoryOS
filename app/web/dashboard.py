@@ -32,7 +32,7 @@ from app.models import (
     Tenant,
     User,
 )
-from app.onboarding import checklist
+from app.onboarding import answered, checklist
 from app.orchestration.alerts import proposals_for
 from app.orchestration.dashboard import (
     ATTENTION_SHOWN,
@@ -68,6 +68,7 @@ from app.transform.expiry import ItemExpiry
 from app.transform.inventory import days_of_cover, suggest_order_base, valuation_cents
 from app.transform.items import ItemRuleError
 from app.transform.ledger import LedgerRuleError
+from app.transform.onboarding import ANSWERS
 from app.transform.waste import WasteRuleError
 from app.units import UnitError, format_amount, format_change, to_base
 from app.waste import NotFound as WasteNotFound
@@ -234,6 +235,8 @@ def dashboard(
             "currency": tenant_currency(db, org),
             # Setup is the Owner's and Administrator's; the card goes once every step is done.
             "checklist": checklist(db, org) if org.can("settings.manage") else [],
+            "step0": org.can("settings.manage") and not answered(db, org),
+            "answers": ANSWERS,
             **context,
         },
     )

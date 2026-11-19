@@ -5,6 +5,31 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.20-b Step 0 and the opening count (built on branch)
+
+**Implemented**
+- `onboarding` (migration `4ebc618f9510`); `app/transform/onboarding.py` (answers, skips);
+  `app/onboarding.py`: `answer_payments()` (audited, routes the checklist, keeps the POS named),
+  `set_skipped()`, a path-aware `checklist()` that reads without writing, `opening_count()`
+  (`opening_balance` for items that never moved, a count variance for the rest).
+- Dashboard: the step-0 question until answered, skip and "take it back up" on each step;
+  `/app/onboarding/count` (one screen, display unit or package); isolation cases.
+
+**Verified**
+- `tests/test_onboarding.py`: routing and what is kept, skipping and resuming, the opening count
+  (40 opened, 5 corrected to 8, a blank left alone, a negative refused), the dashboard flow;
+  item import, isolation, permissions, dashboard, headers, migrations, ledger writers, async,
+  scoped access, web, accounts, health flow; step 0 and the count page checked on the demo
+  database.
+
+**Decisions**
+- ADR-0072 (Proposed).
+
+**Open issues**
+- AC-SAAS-10 is observed with a non-founder (manual); T2.22 adds the end-to-end onboarding test.
+
+---
+
 ## 2026-11-19 — T2.20-a Item import, quick-add and checklist (built on branch)
 
 **Implemented**

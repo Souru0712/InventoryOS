@@ -39,6 +39,7 @@ from app.transform.ledger import (
     MOVEMENT_TYPES,
     TRANSACTION_KINDS,
 )
+from app.transform.onboarding import ANSWERS as ONBOARDING_ANSWERS
 from app.transform.production import STATUSES as PRODUCTION_STATUSES
 from app.transform.products import MODIFIER_EFFECTS, PRODUCTION_MODES
 from app.transform.receivings import LINE_STATUSES as RECEIVING_LINE_STATUSES
@@ -2125,6 +2126,26 @@ class ModifierScale(Base):
     effective_from: Mapped[datetime] = mapped_column(UTCDateTime)
     recorded_by: Mapped[int | None] = mapped_column(ref("users.id"))
     recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class Onboarding(Base):
+    """A business's onboarding (T2.20-b; SAAS §5): its step-0 answer and the POS it names, the
+    steps it chose to skip, and when its opening count was taken. Made on first read."""
+
+    __tablename__ = "onboarding"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_onboarding_tenant"),
+        one_of("onboarding", "payment_answer", tuple(ONBOARDING_ANSWERS)),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(owned_by("tenants.id"))
+    payment_answer: Mapped[str | None] = mapped_column(String(20))
+    pos_name: Mapped[str | None] = mapped_column(String(80))
+    answered_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    skipped: Mapped[str] = mapped_column(String(200), default="")
+    opening_counted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 # Keeps inventory_items and item_locations in step with stock_items while both exist (C-38).

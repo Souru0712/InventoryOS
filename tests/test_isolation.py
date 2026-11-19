@@ -168,6 +168,10 @@ CASES = {
     },
     ("GET", "/app/items/import/{digest}"): lambda ids: {"params": {"location": ids["location"]}},
     ("POST", "/app/items/import/{digest}"): lambda ids: {"data": {"location_id": ids["location"]}},
+    ("GET", "/app/onboarding/count"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/onboarding/count"): lambda ids: {
+        "data": {"location_id": ids["location"], f"qty_{ids['inventory_item']}": "3"}
+    },
     ("POST", "/app/items/quick-add"): lambda ids: {
         "data": {"location_id": ids["location"], "name_1": "Fresh mint"}
     },
