@@ -83,6 +83,7 @@ def _waiting(db: Session, org: OrgContext, kind: str, dedupe_key: str | None) ->
 
 def _handlers() -> dict[str, Handler]:
     # Imported here: these modules queue follow-up work through this one.
+    from app.business_settings import alert_email_key
     from app.consumption import consume_sale
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
@@ -98,7 +99,9 @@ def _handlers() -> dict[str, Handler]:
             log.info("wrote off %d expired prepared batches for tenant %s", disposed, org.tenant_id)
         stats = evaluate_and_store(db, org)
         log.info("evaluated exceptions for tenant %s: %s", org.tenant_id, stats)
-        enqueue(db, org, "send_alert_digest", dedupe_key="digest")
+        key = alert_email_key(db, org, datetime.now(UTC))
+        if key is not None:
+            enqueue(db, org, "send_alert_digest", dedupe_key=key)
 
     def digest(db: Session, org: OrgContext, payload: dict) -> None:
         send_alert_digest(db, org)

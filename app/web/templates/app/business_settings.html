@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/settings">← Your settings</a></p>
+<h1>Business settings</h1>
+<p class="small muted">Every change here is kept in the business's history.</p>
+
+<h2>Profile</h2>
+<form method="post" action="/app/settings/business/profile" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field"><label for="name">Business name</label><input id="name" name="name" value="{{ tenant.name }}" maxlength="200" required></div>
+    <div class="field"><label for="contact_email">Contact email</label><input id="contact_email" name="contact_email" type="email" value="{{ tenant.contact_email or '' }}" maxlength="255"></div>
+  </div>
+  <div class="field"><label for="address">Address</label><input id="address" name="address" value="{{ tenant.address or '' }}" maxlength="300"></div>
+  <button class="btn secondary" type="submit">Save the profile</button>
+</form>
+
+<h2>Weekly summary</h2>
+<form method="post" action="/app/settings/business/schedule" class="card">{{ csrf_field(request) }}
+  <p class="small muted" style="margin-top:0;">When the weekly summary email goes out, in the business's time zone ({{ tenant.timezone }}).</p>
+  <div class="row">
+    <div class="field"><label for="day">Day</label><select id="day" name="day">{% for name in days %}<option value="{{ loop.index0 }}"{% if loop.index0 == tenant.report_day %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="hour">Hour</label><select id="hour" name="hour">{% for h in range(24) %}<option value="{{ h }}"{% if h == tenant.report_hour %} selected{% endif %}>{{ "%02d:00"|format(h) }}</option>{% endfor %}</select></div>
+  </div>
+  <button class="btn secondary" type="submit">Save the schedule</button>
+</form>
+
+<h2>Defaults</h2>
+<form method="post" action="/app/settings/business/defaults" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field"><label for="unit_system">Units offered first</label><select id="unit_system" name="unit_system">{% for code, label in systems.items() %}<option value="{{ code }}"{% if code == settings.unit_system %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="production_mode">New products are</label><select id="production_mode" name="production_mode">{% for code, label in modes.items() %}<option value="{{ code }}"{% if code == settings.default_production_mode %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  </div>
+  <button class="btn secondary" type="submit">Save the defaults</button>
+</form>
+
+<h2>Elsewhere</h2>
+<ul class="small">
+  <li><a href="/app/settings/alerts">Alerts: expiry window, alert email time, review thresholds, who receives what</a></li>
+  <li><a href="/app/locations">Locations: address, time zone, business-day cutoff, open days</a></li>
+  <li><a href="/app/team">Team: people, roles, locations</a></li>
+  <li><a href="/app/catalog">Items and categories</a></li>
+  <li><a href="/app/waste">Waste reasons</a> (on the waste page)</li>
+  <li><a href="/app/products">Products, sizes and modifiers</a>: a modifier's scale factor applies to sales from the moment it changes</li>
+  <li><a href="/app/sales/daily">Whether Employees may enter sales</a></li>
+</ul>
+{% endblock %}

@@ -39,7 +39,7 @@ EMAIL_SETTINGS = (
         "weekly_report",
         "wants_weekly_report",
         "Weekly report",
-        "Sales, stock value and what to order, once a week.",
+        "Stock value, waste, money at risk, low stock and open exceptions, once a week (Owners and roles that see costs).",
     ),
 )
 

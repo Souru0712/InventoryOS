@@ -16,6 +16,7 @@ from app.db import Base
 from app.models import (
     Alert,
     AuditEvent,
+    BusinessSettings,
     Document,
     DocumentLine,
     EmailLog,
@@ -38,6 +39,7 @@ from app.models import (
     Location,
     Membership,
     Modifier,
+    ModifierScale,
     Product,
     ProductIdentifier,
     ProductVariation,
@@ -85,6 +87,7 @@ APPEND_ONLY: frozenset[type[Base]] = frozenset(
         ItemCostHistory,
         RecipeVersion,
         RecipeLine,
+        ModifierScale,
     }
 )
 
@@ -113,8 +116,10 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         WasteReason,
         Supplier,
         SupplierItem,
+        BusinessSettings,
         ImportMapping,
         ImportName,
+        ModifierScale,
     }
 )
 

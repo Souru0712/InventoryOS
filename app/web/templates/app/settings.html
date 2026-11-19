@@ -5,6 +5,7 @@
 {% endif %}
 
 <h1>Settings</h1>
+{% if can(request, "settings.manage") or can(request, "alerts.configure") %}<p class="small">{% if can(request, "settings.manage") %}<a href="/app/settings/business">Business settings →</a>{% endif %}{% if can(request, "settings.manage") and can(request, "alerts.configure") %} · {% endif %}{% if can(request, "alerts.configure") %}<a href="/app/settings/alerts">Alert settings →</a>{% endif %}</p>{% endif %}
 <p class="lede">What StockPulse sends to {{ user.email }}.</p>
 
 {% if suppressed %}

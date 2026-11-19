@@ -20,6 +20,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
+from app.business_settings import settings_for
 from app.exceptions import record_exception
 from app.items import entered_base
 from app.ledger.posting import Observation, balance_at, post_count_lines
@@ -265,13 +266,21 @@ def post_count(
             select_scoped(org, StockItem).where(StockItem.location_id == count.location_id)
         )
     }
+    limits = settings_for(db, org)
+    review_share = Decimal(limits.count_review_percent) / 100
     for line, result in zip(lines, results, strict=True):
         line.expected_qty_base = result.expected
         line.variance_qty_base = result.variance
         line.unit_cost = result.unit_cost
         line.variance_cents = variance_cents(result.variance, result.unit_cost)
         line.movement_id = result.movement_id
-        line.needs_review = needs_review(result.variance, result.expected, line.variance_cents)
+        line.needs_review = needs_review(
+            result.variance,
+            result.expected,
+            line.variance_cents,
+            limits.count_review_cents,
+            review_share,
+        )
         row = stock.get(line.inventory_item_id)
         if row is not None and (
             row.last_counted_at is None or row.last_counted_at < line.counted_at

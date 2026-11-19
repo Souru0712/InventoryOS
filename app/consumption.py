@@ -39,6 +39,7 @@ from app.models import (
     SalesTransaction,
     SalesTransactionLine,
 )
+from app.products import scale_at
 from app.recipes import Owner, effective_version, recipe_of
 from app.transform.business_days import business_day_end
 from app.transform.consumption import (
@@ -121,7 +122,7 @@ def resolve_line(
             ModifierIn(
                 modifier.id,
                 modifier.effect,
-                Decimal(modifier.scale_factor) if modifier.scale_factor is not None else None,
+                scale_at(db, org, modifier, at),
                 _version_of(db, org, Owner("modifier", modifier.id), at)
                 if modifier.effect == "add"
                 else None,

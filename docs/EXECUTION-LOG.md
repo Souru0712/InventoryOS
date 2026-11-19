@@ -5,6 +5,32 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.19 Settings module (built on branch)
+
+**Implemented**
+- `business_settings` and `modifier_scales` (migration `3636bfa718b2`, factors backfilled from
+  the start); `app/transform/settings.py`, `app/business_settings.py` (profile, schedule, alerts,
+  defaults, all audited; `alert_email_key()`).
+- Settings take effect where read: count and adjustment review thresholds, the alert email's
+  hour on the business's clock, the default production mode, units listed first in item forms;
+  `scale_at()` gives the factor in effect at a sale's moment (AC-ADM-06).
+- `/app/settings/business` and `/app/settings/alerts`, linked from the personal settings page.
+
+**Verified**
+- `tests/test_business_settings.py`: profile and schedule audited, AC-ADM-02 (alerts and the
+  digest hour in New York time), thresholds, defaults, AC-ADM-06 (1.5 before, 2 after, the earlier
+  sale keeps 1.5), the pages; consumption, counts, adjustments, products, catalog, migrations,
+  jobs, headers, async, audit, permissions, isolation, alerts, email, recipes, web, production,
+  daily sales; both pages and the units default checked on the demo database.
+
+**Decisions**
+- ADR-0070 (Proposed).
+
+**Open issues**
+- Adjustment reasons are the fixed R1 list; configurable ones need a reasons table (decision).
+
+---
+
 ## 2026-11-19 — T2.18 Weekly summary email (built on branch)
 
 **Implemented**

@@ -184,6 +184,10 @@ implementation sessions; the detail lives in `docs/`.
   builds the windows, `app/transform/analytics.py` works out the figures per movement at its
   snapshot cost; never sum events, lines or today's costs for a past figure. Every report table
   exports through `/app/reports.csv` (ADR-0068) from the same report objects as its page.
+- Business settings are written only by `app/business_settings.py` (ADR-0070), audited as
+  `settings.*`, and read where they act (review thresholds, alert email hour, default production
+  mode, units). A modifier's scale factor is dated (`modifier_scales`, append-only): a sale reads
+  `scale_at()` at its own moment, never the modifier row's current factor.
 - Velocity and reorder read ledger usage (ADR-0066): `consumption()` in
   `app/orchestration/views.py` sums sale, production and manual consumption per business day;
   `app/reorder.py` (`plan()`, rules in `app/transform/reorder.py`) falls back to use between two

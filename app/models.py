@@ -49,6 +49,12 @@ from app.transform.sales import (
     SALES_ORIGINS,
     TRANSACTION_STATUSES,
 )
+from app.transform.settings import (
+    DEFAULT_ADJUSTMENT_REVIEW_CENTS,
+    DEFAULT_COUNT_REVIEW_CENTS,
+    DEFAULT_COUNT_REVIEW_PERCENT,
+    UNIT_SYSTEMS,
+)
 from app.transform.suppliers import ORDERING_METHODS
 from app.transform.waste import STATUSES as WASTE_STATUSES
 from app.units import BASE_UNIT, Dimension
@@ -2069,6 +2075,56 @@ class WebhookEvent(Base):
     event_type: Mapped[str] = mapped_column(String(80))
     tenant_id: Mapped[int | None] = mapped_column(ref("tenants.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class BusinessSettings(Base):
+    """A business's settings beyond its profile (T2.19; ADM-FR-03, -05, -06): one row, made on
+    first read. Profile, schedule and expiry window stay on the tenant row where they began."""
+
+    __tablename__ = "business_settings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_business_settings_tenant"),
+        one_of("business_settings", "unit_system", UNIT_SYSTEMS),
+        one_of("business_settings", "default_production_mode", PRODUCTION_MODES),
+        CheckConstraint(
+            "digest_hour IS NULL OR (digest_hour >= 0 AND digest_hour <= 23)",
+            name="ck_business_settings_digest_hour",
+        ),
+        CheckConstraint(
+            "count_review_percent >= 1 AND count_review_percent <= 100",
+            name="ck_business_settings_count_review_percent",
+        ),
+        not_negative("business_settings", "count_review_cents"),
+        not_negative("business_settings", "adjustment_review_cents"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(owned_by("tenants.id"))
+    unit_system: Mapped[str] = mapped_column(String(8), default="metric")
+    default_production_mode: Mapped[str] = mapped_column(String(16), default="made_to_order")
+    digest_hour: Mapped[int | None] = mapped_column(Integer)
+    count_review_cents: Mapped[int] = mapped_column(Integer, default=DEFAULT_COUNT_REVIEW_CENTS)
+    count_review_percent: Mapped[int] = mapped_column(Integer, default=DEFAULT_COUNT_REVIEW_PERCENT)
+    adjustment_review_cents: Mapped[int] = mapped_column(
+        Integer, default=DEFAULT_ADJUSTMENT_REVIEW_CENTS
+    )
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ModifierScale(Base):
+    """A scale modifier's factor from an instant on (T2.19, AC-ADM-06): append-only, so a sale
+    reads the factor in effect at its own moment and a change applies to later sales only."""
+
+    __tablename__ = "modifier_scales"
+    __table_args__ = (positive("modifier_scales", "scale_factor"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    modifier_id: Mapped[int] = mapped_column(owned_by("modifiers.id"), index=True)
+    scale_factor: Mapped[Decimal] = mapped_column(Qty)
+    effective_from: Mapped[datetime] = mapped_column(UTCDateTime)
+    recorded_by: Mapped[int | None] = mapped_column(ref("users.id"))
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 # Keeps inventory_items and item_locations in step with stock_items while both exist (C-38).

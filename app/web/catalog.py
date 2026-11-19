@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
 from app.access.permissions import VIEW_COSTS
+from app.business_settings import settings_for
 from app.costs import history as cost_history
 from app.db import get_db
 from app.items import (
@@ -44,6 +45,7 @@ from app.security import location_filter, require_permission, require_tenant, re
 from app.throttle import client_ip
 from app.transform.batches import ORDER_LABELS
 from app.transform.items import ITEM_TYPE_LABELS, ItemRuleError
+from app.transform.settings import ordered_units
 from app.units import UNITS, UNITS_BY_DIMENSION, Dimension
 from app.web.flash import flash, pop_flash
 from app.web.templating import templates
@@ -64,8 +66,14 @@ def _locations(db: Session, org: OrgContext) -> list[Location]:
     )
 
 
-def _units() -> dict[str, list[tuple[str, str]]]:
-    return {d.value: [(u.code, u.label) for u in UNITS_BY_DIMENSION[d]] for d in Dimension}
+def _units(db: Session, org: OrgContext) -> dict[str, list[tuple[str, str]]]:
+    """Every unit by kind, the business's own system first (ADM-FR-03)."""
+    system = settings_for(db, org).unit_system
+    result = {}
+    for d in Dimension:
+        codes = ordered_units([u.code for u in UNITS_BY_DIMENSION[d]], system)
+        result[d.value] = [(code, UNITS[code].label) for code in codes]
+    return result
 
 
 def _dimension_of(unit: str) -> str:
@@ -259,7 +267,7 @@ def _new_form(request, db, org, tenant, values: dict, error: str | None = None, 
             "locations": _locations(db, org),
             "categories": categories(db, org),
             "type_labels": ITEM_TYPE_LABELS,
-            "units": _units(),
+            "units": _units(db, org),
             "values": values,
             "error": error,
         },
@@ -359,7 +367,7 @@ def _item_page(request, db, org, tenant, inventory_item_id: int, error=None, sta
             "locked_dimension": has_history(db, org, row),
             "categories": categories(db, org),
             "type_labels": ITEM_TYPE_LABELS,
-            "units": _units(),
+            "units": _units(db, org),
             "elsewhere": [loc for loc in _locations(db, org) if loc.id not in stocked],
             # The last few costs at each location, newest first (INV-FR-07); shown with costs only.
             "cost_history": {

@@ -60,7 +60,7 @@ from tests.sample_files import jpeg
 from tests.test_async_correctness import api_routes
 
 # Integer parameters that are quantities, not identifiers. Any other integer is an identifier.
-NOT_IDENTIFIERS = {"lead_time_days", "business_day_cutoff_hour"}
+NOT_IDENTIFIERS = {"lead_time_days", "business_day_cutoff_hour", "day", "hour"}  # numbers, not rows
 
 
 def _is_int(annotation) -> bool:
