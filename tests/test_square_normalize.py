@@ -6,7 +6,7 @@ from app.providers.square.normalize import (
     measurement_units,
     normalize_catalog,
     normalize_counts,
-    normalize_locations,
+    to_location,
 )
 from app.units import Dimension
 
@@ -54,18 +54,23 @@ CATALOG = [
 
 
 def test_locations_normalize_with_defaults():
-    rows = normalize_locations(
-        [{"id": "L1", "name": "Main", "timezone": "Europe/London", "currency": "GBP"}]
+    place = to_location({"id": "L1", "timezone": "Europe/London"})
+    assert (place.external_location_id, place.name, place.timezone, place.active) == (
+        "L1",
+        "L1",
+        "Europe/London",
+        True,
     )
-    assert rows == [
-        {
-            "provider_location_id": "L1",
-            "name": "Main",
-            "timezone": "Europe/London",
-            "currency": "GBP",
-            "is_active": True,
-        }
-    ]
+
+
+def test_a_milligram_stays_a_milligram():
+    """Audit SQ8: METRIC_MILLIGRAM was read as grams, a 1000x error."""
+    unit = {
+        "type": "MEASUREMENT_UNIT",
+        "id": "mu-mg",
+        "measurement_unit_data": {"measurement_unit": {"weight_unit": "METRIC_MILLIGRAM"}},
+    }
+    assert measurement_units([unit]) == {"mu-mg": ("mg", Dimension.WEIGHT)}
 
 
 def test_measurement_units_map_to_our_dimensions():

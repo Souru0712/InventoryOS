@@ -127,6 +127,10 @@ implementation sessions; the detail lives in `docs/`.
   per merchant across businesses, tokens through `credentials()` (refreshed, encrypted), a
   provider's 401 or revocation webhook → `mark_revoked()` (critical `sync_failure`, Owners
   emailed); `disconnect()` revokes at the provider and keeps history.
+- What a POS reports is written only by `app/pos_catalog.py` (ADR-0077): external locations,
+  products (per variation) and modifiers, unique per (connection, external id), never deleted
+  (unlisted → inactive). The sync never creates a location: a POS location is tracked by one of
+  the business's locations (`provider_location_id`) through `track_location()`.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,
@@ -164,7 +168,8 @@ implementation sessions; the detail lives in `docs/`.
 - What a business sells is its own catalog (C-36, ADR-0050): `products`, `product_variations`
   (sizes, informational price) and `modifiers` (none, scale, add), changed only through
   `app/products.py` and never deleted. A POS catalog is mapped onto it (T3.03, T3.04); the
-  Square sync writes `sold_items` only. A price is money: behind `inventory.view_costs`.
+  Square sync writes `sold_items` and the external catalog only. A price is money: behind
+  `inventory.view_costs`.
 - Recipes are versioned (ADR-0051): `recipes`, `recipe_versions`, `recipe_lines`, written only
   by `app/recipes.py` (`save_recipe()`). Versions and lines are append-only: an edit is the
   next version, effective now or later, never earlier, and anything that happened reads the

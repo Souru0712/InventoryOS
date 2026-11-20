@@ -62,6 +62,7 @@ class NormalizedProduct:
     category: str | None = None
     active: bool = True
     price_cents: int | None = None
+    unit: str | None = None  # the POS's measurement unit, informational only (SQ-09)
 
 
 @dataclass(frozen=True)

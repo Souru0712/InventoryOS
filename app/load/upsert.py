@@ -31,34 +31,6 @@ def slugify(text: str) -> str:
     return slug[:160] or "item"
 
 
-def upsert_locations(
-    db: Session, tenant_id: int, rows: list[dict], provider: str = "square"
-) -> int:
-    existing = {
-        loc.provider_location_id: loc
-        for loc in db.scalars(
-            select(Location).where(Location.tenant_id == tenant_id, Location.provider == provider)
-        )
-    }
-    changed = 0
-    for row in rows:
-        location = existing.get(row["provider_location_id"])
-        if location is None:
-            location = Location(tenant_id=tenant_id, provider=provider, **row)
-            db.add(location)
-            changed += 1
-            continue
-        for key, value in row.items():
-            # An archived location stays off even while the POS still lists it as open.
-            if key == "is_active" and location.archived_at is not None:
-                continue
-            if getattr(location, key) != value:
-                setattr(location, key, value)
-                changed += 1
-    db.flush()
-    return changed
-
-
 SOLD_ITEM_FIELDS = (
     "provider_item_id",
     "name",

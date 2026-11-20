@@ -6,7 +6,7 @@ disconnect. Provider-neutral: everything goes through `app/connections.py`.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.access import OrgContext, select_scoped
 from app.connections import NotConnected, current, disconnect, name_of, sync_health
 from app.db import get_db
 from app.models import Location, SyncRun, Tenant, User
+from app.pos_catalog import MappingError, NotFound, external_locations, summary, track_location
 from app.security import require_permission, require_tenant, require_verified
 from app.throttle import client_ip
 from app.web.flash import flash, pop_flash
@@ -41,13 +42,14 @@ def connection_page(
     last_run = db.scalars(
         select_scoped(org, SyncRun).order_by(SyncRun.started_at.desc()).limit(1)
     ).first()
-    locations = list(
+    own = list(
         db.scalars(
             select_scoped(org, Location)
-            .where(Location.provider == PROVIDER)
+            .where(Location.archived_at.is_(None), Location.is_active.is_(True))
             .order_by(Location.name)
         )
     )
+    active = connection is not None and connection.status == "active"
     return templates.TemplateResponse(
         request,
         "app/connection.html",
@@ -59,7 +61,11 @@ def connection_page(
             "provider": name_of(PROVIDER),
             "connection": connection,
             "health": sync_health(db, org, connection, last_run),
-            "locations": locations,
+            # Square's locations, each with the business's location tracking it (POS-FR-03).
+            "places": external_locations(db, org, connection) if connection else [],
+            "own_locations": own,
+            "can_map": active,
+            "catalog": summary(db, org, connection) if connection else None,
         },
     )
 
@@ -86,4 +92,30 @@ def disconnect_pos(
             "under Apps in your Square Dashboard.",
             "error",
         )
+    return RedirectResponse(PAGE, status_code=303)
+
+
+@router.post(PAGE + "/locations/{external_location_id}")
+def track_pos_location(
+    request: Request,
+    external_location_id: int,
+    location_id: str = Form(""),
+    db: Session = Depends(get_db),
+    org: OrgContext = Depends(require_permission("pos.manage")),
+):
+    """Which of the business's locations tracks a Square location; none leaves it untracked."""
+    try:
+        chosen = int(location_id) if location_id.strip() else None
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="location not found") from exc
+    try:
+        changed = track_location(db, org, external_location_id, chosen, ip=client_ip(request))
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail="location not found") from exc
+    except MappingError as exc:
+        db.rollback()
+        flash(request, str(exc), "error")
+        return RedirectResponse(PAGE, status_code=303)
+    db.commit()
+    flash(request, "Saved." if changed else "Nothing changed.")
     return RedirectResponse(PAGE, status_code=303)

@@ -24,6 +24,7 @@ from app.models import (
     DocumentLine,
     DocumentStatus,
     ExceptionRecord,
+    ExternalLocation,
     InventoryCategory,
     Invitation,
     ItemPackage,
@@ -37,6 +38,7 @@ from app.models import (
     ProductVariation,
     Promotion,
     PromotionStatus,
+    ProviderConnection,
     Receiving,
     ReceivingLine,
     SalesImport,
@@ -316,6 +318,9 @@ CASES = {
         }
     },
     ("POST", "/app/locations/{location_id}/archive"): lambda ids: {},
+    ("POST", "/app/connection/locations/{external_location_id}"): lambda ids: {
+        "data": {"location_id": ids["location"]}
+    },
     ("POST", "/app/organizations/switch"): lambda ids: {
         "data": {"membership_id": ids["membership"]}
     },
@@ -393,6 +398,7 @@ PATH_ROWS = {
     "line_id": "receiving_line",
     "import_id": "sales_import",
     "digest": "item_file",
+    "external_location_id": "external_location",
 }
 
 
@@ -410,6 +416,19 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
         tenant_id=tenant_id, provider="demo", provider_location_id=f"{tag}-1", name=f"{tag} Main"
     )
     db.add(location)
+    db.flush()
+    square = ProviderConnection(
+        tenant_id=tenant_id, provider="square", merchant_id=f"{tag}-M", access_token_enc="x"
+    )
+    db.add(square)
+    db.flush()
+    square_place = ExternalLocation(
+        tenant_id=tenant_id,
+        connection_id=square.id,
+        external_location_id=f"{tag}-SQ",
+        name=f"{tag} on Square",
+    )
+    db.add(square_place)
     db.flush()
 
     def item(slug: str, name: str) -> StockItem:
@@ -601,6 +620,7 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
         "category2": drinks.id,
         "tenant": tenant_id,
         "location": location.id,
+        "external_location": square_place.id,
         "item": bars.id,
         "promo_item": brew.id,
         "batch": batch.id,

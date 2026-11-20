@@ -43,7 +43,7 @@ risks: [DATA_MIGRATION_ASSESSMENT](../audit/DATA_MIGRATION_ASSESSMENT.md).
 | DM-10 | Batch allocation: allocation columns; existing batches get allocations from the opening movement (remaining = FEFO-derived at migration) | T2.06 | Expand + backfill | T2.07 |
 | DM-11 | Suppliers from free-text `supplier` values on items and documents | T2.10 | Expand + backfill | T2.11 |
 | DM-12 | Receivings created for already-applied documents (history only, no new movements) | T2.11 | Expand + backfill | — |
-| DM-13 | External products from Square-origin `sold_items` (provider ids) with mappings | T3.03 | Expand + backfill | T3.04 |
+| DM-13 | External products from Square-origin `sold_items` (provider ids) and external locations from Square location rows (T3.03, migration `b7d2f4c8e1a6`); their mappings with `product_mappings` (T3.04) | T3.03 | Expand + backfill | T3.04 |
 | DM-14 | Provider connections: unique active (provider, merchant, location) | T3.02 | Migrate (constraint) | T3.05 |
 | DM-15 | Plans and entitlements from the `Plan` enum and `CAPABILITIES` | T4.01 | Expand + backfill | T4.02 |
 | DM-16 | Contract: drop `users.tenant_id`, the `stock_items` compatibility layer and `qty_base`, unused legacy writers | T4.16 | Contract (needs approval) | T4.17, G-R1 |
@@ -78,7 +78,7 @@ risks: [DATA_MIGRATION_ASSESSMENT](../audit/DATA_MIGRATION_ASSESSMENT.md).
 | DM-7 | (T2.04) Every `sales_daily` day of a location is one daily sales transaction from its POS source of record, with the same units per sold item; nothing writes `sales_daily`. (T2.05) `sales_daily` is dropped and its downgrade rebuilds it from those transactions; no line recorded before T2.05 is consumed |
 | DM-9 | Every sold item is the source of exactly one product variation, its name split at the last " - " (T2.01); every recipe component appears once in version 1 of its recipe (T2.02) |
 | DM-10 | For batch-tracked items: Σ batch remaining = balance (DR-13) |
-| DM-13 | Every Square-origin sold item has an external product and a mapping |
+| DM-13 | Every Square-origin sold item of a business with a Square connection has an external product (T3.03) and a mapping (T3.04) |
 | DM-15 | Every tenant has a subscription with an entitlement set; no core capability gated |
 | All | Single Alembic head; model/migration diff empty; upgrade over populated data passes on Postgres |
 

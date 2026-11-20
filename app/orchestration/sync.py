@@ -20,7 +20,6 @@ from app.load.upsert import (
     sync_catalog_presence,
     sync_identifiers_from_catalog,
     sync_retail_prices,
-    upsert_locations,
     upsert_sales_daily,
     upsert_sold_items,
 )
@@ -35,6 +34,8 @@ from app.models import (
 )
 from app.orchestration.alerts import evaluate_and_store
 from app.orchestration.subscriptions import apply_location_limit
+from app.pos_catalog import store_catalog, store_locations
+from app.providers.base import Catalog
 from app.providers.square.client import (
     SquareClient,
     SquareError,
@@ -45,7 +46,9 @@ from app.providers.square.normalize import (
     daily_sales_from_orders,
     normalize_catalog,
     normalize_counts,
-    normalize_locations,
+    to_location,
+    to_modifiers,
+    to_products,
 )
 from app.units import from_base
 
@@ -93,14 +96,24 @@ def _note_revocation(
         mark_revoked(db, org, connection)
 
 
-def _pull_catalog(db: Session, org: OrgContext, client: SquareClient) -> tuple[list[dict], dict]:
-    """Locations and catalog: the part of a sync that a catalog change invalidates."""
-    stats: dict[str, int] = {
-        "locations": upsert_locations(db, org.tenant_id, normalize_locations(client.locations()))
-    }
-    catalog_rows = normalize_catalog(
-        client.catalog_objects(("ITEM", "CATEGORY", "MEASUREMENT_UNIT"))
+def _pull_catalog(
+    db: Session, org: OrgContext, connection: ProviderConnection, client: SquareClient
+) -> tuple[list[dict], dict]:
+    """Locations and catalog: the part of a sync that a catalog change invalidates.
+
+    One read feeds both the external catalog (T3.03) and the legacy rows the sales path still
+    reads until T3.12. Square's locations are recorded, never created as the business's own (G11).
+    """
+    raw_locations = [place for place in client.locations() if place.get("id")]
+    raw_objects = client.catalog_objects(("ITEM", "CATEGORY", "MEASUREMENT_UNIT", "MODIFIER_LIST"))
+    located = store_locations(db, org, connection, [to_location(p) for p in raw_locations])
+    stats: dict[str, int] = {"locations": sum(located.values())}
+    stats.update(
+        store_catalog(
+            db, org, connection, Catalog(to_products(raw_objects), to_modifiers(raw_objects))
+        )
     )
+    catalog_rows = normalize_catalog(raw_objects)
     stats["sold_items"] = upsert_sold_items(db, org.tenant_id, catalog_rows)
     stats["stock_items_created"] = ensure_tracked_stock_items(db, org.tenant_id, catalog_rows)
     stats["identifiers"] = sync_identifiers_from_catalog(db, org.tenant_id, catalog_rows)
@@ -118,7 +131,7 @@ def sync_catalog(db: Session, org: OrgContext) -> dict:
     try:
         token = _access_token(db, org, connection)
         with SquareClient(token) as client:
-            _rows, stats = _pull_catalog(db, org, client)
+            _rows, stats = _pull_catalog(db, org, connection, client)
     except Exception as exc:
         _note_revocation(db, org, connection, exc)
         run.status = SyncStatus.FAILED
@@ -151,7 +164,7 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
     try:
         token = _access_token(db, org, connection)
         with SquareClient(token) as client:
-            catalog_rows, catalog_stats = _pull_catalog(db, org, client)
+            catalog_rows, catalog_stats = _pull_catalog(db, org, connection, client)
             stats.update(catalog_stats)
 
             locations = _square_locations(db, org, active_only=True)

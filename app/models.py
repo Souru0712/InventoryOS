@@ -455,6 +455,76 @@ class ProviderConnection(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
+class ExternalLocation(Base):
+    """A location the POS reports (T3.03, SQ-05). Which of the business's locations tracks it is
+    that location's `provider_location_id`; one tracking none is listed as not tracked."""
+
+    __tablename__ = "external_locations"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_location_id", name="uq_external_locations_external_id"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"), index=True)
+    external_location_id: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(200))
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    address: Mapped[str | None] = mapped_column(String(300))
+    # False once the POS closes it or stops listing it; kept for history (SQ-08).
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ExternalProduct(Base):
+    """One sellable variation in the POS's catalog (T3.03, POS-FR-04): the mapping grain. Its
+    price and unit are the POS's, informational only (RCP-FR-01, SQ-09)."""
+
+    __tablename__ = "external_products"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_variation_id", name="uq_external_products_variation"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"), index=True)
+    # Unknown on a row carried over from sold_items until the next catalog sync (DM-13).
+    external_item_id: Mapped[str | None] = mapped_column(String(120))
+    external_variation_id: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(300))
+    variation_name: Mapped[str] = mapped_column(String(200), default="")
+    category: Mapped[str | None] = mapped_column(String(200))
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    unit: Mapped[str | None] = mapped_column(String(16))
+    # False once the POS archives or deletes it; its mapping and history stay (SQ-08).
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ExternalModifier(Base):
+    """One modifier in the POS's catalog, with the list it belongs to (T3.03, POS-FR-04)."""
+
+    __tablename__ = "external_modifiers"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_modifier_id", name="uq_external_modifiers_external_id"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"), index=True)
+    external_modifier_id: Mapped[str] = mapped_column(String(120))
+    list_name: Mapped[str] = mapped_column(String(200), default="")
+    name: Mapped[str] = mapped_column(String(200))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
 class Location(Base):
     """A site the business runs, with or without a POS (ADM-FR-02)."""
 

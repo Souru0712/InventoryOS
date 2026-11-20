@@ -86,7 +86,9 @@ class FakeSquareCatalog:
 
 @pytest.fixture
 def connected(db, tenant, location, monkeypatch):
-    """A connected tenant whose Square catalog holds one tracked variation."""
+    """A connected tenant whose Square catalog holds one tracked variation, its location
+    tracking Square's (T3.03: the sync no longer creates locations)."""
+    location.provider, location.provider_location_id = "square", "LOC-SQ-1"
     db.add(
         ProviderConnection(
             tenant_id=tenant.id,

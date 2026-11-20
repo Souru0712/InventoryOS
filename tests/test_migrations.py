@@ -1357,3 +1357,81 @@ def test_every_migration_survives_a_database_that_already_has_rows(fresh_url):
         assert key == f"1/{photo}.jpg", "an old upload path was not turned into a storage key"
     finally:
         engine.dispose()
+
+
+BEFORE_DM13 = "9c41e7a2d5b3"
+
+
+def test_dm13_square_rows_become_the_external_catalog(fresh_url):
+    """T3.03, DM-13: a Square location row becomes the POS location it tracks, a Square sold item
+    an external product of the business's latest connection; demo rows and a business with no
+    connection are left alone, and the downgrade drops only the new tables."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM13)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    tenant = (
+        "INSERT INTO tenants (name, plan, subscription_status, report_day, report_hour, timezone,"
+        " created_at, expiry_alert_days, auto_dispose_prepared, employees_enter_sales)"
+        " VALUES (:name, 'PRO', 'TRIALING', 0, 7, 'UTC', '2026-11-19 12:00:00', 2, false, false)"
+    )
+    sold = (
+        "INSERT INTO sold_items (tenant_id, provider, provider_item_id, name, category, price_cents,"
+        " currency, sell_unit, is_active) VALUES (:tenant, :provider, :ref, :name, 'Drinks', 450,"
+        " 'USD', 'each', true)"
+    )
+    try:
+        with engine.begin() as connection:
+            for name in ("Corner", "Harbor"):
+                connection.execute(text(tenant), {"name": name})
+            for status, merchant in (("disconnected", "OLD"), ("active", "M-1")):
+                connection.execute(
+                    text(
+                        "INSERT INTO provider_connections (tenant_id, provider, merchant_id,"
+                        " access_token_enc, status, created_at) VALUES (1, 'square', :m, 'x',"
+                        " :s, '2026-11-19 12:00:00')"
+                    ),
+                    {"m": merchant, "s": status},
+                )
+            connection.execute(
+                text(
+                    "INSERT INTO locations (tenant_id, provider, provider_location_id, name,"
+                    " timezone, currency, is_active) VALUES (1, 'square', 'SQ-1', 'Main',"
+                    " 'America/New_York', 'USD', true), (1, NULL, NULL, 'Kitchen', 'UTC', 'USD',"
+                    " true)"
+                )
+            )
+            for tenant_id, provider, ref, name in (
+                (1, "square", "VAR-1", "Latte - 12 oz"),
+                (1, "demo", "DEMO-1", "Muffin"),
+                (2, "square", "VAR-9", "Bagel"),  # Harbor has no connection
+            ):
+                connection.execute(
+                    text(sold),
+                    {"tenant": tenant_id, "provider": provider, "ref": ref, "name": name},
+                )
+
+        command.upgrade(config, "b7d2f4c8e1a6")
+        with engine.connect() as connection:
+            places = connection.execute(
+                text(
+                    "SELECT tenant_id, connection_id, external_location_id, name, timezone, active"
+                    " FROM external_locations"
+                )
+            ).all()
+            products = connection.execute(
+                text(
+                    "SELECT tenant_id, connection_id, external_variation_id, external_item_id,"
+                    " name, price_cents, unit, active FROM external_products"
+                )
+            ).all()
+        assert [tuple(r) for r in places] == [(1, 2, "SQ-1", "Main", "America/New_York", True)]
+        assert [tuple(r) for r in products] == [
+            (1, 2, "VAR-1", None, "Latte - 12 oz", 450, "each", True)
+        ]
+
+        command.downgrade(config, BEFORE_DM13)
+        with engine.connect() as connection:
+            assert "external_products" not in inspect(connection).get_table_names()
+            assert connection.execute(text("SELECT COUNT(*) FROM sold_items")).scalar_one() == 3
+    finally:
+        engine.dispose()

@@ -5,6 +5,40 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T3.03 Location mapping and catalog sync (built on branch)
+
+**Implemented**
+- `external_locations`, `external_products`, `external_modifiers`, unique per (connection,
+  external id), written only by `app/pos_catalog.py` from the contract's normalized types; what
+  Square stops listing is kept inactive; a re-sync of the same listing changes nothing.
+- The sync records Square's locations and no longer creates or edits the business's (G11). A
+  Square location is tracked by one of the business's active locations (`provider_location_id`),
+  chosen on `/app/connection`, audited; the plan's allowance holds because only existing
+  locations can track one.
+- One catalog read (now with modifier lists) feeds the external catalog and the legacy
+  `sold_items` path the sales still read until T3.12.
+- `METRIC_MILLIGRAM` maps to `mg` (SQ8); Square units are informational (SQ-09).
+- DM-13 migration `b7d2f4c8e1a6`: Square location rows and Square-origin sold items copied to
+  the business's latest Square connection; rows of a business with no connection reported and
+  skipped.
+- `/app/connection` shows the import summary (items, variations, modifiers) and the location
+  mapping.
+
+**Verified**
+- `tests/test_pos_catalog.py` (6): import with units and modifiers, idempotent re-sync,
+  inactive-not-deleted, no location created and no sales read until tracked, the tracking rules
+  (move, untrack, refusals, other business, disconnected), the screen, the single-writer rule.
+  DM-13 migration test; isolation case for the new route; related suites, ruff, mypy, docs
+  checker.
+
+**Decisions**
+- ADR-0077 (Proposed). DM-13's mapping half moves to T3.04 with `product_mappings`.
+
+**Open issues**
+- Creating a location from a Square location in one step (today: add the location, then map).
+
+---
+
 ## 2026-11-19 — T3.02 Square connection lifecycle (built on branch)
 
 **Implemented**

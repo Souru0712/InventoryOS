@@ -9,7 +9,6 @@ from sqlalchemy import select
 
 from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
-from app.load.upsert import upsert_locations
 from app.main import app
 from app.models import (
     AlertKind,
@@ -210,15 +209,14 @@ def test_the_plan_allowance_holds_for_new_and_restored_locations(client):
         assert db.get(Location, first).archived_at is not None
 
 
-def test_an_archived_location_stays_off_whatever_square_or_the_plan_says(db, tenant):
+def test_an_archived_location_stays_off_whatever_the_plan_says(db, tenant):
+    """Square no longer writes locations at all (T3.03, G11); an upgrade must not revive it."""
     location = db.scalars(select(Location).where(Location.tenant_id == tenant.id)).one()
     location.provider, location.provider_location_id = "square", "SQ-9"
     location.archived_at = datetime.now(UTC)
     location.is_active = False
     db.commit()
 
-    row = {"provider_location_id": "SQ-9", "name": "Main", "timezone": "UTC", "currency": "USD"}
-    upsert_locations(db, tenant.id, [row | {"is_active": True}])
     tenant.subscription_status = SubscriptionStatus.ACTIVE
     change_plan(db, tenant, "pro")  # an upgrade turns covered locations back on
     db.commit()

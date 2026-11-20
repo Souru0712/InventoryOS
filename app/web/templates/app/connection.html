@@ -37,10 +37,40 @@
   {% endif %}
 </div>
 
-{% if locations %}
+{% if catalog %}
+<h2>{{ provider }} catalog</h2>
+<p class="small">{{ catalog.items }} item{{ "" if catalog.items == 1 else "s" }}, {{ catalog.variations }} variation{{ "" if catalog.variations == 1 else "s" }} and {{ catalog.modifiers }} modifier{{ "" if catalog.modifiers == 1 else "s" }} imported. Archived or deleted ones are kept, marked inactive.</p>
+{% endif %}
+
+{% if places %}
 <h2>{{ provider }} locations</h2>
-<ul>
-  {% for location in locations %}<li>{{ location.name }}{% if not location.is_active %} <span class="muted">(not tracked)</span>{% endif %}</li>{% endfor %}
-</ul>
+<p class="small muted">Choose which of your locations tracks each {{ provider }} location. Sales from a location no one tracks are not brought in.{% if can_map and not own_locations %} <a href="/app/locations/new">Add a location</a> first.{% endif %}</p>
+<table>
+  <thead><tr><th>{{ provider }} location</th><th>Tracked by</th></tr></thead>
+  <tbody>
+  {% for place, tracker in places %}
+    <tr>
+      <td>{{ place.name }}{% if place.address %}<br><span class="small muted">{{ place.address }}</span>{% endif %}{% if not place.active %} <span class="muted">(closed in {{ provider }})</span>{% endif %}</td>
+      <td>
+        {% if can_map %}
+        <form method="post" action="/app/connection/locations/{{ place.id }}" class="inline-form">{{ csrf_field(request) }}
+          <select name="location_id" aria-label="Location tracking {{ place.name }}">
+            <option value="">Not tracked</option>
+            {% for location in own_locations %}
+              {% if location.provider_location_id is none or (tracker and location.id == tracker.id) %}
+              <option value="{{ location.id }}"{% if tracker and location.id == tracker.id %} selected{% endif %}>{{ location.name }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <button class="btn small secondary" type="submit">Save</button>
+        </form>
+        {% else %}
+          {{ tracker.name if tracker else "Not tracked" }}
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
 {% endif %}
 {% endblock %}

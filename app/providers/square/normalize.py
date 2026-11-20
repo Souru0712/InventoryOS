@@ -21,13 +21,14 @@ from app.providers.base import (
 )
 from app.units import Dimension
 
-# Square measurement units -> our unit codes.
+# Square measurement units -> our unit codes. Informational (SQ-09): nothing converts with them.
+# A milligram is "mg", never "g" (audit SQ8: a 1000x error).
 SQUARE_WEIGHT_UNITS = {
     "IMPERIAL_WEIGHT_OUNCE": "oz",
     "IMPERIAL_POUND": "lb",
     "METRIC_KILOGRAM": "kg",
     "METRIC_GRAM": "g",
-    "METRIC_MILLIGRAM": "g",
+    "METRIC_MILLIGRAM": "mg",
 }
 SQUARE_VOLUME_UNITS = {
     "METRIC_MILLILITER": "ml",
@@ -45,20 +46,6 @@ def _decimal(value: object, default: str = "0") -> Decimal:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         return Decimal(default)
-
-
-def normalize_locations(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {
-            "provider_location_id": loc["id"],
-            "name": loc.get("name") or loc["id"],
-            "timezone": loc.get("timezone") or "UTC",
-            "currency": loc.get("currency") or "USD",
-            "is_active": loc.get("status", "ACTIVE") == "ACTIVE",
-        }
-        for loc in raw
-        if loc.get("id")
-    ]
 
 
 def measurement_units(raw_objects: list[dict[str, Any]]) -> dict[str, tuple[str, Dimension]]:
@@ -236,6 +223,7 @@ def to_products(raw_objects: list[dict[str, Any]]) -> tuple[NormalizedProduct, .
         for obj in raw_objects
         if obj.get("type") == "CATEGORY"
     }
+    units = measurement_units(raw_objects)
     products = []
     for obj in raw_objects:
         if obj.get("type") != "ITEM" or obj.get("is_deleted"):
@@ -254,6 +242,9 @@ def to_products(raw_objects: list[dict[str, Any]]) -> tuple[NormalizedProduct, .
                     category=categories.get(data.get("category_id", "")),
                     active=not data.get("is_archived", False),
                     price_cents=_cents(vdata.get("price_money")),
+                    unit=units.get(vdata.get("measurement_unit_id", ""), ("each", Dimension.COUNT))[
+                        0
+                    ],
                 )
             )
     return tuple(products)

@@ -108,3 +108,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0074](0074-standalone-suite.md) | The Standalone end-to-end suite and the adapter boundary | T2.22 | Accepted |
 | [ADR-0075](0075-pos-adapter-contract.md) | The POS adapter contract | T3.01 | Proposed |
 | [ADR-0076](0076-connection-lifecycle.md) | The POS connection lifecycle | T3.02 | Proposed |
+| [ADR-0077](0077-external-catalog-and-location-mapping.md) | The external catalog and location mapping | T3.03 | Proposed |
