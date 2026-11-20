@@ -1,6 +1,6 @@
 # ADR-0069: Weekly summary email on the new data
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.18: ANL-FR-09, AC-ANL-07)
 - **Tasks:** T2.18
 

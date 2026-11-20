@@ -1,6 +1,6 @@
 # ADR-0070: Settings module
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.19: ADM-FR-01, -03..06, AC-ADM-01, -02, -06)
 - **Tasks:** T2.19; T2.20 (onboarding sets the same settings)
 

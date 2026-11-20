@@ -1,6 +1,6 @@
 # ADR-0074: The Standalone end-to-end suite and the adapter boundary
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.22: AC-SAL-01, AC-SAL-07, MNT-08, DR-29)
 - **Tasks:** T2.22; the M4 gate review reads its result
 

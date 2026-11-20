@@ -1,6 +1,6 @@
 # ADR-0059: Expiry alert window and auto-dispose
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.08: BAT-FR-09..11, BAT-FR-14, PD-29, AC-BAT-06, -07)
 - **Tasks:** T2.08
 

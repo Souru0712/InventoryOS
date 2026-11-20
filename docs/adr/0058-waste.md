@@ -1,6 +1,6 @@
 # ADR-0058: Waste
 
-- **Status:** Proposed, 2026-11-19 (in the T2.07 pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.07: WST-FR-01..12, DR-33, AC-WST-01..08)
 - **Tasks:** T2.07; T2.08 (expiry disposal posts waste), T2.09 (production loss), T2.11
   (counts and receiving beside waste in reports)

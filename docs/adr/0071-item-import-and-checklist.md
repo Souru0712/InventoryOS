@@ -1,6 +1,6 @@
 # ADR-0071: Item import, quick-add and the onboarding checklist
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.20-a: INV-FR-08, AC-INV-12, CMD-FR-11, SAAS §5 steps 2–10)
 - **Tasks:** T2.20-a; T2.20-b (step 0, the one-screen opening count, skipping steps)
 

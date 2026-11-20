@@ -1,6 +1,6 @@
 # ADR-0062: Receivings on the ledger
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.11-a: RCV-FR-01, -05..07, -09..12, DR-07, AC-RCV-01,
   -05..08; DM-12)
 - **Tasks:** T2.11 (`-a` posting model, `-b` invoice review on receivings and the extraction job)

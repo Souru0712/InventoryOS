@@ -1,6 +1,6 @@
 # ADR-0067: Operational reports on the ledger
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.16: ANL-FR-02..05, -07, AC-ANL-01, -03, -05)
 - **Tasks:** T2.16; T2.17 (margin, cost of sales, receiving, count-based usage, CSV of every table)
 
