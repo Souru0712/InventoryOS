@@ -5,6 +5,31 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T3.01 Adapter interface and boundary check (built on branch)
+
+**Implemented**
+- `app/providers/base.py`: the normalized types of INTEGRATION_REQUIREMENTS §2, the `PosAdapter`
+  protocol, `Unsupported`, `Registry`; `app.providers.adapter_for()` loads providers lazily.
+- `app/providers/square/adapter.py`: Square as the first adapter (client, OAuth, signature
+  check); converters into the normalized types in `normalize.py`. Revocation is `Unsupported`
+  until T3.02.
+- The boundary check allows the contract and registry anywhere and keeps provider packages to
+  the POS seams.
+
+**Verified**
+- `tests/test_pos_adapter.py`: the registry, a recorded order (lines by uid, modifiers, a custom
+  amount, refunds), the recorded catalog, locations and events, webhook verification, the
+  adapter over a fake client, and a fake POS filling the contract with no Square type
+  (AC-POS-12); Standalone, Square normalise, webhooks, Square catalog.
+
+**Decisions**
+- ADR-0075 (Proposed).
+
+**Open issues**
+- The legacy sync still calls the Square client directly until T3.12.
+
+---
+
 ## 2026-11-19 — Stage 2 merged (PR #60)
 
 **Implemented**

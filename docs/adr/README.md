@@ -106,3 +106,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0072](0072-step-0-and-opening-count.md) | Onboarding step 0 and the opening count | T2.20 | Accepted |
 | [ADR-0073](0073-employee-home-and-logged-by.md) | Employee home and the "logged by" picker | T2.21 | Accepted |
 | [ADR-0074](0074-standalone-suite.md) | The Standalone end-to-end suite and the adapter boundary | T2.22 | Accepted |
+| [ADR-0075](0075-pos-adapter-contract.md) | The POS adapter contract | T3.01 | Proposed |

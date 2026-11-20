@@ -49,14 +49,20 @@ def _imports(path: Path) -> set[str]:
     return found
 
 
+# Provider-independent: the adapter contract and the registry may be used anywhere (T3.01).
+NEUTRAL = {"app.providers", "app.providers.base"}
+
+
 def test_ac_sal_07_provider_code_lives_only_in_the_adapter():
     users = {
         path.as_posix()
         for path in APP.rglob("*.py")
         if not path.as_posix().startswith("app/providers/")
-        and any(m == "app.providers" or m.startswith("app.providers.") for m in _imports(path))
+        and any(m.startswith("app.providers.") and m not in NEUTRAL for m in _imports(path))
     }
     assert users <= PROVIDER_SEAMS, users - PROVIDER_SEAMS
+    base = _imports(APP / "providers" / "base.py")
+    assert not any(m.startswith("app.providers.") for m in base), "the contract names no provider"
     named = [
         path.as_posix()
         for path in APP.rglob("*square*.py")
