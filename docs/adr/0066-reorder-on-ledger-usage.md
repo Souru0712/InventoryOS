@@ -1,6 +1,6 @@
 # ADR-0066: Reorder suggestions on ledger usage
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.15: ROR-FR-01..05, -07, -08, STD-FR-09, AC-ROR-01..05;
   DM-9 contract)
 - **Tasks:** T2.15; T2.16 (reports read the same usage)

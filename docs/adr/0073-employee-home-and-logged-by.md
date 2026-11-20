@@ -1,6 +1,6 @@
 # ADR-0073: Employee home and the "logged by" picker
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.21: WF-23, UX-02, UX-03, PD-14 → C-44, WST-FR-03, AC-WST-01)
 - **Tasks:** T2.21; R1.1 PIN switch (PD-14) replaces the picker on shared devices
 

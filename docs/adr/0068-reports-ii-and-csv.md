@@ -1,6 +1,6 @@
 # ADR-0068: Reports II and CSV of every report table
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.17: ANL-FR-06, -08, -12..14, STD-FR-08, AC-ANL-04, -06,
   -08)
 - **Tasks:** T2.17; T2.18 (the weekly summary reuses these reads)

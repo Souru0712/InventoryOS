@@ -1,6 +1,6 @@
 # ADR-0063: Daily sales entry
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.12: STD-FR-02, -05, -06, PD-37, PD-38, AC-SAL-02, -03,
   -05, -06)
 - **Tasks:** T2.12; T2.13 (file import records through the same sales model)

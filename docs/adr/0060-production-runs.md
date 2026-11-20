@@ -1,6 +1,6 @@
 # ADR-0060: Production runs
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.09: WF-11, PRD-FR-01..08, -12, -14, PD-15, AC-PRD-01..03,
   -05..07)
 - **Tasks:** T2.09; T2.11 (receiving beside production in reports)

@@ -5,6 +5,23 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — Stage 2 merged (PR #60)
+
+**Implemented**
+- PR #60 merged into `main` with a merge commit (`f9184b7`): T2.07 to T2.22 and the CI fixes
+  (audit rule in the onboarding checklist, Postgres time limit 45 minutes, tests that failed
+  across midnight UTC). T2.07–T2.22 are Completed; ADR-0058 to ADR-0074 are Accepted.
+
+**Verified**
+- CI on `5bd4f4b`: Tests (SQLite), Tests (PostgreSQL 16), Lint and types, Dependency audit,
+  Docker image and Standalone (no POS) all green.
+
+**Open issues**
+- "Standalone (no POS)" is not yet a required check (the `main` ruleset is the owner's).
+- Open items carried by the tasks stay as recorded in their entries below.
+
+---
+
 ## 2026-11-19 — T2.22 Standalone end-to-end suite (built on branch)
 
 **Implemented**

@@ -1,6 +1,6 @@
 # ADR-0072: Onboarding step 0 and the opening count
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Update, then merge"; PR #60, merge commit f9184b7)
 - **Decision ID:** none (implements T2.20-b: SAAS §5 step 0 and step 10, WF-01)
 - **Tasks:** T2.20-b; T3 connected steps 7–8 add to the same checklist
 
