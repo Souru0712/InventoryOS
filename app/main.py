@@ -26,6 +26,7 @@ from app.web import (
     billing,
     business_settings,
     catalog,
+    connections,
     costing,
     counts,
     daily_sales,
@@ -136,6 +137,7 @@ app.include_router(business_settings.router)
 app.include_router(item_import.router)
 app.include_router(onboarding.router)
 app.include_router(floor.router)
+app.include_router(connections.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

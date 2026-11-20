@@ -31,8 +31,9 @@ from app.transform.business_days import business_date
 
 D = Decimal
 APP = Path("app")
-# The seams where the product meets a POS: syncing, connecting, and receiving its webhooks.
-PROVIDER_SEAMS = {"app/orchestration/sync.py", "app/web/dashboard.py", "app/web/webhooks.py"}
+# The seams where the product meets a POS: syncing and receiving its webhooks. Connecting goes
+# through the adapter contract (T3.02).
+PROVIDER_SEAMS = {"app/orchestration/sync.py", "app/web/webhooks.py"}
 
 
 # --- AC-SAL-07: provider code stays in the adapter -----------------------------------------------

@@ -84,6 +84,7 @@ def _waiting(db: Session, org: OrgContext, kind: str, dedupe_key: str | None) ->
 def _handlers() -> dict[str, Handler]:
     # Imported here: these modules queue follow-up work through this one.
     from app.business_settings import alert_email_key
+    from app.connections import email_owners
     from app.consumption import consume_sale
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
@@ -138,9 +139,14 @@ def _handlers() -> dict[str, Handler]:
     def consume(db: Session, org: OrgContext, payload: dict) -> None:
         consume_sale(db, org, int(payload["sales_transaction_id"]), payload.get("reason"))
 
+    def revoked_email(db: Session, org: OrgContext, payload: dict) -> None:
+        # A repeat finds the exception already notified and sends nothing.
+        email_owners(db, org, int(payload["connection_id"]))
+
     return {
         "evaluate_exceptions": evaluate,
         "consume_sale": consume,
+        "connection_revoked_email": revoked_email,
         "verify_ledger": verify,
         "send_alert_digest": digest,
         "send_weekly_report": weekly,

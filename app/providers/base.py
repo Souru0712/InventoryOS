@@ -20,7 +20,15 @@ class Unsupported(NotImplementedError):
 
 
 class AdapterError(RuntimeError):
-    """The provider refused or failed a request; the message is safe to log."""
+    """The provider refused or failed a request; the message is safe to log.
+
+    `revoked` says the provider no longer honours the connection's authorization (revoked or
+    expired beyond refresh): the connection is dead until the merchant reconnects (SQ-01).
+    """
+
+    def __init__(self, message: str, *, revoked: bool = False):
+        super().__init__(message)
+        self.revoked = revoked
 
 
 @dataclass(frozen=True)

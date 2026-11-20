@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from app.main import app
-from app.providers.square.oauth import SCOPES
+from app.providers.square.oauth import scopes
 from tests.test_async_correctness import api_routes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,14 +25,9 @@ def test_none_of_the_shops_routes_remain():
     assert not [p for p in paths if p.startswith(("/shop", "/app/boxes"))]
 
 
-def test_square_asks_merchants_for_the_five_product_scopes_only():
-    assert SCOPES == [
-        "MERCHANT_PROFILE_READ",
-        "ITEMS_READ",
-        "INVENTORY_READ",
-        "INVENTORY_WRITE",
-        "ORDERS_READ",
-    ]
+def test_square_asks_merchants_for_the_product_scopes_only():
+    """No payment or order writes; inventory only with write-back (SQ-02, T3.02)."""
+    assert scopes() == ("MERCHANT_PROFILE_READ", "ITEMS_READ", "ORDERS_READ")
 
 
 def test_no_snack_box_code_remains():

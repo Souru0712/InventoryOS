@@ -95,7 +95,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.21 | Employee home and floor screens | P1 | M | M3 | T2.07, T2.09 | Completed (2026-11-19; /app/floor with alerts and role tasks, Employees land there, shared-device "logged by" picker; 375 px checked) |
 | T2.22 | Standalone end-to-end suite | P0 | M | M4 | T2.20 | Completed (2026-11-19; every R1 workflow through the pages with no POS; adapter boundary check; CI job added, required-check status is the owner's) |
 | T3.01 | Adapter interface and boundary check | P1 | M | M5 | T2.04 | Built on branch, not merged (PosAdapter protocol and normalized types, registry, Square as first adapter, boundary check extended) |
-| T3.02 | Square connection lifecycle | P1 | M | M5 | T3.01, T1.12 | Not started |
+| T3.02 | Square connection lifecycle | P1 | M | M5 | T3.01, T1.12 | Built on branch, not merged (connection service, one active connection per merchant, product-only scopes, disconnect, revocation detection; PA4 retired) |
 | T3.03 | Location mapping and catalog sync | P1 | M | M5 | T3.02 | Not started |
 | T3.04 | Product mapping and reprocessing | P1 | M | M5 | T3.03, T2.05 | Not started |
 | T3.05 | Order-line ingestion | P1 | L | M5 | T3.04, T1.20 | Not started |

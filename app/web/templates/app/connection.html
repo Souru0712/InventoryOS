@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+<p class="small"><a href="/app">← Inventory</a></p>
+<h1>{{ provider }} connection</h1>
+
+<div class="card">
+  {% if connection and connection.status == "active" %}
+    <p><strong>Connected.</strong> {{ provider }} account {{ connection.merchant_id }}.</p>
+  {% elif connection and connection.status == "revoked" %}
+    <p><strong>{{ provider }} stopped accepting the connection.</strong> New sales are not coming in. Reconnect to pick up where it left off; your history is kept.</p>
+  {% elif connection %}
+    <p><strong>Disconnected.</strong> Your history is kept; sales are entered by hand or imported until you reconnect.</p>
+  {% else %}
+    <p><strong>Not connected.</strong> Connect {{ provider }} to bring in your catalog and sales. InventoryOS asks only to read your business profile, catalog and orders.</p>
+  {% endif %}
+
+  {% if connection %}
+  <ul class="small">
+    <li>Last successful sync: {% if health.last_success_at %}{{ health.last_success_at.strftime("%d %b %Y %H:%M") }} UTC{% else %}none yet{% endif %}</li>
+    {% if health.error %}<li>Last attempt failed{% if health.failed_at %} at {{ health.failed_at.strftime("%d %b %H:%M") }} UTC{% endif %}: {{ health.error }}</li>{% endif %}
+  </ul>
+  {% endif %}
+
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    {% if connection and connection.status == "active" %}
+      <form method="post" action="/app/connection/disconnect">{{ csrf_field(request) }}
+        <button class="btn small secondary" type="submit">Disconnect {{ provider }}</button>
+      </form>
+    {% else %}
+      <a class="btn small" href="/connect/square">{% if connection %}Reconnect{% else %}Connect{% endif %} {{ provider }}</a>
+    {% endif %}
+  </div>
+  {% if connection and connection.status == "active" %}
+    <p class="small muted">Disconnecting revokes InventoryOS's access at {{ provider }} and stops new sales coming in. Everything recorded so far stays.</p>
+  {% endif %}
+</div>
+
+{% if locations %}
+<h2>{{ provider }} locations</h2>
+<ul>
+  {% for location in locations %}<li>{{ location.name }}{% if not location.is_active %} <span class="muted">(not tracked)</span>{% endif %}</li>{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

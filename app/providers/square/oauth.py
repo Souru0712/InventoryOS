@@ -1,4 +1,7 @@
-"""Square OAuth: authorize URL, code exchange, refresh, token encryption."""
+"""Square OAuth: authorize URL, code exchange, refresh, revocation (T3.02).
+
+Tokens are stored encrypted by `app/connections.py` through `app/crypto.py`.
+"""
 
 from __future__ import annotations
 
@@ -6,44 +9,24 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
-from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import get_settings
 
-SCOPES = [
-    "MERCHANT_PROFILE_READ",
-    "ITEMS_READ",
-    "INVENTORY_READ",
-    "INVENTORY_WRITE",
-    "ORDERS_READ",
-]
+# What the product reads: merchant profile, catalog and orders (SQ-02). Inventory only while
+# write-back is on (R1.1, C-34): Square's counts never change stock, so reading them serves
+# nothing else.
+BASE_SCOPES = ("MERCHANT_PROFILE_READ", "ITEMS_READ", "ORDERS_READ")
+WRITE_BACK_SCOPES = ("INVENTORY_READ", "INVENTORY_WRITE")
+
+
+def scopes() -> tuple[str, ...]:
+    return BASE_SCOPES + (WRITE_BACK_SCOPES if get_settings().square_write_back else ())
 
 
 class OAuthError(RuntimeError):
-    pass
-
-
-def _fernet() -> Fernet:
-    settings = get_settings()
-    if not settings.encryption_key:
-        raise OAuthError(
-            "ENCRYPTION_KEY is not set; generate one with "
-            'python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"'
-        )
-    return Fernet(settings.encryption_key.encode())
-
-
-def encrypt(value: str) -> str:
-    return _fernet().encrypt(value.encode()).decode()
-
-
-def decrypt(value: str) -> str:
-    try:
-        return _fernet().decrypt(value.encode()).decode()
-    except InvalidToken as exc:
-        raise OAuthError(
-            "stored token could not be decrypted; ENCRYPTION_KEY may have changed"
-        ) from exc
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 def authorize_url(state: str) -> str:
@@ -53,7 +36,7 @@ def authorize_url(state: str) -> str:
     query = urlencode(
         {
             "client_id": settings.square_app_id,
-            "scope": " ".join(SCOPES),
+            "scope": " ".join(scopes()),
             "session": "false",
             "state": state,
             "redirect_uri": f"{settings.app_base_url}/connect/square/callback",
@@ -76,7 +59,8 @@ def _token_request(payload: dict) -> dict:
     )
     if response.status_code >= 400:
         raise OAuthError(
-            f"square token exchange failed ({response.status_code}): {response.text[:500]}"
+            f"square token request failed ({response.status_code}): {response.text[:500]}",
+            response.status_code,
         )
     return response.json()
 
@@ -97,6 +81,28 @@ def refresh(refresh_token: str) -> dict:
     return _normalize_token(
         _token_request({"refresh_token": refresh_token, "grant_type": "refresh_token"})
     )
+
+
+def revoke(access_token: str) -> None:
+    """Revoke the merchant's authorization of this application at Square.
+
+    Square revokes every token the merchant granted the application, not only this one.
+    """
+    settings = get_settings()
+    response = httpx.post(
+        f"{settings.square_api_base}/oauth2/revoke",
+        json={"client_id": settings.square_app_id, "access_token": access_token},
+        headers={
+            "Authorization": f"Client {settings.square_app_secret}",
+            "Square-Version": settings.square_api_version,
+        },
+        timeout=30.0,
+    )
+    if response.status_code >= 400:
+        raise OAuthError(
+            f"square revoke failed ({response.status_code}): {response.text[:500]}",
+            response.status_code,
+        )
 
 
 def _normalize_token(data: dict) -> dict:

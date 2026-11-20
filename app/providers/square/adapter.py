@@ -15,7 +15,6 @@ from app.providers.base import (
     NormalizedEvent,
     NormalizedLocation,
     OrderPage,
-    Unsupported,
 )
 from app.providers.square import oauth
 from app.providers.square.client import SquareClient, SquareError
@@ -29,6 +28,16 @@ from app.providers.square.normalize import (
 from app.providers.square.webhooks import verify_signature
 
 SIGNATURE_HEADER = "x-square-hmacsha256-signature"
+# Square answers 401 once an authorization is revoked or a token has expired for good.
+UNAUTHORIZED = 401
+
+
+def _oauth_failed(exc: oauth.OAuthError) -> AdapterError:
+    return AdapterError(str(exc), revoked=exc.status == UNAUTHORIZED)
+
+
+def _api_failed(exc: SquareError) -> AdapterError:
+    return AdapterError(str(exc), revoked=exc.status == UNAUTHORIZED)
 
 
 def _credentials(token: dict) -> Credentials:
@@ -50,27 +59,28 @@ class SquareAdapter:
         try:
             return _credentials(oauth.exchange_code(code))
         except oauth.OAuthError as exc:
-            raise AdapterError(str(exc)) from exc
+            raise _oauth_failed(exc) from exc
 
     def refresh(self, credentials: Credentials) -> Credentials:
         if not credentials.refresh_token:
-            raise AdapterError("this connection has no refresh token")
+            raise AdapterError("this connection has no refresh token", revoked=True)
         try:
             return _credentials(oauth.refresh(credentials.refresh_token))
         except oauth.OAuthError as exc:
-            raise AdapterError(str(exc)) from exc
+            raise _oauth_failed(exc) from exc
 
     def revoke(self, credentials: Credentials) -> None:
-        raise Unsupported(
-            "revoking a Square connection arrives with the connection lifecycle (T3.02)"
-        )
+        try:
+            oauth.revoke(credentials.access_token)
+        except oauth.OAuthError as exc:
+            raise _oauth_failed(exc) from exc
 
     def list_locations(self, credentials: Credentials) -> list[NormalizedLocation]:
         with SquareClient(credentials.access_token) as client:
             try:
                 raw = client.locations()
             except SquareError as exc:
-                raise AdapterError(str(exc)) from exc
+                raise _api_failed(exc) from exc
         return [to_location(location) for location in raw if location.get("id")]
 
     def sync_catalog(self, credentials: Credentials, since: datetime | None = None) -> Catalog:
@@ -78,7 +88,7 @@ class SquareAdapter:
             try:
                 raw = client.catalog_objects(("ITEM", "MODIFIER_LIST", "CATEGORY"))
             except SquareError as exc:
-                raise AdapterError(str(exc)) from exc
+                raise _api_failed(exc) from exc
         return Catalog(to_products(raw), to_modifiers(raw))
 
     def fetch_orders(
@@ -94,7 +104,7 @@ class SquareAdapter:
             try:
                 raw = client.orders(location_ids, since, until)
             except SquareError as exc:
-                raise AdapterError(str(exc)) from exc
+                raise _api_failed(exc) from exc
         return OrderPage(tuple(to_order(order) for order in raw if order.get("id")))
 
     def parse_webhook(

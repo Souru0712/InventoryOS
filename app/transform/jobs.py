@@ -28,6 +28,8 @@ KINDS: Mapping[str, JobKind] = {
     "verify_ledger": JobKind("Checking the ledger", max_attempts=3),
     # What a sale used leaves stock (T2.05, WF-12); a failure leaves its lines pending.
     "consume_sale": JobKind("Taking a sale's ingredients out of stock"),
+    # A POS stopped accepting the connection: the Owners hear at once (T3.02, AC-POS-09).
+    "connection_revoked_email": JobKind("Telling the Owner the POS connection ended"),
 }
 JOB_KINDS = tuple(KINDS)
 

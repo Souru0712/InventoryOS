@@ -10,6 +10,7 @@ import pytest
 from app.config import get_settings
 from app.providers import adapter_for, providers
 from app.providers.base import (
+    AdapterError,
     Catalog,
     Credentials,
     NormalizedOrder,
@@ -156,8 +157,34 @@ def test_the_adapter_returns_normalized_types_from_the_client(monkeypatch):
     assert isinstance(page, OrderPage) and isinstance(page.orders[0], NormalizedOrder)
     assert isinstance(adapter.sync_catalog(CREDENTIALS), Catalog)
     assert adapter.list_locations(CREDENTIALS)[0].external_location_id == "L1"
-    with pytest.raises(Unsupported):
-        adapter.revoke(CREDENTIALS)
+
+
+def test_square_answering_401_means_the_authorization_is_gone(monkeypatch):
+    """A revoked or dead token is told apart from a passing failure (SQ-01, T3.02)."""
+    from app.providers.square import oauth
+
+    revoked: list[str] = []
+    monkeypatch.setattr(oauth, "revoke", revoked.append)
+    SquareAdapter().revoke(CREDENTIALS)
+    assert revoked == ["token"]
+
+    def refused(status):
+        def call(*_args):
+            raise oauth.OAuthError("refused", status)
+
+        return call
+
+    monkeypatch.setattr(oauth, "refresh", refused(401))
+    with pytest.raises(AdapterError) as gone:
+        SquareAdapter().refresh(CREDENTIALS)
+    assert gone.value.revoked
+    monkeypatch.setattr(oauth, "refresh", refused(503))
+    with pytest.raises(AdapterError) as passing:
+        SquareAdapter().refresh(CREDENTIALS)
+    assert not passing.value.revoked
+    with pytest.raises(AdapterError) as no_refresh:
+        SquareAdapter().refresh(Credentials("token", None, None, "merchant-1"))
+    assert no_refresh.value.revoked
 
 
 def test_ac_pos_12_another_adapter_needs_no_square_type():

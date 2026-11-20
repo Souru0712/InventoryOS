@@ -109,6 +109,10 @@ def positive(table: str, column: str) -> CheckConstraint:
     return CheckConstraint(f"CAST({column} AS NUMERIC) > 0", name=f"ck_{table}_{column}_positive")
 
 
+# connected → revoked (the provider ended it) or disconnected (the business did) (DOMAIN_MODEL §5).
+CONNECTION_STATUSES = ("active", "revoked", "disconnected")
+
+
 def one_of(table: str, column: str, values: tuple[str, ...]) -> CheckConstraint:
     allowed = ", ".join(f"'{value}'" for value in values)
     return CheckConstraint(f"{column} IN ({allowed})", name=f"ck_{table}_{column}")
@@ -415,14 +419,36 @@ class UserSession(Base):
 
 
 class ProviderConnection(Base):
+    """A business's authorization to read one merchant's POS (T3.02, ADR-0076); written only by
+    `app/connections.py`. Disconnected and revoked rows stay as history; reconnecting reuses
+    the business's row for that merchant."""
+
     __tablename__ = "provider_connections"
-    __table_args__ = (UniqueConstraint("tenant_id", "provider", "merchant_id"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", "merchant_id"),
+        one_of("provider_connections", "status", CONNECTION_STATUSES),
+        CheckConstraint(
+            "status <> 'active' OR access_token_enc IS NOT NULL",
+            name="ck_provider_connections_token",
+        ),
+        # One business per merchant across all businesses (DR-22, AC-POS-11): webhooks name the
+        # merchant, and Square's revocation ends every token the merchant granted.
+        Index(
+            "uq_provider_connections_active",
+            "provider",
+            "merchant_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="square")
     merchant_id: Mapped[str] = mapped_column(String(120))
-    access_token_enc: Mapped[str] = mapped_column(Text)
+    # None once disconnected: a connection that has let go of the merchant holds no token.
+    access_token_enc: Mapped[str | None] = mapped_column(Text)
     refresh_token_enc: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     status: Mapped[str] = mapped_column(String(32), default="active")

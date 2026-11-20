@@ -440,4 +440,6 @@ def _subjects(
             found[row.id] = (f"/app/products/{product_id}", name)
         elif kind == "modifier" and int(subject) in modifiers:
             found[row.id] = ("/app/products", modifiers[int(subject)])
+        elif kind == "provider_connection":
+            found[row.id] = ("/app/connection", "POS connection")
     return found

@@ -25,15 +25,9 @@ def test_PA2_starter_plan_gates_core_features(db, tenant):
 # PA3 (one person cannot belong to two businesses) retired in T1.05: memberships; see
 # tests/test_memberships.py::test_one_person_can_belong_to_two_businesses_but_only_once_to_each.
 
-def test_PA4_one_square_merchant_can_attach_to_two_tenants(db, tenant):
-    """S7: nothing stops two businesses connecting the same merchant; webhooks then route to .first()."""
-    other = Tenant(name="Second Shop")
-    db.add(other)
-    db.flush()
-    for t in (tenant.id, other.id):
-        db.add(ProviderConnection(tenant_id=t, provider="square", merchant_id="MERCHANT-1", access_token_enc="x"))
-    db.commit()
-    assert db.query(ProviderConnection).filter(ProviderConnection.merchant_id == "MERCHANT-1").count() == 2
+# PA4 (one Square merchant can attach to two businesses, S7) retired in T3.02: a partial unique
+# index allows one active connection per merchant; see
+# tests/test_connections.py::test_pa4_retired_a_merchant_is_actively_connected_to_one_business_at_most.
 
 
 # PA5 (stored datetimes come back naive, DB3) retired in T1.01: every instant is timestamptz and

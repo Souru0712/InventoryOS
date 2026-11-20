@@ -120,10 +120,13 @@ implementation sessions; the detail lives in `docs/`.
   `app/throttle.py` (`locked_for`, `hit`, `clear`; ADR-0032); a refusal reveals nothing more
   than a success would.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
-  Only the POS seams import it (`app/orchestration/sync.py`, the connect routes in
-  `app/web/dashboard.py`, `app/web/webhooks.py`); `tests/test_standalone.py` runs every R1
-  workflow with no POS and enforces both (ADR-0074). New POS work goes through the adapter
+  Only the POS seams import it (`app/orchestration/sync.py`, `app/web/webhooks.py`);
+  `tests/test_standalone.py` runs every R1 workflow with no POS and enforces both (ADR-0074). New POS work goes through the adapter
   contract (`app/providers/base.py`, `adapter_for(code)`, ADR-0075) and its normalized types.
+- POS connections are written only by `app/connections.py` (ADR-0076): one active connection
+  per merchant across businesses, tokens through `credentials()` (refreshed, encrypted), a
+  provider's 401 or revocation webhook → `mark_revoked()` (critical `sync_failure`, Owners
+  emailed); `disconnect()` revokes at the provider and keeps history.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,

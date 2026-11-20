@@ -5,6 +5,39 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T3.02 Square connection lifecycle (built on branch)
+
+**Implemented**
+- `app/connections.py`, the only writer of `provider_connections`: connect (refuses a merchant
+  another business holds), refresh before expiry, disconnect (revokes at Square, clears tokens,
+  keeps history), revocation (401, expired with nothing to refresh, or Square's
+  `oauth.authorization.revoked` webhook): status `revoked`, a critical `sync_failure`, and a
+  `connection_revoked_email` job to the Owners.
+- DM-14 migration: status CHECK, token CHECK, a partial unique index on active (provider,
+  merchant); refuses to run while two businesses share a merchant.
+- Scopes cut to merchant profile, items and orders; inventory only with write-back. Without it,
+  the legacy sync no longer reads Square's counts.
+- `/app/connection`: status, Square locations, last sync, last error, reconnect, disconnect.
+  The connect routes go through the adapter; the dashboard no longer imports Square code.
+
+**Verified**
+- `tests/test_connections.py` (13): the index and token CHECK, AC-POS-11 through the service
+  and the screens, AC-POS-01 scopes and encrypted tokens, disconnect and reconnect, a disconnect
+  Square cannot confirm, refresh, AC-POS-09 (marked, critical, Owner emailed once, cleared on
+  reconnect), 401 from the sync, the revocation webhook, the single-writer rule. Related suites,
+  ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0076 (Proposed). One active connection per merchant across businesses, stricter than
+  DR-22's merchant + location, because Square's revocation ends every token the merchant
+  granted.
+
+**Open issues**
+- Merchant business name on the connection page (the contract does not read the profile).
+- Existing connections keep their old scopes until they reconnect.
+
+---
+
 ## 2026-11-19 — T3.01 Adapter interface and boundary check (built on branch)
 
 **Implemented**

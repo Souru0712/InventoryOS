@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.config import get_settings
+from app.connections import active_connection, credentials, mark_revoked
 from app.jobs import enqueue
 from app.load.upsert import (
     apply_provider_counts,
@@ -36,6 +37,7 @@ from app.orchestration.alerts import evaluate_and_store
 from app.orchestration.subscriptions import apply_location_limit
 from app.providers.square.client import (
     SquareClient,
+    SquareError,
     adjustment_change,
     physical_count_change,
 )
@@ -45,17 +47,13 @@ from app.providers.square.normalize import (
     normalize_counts,
     normalize_locations,
 )
-from app.providers.square.oauth import decrypt, encrypt, refresh
 from app.units import from_base
 
 log = logging.getLogger(__name__)
 
 SALES_LOOKBACK_DAYS = 60
-REFRESH_MARGIN = timedelta(days=7)
-
-
-class NotConnected(RuntimeError):
-    pass
+# Square answers 401 once the merchant revoked the authorization (SQ-01).
+UNAUTHORIZED = 401
 
 
 class WriteBackDisabled(RuntimeError):
@@ -84,34 +82,15 @@ def _square_locations(
     }
 
 
-def active_connection(db: Session, org: OrgContext, provider: str = "square") -> ProviderConnection:
-    connection = db.scalars(
-        select_scoped(org, ProviderConnection).where(
-            ProviderConnection.provider == provider,
-            ProviderConnection.status == "active",
-        )
-    ).first()
-    if connection is None:
-        raise NotConnected(f"tenant {org.tenant_id} has no active {provider} connection")
-    return connection
+def _access_token(db: Session, org: OrgContext, connection: ProviderConnection) -> str:
+    return credentials(db, org, connection).access_token
 
 
-def _access_token(db: Session, connection: ProviderConnection) -> str:
-    expires_at = connection.expires_at
-    if expires_at and expires_at - REFRESH_MARGIN < datetime.now(UTC):
-        if not connection.refresh_token_enc:
-            raise NotConnected(
-                f"square token for tenant {connection.tenant_id} expires at {expires_at} "
-                "and no refresh token is stored; the merchant must reconnect"
-            )
-        log.info("refreshing square token for tenant %s", connection.tenant_id)
-        token = refresh(decrypt(connection.refresh_token_enc))
-        connection.access_token_enc = encrypt(token["access_token"])
-        if token["refresh_token"]:
-            connection.refresh_token_enc = encrypt(token["refresh_token"])
-        connection.expires_at = token["expires_at"]
-        db.flush()
-    return decrypt(connection.access_token_enc)
+def _note_revocation(
+    db: Session, org: OrgContext, connection: ProviderConnection, exc: Exception
+) -> None:
+    if isinstance(exc, SquareError) and exc.status == UNAUTHORIZED:
+        mark_revoked(db, org, connection)
 
 
 def _pull_catalog(db: Session, org: OrgContext, client: SquareClient) -> tuple[list[dict], dict]:
@@ -137,10 +116,11 @@ def sync_catalog(db: Session, org: OrgContext) -> dict:
     db.add(run)
     db.flush()
     try:
-        token = _access_token(db, connection)
+        token = _access_token(db, org, connection)
         with SquareClient(token) as client:
             _rows, stats = _pull_catalog(db, org, client)
     except Exception as exc:
+        _note_revocation(db, org, connection, exc)
         run.status = SyncStatus.FAILED
         run.finished_at = datetime.now(UTC)
         run.error = f"{type(exc).__name__}: {exc}"
@@ -169,7 +149,7 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
 
     stats: dict[str, int] = {}
     try:
-        token = _access_token(db, connection)
+        token = _access_token(db, org, connection)
         with SquareClient(token) as client:
             catalog_rows, catalog_stats = _pull_catalog(db, org, client)
             stats.update(catalog_stats)
@@ -182,7 +162,9 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
                 tracked_ids = [
                     row["provider_item_id"] for row in catalog_rows if row["tracks_inventory"]
                 ]
-                if tracked_ids:
+                # Square's counts are read only while write-back is on: they change no stock
+                # (C-34), and the scope to read them is not asked for otherwise (SQ-02).
+                if tracked_ids and get_settings().square_write_back:
                     stats["counts"] = apply_provider_counts(
                         db,
                         org.tenant_id,
@@ -209,6 +191,7 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
         run.stats_json = json.dumps(stats, default=str)
         db.flush()
     except Exception as exc:
+        _note_revocation(db, org, connection, exc)
         run.status = SyncStatus.FAILED
         run.finished_at = datetime.now(UTC)
         run.error = f"{type(exc).__name__}: {exc}"
@@ -262,7 +245,7 @@ def push_counts_to_square(db: Session, org: OrgContext, stock_item_ids: list[int
         if item.provider_variation_id and item.location_id in locations
     ]
 
-    token = _access_token(db, connection)
+    token = _access_token(db, org, connection)
     with SquareClient(token) as client:
         client.apply_inventory_changes(changes, str(uuid.uuid4()))
 
@@ -321,7 +304,7 @@ def push_adjustments_to_square(
         return 0
 
     connection = active_connection(db, org)
-    token = _access_token(db, connection)
+    token = _access_token(db, org, connection)
     with SquareClient(token) as client:
         # A repeated push of the same receipt is dropped by Square rather than added twice.
         client.apply_inventory_changes(

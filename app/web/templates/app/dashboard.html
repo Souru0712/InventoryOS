@@ -52,6 +52,7 @@
       {% else %}
         Square connected. Not synced yet.
       {% endif %}
+      {% if can(request, "pos.manage") %}<a class="small" href="/app/connection">Manage the connection</a>{% endif %}
     </p>
     {% if sync.error %}
       <p class="small" style="color:var(--danger, #b3261e); margin:-6px 0 0;">

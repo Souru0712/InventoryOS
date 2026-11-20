@@ -8,6 +8,8 @@ import hmac
 
 INVENTORY_COUNT_UPDATED = "inventory.count.updated"
 CATALOG_VERSION_UPDATED = "catalog.version.updated"
+# The merchant removed the application in Square (SQ-01): the connection is over.
+OAUTH_AUTHORIZATION_REVOKED = "oauth.authorization.revoked"
 
 
 def signature_for(notification_url: str, body: bytes, signature_key: str) -> str:

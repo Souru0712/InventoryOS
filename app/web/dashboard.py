@@ -18,6 +18,7 @@ from app.audit import changes, record_audit
 from app.batches import NotFound as BatchNotFound
 from app.batches import batch_view, count_batch, date_stock, undate_batch
 from app.config import get_settings
+from app.connections import MerchantTaken, NotConnected, connect, sync_health
 from app.costs import value_stock
 from app.db import get_db
 from app.entitlements import require
@@ -28,7 +29,6 @@ from app.models import (
     ProviderConnection,
     StockItem,
     SyncRun,
-    SyncStatus,
     Tenant,
     User,
 )
@@ -41,7 +41,7 @@ from app.orchestration.dashboard import (
     sales_without_recipe,
 )
 from app.orchestration.reporting import weekly_report
-from app.orchestration.sync import NotConnected, run_sync
+from app.orchestration.sync import run_sync
 from app.orchestration.views import (
     expiry_coverage,
     expiry_positions,
@@ -49,7 +49,8 @@ from app.orchestration.views import (
     tenant_currency,
     velocity_map,
 )
-from app.providers.square import oauth
+from app.providers import adapter_for
+from app.providers.base import AdapterError
 from app.security import (
     SESSION_STATE_KEY,
     location_filter,
@@ -184,7 +185,7 @@ def dashboard(
     last_run = db.scalars(
         select_scoped(org, SyncRun).order_by(SyncRun.started_at.desc()).limit(1)
     ).first()
-    sync = _sync_status(db, org, connection, last_run)
+    sync = sync_health(db, org, connection, last_run)
 
     by_dimension: dict[str, dict] = {}
     for row in rows:
@@ -240,28 +241,6 @@ def dashboard(
             **context,
         },
     )
-
-
-def _sync_status(
-    db: Session, org: OrgContext, connection: ProviderConnection | None, last_run: SyncRun | None
-) -> dict:
-    """What the merchant needs to know: is it connected, when did it last work, what broke.
-
-    A failure is only worth showing while it is still the latest word; a later success clears it.
-    """
-    last_success = db.scalars(
-        select_scoped(org, SyncRun)
-        .where(SyncRun.status == SyncStatus.SUCCESS)
-        .order_by(SyncRun.started_at.desc())
-        .limit(1)
-    ).first()
-    failed = last_run if last_run is not None and last_run.status is SyncStatus.FAILED else None
-    return {
-        "connected": connection is not None,
-        "last_success_at": last_success.finished_at if last_success else None,
-        "error": (failed.error or "")[:200] if failed else None,
-        "failed_at": failed.finished_at if failed else None,
-    }
 
 
 @router.get("/app/expiring", response_class=HTMLResponse)
@@ -596,7 +575,7 @@ def connect_square(
 ):
     state = new_state()
     request.session[SESSION_STATE_KEY] = state
-    return RedirectResponse(oauth.authorize_url(state), status_code=303)
+    return RedirectResponse(adapter_for("square").authorize_url(state), status_code=303)
 
 
 @router.get("/connect/square/callback")
@@ -616,35 +595,15 @@ def square_callback(
     if not code or not state or state != expected:
         raise HTTPException(status_code=400, detail="the connection link is invalid or expired")
 
-    token = oauth.exchange_code(code)
-    existing = db.scalars(
-        select_scoped(org, ProviderConnection).where(
-            ProviderConnection.provider == "square",
-            ProviderConnection.merchant_id == token["merchant_id"],
-        )
-    ).first()
-    connection = existing or ProviderConnection(
-        tenant_id=org.tenant_id, provider="square", merchant_id=token["merchant_id"]
-    )
-    connection.access_token_enc = oauth.encrypt(token["access_token"])
-    connection.refresh_token_enc = (
-        oauth.encrypt(token["refresh_token"]) if token["refresh_token"] else None
-    )
-    connection.expires_at = token["expires_at"]
-    was_active = existing is not None and existing.status == "active"
-    connection.status = "active"
-    db.add(connection)
-    db.flush()
-    record_audit(
-        db,
-        org,
-        "connection.connected",
-        "Reconnected Square" if was_active else "Connected Square",
-        subject_type="provider_connection",
-        subject_id=connection.id,
-        after={"provider": "square", "merchant": token["merchant_id"]},
-        ip=client_ip(request),
-    )
+    try:
+        credentials = adapter_for("square").exchange_code(code)
+        connect(db, org, "square", credentials, ip=client_ip(request))
+    except MerchantTaken:
+        # Says no more than that: which business holds the merchant is not this one's to know.
+        return RedirectResponse("/app/connection?error=merchant_taken", status_code=303)
+    except AdapterError:
+        log.exception("square code exchange failed for tenant %s", org.tenant_id)
+        return RedirectResponse("/app/connection?error=exchange_failed", status_code=303)
     db.commit()
 
     try:

@@ -53,7 +53,7 @@ def memberships_of(db: Session, user_id: int) -> list[tuple[Membership, str]]:
 def connection_for_merchant(
     db: Session, provider: str, merchant_id: str
 ) -> ProviderConnection | None:
-    """The active connection a provider's webhook names by merchant."""
+    """The active connection a provider's webhook names by merchant: one at most (ADR-0076)."""
     return db.scalars(
         select(ProviderConnection).where(
             ProviderConnection.provider == provider,

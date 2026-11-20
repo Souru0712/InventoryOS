@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 
 from app.access import OrgContext
+from app.config import get_settings
 from app.load.upsert import sync_catalog_presence
 from app.models import (
     InventoryCount,
@@ -98,7 +99,7 @@ def connected(db, tenant, location, monkeypatch):
     db.commit()
     fake = FakeSquareCatalog([catalog_object("VAR-COKE", "Coca-Cola")])
     monkeypatch.setattr(sync, "SquareClient", fake)
-    monkeypatch.setattr(sync, "_access_token", lambda _db, _connection: "token")
+    monkeypatch.setattr(sync, "_access_token", lambda *_: "token")
     return fake
 
 
@@ -177,8 +178,21 @@ def test_stock_the_operator_defined_is_not_touched_by_a_catalog_change(db, tenan
     assert flour.is_active is True
 
 
-def test_the_hourly_sync_reads_square_counts_but_never_applies_them(db, tenant, connected):
+def test_without_write_back_the_sync_never_reads_square_counts(db, tenant, connected):
+    """The scope to read them is not asked for, and they would change nothing (SQ-02, C-34)."""
+    sync.sync_catalog(db, OrgContext.system(tenant.id))
+    db.commit()
+    connected.counts = {"VAR-COKE": 20}
+    stats = sync.run_sync(db, OrgContext.system(tenant.id))
+    assert "counts" not in stats
+    assert stock_for(db, "VAR-COKE").last_synced_at is None
+
+
+def test_the_hourly_sync_reads_square_counts_but_never_applies_them(
+    db, tenant, connected, monkeypatch
+):
     """Square's count is noted, not applied: the ledger owns the quantity (C-34, T1.18)."""
+    monkeypatch.setattr(get_settings(), "square_write_back", True, raising=False)
     sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()
     item = stock_for(db, "VAR-COKE")

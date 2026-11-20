@@ -12,14 +12,16 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, select_scoped
 from app.access.system import connection_for_merchant
 from app.config import get_settings
+from app.connections import NotConnected, revoked_by_provider
 from app.db import get_db
 from app.load.upsert import apply_provider_counts
 from app.models import Location, StockItem, SyncRun, TrackMode
-from app.orchestration.sync import NotConnected, sync_catalog
+from app.orchestration.sync import sync_catalog
 from app.providers.square.normalize import normalize_counts
 from app.providers.square.webhooks import (
     CATALOG_VERSION_UPDATED,
     INVENTORY_COUNT_UPDATED,
+    OAUTH_AUTHORIZATION_REVOKED,
     inventory_counts,
     merchant_id,
     verify_signature,
@@ -112,6 +114,14 @@ def square_webhook(
         event = json.loads(body)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="body is not JSON") from exc
+
+    if event.get("type") == OAUTH_AUTHORIZATION_REVOKED:
+        # Signed above, so it is Square speaking: the connection is marked revoked and the
+        # Owners hear of it (AC-POS-09).
+        tenant_id = revoked_by_provider(db, "square", merchant_id(event))
+        db.commit()
+        log.info("square revoked the authorization of merchant %s", merchant_id(event))
+        return {"revoked": tenant_id is not None}
 
     if event.get("type") == CATALOG_VERSION_UPDATED:
         tenant_id = _tenant_for(db, merchant_id(event))

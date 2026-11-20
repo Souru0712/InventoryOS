@@ -188,7 +188,7 @@ def test_connecting_square_is_recorded(corner, monkeypatch):
         "refresh_token": "r",
         "expires_at": datetime.now(UTC) + timedelta(days=30),
     }
-    monkeypatch.setattr("app.web.dashboard.oauth.exchange_code", lambda code: token)
+    monkeypatch.setattr("app.providers.square.oauth.exchange_code", lambda code: token)
     monkeypatch.setattr("app.web.dashboard.run_sync", lambda db, org: None)
     start = owner.get("/connect/square", follow_redirects=False)
     state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
@@ -240,7 +240,7 @@ def test_settings_role_and_connection_changes_appear_in_the_history(corner, monk
         "refresh_token": None,
         "expires_at": datetime.now(UTC) + timedelta(days=30),
     }
-    monkeypatch.setattr("app.web.dashboard.oauth.exchange_code", lambda code: token)
+    monkeypatch.setattr("app.providers.square.oauth.exchange_code", lambda code: token)
     monkeypatch.setattr("app.web.dashboard.run_sync", lambda db, org: None)
     start = owner.get("/connect/square", follow_redirects=False)
     state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]

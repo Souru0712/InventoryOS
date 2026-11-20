@@ -102,7 +102,7 @@ def square(db, tenant, location, monkeypatch):
     db.commit()
     fake = FakeSquare({("VAR-COKE", location.provider_location_id): Decimal("24")})
     monkeypatch.setattr(sync, "SquareClient", fake)
-    monkeypatch.setattr(sync, "_access_token", lambda _db, _connection: "token")
+    monkeypatch.setattr(sync, "_access_token", lambda *_: "token")
     return fake, item
 
 
