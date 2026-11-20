@@ -24,24 +24,36 @@ from app.web import (
     audit,
     auth,
     billing,
+    business_settings,
     catalog,
     costing,
     counts,
+    daily_sales,
     dashboard,
+    deliveries,
     exceptions,
+    floor,
     health,
+    item_import,
     locations,
     marketing,
     mfa,
+    onboarding,
     ops,
+    production,
     products,
     promotions,
     receiving,
     recipes,
+    reports,
+    sales_import,
     scanning,
     stock,
+    suppliers,
     team,
+    usage,
     valuation,
+    waste,
     webhooks,
 )
 from app.web import (
@@ -112,6 +124,18 @@ app.include_router(catalog.router)
 app.include_router(products.router)
 app.include_router(recipes.router)
 app.include_router(costing.router)
+app.include_router(waste.router)
+app.include_router(production.router)
+app.include_router(suppliers.router)
+app.include_router(deliveries.router)
+app.include_router(daily_sales.router)
+app.include_router(sales_import.router)
+app.include_router(usage.router)
+app.include_router(reports.router)
+app.include_router(business_settings.router)
+app.include_router(item_import.router)
+app.include_router(onboarding.router)
+app.include_router(floor.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

@@ -243,7 +243,7 @@ def test_the_menu_shows_what_the_role_may_open(client_factory):
     sign_in, _ids, _people = client_factory
     employee = sign_in("employee").get("/app").text
     owner = sign_in("owner").get("/app").text
-    for link in ('href="/app/promotions"', 'href="/app/report"'):
+    for link in ('href="/app/promotions"', 'href="/app/reports"'):
         assert link in owner and link not in employee
     assert 'href="/app/receiving"' in employee  # PD-19
 

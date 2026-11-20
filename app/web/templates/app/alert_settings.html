@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/settings">← Your settings</a></p>
+<h1>Alert settings</h1>
+<p class="small muted">The next check of stock and dates uses these. Every change is kept in the business's history.</p>
+
+<form method="post" action="/app/settings/alerts" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field"><label for="expiry_alert_days">Warn this many days before a date</label><input id="expiry_alert_days" name="expiry_alert_days" type="number" min="0" max="60" value="{{ tenant.expiry_alert_days }}"></div>
+    <div class="field"><label for="digest_hour">Send the alert email</label>
+      <select id="digest_hour" name="digest_hour"><option value=""{% if settings.digest_hour is none %} selected{% endif %}>As soon as something is found</option>{% for h in range(24) %}<option value="{{ h }}"{% if settings.digest_hour == h %} selected{% endif %}>Once a day at {{ "%02d:00"|format(h) }}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="count_review">Review a count difference worth ($)</label><input id="count_review" name="count_review" inputmode="decimal" value="{{ '%.2f'|format(settings.count_review_cents / 100) }}"></div>
+    <div class="field"><label for="count_review_percent">or this share of what was expected (%)</label><input id="count_review_percent" name="count_review_percent" type="number" min="1" max="100" value="{{ settings.count_review_percent }}"></div>
+    <div class="field"><label for="adjustment_review">Review an adjustment worth ($)</label><input id="adjustment_review" name="adjustment_review" inputmode="decimal" value="{{ '%.2f'|format(settings.adjustment_review_cents / 100) }}"></div>
+  </div>
+  <button class="btn" type="submit">Save</button>
+</form>
+
+<h2>Who receives what</h2>
+<p class="small muted">Each person chooses their own emails in their settings. The weekly summary carries money, so it goes only to Owners and to roles that see costs.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Person</th><th>Role</th><th>Inventory alerts</th><th>Expiration alerts</th><th>Weekly summary</th></tr></thead>
+  <tbody>{% for p in people %}<tr><td>{{ p.email }}</td><td class="small">{{ p.role|replace("_", " ")|capitalize }}</td><td class="small">{{ "Yes" if p.stock else "No" }}</td><td class="small">{{ "Yes" if p.expiry else "No" }}</td><td class="small">{{ "Yes" if p.weekly else "No" }}</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/deliveries">← Deliveries</a></p>
+<h1>Delivery {{ receiving.id }}</h1>
+<p class="muted">{% if supplier %}From {{ supplier.name }}. {% endif %}{{ "Posted " ~ receiving.posted_at.strftime("%d %b %Y %H:%M") ~ " UTC." if receiving.status == "posted" else "Draft: nothing is in stock until it is posted." }}</p>
+{% set money = can(request, "inventory.view_costs") %}
+
+{% if receiving.lines %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>Invoiced</th><th>Arrived</th><th>Accepted</th>{% if money %}<th>Price</th>{% endif %}<th>Notes</th><th></th></tr></thead>
+  <tbody>
+  {% for line in receiving.lines %}
+    {% set item = names.get(line.inventory_item_id) %}
+    <tr{% if line.status == "corrected" %} class="muted"{% endif %}>
+      <td>{{ item.name if item else "" }}{% if line.status == "corrected" %} <span class="small">corrected</span>{% endif %}{% if line.corrects_line_id %} <span class="small muted">correction: {{ line.correction_reason }}</span>{% endif %}</td>
+      <td class="small">{{ line.invoiced_qty|num if line.invoiced_qty is not none else "—" }}</td>
+      <td class="small">{{ line.arrived_qty|num }}</td>
+      <td>{{ line.accepted_qty|num }} {{ line.unit }}</td>
+      {% if money %}<td class="small">{% if line.unit_price_cents is not none %}{{ line.unit_price_cents|money(currency) }}{% endif %}{% if line.price_flag %} <span class="badge warn">price changed</span>{% endif %}</td>{% endif %}
+      <td class="small">{{ issues.get(line.id, [])|join(", ") }}{% if line.reject_reason %} ({{ line.reject_reason }}){% endif %}{% if line.expires_on %} · dated {{ line.expires_on.strftime("%d %b") }}{% endif %}</td>
+      <td>
+        {% if line.status == "open" %}
+        <form method="post" action="/app/deliveries/lines/{{ line.id }}/remove">{{ csrf_field(request) }}<button class="btn small secondary" type="submit">Remove</button></form>
+        {% elif line.status == "posted" and can(request, "receiving.correct") %}
+        <details><summary class="small">Correct</summary>
+        <form method="post" action="/app/deliveries/lines/{{ line.id }}/correct">{{ csrf_field(request) }}
+          <input name="accepted" placeholder="Right quantity" aria-label="Right quantity" inputmode="decimal" required>
+          <input name="reason" placeholder="Why" aria-label="Why" required maxlength="300">
+          <button class="btn small secondary" type="submit">Correct</button>
+        </form>
+        </details>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if receiving.status == "draft" %}
+<h2>Add what arrived</h2>
+<form method="post" action="/app/deliveries/{{ receiving.id }}/lines" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field"><label for="inventory_item_id">Item</label><select id="inventory_item_id" name="inventory_item_id" required>{% for i in items %}<option value="{{ i.id }}">{{ i.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="unit">Unit</label><input id="unit" name="unit" placeholder="the item's unit"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="invoiced">Invoiced</label><input id="invoiced" name="invoiced" inputmode="decimal"></div>
+    <div class="field"><label for="arrived">Arrived</label><input id="arrived" name="arrived" inputmode="decimal" placeholder="as invoiced"></div>
+    <div class="field"><label for="accepted">Accepted</label><input id="accepted" name="accepted" inputmode="decimal" placeholder="as arrived"></div>
+  </div>
+  <div class="row">
+    {% if money %}<div class="field"><label for="unit_price">Price per unit</label><input id="unit_price" name="unit_price" inputmode="decimal"></div>{% endif %}
+    <div class="field"><label for="expires_on">Best before</label><input id="expires_on" name="expires_on" type="date"></div>
+    <div class="field"><label for="lot_code">Lot</label><input id="lot_code" name="lot_code" maxlength="80"></div>
+  </div>
+  <div class="field"><label for="reject_reason">Why not all accepted (if so)</label><input id="reject_reason" name="reject_reason" maxlength="200"></div>
+  <button class="btn secondary" type="submit">Add the line</button>
+</form>
+{% if receiving.lines and can(request, "receiving.post") %}
+<form method="post" action="/app/deliveries/{{ receiving.id }}/post" style="margin-top:12px;">{{ csrf_field(request) }}
+  <button class="btn" type="submit">Post the delivery</button>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

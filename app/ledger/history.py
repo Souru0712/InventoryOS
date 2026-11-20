@@ -152,6 +152,67 @@ def snapshot_cost_at(
 
 
 @dataclass(frozen=True)
+class PeriodMovement:
+    """One movement in a period, with the record it came from: what reports read (DR-33)."""
+
+    source_type: str
+    source_id: str
+    location_id: int
+    inventory_item_id: int
+    movement_type: str
+    qty_base: Decimal
+    unit_cost: Decimal  # cents per base unit, as posted
+    occurred_at: datetime | None = None
+    actor_user_id: int | None = None
+    reason: str | None = None
+
+
+def movements_in(
+    db: Session,
+    org: OrgContext,
+    windows: Mapping[int, tuple[datetime, datetime]],
+    *,
+    source_type: str | None = None,
+    movement_type: str | None = None,
+) -> list[PeriodMovement]:
+    """The movements at each location within its own window (first and last instant, both
+    included), from one kind of record or of one type. A reversal carries the record of what it
+    undid, so a voided record nets to nothing."""
+    found: list[PeriodMovement] = []
+    for location_id, (start, end) in windows.items():
+        query = (
+            select_scoped(org, InventoryMovement)
+            .add_columns(InventoryTransaction)
+            .join(InventoryTransaction, InventoryTransaction.id == InventoryMovement.transaction_id)
+            .where(
+                InventoryMovement.location_id == location_id,
+                InventoryMovement.occurred_at >= start,
+                InventoryMovement.occurred_at <= end,
+            )
+        )
+        if source_type is not None:
+            query = query.where(InventoryTransaction.source_type == source_type)
+        if movement_type is not None:
+            query = query.where(InventoryMovement.movement_type == movement_type)
+        for movement, transaction in db.execute(query.order_by(InventoryMovement.id)):
+            found.append(
+                PeriodMovement(
+                    transaction.source_type,
+                    transaction.source_id,
+                    movement.location_id,
+                    movement.inventory_item_id,
+                    movement.movement_type,
+                    Decimal(movement.qty_base),
+                    Decimal(movement.unit_cost_snapshot),
+                    movement.occurred_at,
+                    transaction.actor_user_id,
+                    movement.reason or transaction.reason,
+                )
+            )
+    return found
+
+
+@dataclass(frozen=True)
 class MovementTotal:
     """What moved of one kind over a period: how many movements and their value as posted."""
 
@@ -208,3 +269,94 @@ def movement_totals(
             before.value_cents + movement_value_cents(Decimal(qty), Decimal(cost or 0)),
         )
     return totals
+
+
+@dataclass(frozen=True)
+class ItemMove:
+    """One movement of an item, as usage and count-based usage read it (ROR-FR-01, AC-ANL-08)."""
+
+    location_id: int
+    inventory_item_id: int
+    occurred_at: datetime
+    transaction_id: int
+    kind: str  # the transaction's kind: sale, count, receipt...
+    source_type: str
+    movement_type: str  # a reversal carries the type of the movement it undid
+    qty_base: Decimal
+    unit_cost: Decimal = Decimal(0)  # cents per base unit, as posted
+    reverses: bool = False
+    source_id: str = ""
+
+
+def item_moves(
+    db: Session, org: OrgContext, windows: Mapping[int, tuple[datetime, datetime]]
+) -> list[ItemMove]:
+    """Every movement at each location within its window (both ends included), in the order
+    stock moved. A reversal takes the type of what it undid, so the two net out by type."""
+    found: list[tuple[InventoryMovement, InventoryTransaction]] = []
+    for location_id, (start, end) in windows.items():
+        found.extend(
+            db.execute(
+                select_scoped(org, InventoryMovement)
+                .add_columns(InventoryTransaction)
+                .join(
+                    InventoryTransaction,
+                    InventoryTransaction.id == InventoryMovement.transaction_id,
+                )
+                .where(
+                    InventoryMovement.location_id == location_id,
+                    InventoryMovement.occurred_at >= start,
+                    InventoryMovement.occurred_at <= end,
+                )
+            ).tuples()
+        )
+    undone = {m.reverses_movement_id for m, _ in found if m.reverses_movement_id is not None}
+    original: dict[int, str] = {}
+    if undone:
+        original = {
+            movement_id: kind
+            for movement_id, kind in db.execute(
+                select_scoped(org, InventoryMovement)
+                .with_only_columns(InventoryMovement.id, InventoryMovement.movement_type)
+                .where(InventoryMovement.id.in_(undone))
+            ).tuples()
+        }
+    found.sort(key=lambda pair: (pair[0].occurred_at, pair[0].id))
+    return [
+        ItemMove(
+            m.location_id,
+            m.inventory_item_id,
+            m.occurred_at,
+            t.id,
+            t.kind,
+            t.source_type,
+            original.get(m.reverses_movement_id, m.movement_type)
+            if m.reverses_movement_id is not None
+            else m.movement_type,
+            Decimal(m.qty_base),
+            Decimal(m.unit_cost_snapshot),
+            m.reverses_movement_id is not None,
+            t.source_id,
+        )
+        for m, t in found
+    ]
+
+
+def balances_before(
+    db: Session, org: OrgContext, windows: Mapping[int, tuple[datetime, datetime]]
+) -> dict[tuple[int, int], Decimal]:
+    """What each item held at each location just before its window opened."""
+    result: dict[tuple[int, int], Decimal] = {}
+    for location_id, (start, _end) in windows.items():
+        rows = db.execute(
+            select_scoped(org, InventoryMovement)
+            .with_only_columns(InventoryMovement.inventory_item_id, InventoryMovement.qty_base)
+            .where(
+                InventoryMovement.location_id == location_id,
+                InventoryMovement.occurred_at < start,
+            )
+        ).tuples()
+        for item_id, qty in rows:
+            key = (location_id, item_id)
+            result[key] = result.get(key, Decimal(0)) + Decimal(qty)
+    return result

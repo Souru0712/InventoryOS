@@ -83,17 +83,25 @@ def _waiting(db: Session, org: OrgContext, kind: str, dedupe_key: str | None) ->
 
 def _handlers() -> dict[str, Handler]:
     # Imported here: these modules queue follow-up work through this one.
+    from app.business_settings import alert_email_key
     from app.consumption import consume_sale
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
     from app.orchestration.alerts import evaluate_and_store, send_alert_digest
     from app.orchestration.receiving import parse_document
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
+    from app.waste import dispose_expired
 
     def evaluate(db: Session, org: OrgContext, payload: dict) -> None:
+        # Expired prepared batches leave first (BAT-FR-11), so their alerts clear in this run.
+        disposed = dispose_expired(db, org)
+        if disposed:
+            log.info("wrote off %d expired prepared batches for tenant %s", disposed, org.tenant_id)
         stats = evaluate_and_store(db, org)
         log.info("evaluated exceptions for tenant %s: %s", org.tenant_id, stats)
-        enqueue(db, org, "send_alert_digest", dedupe_key="digest")
+        key = alert_email_key(db, org, datetime.now(UTC))
+        if key is not None:
+            enqueue(db, org, "send_alert_digest", dedupe_key=key)
 
     def digest(db: Session, org: OrgContext, payload: dict) -> None:
         send_alert_digest(db, org)
@@ -128,7 +136,7 @@ def _handlers() -> dict[str, Handler]:
             )
 
     def consume(db: Session, org: OrgContext, payload: dict) -> None:
-        consume_sale(db, org, int(payload["sales_transaction_id"]))
+        consume_sale(db, org, int(payload["sales_transaction_id"]), payload.get("reason"))
 
     return {
         "evaluate_exceptions": evaluate,

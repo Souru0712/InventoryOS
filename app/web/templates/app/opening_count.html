@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app">← Dashboard</a></p>
+<h1>Count your stock</h1>
+<p class="small muted">Walk the shelves and type what you find. Leave anything blank to skip it. Items you have not counted before start from this number; the rest are corrected to it.</p>
+{% if places|length > 1 %}
+<p class="small">{% for p in places %}{% if place and p.id == place.id %}<strong>{{ p.name }}</strong>{% else %}<a href="/app/onboarding/count?location={{ p.id }}">{{ p.name }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+{% if not place %}
+<div class="card"><p style="margin:0;">Set up a location first. <a href="/app/locations">Add a location →</a></p></div>
+{% elif not rows %}
+<div class="card"><p style="margin:0;">Nothing is stocked here yet. <a href="/app/items/import">Add your items →</a></p></div>
+{% else %}
+<form method="post" action="/app/onboarding/count">{{ csrf_field(request) }}
+  <input type="hidden" name="location_id" value="{{ place.id }}">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Item</th><th>On the shelf</th><th>Unit</th></tr></thead>
+    <tbody>
+    {% for item, stock in rows %}
+      <tr>
+        <td>{{ item.name }}<div class="small muted">recorded {{ stock.qty_base|qty(item.display_unit) }}</div></td>
+        <td><input name="qty_{{ item.id }}" aria-label="{{ item.name }} counted" inputmode="decimal" size="7"></td>
+        <td>
+          <select name="unit_{{ item.id }}" aria-label="{{ item.name }} unit">
+            <option value="">{{ item.display_unit|unit }}</option>
+            {% for package in item.packages %}<option value="{{ package.name }}">{{ package.name }}</option>{% endfor %}
+          </select>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <button class="btn" type="submit" style="margin-top:12px;">Save the count</button>
+</form>
+{% endif %}
+{% endblock %}

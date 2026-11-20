@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import changes, record_audit
-from app.models import Modifier, Product, ProductVariation, SoldItem
+from app.business_settings import settings_for
+from app.models import Modifier, ModifierScale, Product, ProductVariation, SoldItem
 from app.transform.products import (
     NAME_LIMIT,
     PRODUCTION_MODES,
@@ -104,7 +107,11 @@ def create_product(
         if label.casefold() in {p[0].casefold() for p in planned}:
             raise ProductRuleError(f"{label} is listed twice.")
         planned.append((label, check_price(variation.price)))
-    product = Product(tenant_id=org.tenant_id, name=name, category=_category(category))
+    # A new product is made as the business usually makes them (ADM-FR-06).
+    mode = settings_for(db, org).default_production_mode
+    product = Product(
+        tenant_id=org.tenant_id, name=name, category=_category(category), production_mode=mode
+    )
     db.add(product)
     db.flush()
     for label, price in planned:
@@ -341,8 +348,23 @@ def save_modifier(
         was = _modifier_state(modifier)
     modifier.name = label
     modifier.group_name = _category(group)
+    changed_factor = factor != (
+        Decimal(modifier.scale_factor) if modifier.scale_factor is not None else None
+    )
     modifier.effect, modifier.scale_factor, modifier.is_active = effect, factor, active
     db.flush()
+    if factor is not None and (changed_factor or modifier_id is None):
+        # From now on only: a sale reads the factor in effect at its moment (AC-ADM-06).
+        db.add(
+            ModifierScale(
+                tenant_id=org.tenant_id,
+                modifier_id=modifier.id,
+                scale_factor=factor,
+                effective_from=datetime.now(UTC),
+                recorded_by=org.user_id,
+            )
+        )
+        db.flush()
     if modifier_id is None:
         record_audit(
             db,
@@ -409,3 +431,19 @@ def products_from_sold_items(db: Session, org: OrgContext) -> int:
             made += 1
     db.flush()
     return made
+
+
+def scale_at(db: Session, org: OrgContext, modifier: Modifier, at: datetime) -> Decimal | None:
+    """A scale modifier's factor in effect at an instant (AC-ADM-06): the latest set by then,
+    else the first it ever had; the modifier's own factor when it has no history."""
+    rows = list(
+        db.scalars(
+            select_scoped(org, ModifierScale)
+            .where(ModifierScale.modifier_id == modifier.id)
+            .order_by(ModifierScale.effective_from, ModifierScale.id)
+        )
+    )
+    if not rows:
+        return Decimal(modifier.scale_factor) if modifier.scale_factor is not None else None
+    in_effect = [r for r in rows if r.effective_from <= at]
+    return Decimal((in_effect[-1] if in_effect else rows[0]).scale_factor)

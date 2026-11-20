@@ -39,7 +39,7 @@ risks: [DATA_MIGRATION_ASSESSMENT](../audit/DATA_MIGRATION_ASSESSMENT.md).
 | DM-6 | Ledger tables; one `opening_balance` movement per item × location = `qty_base`; `stock_balances` populated | T1.16, T1.17 | Expand + backfill | T1.18 |
 | DM-7 | Legacy freeze: `inventory_counts`, `inventory_events` read-only at T1.18; `sales_daily` at T2.04 (split by the owner, 2026-11-12) and dropped at T2.05 (contract, approved by the owner 2026-11-18) | T1.18, T2.04 | Migrate (writers removed) | T2.05 |
 | DM-8 | `alerts` → `exceptions` (five kinds mapped) | T1.19 | Expand + backfill | T1.25 |
-| DM-9 | Products and recipes: `sold_items` → products/variations; `recipe_components` → recipe version 1, dropped once velocity reads ledger usage (T2.15; owner, 2026-11-18) | T2.01, T2.02 | Expand + backfill | T2.05 |
+| DM-9 | Products and recipes: `sold_items` → products/variations; `recipe_components` → recipe version 1, dropped once velocity reads ledger usage (T2.15; owner, 2026-11-18; dropped at T2.15, migration `2675519dc2bc`) | T2.01, T2.02 | Expand + backfill | T2.05 |
 | DM-10 | Batch allocation: allocation columns; existing batches get allocations from the opening movement (remaining = FEFO-derived at migration) | T2.06 | Expand + backfill | T2.07 |
 | DM-11 | Suppliers from free-text `supplier` values on items and documents | T2.10 | Expand + backfill | T2.11 |
 | DM-12 | Receivings created for already-applied documents (history only, no new movements) | T2.11 | Expand + backfill | — |

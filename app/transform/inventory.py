@@ -8,7 +8,6 @@ Covers the three ways a small business holds stock:
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_CEILING, Decimal
@@ -55,40 +54,6 @@ class StockView:
     @property
     def reorder_label(self) -> str:
         return format_qty(self.reorder_point_base, self.stock_unit)
-
-
-@dataclass(frozen=True)
-class SaleRow:
-    """One sold item on one day, in sold units."""
-
-    sold_item_id: int
-    dt: date
-    units: Decimal
-    net_cents: int = 0
-
-
-@dataclass(frozen=True)
-class Component:
-    """Recipe link: one sold unit consumes qty_base of a stock item."""
-
-    sold_item_id: int
-    stock_item_id: int
-    qty_base_per_sale: Decimal
-
-
-def consumption_by_day(
-    sales: list[SaleRow], components: list[Component]
-) -> dict[int, dict[date, Decimal]]:
-    """Explode sales through recipes into base-unit consumption per stock item per day."""
-    by_sold: dict[int, list[Component]] = defaultdict(list)
-    for component in components:
-        by_sold[component.sold_item_id].append(component)
-
-    result: dict[int, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
-    for sale in sales:
-        for component in by_sold.get(sale.sold_item_id, ()):
-            result[component.stock_item_id][sale.dt] += sale.units * component.qty_base_per_sale
-    return {item_id: dict(days) for item_id, days in result.items()}
 
 
 def daily_velocity(daily: dict[date, Decimal], window_days: int, today: date) -> Decimal:

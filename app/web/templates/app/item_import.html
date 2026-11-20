@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Add items</h1>
+<p class="lede">Bring in your whole list from a spreadsheet, or type a few at a time.</p>
+
+{% if not places %}
+<div class="card"><p style="margin:0;">Set up a location first: items are stocked somewhere. <a href="/app/locations">Add a location →</a></p></div>
+{% else %}
+<h2>From a CSV file</h2>
+<form method="post" action="/app/items/import" enctype="multipart/form-data" class="card">{{ csrf_field(request) }}
+  <p class="small muted" style="margin-top:0;">Columns: {{ template_header|join(", ") }}. Only Name is required; Unit is a unit like each, g, kg, ml, l, oz or lb. <a href="/app/items/import/template.csv">Download a template</a>.</p>
+  <div class="row">
+    <div class="field"><label for="location_id">Stock them at</label><select id="location_id" name="location_id">{% for p in places %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="file">File (CSV)</label><input id="file" type="file" name="file" accept=".csv,text/csv" required></div>
+  </div>
+  <button class="btn" type="submit">Check the file</button>
+  <p class="small muted" style="margin-bottom:0;">Nothing is added until you have seen every row.</p>
+</form>
+
+<h2>Type them in</h2>
+<p><a class="btn secondary" href="/app/items/quick-add">Open the quick-add grid</a> <a class="small" href="/app/catalog/new">or add one item with every detail</a></p>
+{% endif %}
+{% endblock %}

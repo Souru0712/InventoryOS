@@ -59,6 +59,8 @@ TYPES: Mapping[str, ExceptionType] = {
     "low_stock": ExceptionType("Low stock", WARNING, "Reorder it"),
     "stale_count": ExceptionType("Not counted recently", INFO, "Count the item"),
     "waste_risk": ExceptionType("May expire unsold", WARNING, "Sell it first, or mark it down"),
+    # A lot within the expiry alert window (BAT-FR-09, AC-BAT-06), once per item until it clears.
+    "expiring_soon": ExceptionType("Expiring soon", INFO, "Use it first, or mark it down"),
     # An adjustment worth more than the review threshold, posted and awaiting an Owner's or
     # Administrator's review (T1.22, STF-FR-08 R1).
     "adjustment_review": ExceptionType(
@@ -76,10 +78,11 @@ FROM_ALERT_KIND: Mapping[str, str] = {
     "stale_count": "stale_count",
     "waste_risk": "waste_risk",
     "expired": "batch_expired_unresolved",
+    "expiring": "expiring_soon",
 }
 # The types the stock and expiry evaluation answers for: only these does it auto-resolve.
 STOCK_TYPES = frozenset(FROM_ALERT_KIND.values())
-EXPIRY_TYPES = frozenset({"waste_risk", "batch_expired_unresolved"})
+EXPIRY_TYPES = frozenset({"waste_risk", "batch_expired_unresolved", "expiring_soon"})
 
 Key = tuple[str, str, str]  # (type, subject_type, subject_id)
 

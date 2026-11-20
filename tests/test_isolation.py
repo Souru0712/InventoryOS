@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
 from app.main import app
 from app.models import (
@@ -32,15 +33,24 @@ from app.models import (
     Modifier,
     Product,
     ProductIdentifier,
+    ProductionOrder,
     ProductVariation,
     Promotion,
     PromotionStatus,
+    Receiving,
+    ReceivingLine,
+    SalesImport,
     StockCount,
     StockItem,
+    Supplier,
+    SupplierItem,
     Tenant,
     TrackMode,
     User,
+    WasteEvent,
+    WasteReason,
 )
+from app.recipes import NewLine, Owner, save_recipe
 from app.security import hash_password
 from app.storage import get_storage
 from app.units import Dimension
@@ -50,7 +60,7 @@ from tests.sample_files import jpeg
 from tests.test_async_correctness import api_routes
 
 # Integer parameters that are quantities, not identifiers. Any other integer is an identifier.
-NOT_IDENTIFIERS = {"lead_time_days", "business_day_cutoff_hour"}
+NOT_IDENTIFIERS = {"lead_time_days", "business_day_cutoff_hour", "day", "hour"}  # numbers, not rows
 
 
 def _is_int(annotation) -> bool:
@@ -65,7 +75,8 @@ def identifier_params(route) -> list[str]:
         for param in dependant.path_params:
             found.append(param.name)
         for param in dependant.query_params + dependant.body_params:
-            names_a_row = param.name == "id" or param.name.endswith("_id")
+            # location_filter reads ?location= as text so a form's "All" (empty) is accepted.
+            names_a_row = param.name in ("id", "location") or param.name.endswith("_id")
             if names_a_row or (
                 _is_int(param.field_info.annotation) and param.name not in NOT_IDENTIFIERS
             ):
@@ -102,6 +113,9 @@ def _apply_form(ids):
     }
 
 
+SALES_CSV = b"date,item,qty\r\n2026-11-02,Bars,3\r\n"
+ITEMS_CSV = b"Name,Unit,Quantity\r\nFresh basil,g,100\r\n"
+
 CASES = {
     ("GET", "/app"): lambda ids: {"params": {"location": ids["location"]}},
     ("GET", "/app/expiring"): lambda ids: {"params": {"location": ids["location"]}},
@@ -116,8 +130,105 @@ CASES = {
         "data": {"stock_item_id": ids["item"], "perishable": "yes"}
     },
     ("POST", "/app/expiring/{batch_id}/remove"): lambda ids: {},
+    ("POST", "/app/expiring/{batch_id}/dispose"): lambda ids: {},
+    ("GET", "/app/production"): lambda ids: {
+        "params": {"item": ids["inventory_item"], "location": ids["location"]}
+    },
+    ("POST", "/app/production"): lambda ids: {
+        "data": {"location_id": ids["location"], "inventory_item_id": ids["inventory_item"]}
+    },
+    ("POST", "/app/production/{order_id}/void"): lambda ids: {},
+    ("GET", "/app/suppliers/{supplier_id}"): lambda ids: {},
+    ("POST", "/app/suppliers/{supplier_id}"): lambda ids: {"data": {"name": "Renamed"}},
+    ("POST", "/app/suppliers/{supplier_id}/active"): lambda ids: {"data": {"active": "yes"}},
+    ("POST", "/app/suppliers/{supplier_id}/items"): lambda ids: {
+        "data": {"inventory_item_id": ids["inventory_item"], "pack_quantity": "2"}
+    },
+    ("GET", "/app/sales/daily"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/sales/import"): lambda ids: {
+        "data": {"location_id": ids["location"]},
+        "files": {"file": ("sales.csv", SALES_CSV, "text/csv")},
+    },
+    ("GET", "/app/sales/import/{import_id}"): lambda ids: {},
+    ("POST", "/app/sales/import/{import_id}/mapping"): lambda ids: {
+        "data": {"date_column": "date", "product_column": "item", "quantity_column": "qty"}
+    },
+    ("POST", "/app/sales/import/{import_id}/match"): lambda ids: {
+        "data": {"name": "Bars", "product_variation_id": ids["variation"]}
+    },
+    ("POST", "/app/sales/import/{import_id}/post"): lambda ids: {},
+    ("POST", "/app/sales/daily"): lambda ids: {
+        "data": {"location_id": ids["location"], "day": "2026-11-02"}
+    },
+    ("GET", "/app/usage"): lambda ids: {"params": {"location": ids["location"]}},
+    ("GET", "/app/reports"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/items/import"): lambda ids: {
+        "data": {"location_id": ids["location"]},
+        "files": {"file": ("items.csv", ITEMS_CSV, "text/csv")},
+    },
+    ("GET", "/app/items/import/{digest}"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/items/import/{digest}"): lambda ids: {"data": {"location_id": ids["location"]}},
+    ("POST", "/app/floor/person"): lambda ids: {"data": {"membership_id": ids["membership"]}},
+    ("GET", "/app/onboarding/count"): lambda ids: {"params": {"location": ids["location"]}},
+    ("POST", "/app/onboarding/count"): lambda ids: {
+        "data": {"location_id": ids["location"], f"qty_{ids['inventory_item']}": "3"}
+    },
+    ("POST", "/app/items/quick-add"): lambda ids: {
+        "data": {"location_id": ids["location"], "name_1": "Fresh mint"}
+    },
+    ("GET", "/app/reports.csv"): lambda ids: {
+        "params": {"location": ids["location"], "table": "consumption"}
+    },
+    ("POST", "/app/usage"): lambda ids: {
+        "data": {
+            "location_id": ids["location"],
+            "token": "a" * 32,
+            "reason": "staff_meal",
+            "item_1": ids["inventory_item"],
+            "qty_1": "1",
+        }
+    },
+    ("POST", "/app/deliveries"): lambda ids: {
+        "data": {"location_id": ids["location"], "supplier_id": ids["supplier"]}
+    },
+    ("GET", "/app/deliveries/{receiving_id}"): lambda ids: {},
+    ("POST", "/app/deliveries/{receiving_id}/lines"): lambda ids: {
+        "data": {
+            "inventory_item_id": ids["inventory_item"],
+            "supplier_item_id": ids["supplier_item"],
+            "accepted": "1",
+        }
+    },
+    ("POST", "/app/deliveries/{receiving_id}/post"): lambda ids: {},
+    ("POST", "/app/deliveries/lines/{line_id}/remove"): lambda ids: {},
+    ("POST", "/app/deliveries/lines/{line_id}/correct"): lambda ids: {
+        "data": {"accepted": "1", "reason": "recount"}
+    },
+    ("POST", "/app/suppliers/items/{supplier_item_id}"): lambda ids: {
+        "data": {"pack_quantity": "3"}
+    },
     ("GET", "/app/expiring/batches/{batch_id}"): lambda ids: {},
     ("POST", "/app/expiring/batches/{batch_id}/count"): lambda ids: {"data": {"quantity": "1"}},
+    ("GET", "/app/waste"): lambda ids: {
+        "params": {"item": ids["inventory_item"], "location": ids["location"]}
+    },
+    ("POST", "/app/waste"): lambda ids: {
+        "data": {
+            "location_id": ids["location"],
+            "reason_id": ids["waste_reason"],
+            "inventory_item_id": ids["inventory_item"],
+            "quantity": "1",
+        }
+    },
+    ("POST", "/app/waste/{event_id}/void"): lambda ids: {},
+    ("GET", "/app/waste/log"): lambda ids: {
+        "params": {
+            "location": ids["location"],
+            "reason": ids["waste_reason"],
+            "item": ids["inventory_item"],
+        }
+    },
+    ("POST", "/app/waste/reasons/{reason_id}"): lambda ids: {"data": {"label": "Dropped"}},
     ("GET", "/app/catalog"): lambda ids: {"params": {"category": ids["category"]}},
     ("POST", "/app/catalog/new"): lambda ids: {
         "data": {"name": "Oat milk", "location_ids": [ids["location"]], "display_unit": "each"}
@@ -273,6 +384,15 @@ PATH_ROWS = {
     "modifier_id": "modifier",
     "kind": "kind",
     "owner_id": "variation",
+    "event_id": "waste_event",
+    "reason_id": "waste_reason",
+    "order_id": "production_order",
+    "supplier_id": "supplier",
+    "supplier_item_id": "supplier_item",
+    "receiving_id": "receiving",
+    "line_id": "receiving_line",
+    "import_id": "sales_import",
+    "digest": "item_file",
 }
 
 
@@ -383,9 +503,90 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     db.add_all([juice, ice])
     db.flush()
     size = ProductVariation(tenant_id=tenant_id, product_id=juice.id, name="Regular")
-    db.add(size)
+    spilled = WasteReason(tenant_id=tenant_id, code="spilled", label="Spilled")
+    db.add_all([size, spilled])
     db.flush()
+    wasted = WasteEvent(
+        tenant_id=tenant_id,
+        location_id=location.id,
+        reason_id=spilled.id,
+        reason_label="Spilled",
+        inventory_item_id=bars.inventory_item_id,
+        quantity=Decimal("1"),
+        unit="each",
+        qty_base=Decimal("1"),
+        occurred_at=datetime.now(UTC),
+    )
+    db.add(wasted)
+    db.flush()
+    version = save_recipe(
+        db,
+        OrgContext.system(tenant_id),
+        Owner("variation", size.id),
+        [NewLine(bars.inventory_item_id, "1", "")],
+    )
+    run = ProductionOrder(
+        tenant_id=tenant_id,
+        location_id=location.id,
+        inventory_item_id=bars.inventory_item_id,
+        recipe_version_id=version.id,
+        multiplier=Decimal("1"),
+        expected_yield_base=Decimal("1"),
+        actual_yield_base=Decimal("1"),
+        variance_base=Decimal("0"),
+        batch_code=f"{tag}-1",
+        occurred_at=datetime.now(UTC),
+    )
+    db.add(run)
+    vendor = Supplier(tenant_id=tenant_id, name=f"{tag} Farms")
+    db.add(vendor)
+    db.flush()
+    sells = SupplierItem(
+        tenant_id=tenant_id,
+        supplier_id=vendor.id,
+        inventory_item_id=bars.inventory_item_id,
+        purchase_unit="box",
+        pack_size_base=Decimal("12"),
+    )
+    db.add(sells)
+    db.flush()
+    delivery = Receiving(tenant_id=tenant_id, location_id=location.id, supplier_id=vendor.id)
+    db.add(delivery)
+    db.flush()
+    arrived = ReceivingLine(
+        tenant_id=tenant_id,
+        receiving_id=delivery.id,
+        inventory_item_id=bars.inventory_item_id,
+        arrived_qty=Decimal("2"),
+        accepted_qty=Decimal("2"),
+        unit="each",
+        qty_base=Decimal("2"),
+    )
+    db.add(arrived)
+    db.flush()
+    get_storage().put(f"{tenant_id}/imports/iso.csv", SALES_CSV, "text/csv")
+    sheet = SalesImport(
+        tenant_id=tenant_id,
+        location_id=location.id,
+        filename="sales.csv",
+        sha256="d" * 64,
+        storage_key=f"{tenant_id}/imports/iso.csv",
+    )
+    db.add(sheet)
+    db.flush()
+    # Each business's item file sits under its own name in its own storage (T2.20-a).
+    item_file = hashlib.sha256(f"items-{tenant_id}".encode()).hexdigest()
+    get_storage().put(f"{tenant_id}/imports/items-{item_file}.csv", ITEMS_CSV, "text/csv")
     return {
+        "item_file": item_file,
+        "sales_import": sheet.id,
+        "receiving": delivery.id,
+        "receiving_line": arrived.id,
+        "supplier": vendor.id,
+        "supplier_item": sells.id,
+        "production_order": run.id,
+        "waste_reason": spilled.id,
+        "waste_event": wasted.id,
         "kind": "variation",
         "product": juice.id,
         "variation": size.id,

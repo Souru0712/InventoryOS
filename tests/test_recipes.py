@@ -12,20 +12,29 @@ from sqlalchemy import select
 
 from app.access import OrgContext, UnscopedAccess, update_scoped
 from app.access.permissions import role_permissions
-from app.cli import cmd_demo
+from app.cli import DEMO_MENU, DEMO_STOCK, cmd_demo
 from app.db import Base, SessionLocal, engine
 from app.items import NewItem, add_conversion, create_item
 from app.models import (
     AuditEvent,
+    InventoryMovement,
     ProductVariation,
     Recipe,
-    RecipeComponent,
     RecipeLine,
     RecipeVersion,
+    SoldItem,
     StockItem,
 )
 from app.products import NewVariation, create_product, save_modifier
-from app.recipes import NewLine, Owner, effective_version, save_recipe, start_from, versions
+from app.recipes import (
+    FROM_THE_START,
+    NewLine,
+    Owner,
+    effective_version,
+    save_recipe,
+    start_from,
+    versions,
+)
 from app.transform.recipes import (
     Line,
     RecipeRuleError,
@@ -36,6 +45,7 @@ from app.transform.recipes import (
     version_at,
     what_changed,
 )
+from app.units import to_base
 
 D = Decimal
 NOW = datetime(2026, 11, 13, 12, tzinfo=UTC)
@@ -303,27 +313,38 @@ def test_versions_are_append_only_written_in_one_place_and_recorded(kitchen, db)
     assert found == []
 
 
-# --- DM-9: the demo's recipe components are each version 1 -------------------------------------
+# --- the demo: recipes from the start, history consumed on the ledger (T2.15) ------------------
 
 
-def test_the_demo_cafe_recipes_are_version_1_of_its_components():
+def test_the_demo_cafe_has_its_recipes_from_the_start_and_its_history_on_the_ledger():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     args = argparse.Namespace(
-        email="demo@stockpulse.local", password="demopassword", name="Rosewood Coffee", days=1
+        email="demo@stockpulse.local", password="demopassword", name="Rosewood Coffee", days=2
     )
     assert cmd_demo(args) == 0
     with SessionLocal() as db:
-        variation_of = {v.source_sold_item_id: v.id for v in db.scalars(select(ProductVariation))}
-        stock = {s.id: s.inventory_item_id for s in db.scalars(select(StockItem))}
+        size_of = {v.source_sold_item_id: v.id for v in db.scalars(select(ProductVariation))}
+        sold = {s.name: s.id for s in db.scalars(select(SoldItem))}
+        item_of = {s.name: s.inventory_item_id for s in db.scalars(select(StockItem))}
         expected = {
-            (variation_of[c.sold_item_id], stock[c.stock_item_id], D(c.qty_base_per_sale))
-            for c in db.scalars(select(RecipeComponent))
+            (size_of[sold[name]], item_of[stock_name], to_base(qty, unit))
+            for name, _category, _price, recipe, _daily in DEMO_MENU
+            for stock_name, qty, unit in recipe
         }
         found = {
             (v.recipe.product_variation_id, ln.inventory_item_id, D(ln.qty_base))
             for v in db.scalars(select(RecipeVersion))
             for ln in v.lines
         }
-        assert expected and found == expected
-        assert {v.version_no for v in db.scalars(select(RecipeVersion))} == {1}
+        assert found == expected
+        assert {(v.version_no, v.effective_from) for v in db.scalars(select(RecipeVersion))} == {
+            (1, FROM_THE_START)
+        }
+        # The sales history took ingredients out of stock, and the shelf holds what it should.
+        assert db.scalars(
+            select(InventoryMovement).where(InventoryMovement.movement_type == "sale_consumption")
+        ).first()
+        shelf = {name: to_base(on_hand, unit) for name, _c, _d, unit, on_hand, *_ in DEMO_STOCK}
+        for stock_row in db.scalars(select(StockItem)):
+            assert D(stock_row.qty_base) == shelf[stock_row.name], stock_row.name

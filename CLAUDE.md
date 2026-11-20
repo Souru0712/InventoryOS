@@ -51,6 +51,25 @@ implementation sessions; the detail lives in `docs/`.
   A batch is counted on its own through `count_batch()` (an explicit `count_variance` on it);
   stock of a batch-tracked item that no batch holds raises `batch_shortfall` (DR-13,
   ADR-0057).
+- Waste is recorded only by `app/waste.py` (ADR-0058): an event (reason name kept as it was)
+  posts `waste` movements keyed `waste:<id>`, a product through its recipe in effect
+  (`resolve_variation()`); below zero refused without the override (DR-08). The logger voids
+  for 30 minutes, afterwards `waste.void` with a reason. The log and report read the ledger
+  only (`logged()`, `found_short()`, DR-33): never sum events or lines. Expired lots are
+  disposed through `dispose_batch()`; opt-in `dispose_expired()` writes off expired prepared
+  batches in the evaluation job, never while a location's sales are pending (ADR-0059).
+- Production runs are recorded only by `app/production.py` (ADR-0060): one `production`
+  transaction keyed `production_order:<id>` takes the item's recipe inputs (batches inferred
+  by the ledger) and puts the actual yield into a new dated batch; output cost = inputs ÷
+  actual yield (unknown if an input has no cost), set as the item's cost; short inputs go
+  below zero with `negative_balance` (PD-15).
+- Suppliers and supplier items are written only by `app/suppliers.py` (ADR-0061): deactivated,
+  never deleted; packs convert through the item's units; `record_price()` raises
+  `price_variance` at 10 % or more.
+- Deliveries are received through `app/receivings.py` (ADR-0062): a draft receiving posts
+  exactly once (conditional status change, `AlreadyPosted`), each accepted line its own
+  `receipt` keyed `receiving_line:<id>`; discrepancies open `receiving_discrepancy`; a posted
+  line is corrected by reversal and a new line, never edited.
 - An item's current cost changes only through `app/costs.py` (ADR-0048): `set_cost()` appends
   to `item_cost_history` (append-only) and mirrors `stock_items.cost_per_base_cents`; a hand
   change is `override_cost()` (audited). A test fails on any other assignment. Past figures
@@ -66,6 +85,9 @@ implementation sessions; the detail lives in `docs/`.
   in `app/access/system.py`. A test fails on raw queries in `app/web` and `app/orchestration`.
   A new route that takes an identifier needs a case in `tests/test_isolation.py` (a test fails
   until it has one); an optional `?location=` goes through `location_filter`.
+- On a shared floor device (an Employee account) the member picked on `/app/floor` is the
+  request's actor (`floor_person()` in `require_org()`, ADR-0073); the account keeps its own
+  permissions. Never let another role pick, or pick someone without an active membership.
 - A person reaches a business only through an active membership (ADR-0028): the request's
   business is the session's membership, never `users.tenant_id`. Users are global; a business
   reaches its people through `members(db, org)`.
@@ -98,6 +120,9 @@ implementation sessions; the detail lives in `docs/`.
   `app/throttle.py` (`locked_for`, `hit`, `clear`; ADR-0032); a refusal reveals nothing more
   than a success would.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
+  Only the POS seams import it (`app/orchestration/sync.py`, the connect routes in
+  `app/web/dashboard.py`, `app/web/webhooks.py`); `tests/test_standalone.py` runs every R1
+  workflow with no POS and enforces both (ADR-0074).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,
@@ -157,6 +182,34 @@ implementation sessions; the detail lives in `docs/`.
   before. Gaps raise `unmapped_product`, uncosted use `missing_cost`. `reprocess_sale()`
   reverses and posts again (`:p<n>`). Sales recorded with `consume=False` (history) and lines
   from before T2.05 are never consumed.
+- Daily sales by hand go through `app/daily_sales.py` (`save_day()`, ADR-0063): one manual
+  transaction `day:<date>` per location and day, a changed day needs a reason (carried to the
+  reversal), a POS day is refused; `sales_missing` for open hand-entry days with no sales.
+  A member's permissions are `member_permissions()` (PD-37 adds `sales.record` for Employees).
+- Reports read the ledger over each location's business days (ADR-0067): `app/reports.py`
+  builds the windows, `app/transform/analytics.py` works out the figures per movement at its
+  snapshot cost; never sum events, lines or today's costs for a past figure. Every report table
+  exports through `/app/reports.csv` (ADR-0068) from the same report objects as its page.
+- Items come in from a file or the quick-add grid through `app/item_import.py` (ADR-0071), each
+  row tried through `create_item()`; the onboarding checklist (`app/onboarding.py`) is computed
+  from the business's records; only step 0's answer, skipped steps and the opening count's time
+  are stored (`onboarding`, ADR-0072). The opening count opens never-moved items with
+  `post_opening()` and counts the rest with `post_count()`.
+- Business settings are written only by `app/business_settings.py` (ADR-0070), audited as
+  `settings.*`, and read where they act (review thresholds, alert email hour, default production
+  mode, units). A modifier's scale factor is dated (`modifier_scales`, append-only): a sale reads
+  `scale_at()` at its own moment, never the modifier row's current factor.
+- Velocity and reorder read ledger usage (ADR-0066): `consumption()` in
+  `app/orchestration/views.py` sums sale, production and manual consumption per business day;
+  `app/reorder.py` (`plan()`, rules in `app/transform/reorder.py`) falls back to use between two
+  counts when sales are incomplete, says which, and never orders. `recipe_components` is gone.
+- Ingredients used without a sale are recorded only by `app/usage.py` (ADR-0065): one `usage`
+  transaction of `manual_consumption` keyed `usage:<form token>`, a reason required, below zero
+  refused without the override (DR-08); `consumption()` keeps sales use and manual usage apart.
+- Sales files are imported through `app/sales_import.py` (ADR-0064): CSV read by
+  `app/transform/imports.py`, kept tenant-scoped, columns saved per header
+  (`import_mappings`), names learned (`import_names`); one `file_import` transaction
+  `import:<date>` per day, days another source owns skipped (DR-31).
 - Every sale is a sales transaction (DR-30, ADR-0053), recorded only by `app/sales.py`
   (`record_sale()`), with its origin from its source (DR-34); everything that reads sales
   goes through `daily_sales()`. A location has one source of record per business date: a

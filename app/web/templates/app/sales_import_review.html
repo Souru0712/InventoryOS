@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/sales/import">← Import sales</a></p>
+<h1>{{ row.filename }}</h1>
+
+<h2>Columns</h2>
+<form method="post" action="/app/sales/import/{{ row.id }}/mapping" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    {% for field, label in (("date_column", "Date"), ("product_column", "Product"), ("quantity_column", "Quantity sold")) %}
+    <div class="field"><label for="{{ field }}">{{ label }}</label>
+      <select id="{{ field }}" name="{{ field }}">{% for h in header %}<option value="{{ h }}"{% if columns and columns[field] == h %} selected{% endif %}>{{ h }}</option>{% endfor %}</select>
+    </div>
+    {% endfor %}
+    <div class="field"><label for="date_format">Dates look like</label>
+      <select id="date_format" name="date_format">{% for f in formats %}<option value="{{ f }}"{% if columns and columns.date_format == f %} selected{% endif %}>{{ "Work it out" if f == "auto" else f|replace("%Y", "2026")|replace("%m", "11")|replace("%d", "19") }}</option>{% endfor %}</select>
+    </div>
+  </div>
+  <button class="btn secondary" type="submit">Use these columns</button>
+</form>
+
+{% if problem %}<div class="notice error">{{ problem }}</div>{% endif %}
+{% if preview %}
+<h2>Preview</h2>
+<p class="small muted">{{ preview.rows }} rows. Each day becomes one imported sales record; importing the same file again changes nothing.</p>
+{% if preview.unmatched %}
+<div class="card">
+  <p style="margin:0 0 8px;"><strong>{{ preview.unmatched|length }} name{{ "s" if preview.unmatched|length != 1 else "" }} not matched</strong>: not imported until matched.</p>
+  {% for name, qty in preview.unmatched|dictsort %}
+  <form method="post" action="/app/sales/import/{{ row.id }}/match" class="inline-form">{{ csrf_field(request) }}
+    <input type="hidden" name="name" value="{{ name }}">
+    <span>{{ name }} <span class="small muted">({{ qty|num }} sold)</span></span>
+    <select name="product_variation_id" aria-label="Product for {{ name }}">{% for v in sizes %}<option value="{{ v.id }}">{{ labels[v.id] }}</option>{% endfor %}</select>
+    <button class="btn small secondary" type="submit">Match</button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Day</th><th>Sold</th><th></th></tr></thead>
+  <tbody>
+  {% for day, lines in preview.days.items() %}
+    <tr>
+      <td>{{ day.strftime("%a %d %b %Y") }}</td>
+      <td class="small">{% for vid, qty in lines.items() %}{{ qty|num }} × {{ labels.get(vid, "product") }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      <td class="small">{% if day in preview.blocked %}<span class="muted">from {{ origins[preview.blocked[day]]|lower }}: skipped</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<form method="post" action="/app/sales/import/{{ row.id }}/post" style="margin-top:12px;">{{ csrf_field(request) }}
+  <button class="btn" type="submit">Import the matched days</button>
+</form>
+{% endif %}
+{% endblock %}

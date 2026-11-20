@@ -8,6 +8,14 @@
   <div class="notice ok">Noted. That item is out of the coverage figure from now on.</div>
 {% elif request.query_params.get("error") == "invalid" %}
   <div class="notice error">Enter a quantity above zero and a valid date.</div>
+{% elif request.query_params.get("disposed") %}
+  <div class="notice ok">Disposed. What the lot held is logged as waste, reason past its date.</div>
+{% elif request.query_params.get("saved") %}
+  <div class="notice ok">Expiry settings saved.</div>
+{% elif request.query_params.get("error") == "empty" %}
+  <div class="notice error">That lot holds nothing to dispose of.</div>
+{% elif request.query_params.get("error") == "days" %}
+  <div class="notice error">The alert window is a number of days, 0 to 60.</div>
 {% elif request.query_params.get("error") == "undated" %}
   <div class="notice error">That is more than the stock without a date. Only stock that no batch holds can be given a date.</div>
 {% endif %}
@@ -112,6 +120,12 @@ from the last four weeks of sales.</p>
         {% endif %}
       </td>
       <td>
+        {% if can(request, "waste.record") %}
+        <form method="post" action="/app/expiring/{{ p.batch.id }}/dispose"
+              data-confirm="Throw away what this lot still holds? It is logged as waste.">{{ csrf_field(request) }}
+          <button class="btn small secondary" type="submit" title="Log what this lot holds as waste">Dispose</button>
+        </form>
+        {% endif %}
         {% if can(request, "count.record") %}
         <form method="post" action="/app/expiring/{{ p.batch.id }}/remove"
               data-confirm="Remove this date? The stock itself is not changed.">{{ csrf_field(request) }}
@@ -215,5 +229,26 @@ accounts for it.</p>
   <p class="small muted" style="margin:10px 0 0;">Check one pack and enter the date for all of them.
   The quantity is in the item&rsquo;s own unit, and your stock level does not change.</p>
 </div>
+{% endif %}
+{% if can(request, "alerts.configure") %}
+<h2 id="expiry-settings">Expiry settings</h2>
+<form method="post" action="/app/expiring/settings" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field">
+      <label for="alert_days">Flag a lot this many days before its date</label>
+      <input id="alert_days" name="alert_days" inputmode="numeric" value="{{ tenant.expiry_alert_days }}">
+      <p class="small muted" style="margin:4px 0 0;">An item can set its own on its page.</p>
+    </div>
+    <div class="field">
+      <label for="auto_dispose">Write off expired prepared batches at day close</label>
+      <select id="auto_dispose" name="auto_dispose">
+        <option value="no"{% if not tenant.auto_dispose_prepared %} selected{% endif %}>No, we dispose of them ourselves</option>
+        <option value="yes"{% if tenant.auto_dispose_prepared %} selected{% endif %}>Yes, log them as waste automatically</option>
+      </select>
+      <p class="small muted" style="margin:4px 0 0;">Only prepared items, and only once the day's sales have taken what they used.</p>
+    </div>
+  </div>
+  <button class="btn secondary" type="submit">Save</button>
+</form>
 {% endif %}
 {% endblock %}

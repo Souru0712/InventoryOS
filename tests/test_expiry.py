@@ -7,7 +7,7 @@ from app.access import OrgContext
 from app.transform.expiry import Batch, fefo_order, project_batches
 from app.units import to_base
 from tests.batch_helpers import dated
-from tests.sales_helpers import sold_on
+from tests.ledger_helpers import consumed_on, counted_to
 
 TODAY = date(2026, 9, 10)
 D0 = Decimal("0")
@@ -140,7 +140,6 @@ from app.models import (  # noqa: E402
     EmailLog,
     ExceptionRecord,
     Location,
-    SoldItem,
     StockItem,
     TrackMode,
 )
@@ -166,32 +165,42 @@ def red_bull(db, tenant, location):
         qty_base=Decimal("72"),
         cost_per_base_cents=Decimal("110"),
     )
-    sold = SoldItem(
-        tenant_id=tenant.id, provider_item_id="VAR-RB", name="Red Bull 8.4oz", price_cents=299
-    )
-    db.add_all([item, sold])
+    db.add(item)
     db.flush()
     for back in range(28):
-        sold_on(db, location, sold, TODAY - timedelta(days=back), "4")
+        consumed_on(db, item, TODAY - timedelta(days=back), "4")
+    counted_to(db, item, 72)
     dated(db, item, 72, TODAY + timedelta(days=12), cost=110)
     db.commit()
     return item
 
 
-def test_square_tracked_stock_gets_its_velocity_from_direct_sales(db, tenant, red_bull):
+def test_velocity_is_what_the_ledger_shows_sales_took(db, tenant, red_bull):
     assert velocity_map(db, OrgContext.system(tenant.id), TODAY)[red_bull.id] == Decimal("4")
 
 
-def test_sales_at_another_location_do_not_count(db, tenant, location, red_bull):
+def test_use_at_another_location_does_not_count(db, tenant, location, red_bull):
     other = Location(
         tenant_id=tenant.id, provider="demo", provider_location_id="loc-2", name="Harbour"
     )
     db.add(other)
     db.flush()
-    sold = db.query(SoldItem).one()
-    sold_on(db, other, sold, TODAY, "280")
+    there = StockItem(
+        tenant_id=tenant.id,
+        location_id=other.id,
+        slug="red-bull",
+        name="Red Bull 8.4oz",
+        dimension=Dimension.COUNT,
+        stock_unit="each",
+        qty_base=Decimal("500"),
+    )
+    db.add(there)
+    db.flush()
+    consumed_on(db, there, TODAY, "280")
     db.commit()
-    assert velocity_map(db, OrgContext.system(tenant.id), TODAY)[red_bull.id] == Decimal("4")
+    velocity = velocity_map(db, OrgContext.system(tenant.id), TODAY)
+    assert velocity[red_bull.id] == Decimal("4")
+    assert velocity[there.id] == Decimal("10")
 
 
 def test_the_projection_runs_end_to_end(db, tenant, red_bull):

@@ -39,13 +39,25 @@ from app.transform.ledger import (
     MOVEMENT_TYPES,
     TRANSACTION_KINDS,
 )
+from app.transform.onboarding import ANSWERS as ONBOARDING_ANSWERS
+from app.transform.production import STATUSES as PRODUCTION_STATUSES
 from app.transform.products import MODIFIER_EFFECTS, PRODUCTION_MODES
+from app.transform.receivings import LINE_STATUSES as RECEIVING_LINE_STATUSES
+from app.transform.receivings import STATUSES as RECEIVING_STATUSES
 from app.transform.sales import (
     CONSUMPTION_STATUSES,
     RETURN_STATUSES,
     SALES_ORIGINS,
     TRANSACTION_STATUSES,
 )
+from app.transform.settings import (
+    DEFAULT_ADJUSTMENT_REVIEW_CENTS,
+    DEFAULT_COUNT_REVIEW_CENTS,
+    DEFAULT_COUNT_REVIEW_PERCENT,
+    UNIT_SYSTEMS,
+)
+from app.transform.suppliers import ORDERING_METHODS
+from app.transform.waste import STATUSES as WASTE_STATUSES
 from app.units import BASE_UNIT, Dimension
 
 
@@ -56,7 +68,7 @@ def utcnow() -> datetime:
 # Where a row may come from. The database refuses anything else (DB1).
 COUNT_SOURCES = ("manual", "opening", "receipt", "scan")
 IDENTIFIER_SOURCES = ("manual", "square", "scan")
-BATCH_SOURCES = ("receipt", "label", "scan")
+BATCH_SOURCES = ("receipt", "label", "scan", "production")
 SUPPRESSION_SOURCES = ("bounce", "complaint", "manual")
 # R1 role presets (USER_ROLES_AND_PERMISSIONS §2, PD-11); their permissions arrive in T1.06.
 MEMBERSHIP_ROLES = ("owner", "administrator", "manager", "employee", "read_only")
@@ -193,6 +205,12 @@ class Tenant(Base):
     report_day: Mapped[int] = mapped_column(Integer, default=0)  # 0 = Monday
     report_hour: Mapped[int] = mapped_column(Integer, default=7)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    # Expiry (T2.08): how many days before a lot's date it is flagged (BAT-FR-09), and whether
+    # expired prepared batches are written off at day close (BAT-FR-11; off by default, PD-29).
+    expiry_alert_days: Mapped[int] = mapped_column(Integer, default=2)
+    auto_dispose_prepared: Mapped[bool] = mapped_column(Boolean, default=False)
+    # PD-37: daily sales are entered by Managers and above unless the Owner lets Employees.
+    employees_enter_sales: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     users: Mapped[list[User]] = relationship(back_populates="tenant")
@@ -465,10 +483,6 @@ class SoldItem(Base):
     sell_unit: Mapped[str] = mapped_column(String(16), default="each")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    components: Mapped[list[RecipeComponent]] = relationship(
-        back_populates="sold_item", cascade="all, delete-orphan"
-    )
-
 
 class SplitField:
     """A stock item field that now lives on its split row (C-38, ADR-0036).
@@ -525,6 +539,7 @@ class InventoryCategory(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
+    expiry_alert_days: Mapped[int | None] = mapped_column(Integer)  # None: the business's
     archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
@@ -561,6 +576,7 @@ class InventoryItem(Base):
     # Which batch stock leaves first when no one chooses (BAT-FR-05): soonest expiry, or
     # first received for stock whose dates do not matter.
     batch_order: Mapped[str] = mapped_column(String(4), default="fefo")
+    expiry_alert_days: Mapped[int | None] = mapped_column(Integer)  # None: its category's
     notes: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -726,24 +742,6 @@ class StockItem(Base):
     reorder_point_base = SplitField("_reorder_point_base", "item_location", "reorder_point_base")
     par_level_base = SplitField("_par_level_base", "item_location", "par_level_base")
     is_active = SplitField("_is_active", "item_location", "is_active")
-
-
-class RecipeComponent(Base):
-    """How much base-unit stock one sold unit consumes."""
-
-    __tablename__ = "recipe_components"
-    __table_args__ = (
-        UniqueConstraint("sold_item_id", "stock_item_id"),
-        positive("recipe_components", "qty_base_per_sale"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
-    sold_item_id: Mapped[int] = mapped_column(owned_by("sold_items.id"), index=True)
-    stock_item_id: Mapped[int] = mapped_column(ref("stock_items.id"), index=True)
-    qty_base_per_sale: Mapped[Decimal] = mapped_column(Qty)
-
-    sold_item: Mapped[SoldItem] = relationship(back_populates="components")
 
 
 class Product(Base):
@@ -1676,6 +1674,296 @@ class StockBatch(Base):
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
+class Supplier(Base):
+    """Someone the business buys from (T2.10, PRC-FR-01). Deactivated, never deleted: its
+    deliveries and history stay (AC-PRC-01)."""
+
+    __tablename__ = "suppliers"
+    __table_args__ = (
+        one_of("suppliers", "ordering_method", ORDERING_METHODS),
+        CheckConstraint("delivery_days BETWEEN 0 AND 127", name="ck_suppliers_delivery_days"),
+        not_negative("suppliers", "lead_time_days"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    contact_name: Mapped[str | None] = mapped_column(String(120))
+    phone: Mapped[str | None] = mapped_column(String(40))
+    email: Mapped[str | None] = mapped_column(String(255))
+    ordering_method: Mapped[str] = mapped_column(String(10), default="email")
+    delivery_days: Mapped[int] = mapped_column(Integer, default=0)  # Monday is bit 0
+    lead_time_days: Mapped[int] = mapped_column(Integer, default=2)
+    minimum_order_cents: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    items: Mapped[list[SupplierItem]] = relationship(
+        back_populates="supplier", order_by="SupplierItem.id"
+    )
+
+
+class SupplierItem(Base):
+    """An item as one supplier sells it (PRC-FR-02): its code and name, the purchase unit and how
+    much of the item it holds, the last price per purchase unit. An item may have several."""
+
+    __tablename__ = "supplier_items"
+    __table_args__ = (
+        positive("supplier_items", "pack_size_base"),
+        not_negative("supplier_items", "last_price_cents"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    supplier_id: Mapped[int] = mapped_column(owned_by("suppliers.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"), index=True)
+    code: Mapped[str | None] = mapped_column(String(80))
+    name: Mapped[str | None] = mapped_column(String(300))
+    purchase_unit: Mapped[str] = mapped_column(String(40), default="each")
+    pack_size_base: Mapped[Decimal] = mapped_column(Qty)
+    last_price_cents: Mapped[int | None] = mapped_column(Integer)
+    last_price_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    preferred: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    supplier: Mapped[Supplier] = relationship(back_populates="items")
+
+
+class Receiving(Base):
+    """A delivery as received (T2.11, RCV-FR-01): from a supplier, by hand or from an invoice
+    document. A draft until posted, which happens exactly once (DR-07, AC-RCV-05)."""
+
+    __tablename__ = "receivings"
+    __table_args__ = (
+        one_of("receivings", "status", RECEIVING_STATUSES),
+        UniqueConstraint("document_id", name="uq_receivings_document"),
+        Index("ix_receivings_location_time", "location_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    supplier_id: Mapped[int | None] = mapped_column(ref("suppliers.id"), index=True)
+    document_id: Mapped[int | None] = mapped_column(ref("documents.id"))
+    status: Mapped[str] = mapped_column(String(10), default="draft")
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    posted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    posted_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+
+    lines: Mapped[list[ReceivingLine]] = relationship(
+        back_populates="receiving", order_by="ReceivingLine.id"
+    )
+
+
+class ReceivingLine(Base):
+    """One line of a delivery: invoiced, arrived and accepted, in the unit it came in; what was
+    accepted enters stock through its own receipt transaction (RCV-FR-09). A correction is a new
+    line that names the one it corrects (RCV-FR-12)."""
+
+    __tablename__ = "receiving_lines"
+    __table_args__ = (
+        one_of("receiving_lines", "status", RECEIVING_LINE_STATUSES),
+        not_negative("receiving_lines", "arrived_qty"),
+        not_negative("receiving_lines", "accepted_qty"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    receiving_id: Mapped[int] = mapped_column(owned_by("receivings.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    supplier_item_id: Mapped[int | None] = mapped_column(ref("supplier_items.id"))
+    description: Mapped[str | None] = mapped_column(String(300))
+    ordered_qty: Mapped[Decimal | None] = mapped_column(Qty)  # with purchase orders (R1.1)
+    invoiced_qty: Mapped[Decimal | None] = mapped_column(Qty)
+    arrived_qty: Mapped[Decimal] = mapped_column(Qty)
+    accepted_qty: Mapped[Decimal] = mapped_column(Qty)
+    unit: Mapped[str] = mapped_column(String(40), default="")
+    qty_base: Mapped[Decimal] = mapped_column(Qty)  # accepted, in the item's base unit
+    unit_price_cents: Mapped[int | None] = mapped_column(Integer)  # per `unit`
+    expires_on: Mapped[date | None] = mapped_column(Date)
+    lot_code: Mapped[str | None] = mapped_column(String(80))
+    reject_reason: Mapped[str | None] = mapped_column(String(200))
+    price_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(10), default="open")
+    batch_id: Mapped[int | None] = mapped_column(ref("stock_batches.id"))
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+    corrects_line_id: Mapped[int | None] = mapped_column(earlier("receiving_lines.id"))
+    correction_reason: Mapped[str | None] = mapped_column(String(300))
+
+    receiving: Mapped[Receiving] = relationship(back_populates="lines")
+
+
+class ImportMapping(Base):
+    """Which columns of a sales export hold the date, product and quantity (T2.13, STD-FR-03),
+    saved per business for files with the same header."""
+
+    __tablename__ = "import_mappings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "header_key", name="uq_import_mappings_header"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    header_key: Mapped[str] = mapped_column(String(500))
+    date_column: Mapped[str] = mapped_column(String(120))
+    product_column: Mapped[str] = mapped_column(String(120))
+    quantity_column: Mapped[str] = mapped_column(String(120))
+    date_format: Mapped[str] = mapped_column(String(20), default="auto")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ImportName(Base):
+    """A product name from a sales file, matched once to a product size and remembered."""
+
+    __tablename__ = "import_names"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_import_names_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(300))  # normalized
+    product_variation_id: Mapped[int] = mapped_column(ref("product_variations.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class SalesImport(Base):
+    """An uploaded sales file, kept in the business's storage, previewed then posted."""
+
+    __tablename__ = "sales_imports"
+    __table_args__ = (one_of("sales_imports", "status", ("preview", "posted")),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    filename: Mapped[str] = mapped_column(String(200))
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_key: Mapped[str] = mapped_column(String(500))
+    mapping_id: Mapped[int | None] = mapped_column(ref("import_mappings.id"))
+    status: Mapped[str] = mapped_column(String(10), default="preview")
+    days_posted: Mapped[int] = mapped_column(Integer, default=0)
+    uploaded_by: Mapped[int | None] = mapped_column(ref("users.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    posted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class ProductionOrder(Base):
+    """A production run (T2.09, WF-11): a prepared item or finished good made from its recipe in
+    effect, times a multiplier. R1 records it completed in one step (PRD-FR-08); its ledger
+    transaction takes the inputs and puts the output into a new batch."""
+
+    __tablename__ = "production_orders"
+    __table_args__ = (
+        one_of("production_orders", "status", PRODUCTION_STATUSES),
+        positive("production_orders", "multiplier"),
+        positive("production_orders", "actual_yield_base"),
+        Index("ix_production_orders_location_time", "location_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))  # what was made
+    recipe_version_id: Mapped[int] = mapped_column(ref("recipe_versions.id"))
+    multiplier: Mapped[Decimal] = mapped_column(Qty)
+    expected_yield_base: Mapped[Decimal] = mapped_column(Qty)
+    actual_yield_base: Mapped[Decimal] = mapped_column(Qty)
+    variance_base: Mapped[Decimal] = mapped_column(Qty)  # actual - expected (PRD-FR-04)
+    # Per base unit of the output; None when an input had no cost (PRD-FR-06).
+    unit_cost: Mapped[Decimal | None] = mapped_column(Qty)
+    batch_code: Mapped[str] = mapped_column(String(40))
+    output_batch_id: Mapped[int | None] = mapped_column(ref("stock_batches.id"))
+    note: Mapped[str | None] = mapped_column(String(300))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+    status: Mapped[str] = mapped_column(String(10), default="completed")
+    voided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    voided_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    void_reason: Mapped[str | None] = mapped_column(String(300))
+
+
+class WasteReason(Base):
+    """Why stock was thrown away (WST-FR-02): the defaults and the business's own. Renamed or
+    archived, never deleted; each waste event keeps the name it had then, so reports stay
+    stable."""
+
+    __tablename__ = "waste_reasons"
+    __table_args__ = (UniqueConstraint("tenant_id", "code", name="uq_waste_reasons_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    code: Mapped[str] = mapped_column(String(40))
+    label: Mapped[str] = mapped_column(String(80))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class WasteEvent(Base):
+    """A loss as the business recorded it (T2.07, WST-FR-01): an item, or a sellable product
+    expanded to its recipe, how much, why, by whom and when. Its ledger entries are the stock
+    effect and the only source of quantities and costs in reports (DR-33)."""
+
+    __tablename__ = "waste_events"
+    __table_args__ = (
+        one_of("waste_events", "status", WASTE_STATUSES),
+        positive("waste_events", "qty_base"),
+        CheckConstraint(
+            "(inventory_item_id IS NULL) <> (product_variation_id IS NULL)",
+            name="ck_waste_events_what",
+        ),
+        Index("ix_waste_events_location_time", "location_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    reason_id: Mapped[int] = mapped_column(ref("waste_reasons.id"))
+    reason_label: Mapped[str] = mapped_column(String(80))  # as it was named then
+    inventory_item_id: Mapped[int | None] = mapped_column(ref("inventory_items.id"))
+    product_variation_id: Mapped[int | None] = mapped_column(ref("product_variations.id"))
+    recipe_version_id: Mapped[int | None] = mapped_column(ref("recipe_versions.id"))
+    quantity: Mapped[Decimal] = mapped_column(Qty)  # as entered, in `unit`
+    unit: Mapped[str] = mapped_column(String(16), default="")
+    qty_base: Mapped[Decimal] = mapped_column(Qty)  # the item's base unit, or products wasted
+    note: Mapped[str | None] = mapped_column(String(300))
+    # WST-FR-11: an optional link to the sale or production it came from.
+    related_type: Mapped[str | None] = mapped_column(String(20))
+    related_id: Mapped[str | None] = mapped_column(String(80))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    transaction_id: Mapped[int | None] = mapped_column(ref("inventory_transactions.id"))
+    status: Mapped[str] = mapped_column(String(10), default="recorded")
+    voided_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    voided_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    void_reason: Mapped[str | None] = mapped_column(String(300))
+
+    lines: Mapped[list[WasteLine]] = relationship(back_populates="event", order_by="WasteLine.id")
+
+
+class WasteLine(Base):
+    """What a waste event takes out of stock: one item, how much, and the batch when someone
+    chose it (WST-FR-04). A product's event has a line per ingredient of its recipe. Reports
+    never sum these; they read the ledger (DR-33)."""
+
+    __tablename__ = "waste_lines"
+    __table_args__ = (positive("waste_lines", "qty_base"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    waste_event_id: Mapped[int] = mapped_column(owned_by("waste_events.id"), index=True)
+    inventory_item_id: Mapped[int] = mapped_column(ref("inventory_items.id"))
+    qty_base: Mapped[Decimal] = mapped_column(Qty)
+    batch_id: Mapped[int | None] = mapped_column(ref("stock_batches.id"))
+
+    event: Mapped[WasteEvent] = relationship(back_populates="lines")
+
+
 class Promotion(Base):
     """A markdown the owner decided on, and what happened to sales afterwards.
 
@@ -1788,6 +2076,76 @@ class WebhookEvent(Base):
     event_type: Mapped[str] = mapped_column(String(80))
     tenant_id: Mapped[int | None] = mapped_column(ref("tenants.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class BusinessSettings(Base):
+    """A business's settings beyond its profile (T2.19; ADM-FR-03, -05, -06): one row, made on
+    first read. Profile, schedule and expiry window stay on the tenant row where they began."""
+
+    __tablename__ = "business_settings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_business_settings_tenant"),
+        one_of("business_settings", "unit_system", UNIT_SYSTEMS),
+        one_of("business_settings", "default_production_mode", PRODUCTION_MODES),
+        CheckConstraint(
+            "digest_hour IS NULL OR (digest_hour >= 0 AND digest_hour <= 23)",
+            name="ck_business_settings_digest_hour",
+        ),
+        CheckConstraint(
+            "count_review_percent >= 1 AND count_review_percent <= 100",
+            name="ck_business_settings_count_review_percent",
+        ),
+        not_negative("business_settings", "count_review_cents"),
+        not_negative("business_settings", "adjustment_review_cents"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(owned_by("tenants.id"))
+    unit_system: Mapped[str] = mapped_column(String(8), default="metric")
+    default_production_mode: Mapped[str] = mapped_column(String(16), default="made_to_order")
+    digest_hour: Mapped[int | None] = mapped_column(Integer)
+    count_review_cents: Mapped[int] = mapped_column(Integer, default=DEFAULT_COUNT_REVIEW_CENTS)
+    count_review_percent: Mapped[int] = mapped_column(Integer, default=DEFAULT_COUNT_REVIEW_PERCENT)
+    adjustment_review_cents: Mapped[int] = mapped_column(
+        Integer, default=DEFAULT_ADJUSTMENT_REVIEW_CENTS
+    )
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ModifierScale(Base):
+    """A scale modifier's factor from an instant on (T2.19, AC-ADM-06): append-only, so a sale
+    reads the factor in effect at its own moment and a change applies to later sales only."""
+
+    __tablename__ = "modifier_scales"
+    __table_args__ = (positive("modifier_scales", "scale_factor"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    modifier_id: Mapped[int] = mapped_column(owned_by("modifiers.id"), index=True)
+    scale_factor: Mapped[Decimal] = mapped_column(Qty)
+    effective_from: Mapped[datetime] = mapped_column(UTCDateTime)
+    recorded_by: Mapped[int | None] = mapped_column(ref("users.id"))
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class Onboarding(Base):
+    """A business's onboarding (T2.20-b; SAAS §5): its step-0 answer and the POS it names, the
+    steps it chose to skip, and when its opening count was taken. Made on first read."""
+
+    __tablename__ = "onboarding"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_onboarding_tenant"),
+        one_of("onboarding", "payment_answer", tuple(ONBOARDING_ANSWERS)),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(owned_by("tenants.id"))
+    payment_answer: Mapped[str | None] = mapped_column(String(20))
+    pos_name: Mapped[str | None] = mapped_column(String(80))
+    answered_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    skipped: Mapped[str] = mapped_column(String(200), default="")
+    opening_counted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 # Keeps inventory_items and item_locations in step with stock_items while both exist (C-38).

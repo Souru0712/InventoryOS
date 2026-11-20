@@ -136,8 +136,22 @@ def test_the_weekly_report_is_readable_without_html(db, tenant, milk, mail):
     assert send_weekly_report(db, OrgContext.system(tenant.id)) is True
 
     text = plain(mail[0])
-    assert "Net sales" in text and "Stock on hand" in text
+    for figure in ("Stock value", "Waste cost last week", "Money at risk", "Open exceptions"):
+        assert figure in text  # ANL-FR-09
+    assert "LOW STOCK" in text and "Whole milk" in text  # 4 l against a reorder point of 20 l
     assert "best viewed as HTML" not in text
+    assert "Whole milk" in html_of(mail[0])
+    assert "wasted" in mail[0]["Subject"] and "at risk" in mail[0]["Subject"]
+
+
+def test_the_weekly_summary_goes_to_owners_and_members_who_see_costs(db, tenant, milk, mail):
+    """It carries money: an Employee never gets it, a Manager does unless they turned it off."""
+    second_user(db, tenant, "barista@rosewood.test")  # an Employee
+    manager = second_user(db, tenant, "manager@rosewood.test")
+    db.query(Membership).filter_by(user_id=manager.id).one().role = "manager"
+    db.commit()
+    assert send_weekly_report(db, OrgContext.system(tenant.id)) is True
+    assert {m["To"] for m in mail} == {"owner@rosewood.test", "manager@rosewood.test"}
 
 
 # --- what each person asked for ---------------------------------------------------------------

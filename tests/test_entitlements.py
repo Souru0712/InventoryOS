@@ -344,7 +344,8 @@ def test_an_expired_trial_is_refused_the_same_way(client):
 def test_starter_is_refused_the_pro_features_by_the_server(client):
     signed_up(client, SubscriptionStatus.ACTIVE, "starter")
 
-    assert client.get("/app/reorder.csv").status_code == 402
+    # The reorder CSV is core, on every plan (E-05, T2.15).
+    assert client.get("/app/reorder.csv").status_code == 200
     thresholds = client.post("/app/items/1/thresholds", data={"reorder_point": "5"})
     assert thresholds.status_code == 402
     assert "Pro" in thresholds.text

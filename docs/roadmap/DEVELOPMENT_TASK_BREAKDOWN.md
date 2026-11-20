@@ -77,23 +77,23 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.03 | Recipe costing, margins, completeness | P1 | M | M3 | T2.02, T1.24 | Completed (2026-11-14; cost panel, margins, affected recipes, sold without a recipe) |
 | T2.04 | Sales model and sources | P0 | M | M3 | T2.01, T1.04 | Completed (2026-11-18; sales sources and transactions, one source of record per day, sales_daily frozen) |
 | T2.05 | Consumption engine | P0 | L | M3 | T2.02, T2.04, T1.18 | Completed (2026-11-18; resolver, production mode, sale consumption posting and reprocessing; `sales_daily` dropped) |
-| T2.06 | Batch allocation refactor | P1 | L | M3 | T1.18 | In review (T2.06-a merged; T2.06-b batch history, batch counts, `batch_shortfall`, batch order setting: PR open) |
-| T2.07 | Waste module | P1 | M | M3 | T2.06, T2.02 | Not started |
-| T2.08 | Expiry queue and auto-dispose | P1 | M | M3 | T2.07 | Not started |
-| T2.09 | Production runs | P1 | L | M3 | T2.02, T2.06 | Not started |
-| T2.10 | Suppliers and supplier items | P1 | M | M3 | T1.13 | Not started |
-| T2.11 | Receiving on the ledger | P1 | L | M3 | T2.10, T2.06, T1.20 | Not started |
-| T2.12 | Standalone daily sales entry | P1 | M | M4 | T2.05 | Not started |
-| T2.13 | Sales file import | P1 | M | M4 | T2.12 | Not started |
-| T2.14 | Direct usage records | P1 | S | M4 | T2.05 | Not started |
-| T2.15 | Reorder suggestions on ledger usage | P1 | M | M4 | T2.10, T2.05 | Not started |
-| T2.16 | Reports I: consumption, waste, expiry, variance | P1 | M | M4 | T2.07, T1.23 | Not started |
-| T2.17 | Reports II: margin, cost of sales, receiving, count-based usage, CSV | P1 | M | M4 | T2.16, T2.03, T2.11 | Not started |
-| T2.18 | Weekly summary email | P1 | S | M4 | T2.16 | Not started |
-| T2.19 | Settings module | P1 | M | M3 | T1.04, T1.12 | Not started |
-| T2.20 | Onboarding flow | P1 | L | M4 | T2.12, T2.13, T1.14 | Not started |
-| T2.21 | Employee home and floor screens | P1 | M | M3 | T2.07, T2.09 | Not started |
-| T2.22 | Standalone end-to-end suite | P0 | M | M4 | T2.20 | Not started |
+| T2.06 | Batch allocation refactor | P1 | L | M3 | T1.18 | Completed (2026-11-19; movement-level batches, DM-10, batch history and counts, `batch_shortfall`; probe R6 retired) |
+| T2.07 | Waste module | P1 | M | M3 | T2.06, T2.02 | In review (waste entry, product expansion, void window, log, report and found short: PR #60 open) |
+| T2.08 | Expiry queue and auto-dispose | P1 | M | M3 | T2.07 | Built on branch, not merged (alert window, dispose action, opt-in auto-dispose, use-by label; stacked on T2.07 by the owner's choice) |
+| T2.09 | Production runs | P1 | L | M3 | T2.02, T2.06 | Built on branch, not merged (runs, FEFO inputs, dated output batch, cost over yield, void, production screen) |
+| T2.10 | Suppliers and supplier items | P1 | M | M3 | T1.13 | Built on branch, not merged (suppliers, supplier items and packs, price-change detection, DM-11 backfill, supplier screens) |
+| T2.11 | Receiving on the ledger | P1 | L | M3 | T2.10, T2.06, T1.20 | Built on branch, not merged (receivings, exactly-once posting, discrepancies, price checks, corrections, DM-12; invoices recorded as receivings, daily reading cap, cost flags) |
+| T2.12 | Standalone daily sales entry | P1 | M | M4 | T2.05 | Built on branch, not merged (daily entry grid, corrections with reason, POS days refused, sales_missing, PD-37 setting) |
+| T2.13 | Sales file import | P1 | M | M4 | T2.12 | Built on branch, not merged (CSV upload, saved columns, learned names, preview, daily file_import transactions; XLSX awaits openpyxl) |
+| T2.14 | Direct usage records | P1 | S | M4 | T2.05 | Built on branch, not merged (usage form, manual_consumption with a reason, consumption split sales / manual usage) |
+| T2.15 | Reorder suggestions on ledger usage | P1 | M | M4 | T2.10, T2.05 | Built on branch, not merged (velocity from the ledger, count-based fallback, ROR-FR-02 formula, count first, CSV ungated; recipe_components dropped) |
+| T2.16 | Reports I: consumption, waste, expiry, variance | P1 | M | M4 | T2.07, T1.23 | Built on branch, not merged (/app/reports: consumption split, count variance, expiry losses on business days; links waste report and as-of valuation) |
+| T2.17 | Reports II: margin, cost of sales, receiving, count-based usage, CSV | P1 | M | M4 | T2.16, T2.03, T2.11 | Built on branch, not merged (margins, cost of sales with coverage, receiving discrepancies and price changes, count-based usage per interval, CSV of every report table) |
+| T2.18 | Weekly summary email | P1 | S | M4 | T2.16 | Built on branch, not merged (stock value, waste cost, money at risk, low stock, open exceptions; Owners and cost-seeing members; due on the business's clock; AC-ANL-07 staging check pending) |
+| T2.19 | Settings module | P1 | M | M3 | T1.04, T1.12 | Built on branch, not merged (business and alert settings screens, business_settings, dated modifier scale factors; adjustment reasons still fixed) |
+| T2.20 | Onboarding flow | P1 | L | M4 | T2.12, T2.13, T1.14 | Built on branch, not merged (item CSV import with preview and row errors, quick-add, checklist with skip; step 0 routing; one-screen opening count; AC-SAAS-10 needs a non-founder) |
+| T2.21 | Employee home and floor screens | P1 | M | M3 | T2.07, T2.09 | Built on branch, not merged (/app/floor with alerts and role tasks, Employees land there, shared-device "logged by" picker; 375 px checked) |
+| T2.22 | Standalone end-to-end suite | P0 | M | M4 | T2.20 | Built on branch, not merged (every R1 workflow through the pages with no POS; adapter boundary check; CI job added, required-check status is the owner's) |
 | T3.01 | Adapter interface and boundary check | P1 | M | M5 | T2.04 | Not started |
 | T3.02 | Square connection lifecycle | P1 | M | M5 | T3.01, T1.12 | Not started |
 | T3.03 | Location mapping and catalog sync | P1 | M | M5 | T3.02 | Not started |

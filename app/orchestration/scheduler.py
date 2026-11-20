@@ -14,6 +14,7 @@ import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.base import BaseScheduler
@@ -50,18 +51,26 @@ def sync_all_tenants() -> None:
                 log.exception("scheduled sync failed for tenant %s", tenant_id)
 
 
+def _local(now: datetime, zone: str | None) -> datetime:
+    """The instant on the business's own clock; an unknown zone reads as UTC."""
+    try:
+        return now.astimezone(ZoneInfo(zone or "UTC"))
+    except (ZoneInfoNotFoundError, ValueError):
+        return now.astimezone(UTC)
+
+
 def send_due_reports(now: datetime | None = None) -> None:
-    """Queue each tenant's weekly report at its configured day and hour, once a week; the job
-    retries a failed send (T1.20)."""
+    """Queue each tenant's weekly report at its configured day and hour on its own clock, once a
+    week; the job retries a failed send (T1.20, T2.18)."""
     now = now or datetime.now(UTC)
     with session_scope() as db:
-        due = [
-            tenant.id
-            for tenant in subscribed_tenants(db)
-            if tenant.report_day == now.weekday() and tenant.report_hour == now.hour
-        ]
-    year, week, _ = now.isocalendar()
-    for tenant_id in due:
+        due = []
+        for tenant in subscribed_tenants(db):
+            local = _local(now, tenant.timezone)
+            if tenant.report_day == local.weekday() and tenant.report_hour == local.hour:
+                year, week, _ = local.isocalendar()
+                due.append((tenant.id, f"week:{year}-{week:02d}"))
+    for tenant_id, week_key in due:
         with log_context(tenant_id=tenant_id):
             try:
                 with session_scope() as db:
@@ -69,7 +78,7 @@ def send_due_reports(now: datetime | None = None) -> None:
                         db,
                         OrgContext.system(tenant_id),
                         "send_weekly_report",
-                        dedupe_key=f"week:{year}-{week:02d}",
+                        dedupe_key=week_key,
                     )
                 log.info("weekly report queued for tenant %s", tenant_id)
             except Exception:

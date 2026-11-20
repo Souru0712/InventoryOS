@@ -5,6 +5,501 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T2.22 Standalone end-to-end suite (built on branch)
+
+**Implemented**
+- `tests/test_standalone.py`: a business signs up and runs every R1 workflow through the pages
+  with every POS setting cleared and the Square client refusing to be built, ending with an exact
+  ledger reconciliation and a paid subscription; AC-SAL-07 static checks (provider imports only in
+  the three POS seams, no Square module outside `app/providers/`, the core never reaches the
+  seams).
+- `app/transform/square_normalize.py` moved to `app/providers/square/normalize.py`.
+- CI job "Standalone (no POS)" with every Square variable empty.
+- Found on the way: T2.19 had added a second business-profile form beside T1.04's; removed
+  (`59acd5f`).
+
+**Verified**
+- The suite (3 tests), settings, Square normalise, catalog and write-back, webhooks, deployment,
+  docs contract, locations, settings, permissions, isolation, web.
+
+**Decisions**
+- ADR-0074 (Proposed).
+
+**Open issues**
+- Making "Standalone (no POS)" a required check is a ruleset change for the owner; the M4 gate
+  review reads it.
+
+---
+
+## 2026-11-19 — T2.21 Employee home and floor screens (built on branch)
+
+**Implemented**
+- `/app/floor` ("Today"): alerts without amounts, the floor tasks the role allows, large targets
+  and one column on a phone; Employees land there after signing in; "Today" leads the menu.
+- PD-14 "logged by" picker: on an Employee (shared) account the picked member is kept in the
+  signed session per business and becomes the request's actor (`floor_person()` in
+  `require_org()`); only active members, only from an Employee account.
+
+**Verified**
+- `tests/test_floor.py`: tasks by role (daily sales only once allowed), no money, where people
+  land, the picked person named on waste and the account itself after clearing, refusals; auth,
+  MFA, accounts, permissions, sessions, team, headers, async, isolation, waste, dashboard, web,
+  scoped access; the floor screen and the waste flow (AC-WST-01) checked at 375 px on the demo
+  database.
+
+**Decisions**
+- ADR-0073 (Proposed).
+
+**Open issues**
+- Playwright tests at 375 px (ID-08) wait for the browser test dependency.
+
+---
+
+## 2026-11-19 — T2.20-b Step 0 and the opening count (built on branch)
+
+**Implemented**
+- `onboarding` (migration `4ebc618f9510`); `app/transform/onboarding.py` (answers, skips);
+  `app/onboarding.py`: `answer_payments()` (audited, routes the checklist, keeps the POS named),
+  `set_skipped()`, a path-aware `checklist()` that reads without writing, `opening_count()`
+  (`opening_balance` for items that never moved, a count variance for the rest).
+- Dashboard: the step-0 question until answered, skip and "take it back up" on each step;
+  `/app/onboarding/count` (one screen, display unit or package); isolation cases.
+
+**Verified**
+- `tests/test_onboarding.py`: routing and what is kept, skipping and resuming, the opening count
+  (40 opened, 5 corrected to 8, a blank left alone, a negative refused), the dashboard flow;
+  item import, isolation, permissions, dashboard, headers, migrations, ledger writers, async,
+  scoped access, web, accounts, health flow; step 0 and the count page checked on the demo
+  database.
+
+**Decisions**
+- ADR-0072 (Proposed).
+
+**Open issues**
+- AC-SAAS-10 is observed with a non-founder (manual); T2.22 adds the end-to-end onboarding test.
+
+---
+
+## 2026-11-19 — T2.20-a Item import, quick-add and checklist (built on branch)
+
+**Implemented**
+- `app/transform/item_import.py` (columns by common names, row checks), `app/item_import.py`
+  (file kept by digest; every row tried through `create_item()` in a savepoint, rolled back for
+  the preview, kept on import; quick-add through the same path).
+- `/app/items/import` (upload, template CSV, preview with row errors, import) and
+  `/app/items/quick-add`; `app/onboarding.py` `checklist()` computed from the business's records,
+  on the dashboard for Owners and Administrators until done; isolation cases.
+
+**Verified**
+- `tests/test_item_import.py`: AC-INV-12 (150 rows, 3 bad: 147 imported, rows 149–151 reported
+  with reasons, nothing kept by the preview), column names, refused files, a name already taken,
+  the checklist, the pages; isolation, permissions, dashboard, catalog, headers, async, scoped
+  access, web, health flow, entitlements, accounts; the checklist and an import checked on the demo
+  database.
+
+**Decisions**
+- ADR-0071 (Proposed).
+
+**Open issues**
+- T2.20-b: step 0 ("How do you take payments today?"), the one-screen opening count, skipping a
+  step.
+
+---
+
+## 2026-11-19 — T2.19 Settings module (built on branch)
+
+**Implemented**
+- `business_settings` and `modifier_scales` (migration `3636bfa718b2`, factors backfilled from
+  the start); `app/transform/settings.py`, `app/business_settings.py` (profile, schedule, alerts,
+  defaults, all audited; `alert_email_key()`).
+- Settings take effect where read: count and adjustment review thresholds, the alert email's
+  hour on the business's clock, the default production mode, units listed first in item forms;
+  `scale_at()` gives the factor in effect at a sale's moment (AC-ADM-06).
+- `/app/settings/business` and `/app/settings/alerts`, linked from the personal settings page.
+
+**Verified**
+- `tests/test_business_settings.py`: profile and schedule audited, AC-ADM-02 (alerts and the
+  digest hour in New York time), thresholds, defaults, AC-ADM-06 (1.5 before, 2 after, the earlier
+  sale keeps 1.5), the pages; consumption, counts, adjustments, products, catalog, migrations,
+  jobs, headers, async, audit, permissions, isolation, alerts, email, recipes, web, production,
+  daily sales; both pages and the units default checked on the demo database.
+
+**Decisions**
+- ADR-0070 (Proposed).
+
+**Open issues**
+- Adjustment reasons are the fixed R1 list; configurable ones need a reasons table (decision).
+
+---
+
+## 2026-11-19 — T2.18 Weekly summary email (built on branch)
+
+**Implemented**
+- `app/transform/reports.py`: `WeeklySummary`, `low_stock()`; `app/orchestration/reporting.py`:
+  stock value, last week's waste cost at snapshot, money at risk, low stock, open exceptions;
+  `recipients()` (Owners and members who see costs and financial reports, who want it).
+- Email templates (HTML and text) and `/app/report` rewritten; the CLI `report` prints the new
+  figures; `send_due_reports()` is due at the report day and hour on the tenant's clock.
+- The old sales inputs (`sale_rows()`, `sold_item_names()`, `SaleRow`) removed.
+
+**Verified**
+- `tests/test_email.py` (the figures in the text and HTML parts, the subject, recipients by
+  role), `tests/test_jobs.py` (due at 07:00 New York time, not 07:00 UTC), deployment, web,
+  permissions, dashboard, reports, health flow, expiry, alerts, inventory, recipes, isolation,
+  headers, async, entitlements, billing.
+
+**Decisions**
+- ADR-0069 (Proposed).
+
+**Open issues**
+- AC-ANL-07 (delivery through the email provider) is a staging check at merge.
+
+---
+
+## 2026-11-19 — T2.17 Reports II (built on branch)
+
+**Implemented**
+- `app/transform/analytics.py`: count-based usage per count interval, price changes, cost of
+  sales coverage. `app/reports.py`: `cost_of_sales_report()`, `count_usage_report()`,
+  `receiving_report()`, `margin_report()`; `counted_lines()` in `app/counts.py` (shared with
+  reorder).
+- `/app/reports`: cost of sales, count-based usage, receiving, price changes and margins
+  sections; `/app/reports.csv?table=…` for every report table, linked from the reports, waste
+  log and valuation pages.
+- `location_filter` accepts an empty value as every location (the dashboard's "All" used to
+  return 422); the isolation walker names `location`.
+
+**Verified**
+- `tests/test_reports_ii.py`: AC-ANL-08 worked example (pure and on the ledger, no sales),
+  AC-ANL-04 coverage, discrepancies and a 25 % price change, margins, every CSV table, money
+  columns only with cost access, CSV figures equal the page's, empty and bad location; reports,
+  reorder, isolation, permissions, web, dashboard, headers, async, counts, receiving, health
+  flow, waste; the page and every CSV link checked on the demo database.
+
+**Decisions**
+- ADR-0068 (Proposed).
+
+**Open issues**
+- Count-based usage has no money column yet.
+
+---
+
+## 2026-11-19 — T2.16 Reports I (built on branch)
+
+**Implemented**
+- `app/transform/analytics.py` (pure): consumption split (sales, production, waste, manual),
+  count variance (short and over), expiry losses and stock past its date; values per movement at
+  its snapshot.
+- `app/reports.py`: windows from each location's business days; waste reasons and batches read
+  for expiry. `item_moves()` carries snapshot cost, the reversal flag and the source id.
+- `/app/reports` (`reports.operational`, money behind cost access and financial reports), linking
+  the waste report, as-of valuation and the weekly summary; "Reports" in the menu.
+
+**Verified**
+- `tests/test_reports.py`: AC-ANL-03 (split and ledger totals), AC-ANL-05 (a 02:00 movement with
+  a 04:00 cutoff belongs to the day before), variance at snapshot unchanged by a cost override
+  (AC-ANL-01), expiry losses and at-risk batches, the page; isolation, permissions, web,
+  dashboard, waste, usage, reorder, ledger, headers, async, health flow; the page checked on the
+  demo database.
+
+**Decisions**
+- ADR-0067 (Proposed).
+
+**Open issues**
+- CSV of the report tables arrives with T2.17.
+
+---
+
+## 2026-11-19 — T2.15 Reorder suggestions on ledger usage (built on branch)
+
+**Implemented**
+- Velocity reads the ledger (`item_moves()`, `consumption()` in `app/orchestration/views.py`):
+  sales, production and usage records, reversals netted; the sales signal is recipe ingredients
+  in effect or items used. Health, expiry, promotions and alerts read it.
+- `app/transform/reorder.py` and `app/reorder.py` (`plan()`): ROR-FR-02 formula rounded to the
+  purchase unit, count-based use when sales are incomplete or nothing recorded use (STD-FR-09),
+  count first, order-by from lead time and delivery days, grouped by supplier.
+- `/app/reorder`: window, cover and safety on the page, "why this number"; CSV grouped by
+  supplier on every plan (E-05).
+- `recipe_components` dropped (migration `2675519dc2bc`); the completeness notice reads recipes
+  in effect; the demo seeds first recipes from the start and consumes its sales history.
+
+**Verified**
+- `tests/test_reorder.py` (AC-ROR-01 example, AC-ANL-08 counts, count first, order-by, supplier
+  and receiving packs, CSV, no order path); health, expiry, promotions, alerts, dashboard,
+  permissions, entitlements, billing, recipes, ledger, migrations, isolation, web, scanning;
+  the demo reseeded and `/app/reorder` checked in the browser.
+- Fixtures that built velocity from POS sales now post ledger consumption
+  (`tests/ledger_helpers.py`: `consumed_on`, `counted_to`).
+
+**Decisions**
+- ADR-0066 (Proposed): par no longer sets the quantity; cover 7 days and safety 10 % by default,
+  set on the page (no schema in this task).
+
+**Open issues**
+- Cover and safety as business settings (needs a migration).
+- The completeness notice still treats a POS-counted item without a recipe as covered.
+
+---
+
+## 2026-11-19 — T2.14 Direct usage records (built on branch)
+
+**Implemented**
+- `app/transform/usage.py`: reasons, the form token, `UsageRuleError`.
+- `app/usage.py`: `record_usage()` (one `usage` transaction of `manual_consumption` movements keyed
+  `usage:<token>`, reason required, below zero refused without the override, `missing_cost` and
+  `negative_balance` as for waste), `consumption()` (sales and manual usage kept apart per item),
+  `records()`.
+- `movements_in()` also carries each movement's time, person and reason.
+- `/app/usage` (`sales.record`): the form, the week's consumption split, the records; "Usage" in
+  the menu; isolation cases.
+
+**Verified**
+- `tests/test_usage.py`: stock changes and the record shows as manual usage beside sales use,
+  one post per form, reason and quantity rules, below zero, the page; isolation, ledger,
+  permissions, security headers, async, waste, daily sales, scoped access, consumption, docs.
+- Fixed a timing flake in `tests/test_waste.py` (AC-WST-05): the void window is measured from the
+  entry's `recorded_at`, not the module's `T0`, so a long run no longer fails it.
+
+**Decisions**
+- ADR-0065 (Proposed).
+
+**Open issues**
+- No void for a usage record (corrected by an adjustment or a count).
+
+---
+
+## 2026-11-19 — T2.13 Sales file import (built on branch)
+
+**Implemented**
+- `app/transform/imports.py` (pure): CSV reading, column guessing, date parsing, daily totals per
+  name, name matching.
+- `import_mappings`, `import_names`, `sales_imports` (migration `68df2db99f00`).
+- `app/sales_import.py`: `upload()` (type from bytes, Excel refused, stored tenant-scoped),
+  `save_mapping()`, `teach()`, `preview()` (days, unmatched names, days another source owns),
+  `post()` (one `file_import` transaction per day, consumption in the request, the import source
+  bounded by the next source of record).
+- `/app/sales/import`: upload, columns, matching, preview, post; "Import" in the menu.
+
+**Verified**
+- `tests/test_sales_import.py`: AC-SAL-04 (unmatched listed, matched days posted, re-import adds
+  nothing), learned names, saved columns, a hand-entered day skipped, file types, the pages;
+  isolation, sales, daily sales, permissions, scoped access, security headers, migrations,
+  consumption, sessions; ruff, mypy, docs checker.
+- Fixed `test_dm3_…` in `tests/test_migrations.py`: its raw tenant insert lacked the NOT NULL
+  columns added at T2.08 and T2.12.
+
+**Decisions**
+- ADR-0064 (Proposed).
+
+**Open issues**
+- XLSX is not read: needs `uv add openpyxl` (approved, ID-23) and a reader hook.
+
+---
+
+## 2026-11-19 — T2.12 Standalone daily sales entry (built on branch)
+
+**Implemented**
+- `app/daily_sales.py`: `save_day()` (one manual daily transaction per location and day, the same
+  values record nothing, a changed day needs a reason carried to the reversal, consumption posted
+  in the request with the job as the net, POS days refused, a manual source started or extended
+  back), `missing_days()` (`sales_missing` for open hand-entry days of the last week).
+- `extend_source()` in `app/sales.py`; the correction reason through `record_sale()`,
+  `queue_consumption()` and `consume_sale()`.
+- PD-37: `tenants.employees_enter_sales` (migration `e557269f9eb1`) and `member_permissions()`,
+  used by `require_org()` and the menus.
+- `/app/sales/daily`: the grid, most sold first, and the Employee setting.
+
+**Verified**
+- `tests/test_daily_sales.py`: AC-SAL-02, -03, -05, -06, PD-37, the page; permissions, team,
+  sessions, sales, consumption, jobs, alerts and the full isolation suite.
+
+**Decisions**
+- ADR-0063 (Proposed).
+
+**Open issues**
+- Optional modifier counts on the daily grid (PD-38) are not on the screen.
+
+---
+
+## 2026-11-19 — T2.11-b Invoices as receivings and the reading cap (built on branch)
+
+**Implemented**
+- `apply_document()` records a posted receiving for the invoice (`record_invoice()`): supplier
+  by name, lines linked to the invoice's receipt transaction, prices checked against supplier
+  items, costs changed without `receiving.edit_costs` flagged in `receiving_discrepancy`.
+- `read_later()` stops queueing extraction at `extraction_daily_cap` (40) per business in 24
+  hours and points the document to entry by hand (RCV-FR-14).
+
+**Verified**
+- `tests/test_receivings.py`: an applied invoice is a posted receiving with its price flagged; an
+  Employee's cost change is flagged; the cap; with the existing receiving, invoice, scanning,
+  jobs and isolation tests.
+
+**Open issues**
+- Concurrency of two simultaneous posts is covered by the conditional update and tested
+  sequentially; a two-session Postgres test is still to add.
+
+---
+
+## 2026-11-19 — T2.11-a Receivings on the ledger (built on branch)
+
+**Implemented**
+- `receivings` and `receiving_lines` (migration `ebcbee00f30e`, DM-12 history for applied
+  documents with no new movements); `app/receivings.py`: drafts with invoiced/arrived/accepted
+  lines (supplier packs convert), posting exactly once, a `receipt` per accepted line into a
+  batch when dated, price into the item's cost and the supplier item's last price (flagged at
+  10 %), discrepancies into `receiving_discrepancy`, corrections by reversal and a new line.
+- `/app/deliveries`: start, add lines, post, correct; a Deliveries link in the menu.
+
+**Verified**
+- `tests/test_receivings.py`: AC-RCV-01, -05 (a second post is refused), -06, -07 with AC-PRC-02,
+  -08, a dated line's batch, the pages; the DM-12 migration test; isolation cases for the six
+  new routes; the existing receiving flow and supplier tests.
+
+**Decisions**
+- ADR-0062 (Proposed).
+
+**Open issues**
+- T2.11-b: invoice review through receivings, extraction as a capped job, Employee cost flags.
+- AC-RCV-05 is tested sequentially; the concurrent Postgres test comes with T2.11-b.
+
+---
+
+## 2026-11-19 — T2.10 Suppliers and supplier items (built on branch)
+
+**Implemented**
+- `suppliers` and `supplier_items` (migration `30d75bcd3fd3`, DM-11 backfill from free-text names
+  on items and documents); `app/suppliers.py`: create, edit, deactivate, supplier items with
+  purchase unit and pack in base units, one preferred per item, `record_price()` with
+  `price_variance` at 10 % or more, purchase history from deliveries.
+- `/app/suppliers`: list, add, detail with items and deliveries; a Suppliers link in the menu.
+
+**Verified**
+- `tests/test_suppliers.py` (AC-PRC-01, -02, PRC-FR-08, the pages), the DM-11 migration test,
+  isolation cases for the five new routes.
+
+**Decisions**
+- ADR-0061 (Proposed).
+
+---
+
+## 2026-11-19 — T2.09 Production runs (built on branch)
+
+**Implemented**
+- `production_orders` (migration `240830e94f98`, also `production` as a cost and batch source);
+  `app/production.py` (`propose()`, `record_run()`, `void_run()`): one `production` transaction
+  per run, inputs taken soonest-expiry first, the actual yield into a new batch with use-by and
+  a readable code, cost over actual yield (unknown if an input has none), set as the item's
+  cost; short inputs allowed with `negative_balance`; void by the recorder for 30 minutes, then
+  `production.void` with a reason.
+- `/app/production`: choose, multiplier, inputs against on hand, actual yield, the label.
+
+**Verified**
+- `tests/test_production.py`: AC-PRD-01, -02, -03, -05, -06, -07, PD-15 and the page;
+  isolation cases for the three new routes; costs, ledger writers, batches, consumption.
+
+**Decisions**
+- ADR-0060 (Proposed).
+
+**Open issues**
+- Yield correction after completion (PRD-FR-13, via WF-26) and planned orders (R2) are not built.
+
+---
+
+## 2026-11-19 — T2.08 Expiry queue and auto-dispose (built on branch)
+
+By the owner's choice (2026-11-19, "skip PR's ... continue building"), tasks are now built one
+after another on the stacked branch from `t2.07-waste`, committed without a pull request; T2.08
+stands on T2.07, which is open as PR #60.
+
+**Implemented**
+- Alert window (BAT-FR-09): `tenants.expiry_alert_days` (2), item and category overrides
+  (migration `0662af2faff6`); the evaluation opens `expiring_soon` once per item when a lot
+  enters the window at its location's day (AC-BAT-06).
+- Dispose action on the queue (`dispose_batch()`, BAT-FR-10): waste, reason past its date,
+  from that batch.
+- Auto-dispose (`dispose_expired()`, BAT-FR-11, PD-29): off by default; writes off expired
+  prepared batches at the start of the evaluation job, by the system, and waits while a
+  location's sales are pending (AC-BAT-07).
+- Use-by label text on a prepared batch's page (BAT-FR-14); expiry settings on `/app/expiring`
+  (audited), the item's window on its form.
+
+**Verified**
+- `tests/test_expiry_actions.py`: AC-BAT-06 (once, item override, outside the window), AC-BAT-07
+  (off by default, prepared only, waits for pending sales), the Dispose route, settings and
+  audit, the use-by label.
+- Locally: expiry, alerts, waste, batches, jobs, catalog, exceptions, health, dashboard and the
+  isolation cases for the new route; ruff, mypy, the docs checker.
+
+**Decisions**
+- ADR-0059 (Proposed).
+
+**Open issues**
+- Category overrides are read but have no screen yet.
+- PD-14's "logged by" picker on shared devices (WST-FR-03) is still to build (noted at T2.07).
+
+---
+
+## 2026-11-19 — T2.07 Waste module
+
+**Implemented**
+- Migration `2f829ccb897e`: `waste_reasons`, `waste_events`, `waste_lines`; `app/waste.py` is
+  their only writer.
+- Recording (`record_waste()`): an item in any of its units or packages, or a product size
+  expanded through the recipe in effect (`resolve_variation()`, AC-WST-04); one `waste`
+  transaction keyed `waste:<id>`, costed at that moment; a chosen batch explicit, else the
+  soonest-expiring; below zero refused without the override (DR-08), a Manager's raises
+  `negative_balance`; no cost posts at zero and raises `missing_cost`.
+- Reasons: the twelve defaults written on first use, renamed, archived and added (audited as
+  settings); each event keeps the name it was logged with.
+- Void (`void_waste()`): a reversal at the waste's own moment; the logger for 30 minutes, then
+  `waste.void` with a reason (AC-WST-05).
+- Reading from the ledger only (DR-33): `logged()`, `report()` (reason, item, product, person,
+  top items by cost) and `found_short()` (counts' missing stock, shown apart).
+- Screens: `/app/waste` (choose, then quantity, reason, save; recent entries with Void) and
+  `/app/waste/log` (filters, entries, report, found short, reasons); a Waste link in the menu.
+
+**Verified**
+- `tests/test_waste.py`: AC-WST-02, -03/-08 (2 lb of carrots appear as exactly 2 lb and one
+  cost; never sales or production consumption), -04, -05, -06/-07, the chosen and inferred
+  batch, DR-08 for an Employee and a Manager, reasons, an uncosted item, and the pages.
+- `tests/test_isolation.py`: the four waste routes that take identifiers refuse another
+  business's.
+- Locally the touched areas and the cross-cutting rule tests; ruff, mypy, the docs checker.
+  CI runs the full suite.
+
+**Decisions**
+- ADR-0058 (Proposed); ADR-0057 → Accepted.
+
+**Open issues (not in T2.07)**
+- A photo on a waste entry (WST-FR-01, optional).
+- Choosing the person on a shared device (WST-FR-03, PD-14); the signed-in member is the actor.
+- Picking the related sale or production order on the form (WST-FR-11); the fields exist.
+
+**Files changed**
+- `app/transform/waste.py`, `app/waste.py`, `app/web/waste.py`, templates `waste.html`,
+  `waste_log.html` (new); `app/models.py`, `app/access/scoped.py`, `app/consumption.py`,
+  `app/ledger/history.py`, `app/main.py`, `app/web/templates/base.html`; migration
+  `2f829ccb897e`; `tests/test_waste.py` (new), `tests/test_isolation.py`; ADR-0057, ADR-0058 and
+  the index; the task index (T2.06 → Completed); CLAUDE.md; this log.
+
+**Next task**
+- T2.08 Expiry queue and auto-dispose (depends on T2.07), or T2.09 Production runs.
+
+---
+
+## 2026-11-19 — T2.06 completed
+
+**Verified**
+- At the owner's request ("Yes, merge when green"), PR #59 (T2.06-b) was merged with a merge
+  commit (`6fd3926`) after all five required jobs passed on `a170e27`.
+
+**Files changed**
+- This log; ADR-0057 → Accepted; the task index (T2.06 → Completed).
+
+---
+
 ## 2026-11-19 — T2.06-b Batch history, batch counts and shortfall
 
 **Implemented**

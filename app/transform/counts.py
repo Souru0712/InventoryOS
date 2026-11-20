@@ -81,10 +81,17 @@ def variance_cents(variance: Decimal, unit_cost_cents: Decimal) -> int:
     return int((variance * unit_cost_cents).quantize(Decimal("1")))
 
 
-def needs_review(variance: Decimal, expected: Decimal, cents: int) -> bool:
-    """Worth $25 or more either way, or 20% or more of a positive expected quantity."""
+def needs_review(
+    variance: Decimal,
+    expected: Decimal,
+    cents: int,
+    review_cents: int = REVIEW_CENTS,
+    review_share: Decimal = REVIEW_SHARE,
+) -> bool:
+    """Worth the review amount or more either way ($25 unless the business set one), or the
+    review share or more of a positive expected quantity (20 % unless set, ADM-FR-05)."""
     if variance == 0:
         return False
-    if abs(cents) >= REVIEW_CENTS:
+    if abs(cents) >= review_cents:
         return True
-    return expected > 0 and abs(variance) >= REVIEW_SHARE * expected
+    return expected > 0 and abs(variance) >= review_share * expected

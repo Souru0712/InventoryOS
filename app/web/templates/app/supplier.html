@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/suppliers">← Suppliers</a></p>
+<h1>{{ supplier.name }}{% if not supplier.is_active %} <span class="small muted">deactivated</span>{% endif %}</h1>
+{% set manage = can(request, "supplier.manage") %}
+{% set money = can(request, "inventory.view_costs") %}
+
+<form method="post" action="/app/suppliers/{{ supplier.id }}" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field"><label for="name">Name</label><input id="name" name="name" value="{{ supplier.name }}" maxlength="200"{% if not manage %} disabled{% endif %}></div>
+    <div class="field"><label for="contact_name">Contact</label><input id="contact_name" name="contact_name" value="{{ supplier.contact_name or '' }}"{% if not manage %} disabled{% endif %}></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="phone">Phone</label><input id="phone" name="phone" value="{{ supplier.phone or '' }}"{% if not manage %} disabled{% endif %}></div>
+    <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" value="{{ supplier.email or '' }}"{% if not manage %} disabled{% endif %}></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="ordering_method">Orders by</label><select id="ordering_method" name="ordering_method"{% if not manage %} disabled{% endif %}>{% for key, label in methods.items() %}<option value="{{ key }}"{% if key == supplier.ordering_method %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="lead_time_days">Lead time (days)</label><input id="lead_time_days" name="lead_time_days" value="{{ supplier.lead_time_days }}" inputmode="numeric"{% if not manage %} disabled{% endif %}></div>
+    {% if money %}<div class="field"><label for="minimum_order">Minimum order</label><input id="minimum_order" name="minimum_order" value="{{ '%.2f'|format(supplier.minimum_order_cents / 100) if supplier.minimum_order_cents is not none else '' }}" inputmode="decimal"{% if not manage %} disabled{% endif %}></div>{% endif %}
+  </div>
+  <fieldset class="field"><legend>Delivery days</legend>{% for day in weekdays %}<label class="small" style="margin-right:8px;"><input type="checkbox" name="delivery_days" value="{{ day }}"{% if day in chosen_days %} checked{% endif %}{% if not manage %} disabled{% endif %}> {{ day|capitalize }}</label>{% endfor %}</fieldset>
+  <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes"{% if not manage %} disabled{% endif %}>{{ supplier.notes or '' }}</textarea></div>
+  {% if manage %}<button class="btn secondary" type="submit">Save</button>{% endif %}
+</form>
+{% if manage %}
+<form method="post" action="/app/suppliers/{{ supplier.id }}/active" style="margin-top:8px;">{{ csrf_field(request) }}
+  <input type="hidden" name="active" value="{{ 'no' if supplier.is_active else 'yes' }}">
+  <button class="btn small secondary" type="submit">{{ "Deactivate" if supplier.is_active else "Bring back" }}</button>
+  {% if supplier.is_active %}<span class="small muted">Its deliveries and history stay.</span>{% endif %}
+</form>
+{% endif %}
+
+<h2>What they sell us</h2>
+{% if not supplier.items %}
+  <div class="card"><p style="margin:0;">No items yet.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>Their code and name</th><th>Comes as</th>{% if money %}<th>Last price</th>{% endif %}<th></th></tr></thead>
+  <tbody>
+  {% for si in supplier.items %}
+    {% set item = names.get(si.inventory_item_id) %}
+    <tr>
+      <td>{{ item.name if item else "" }}{% if si.preferred %} <span class="badge ok">preferred</span>{% endif %}{% if not si.is_active %} <span class="small muted">not bought now</span>{% endif %}</td>
+      <td class="small">{{ si.code or "" }} {{ si.name or "" }}</td>
+      <td class="small">1 {{ si.purchase_unit }} = {{ si.pack_size_base|qty(item.display_unit if item else "") }}</td>
+      {% if money %}<td class="small">{% if si.last_price_cents is not none %}{{ si.last_price_cents|money(currency) }}{% else %}—{% endif %}</td>{% endif %}
+      <td>
+        {% if manage %}
+        <details><summary class="small">Edit</summary>
+        <form method="post" action="/app/suppliers/items/{{ si.id }}">{{ csrf_field(request) }}
+          <div class="row">
+            <div class="field"><label>Unit</label><input name="purchase_unit" value="{{ si.purchase_unit }}"></div>
+            <div class="field"><label>Holds ({{ item.base_unit|unit if item else "" }})</label><input name="pack_quantity" value="{{ si.pack_size_base|num }}" inputmode="decimal"><input type="hidden" name="pack_unit" value="{{ item.base_unit if item else '' }}"></div>
+            {% if money %}<div class="field"><label>Price</label><input name="price" value="{{ '%.2f'|format(si.last_price_cents / 100) if si.last_price_cents is not none else '' }}" inputmode="decimal"></div>{% endif %}
+          </div>
+          <div class="row">
+            <div class="field"><label>Their code</label><input name="code" value="{{ si.code or '' }}"></div>
+            <div class="field"><label>Their name</label><input name="name" value="{{ si.name or '' }}"></div>
+          </div>
+          <label class="small"><input type="checkbox" name="preferred" value="yes"{% if si.preferred %} checked{% endif %}> Preferred for this item</label>
+          <label class="small"><input type="checkbox" name="active" value="yes"{% if si.is_active %} checked{% endif %}> Still bought</label>
+          <button class="btn small secondary" type="submit">Save</button>
+        </form>
+        </details>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if manage %}
+<h3>Add an item they sell</h3>
+<form method="post" action="/app/suppliers/{{ supplier.id }}/items" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field"><label for="si-item">Item</label><select id="si-item" name="inventory_item_id" required>{% for i in items %}<option value="{{ i.id }}">{{ i.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="si-unit">They sell it by the</label><input id="si-unit" name="purchase_unit" placeholder="case"></div>
+    <div class="field"><label for="si-pack">Which holds</label><input id="si-pack" name="pack_quantity" value="1" inputmode="decimal"></div>
+    <div class="field"><label for="si-pack-unit">In</label><input id="si-pack-unit" name="pack_unit" placeholder="the item's unit"></div>
+  </div>
+  <div class="row">
+    <div class="field"><label for="si-code">Their code</label><input id="si-code" name="code"></div>
+    <div class="field"><label for="si-name">Their name</label><input id="si-name" name="name"></div>
+    {% if money %}<div class="field"><label for="si-price">Price per unit</label><input id="si-price" name="price" inputmode="decimal"></div>{% endif %}
+  </div>
+  <label class="small"><input type="checkbox" name="preferred" value="yes"> Preferred for this item</label>
+  <button class="btn secondary" type="submit">Add</button>
+</form>
+{% endif %}
+
+<h2>Deliveries</h2>
+{% if not deliveries %}
+  <div class="card"><p style="margin:0;">No deliveries received from them yet.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Received</th><th>Invoice</th>{% if money %}<th>Total</th>{% endif %}</tr></thead>
+  <tbody>{% for d in deliveries %}<tr><td class="small"><a href="/app/receiving/{{ d.id }}">{{ (d.applied_at or d.uploaded_at).strftime("%d %b %Y") }}</a></td><td class="small">{{ d.invoice_number or "" }}</td>{% if money %}<td class="small">{% if d.total_cents is not none %}{{ d.total_cents|money(d.currency) }}{% endif %}</td>{% endif %}</tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

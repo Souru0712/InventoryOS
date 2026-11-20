@@ -39,13 +39,13 @@ from app.providers.square.client import (
     adjustment_change,
     physical_count_change,
 )
-from app.providers.square.oauth import decrypt, encrypt, refresh
-from app.transform.square_normalize import (
+from app.providers.square.normalize import (
     daily_sales_from_orders,
     normalize_catalog,
     normalize_counts,
     normalize_locations,
 )
+from app.providers.square.oauth import decrypt, encrypt, refresh
 from app.units import from_base
 
 log = logging.getLogger(__name__)

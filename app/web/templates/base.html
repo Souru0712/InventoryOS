@@ -206,6 +206,17 @@
     header.site nav a { white-space: nowrap; }
     main.wrap { padding-top: 24px; }
   }
+  /* The employee home (T2.21, UX-02/03): big targets, one column on a phone. */
+  .floor-tasks { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin: 16px 0; }
+  .floor-task { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 88px;
+    padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--card);
+    color: var(--ink); text-decoration: none; }
+  .floor-task strong { font-size: 18px; }
+  .floor-task span { font-size: 13px; color: var(--muted); }
+  .floor-task:hover, .floor-task:focus-visible { border-color: var(--accent); background: var(--accent-wash); }
+  .floor-select { min-height: 48px; font-size: 16px; flex: 1 1 200px; }
+  .floor-button-small { min-height: 48px; }
+  @media (max-width: 480px) { .floor-tasks { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -220,15 +231,20 @@
           {% set on = path == href or (href != "/app" and path.startswith(href ~ "/")) %}
           <a href="{{ href }}"{% if on %} class="here" aria-current="page"{% endif %}>{{ label }}</a>
         {% endmacro %}
-        {% if can(request, "inventory.view") %}{{ nav("/app", "Inventory") }}{{ nav("/app/catalog", "Items") }}{% endif %}
+        {% if can(request, "inventory.view") %}{{ nav("/app/floor", "Today") }}{{ nav("/app", "Inventory") }}{{ nav("/app/catalog", "Items") }}{% endif %}
         {% if can(request, "recipe.view") %}{{ nav("/app/products", "Products") }}{% endif %}
         {% if can(request, "inventory.view") %}{{ nav("/app/scan", "Scan") }}{% endif %}
-        {% if can(request, "receiving.record") %}{{ nav("/app/receiving", "Receiving") }}{% endif %}
+        {% if can(request, "receiving.record") %}{{ nav("/app/receiving", "Receiving") }}{{ nav("/app/deliveries", "Deliveries") }}{% endif %}
         {% if can(request, "inventory.view") %}{{ nav("/app/counts", "Counts") }}{{ nav("/app/expiring", "Expiring") }}{% endif %}
+        {% if can(request, "sales.record") %}{{ nav("/app/sales/daily", "Sales") }}{% endif %}
+        {% if can(request, "sales.import") %}{{ nav("/app/sales/import", "Import") }}{% endif %}
+        {% if can(request, "sales.record") %}{{ nav("/app/usage", "Usage") }}{% endif %}
+        {% if can(request, "production.record") %}{{ nav("/app/production", "Production") }}{% endif %}
+        {% if can(request, "waste.record") %}{{ nav("/app/waste", "Waste") }}{% endif %}
         {% if can(request, "exception.view") %}{{ nav("/app/exceptions", "Exceptions") }}{% endif %}
         {% if can(request, "reports.financial") %}{{ nav("/app/promotions", "Promotions") }}{% endif %}
-        {% if can(request, "reorder.view") %}{{ nav("/app/reorder", "Reorder") }}{% endif %}
-        {% if can(request, "reports.financial") %}{{ nav("/app/report", "Report") }}{% endif %}
+        {% if can(request, "reorder.view") %}{{ nav("/app/reorder", "Reorder") }}{{ nav("/app/suppliers", "Suppliers") }}{% endif %}
+        {% if can(request, "reports.operational") %}{{ nav("/app/reports", "Reports") }}{% endif %}
         {{ nav("/app/settings", "Settings") }}
         {% set businesses = request.state.businesses or [] %}
         {% if businesses|length > 1 %}

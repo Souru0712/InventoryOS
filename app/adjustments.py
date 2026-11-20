@@ -16,6 +16,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
+from app.business_settings import settings_for
 from app.exceptions import record_exception
 from app.ledger.posting import balance, post_transaction
 from app.models import InventoryAdjustment, InventoryItem, ItemLocation, Location
@@ -122,7 +123,7 @@ def adjust(
     after = balance(db, org, location.id, item.id)
     if after < 0:
         record_exception(db, org, negative_finding(item, location, after), now=now)
-    if needs_review(checked.qty_base, unit_cost):
+    if needs_review(checked.qty_base, unit_cost, settings_for(db, org).adjustment_review_cents):
         record_exception(
             db,
             org,

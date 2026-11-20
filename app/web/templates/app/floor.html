@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Today</h1>
+
+{% if shared %}
+<form method="post" action="/app/floor/person" class="card floor-person">{{ csrf_field(request) }}
+  <label for="membership_id"><strong>Who's working?</strong> <span class="small muted">Everything saved from this device names them.</span></label>
+  <div class="row">
+    <select id="membership_id" name="membership_id" class="floor-select">
+      {% for member, user in people %}<option value="{{ member.id }}"{% if user.id == working %} selected{% endif %}>{{ user.email }}</option>{% endfor %}
+    </select>
+    <button class="btn floor-button-small" type="submit">That's me</button>
+  </div>
+</form>
+{% endif %}
+
+{% if alerts %}
+<div class="card">
+  <p style="margin:0 0 6px;"><strong>Needs attention</strong>{% if alerts_total > alerts|length %} <span class="small muted">({{ alerts_total }})</span>{% endif %}</p>
+  <ul class="small" style="margin:0; padding-left:18px;">{% for a in alerts %}<li style="margin:4px 0;">{{ a.title }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if tasks %}
+<nav class="floor-tasks" aria-label="Tasks">
+  {% for _key, title, hint, link in tasks %}
+  <a class="floor-task" href="{{ link }}"><strong>{{ title }}</strong><span>{{ hint }}</span></a>
+  {% endfor %}
+</nav>
+{% else %}
+<p class="muted">Your role has no floor tasks here. Ask an Owner or Manager.</p>
+{% endif %}
+{% endblock %}

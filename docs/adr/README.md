@@ -88,4 +88,21 @@ Task status and the record of work follow the roadmap's
 | [ADR-0054](0054-consumption-engine.md) | Consumption engine | T2.05 | Accepted |
 | [ADR-0055](0055-sale-consumption-posting.md) | Sale consumption posting | T2.05 | Accepted |
 | [ADR-0056](0056-batch-allocation.md) | Batch allocation | T2.06 | Accepted |
-| [ADR-0057](0057-batch-history-counts-and-shortfall.md) | Batch history, batch counts and shortfall | T2.06 | Proposed |
+| [ADR-0057](0057-batch-history-counts-and-shortfall.md) | Batch history, batch counts and shortfall | T2.06 | Accepted |
+| [ADR-0058](0058-waste.md) | Waste | T2.07 | Proposed |
+| [ADR-0059](0059-expiry-alerts-and-auto-dispose.md) | Expiry alert window and auto-dispose | T2.08 | Proposed |
+| [ADR-0060](0060-production-runs.md) | Production runs | T2.09 | Proposed |
+| [ADR-0061](0061-suppliers.md) | Suppliers and supplier items | T2.10 | Proposed |
+| [ADR-0062](0062-receivings.md) | Receivings on the ledger | T2.11 | Proposed |
+| [ADR-0063](0063-daily-sales-entry.md) | Daily sales entry | T2.12 | Proposed |
+| [ADR-0064](0064-sales-file-import.md) | Sales file import | T2.13 | Proposed |
+| [ADR-0065](0065-direct-usage-records.md) | Direct usage records | T2.14 | Proposed |
+| [ADR-0066](0066-reorder-on-ledger-usage.md) | Reorder suggestions on ledger usage | T2.15 | Proposed |
+| [ADR-0067](0067-operational-reports.md) | Operational reports on the ledger | T2.16 | Proposed |
+| [ADR-0068](0068-reports-ii-and-csv.md) | Reports II and CSV of every report table | T2.17 | Proposed |
+| [ADR-0069](0069-weekly-summary-email.md) | Weekly summary email on the new data | T2.18 | Proposed |
+| [ADR-0070](0070-settings-module.md) | Settings module | T2.19 | Proposed |
+| [ADR-0071](0071-item-import-and-checklist.md) | Item import, quick-add and the onboarding checklist | T2.20 | Proposed |
+| [ADR-0072](0072-step-0-and-opening-count.md) | Onboarding step 0 and the opening count | T2.20 | Proposed |
+| [ADR-0073](0073-employee-home-and-logged-by.md) | Employee home and the "logged by" picker | T2.21 | Proposed |
+| [ADR-0074](0074-standalone-suite.md) | The Standalone end-to-end suite and the adapter boundary | T2.22 | Proposed |

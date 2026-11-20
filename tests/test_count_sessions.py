@@ -49,7 +49,8 @@ def stock(db, location, name, qty, cost="100", area=None):
         cost_per_base_cents=D(cost),
     )
     db.add(item)
-    opened(db, item)
+    # Opened before T0 whatever the clock says: in a long run, now passes T0 (fixed at import).
+    opened(db, item, at=T0 - timedelta(days=1))
     if area is not None:
         db.get(ItemLocation, item.item_location_id).storage_area = area
     db.commit()

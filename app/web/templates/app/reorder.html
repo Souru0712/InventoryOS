@@ -3,56 +3,64 @@
 <div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap;">
   <div style="flex: 1 1 420px;">
     <h1>Reorder</h1>
-    <p class="lede">What to order, grouped by who you order it from. Quantities top up to the par
-    level, or cover the lead time plus two weeks of sales where no par is set.</p>
+    <p class="lede">What to order, grouped by supplier, soonest order first. Each number shows how
+    it was worked out. Nothing is ordered for you.</p>
   </div>
-  {% if groups %}
-    {% if entitled(tenant, "reorder_csv") %}
-    <a class="btn small secondary" href="/app/reorder.csv" style="flex: none; margin-top: 6px;">Download as CSV</a>
-    {% else %}
-    <a class="btn small secondary" href="/pricing" style="flex: none; margin-top: 6px;"
-       title="The reorder list as a CSV is part of Pro">CSV with Pro</a>
-    {% endif %}
+  {% if groups and can(request, "data.export") %}
+  <a class="btn small secondary" href="/app/reorder.csv?window={{ window }}&cover={{ cover }}&safety={{ safety }}{% if location %}&location={{ location }}{% endif %}" style="flex: none; margin-top: 6px;">Download as CSV</a>
   {% endif %}
 </div>
+
+<form method="get" action="/app/reorder" class="card">
+  {% if location %}<input type="hidden" name="location" value="{{ location }}">{% endif %}
+  <div class="row">
+    <div class="field"><label for="window">Average use over</label>
+      <select id="window" name="window">{% for w in windows %}<option value="{{ w }}"{% if w == window %} selected{% endif %}>{{ w }} days</option>{% endfor %}</select>
+    </div>
+    <div class="field"><label for="cover">Cover after delivery (days)</label><input id="cover" name="cover" type="number" min="0" max="60" value="{{ cover }}"></div>
+    <div class="field"><label for="safety">Safety margin (%)</label><input id="safety" name="safety" inputmode="decimal" value="{{ "{:f}".format(safety.normalize()) }}"></div>
+  </div>
+  <button class="btn small secondary" type="submit">Recalculate</button>
+</form>
 
 {% if not groups %}
 <div class="card">
   <p style="margin:0;"><strong>Nothing to reorder.</strong></p>
   <p class="small muted" style="margin:8px 0 0;">Everything is above its reorder point and will
-  last until a delivery could arrive.</p>
+  stay there through the lead time and {{ cover }} days of cover.</p>
 </div>
 {% endif %}
 
-{% for supplier, lines in groups %}
-<h2>{{ supplier or "No supplier set" }}</h2>
+{% for group in groups %}
+<h2>{{ group.supplier or "No supplier set" }}</h2>
+<p class="small muted">Order by {{ group.order_by.strftime("%a %d %b") }}</p>
 <div class="table-wrap">
 <table>
-  <thead>
-    <tr><th>Item</th><th>Why</th><th>On hand</th><th>Uses / day</th><th>Stockout</th><th>Lead time</th><th>Order</th></tr>
-  </thead>
+  <thead><tr><th>Item</th><th>On hand</th><th>Use / day</th><th>Order</th><th>Why this number</th></tr></thead>
   <tbody>
-  {% for line in lines %}
-    {% set item = line.health.item %}
+  {% for line in group.lines %}
+    {% set i = line.inputs %}
     <tr>
       <td>
-        <strong>{{ item.name }}</strong>
-        {% if item.location_name %}<div class="small muted">{{ item.location_name }}</div>{% endif %}
+        <strong>{{ line.name }}</strong>
+        {% if line.location_name %}<div class="small muted">{{ line.location_name }}</div>{% endif %}
+        <div class="small muted">Order by {{ line.order_by.strftime("%a %d %b") }}</div>
       </td>
-      <td><span class="pill {{ 'out_of_stock' if line.reason == 'out_of_stock' else 'low_stock' }}">{{ line.reason_label }}</span></td>
-      <td>{{ item.qty_base|qty(item.stock_unit) }}</td>
+      <td>{{ i.on_hand|qty(line.unit) }}<div class="small muted">reorder at {{ i.reorder_point|qty(line.unit) }}</div></td>
+      <td class="small">{% if line.usage.basis == "none" %}<span class="muted">none known</span>{% else %}{{ i.per_day|approx(line.unit) }}{% endif %}</td>
+      <td>
+        {% if line.count_first %}<span class="pill low_stock">Count first</span>
+        {% elif line.suggestion.quantity > 0 %}<strong>{{ line.suggestion.quantity|qty(line.unit) }}</strong>{% if line.suggestion.packs is not none %}<div class="small muted">{{ line.suggestion.packs }} × {{ line.purchase_unit }}</div>{% endif %}
+        {% else %}<span class="small muted">nothing: set a reorder point or record use</span>{% endif %}
+      </td>
       <td class="small">
-        {% if line.health.has_sales_signal %}{{ line.health.velocity_per_day|approx(item.stock_unit) }}{% else %}<span class="muted">no sales data</span>{% endif %}
-      </td>
-      <td>
-        {% if line.days_to_stockout is none %}<span class="muted">&ndash;</span>
-        {% elif line.days_to_stockout <= 0 %}<strong>now</strong>
-        {% else %}in {{ "%.1f"|format(line.days_to_stockout) }} days{% endif %}
-      </td>
-      <td class="small">{{ item.lead_time_days }} day{{ "s" if item.lead_time_days != 1 else "" }}</td>
-      <td>
-        {% if line.order_base > 0 %}<strong>{{ line.order_base|approx(item.stock_unit) }}</strong>
-        {% else %}<span class="small muted">set a par level</span>{% endif %}
+        {% if line.count_first %}{{ line.count_first }}
+        {% else %}
+        {{ i.per_day|approx(line.unit) }}/day × ({{ i.lead_days }} lead + {{ i.cover_days }} cover) days × {{ "{:f}".format(i.factor.normalize()) }}
+        + {{ i.reorder_point|qty(line.unit) }} reorder point − {{ i.on_hand|qty(line.unit) }} on hand
+        = {{ line.suggestion.raw|approx(line.unit) }}{% if line.suggestion.packs is not none %}, rounded up to whole {{ line.purchase_unit }} of {{ i.pack|qty(line.unit) }}{% endif %}.
+        {% endif %}
+        <div class="muted">{{ line.usage.note }}</div>
       </td>
     </tr>
   {% endfor %}

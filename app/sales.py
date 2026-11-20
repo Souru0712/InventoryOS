@@ -141,6 +141,37 @@ def stop_source(
     return source
 
 
+def extend_source(
+    db: Session, org: OrgContext, source_id: int, first_day: date, ip: str | None = None
+) -> SalesSource:
+    """Start a source earlier, when no other source of record covers the days in between
+    (DR-31): a business entering an older day by hand."""
+    source = get_scoped(db, org, SalesSource, source_id)
+    if source is None:
+        raise NotFound(source_id)
+    if first_day >= source.active_from:
+        return source
+    others = [s for s in sources(db, org, source.location_id) if s.of_record and s.id != source.id]
+    check_new_source(
+        Span(first_day, source.active_from - timedelta(days=1)), (_span(s) for s in others)
+    )
+    was = source.active_from
+    source.active_from = first_day
+    db.flush()
+    record_audit(
+        db,
+        org,
+        "settings.sales_source_extended",
+        f"A sales source now starts on {first_day:%d %b %Y}",
+        subject_type="sales_source",
+        subject_id=source.id,
+        before={"from": str(was)},
+        after={"from": str(first_day)},
+        ip=ip,
+    )
+    return source
+
+
 def source_of_record(
     db: Session, org: OrgContext, location_id: int, day: date
 ) -> SalesSource | None:
@@ -193,6 +224,7 @@ def record_sale(
     net_cents: int | None = None,
     tax_cents: int | None = None,
     consume: bool = True,
+    reason: str | None = None,
 ) -> SalesTransaction | None:
     """Record a sale (or a day's sales) from a source; None when a resend changes nothing.
 
@@ -283,7 +315,7 @@ def record_sale(
             )
     db.flush()
     if consume:
-        queue_consumption(db, org, transaction)
+        queue_consumption(db, org, transaction, reason)
     if not counted:
         record_exception(
             db,

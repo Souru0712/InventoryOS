@@ -269,6 +269,16 @@ def test_a_business_with_no_pos_gets_low_stock_exceptions_on_schedule(db, tenant
     ]
 
 
+def test_the_weekly_report_is_due_on_the_business_clock(db, tenant):
+    """Monday 07:00 in New York is 12:00 UTC (T2.18): not due at 07:00 UTC, due at 12:00."""
+    tenant.timezone = "America/New_York"
+    db.commit()
+    scheduler.send_due_reports(NOW)
+    assert jobs() == []
+    scheduler.send_due_reports(NOW + timedelta(hours=5))
+    assert [(j.kind, j.dedupe_key) for j in jobs()] == [("send_weekly_report", "week:2026-47")]
+
+
 def test_the_weekly_report_is_queued_once_a_week_and_sent_once(db, tenant, monkeypatch):
     FakeSMTP.outbox = []
     monkeypatch.setattr(get_settings(), "smtp_host", "smtp.test", raising=False)

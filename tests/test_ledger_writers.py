@@ -30,7 +30,6 @@ from app.models import (
     InventoryMovement,
     InventoryTransaction,
     Location,
-    RecipeComponent,
     SoldItem,
     StockBalance,
     StockItem,
@@ -393,14 +392,6 @@ def test_r1_r2_sales_never_change_stock_without_a_movement(db, tenant, location)
     latte = SoldItem(tenant_id=tenant.id, provider="demo", provider_item_id="latte", name="Latte")
     db.add(latte)
     db.flush()
-    db.add(
-        RecipeComponent(
-            tenant_id=tenant.id,
-            sold_item_id=latte.id,
-            stock_item_id=milk.id,
-            qty_base_per_sale=D(200),
-        )
-    )
     for place, day in ((location, date(2026, 11, 4)), (other, date(2026, 11, 5))):
         sold_on(db, place, latte, day, 10)
     db.commit()

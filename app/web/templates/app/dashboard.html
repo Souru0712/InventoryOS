@@ -1,6 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
 {% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+{% if step0 %}
+<form method="post" action="/app/onboarding/payments" class="card" style="margin-bottom:16px;">{{ csrf_field(request) }}
+  <p style="margin:0 0 8px;"><strong>How do you take payments today?</strong> <span class="small muted">It decides how your sales reach your stock.</span></p>
+  {% for key, label in answers.items() %}
+  <label style="display:block; margin:4px 0;"><input type="radio" name="answer" value="{{ key }}" required> {{ label }}</label>
+  {% endfor %}
+  <div class="field" style="max-width:320px; margin-top:8px;"><label for="pos_name">Which POS? <span class="muted small">(if we don't support it yet)</span></label><input id="pos_name" name="pos_name" maxlength="80"></div>
+  <button class="btn small" type="submit">Continue</button>
+</form>
+{% endif %}
+{% set left = checklist|rejectattr("done")|rejectattr("skipped")|list %}
+{% set put_off = checklist|selectattr("skipped")|list %}
+{% if left or put_off %}
+<div class="card" style="margin-bottom:16px;">
+  <p style="margin:0 0 8px;"><strong>Getting set up</strong> <span class="small muted">{{ checklist|selectattr("done")|list|length }} of {{ checklist|length }} done. Skip anything; it all works as you go.</span></p>
+  <ol class="small" style="margin:0; padding-left:20px;">
+    {% for step in checklist %}
+    <li style="margin:4px 0;{% if step.done or step.skipped %} color:var(--muted, #5d6f67);{% endif %}">
+      {% if step.done %}<s>{{ step.title }}</s>
+      {% elif step.skipped %}{{ step.title }} <span class="muted">skipped</span>
+        <form method="post" action="/app/onboarding/skip" class="inline-form" style="display:inline;">{{ csrf_field(request) }}<input type="hidden" name="step" value="{{ step.key }}"><input type="hidden" name="skip" value="no"><button class="btn small secondary" type="submit">Take it back up</button></form>
+      {% else %}<a href="{{ step.link }}"><strong>{{ step.title }}</strong></a> <span class="muted">{{ step.hint }}</span>
+        <form method="post" action="/app/onboarding/skip" class="inline-form" style="display:inline;">{{ csrf_field(request) }}<input type="hidden" name="step" value="{{ step.key }}"><input type="hidden" name="skip" value="yes"><button class="btn small secondary" type="submit">Skip</button></form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</div>
+{% endif %}
 {% if request.query_params.get("connected") %}
   <div class="notice ok">Square is connected and your first sync has run.</div>
 {% endif %}

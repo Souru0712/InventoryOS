@@ -39,6 +39,7 @@ from app.models import (
     SalesTransaction,
     SalesTransactionLine,
 )
+from app.products import scale_at
 from app.recipes import Owner, effective_version, recipe_of
 from app.transform.business_days import business_day_end
 from app.transform.consumption import (
@@ -121,7 +122,7 @@ def resolve_line(
             ModifierIn(
                 modifier.id,
                 modifier.effect,
-                Decimal(modifier.scale_factor) if modifier.scale_factor is not None else None,
+                scale_at(db, org, modifier, at),
                 _version_of(db, org, Owner("modifier", modifier.id), at)
                 if modifier.effect == "add"
                 else None,
@@ -137,6 +138,22 @@ def resolve_line(
         ),
         prepared=lambda item_id: _version_of(db, org, Owner("item", item_id), at),
         prepared_ids=in_house if in_house is not None else made_in_house(db, org),
+    )
+
+
+def resolve_variation(
+    db: Session, org: OrgContext, variation: ProductVariation, quantity: Decimal, at: datetime
+) -> Resolved:
+    """What that many of a product size uses by the recipes in effect at `at`, with no
+    modifiers: how waste of a sellable product expands (WST-FR-01, AC-WST-04)."""
+    return resolve(
+        LineIn(
+            quantity,
+            _version_of(db, org, Owner("variation", variation.id), at),
+            made_to_order=variation.product.production_mode == "made_to_order",
+        ),
+        prepared=lambda item_id: _version_of(db, org, Owner("item", item_id), at),
+        prepared_ids=made_in_house(db, org),
     )
 
 
@@ -357,10 +374,13 @@ def _post(db: Session, org: OrgContext, transaction: SalesTransaction) -> bool:
     return True
 
 
-def consume_sale(db: Session, org: OrgContext, transaction_id: int) -> bool:
+def consume_sale(
+    db: Session, org: OrgContext, transaction_id: int, reason: str | None = None
+) -> bool:
     """WF-12 for one recorded sale; safe to run again. Earlier revisions give back what they
-    posted; the latest, if it is completed and counted, posts what its lines used. True when
-    something was posted."""
+    posted, with the person's reason when a correction gave one (STD-FR-05); the latest, if it
+    is completed and counted, posts what its lines used. True when something was posted."""
+    correction = reason
     transaction = get_scoped(db, org, SalesTransaction, transaction_id)
     if transaction is None:
         return False
@@ -370,7 +390,11 @@ def consume_sale(db: Session, org: OrgContext, transaction_id: int) -> bool:
         if revision is latest and _counts(revision):
             continue
         if revision is not latest:
-            reason = f"Sale corrected: revision {latest.revision} replaces it"
+            reason = (
+                f"Sale corrected: {why}"
+                if (why := (correction or "").strip())
+                else f"Sale corrected: revision {latest.revision} replaces it"
+            )
         elif revision.status == "voided":
             reason = "Sale voided"
         else:
@@ -400,13 +424,18 @@ def reprocess_sale(db: Session, org: OrgContext, transaction_id: int, *, reason:
     return consume_sale(db, org, transaction.id)
 
 
-def queue_consumption(db: Session, org: OrgContext, transaction: SalesTransaction) -> None:
+def queue_consumption(
+    db: Session, org: OrgContext, transaction: SalesTransaction, reason: str | None = None
+) -> None:
     """Consume a sale in the background: a failure leaves its lines pending and is retried
     (WF-12), and never holds up recording it."""
+    payload: dict = {"sales_transaction_id": transaction.id}
+    if reason:
+        payload["reason"] = reason[:200]
     enqueue(
         db,
         org,
         "consume_sale",
-        {"sales_transaction_id": transaction.id},
+        payload,
         dedupe_key=f"sale:{transaction.id}",
     )

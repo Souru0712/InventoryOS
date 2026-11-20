@@ -1,6 +1,6 @@
 # ADR-0057: Batch history, batch counts and shortfall
 
-- **Status:** Proposed, 2026-11-18 (in the T2.06-b pull request; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-19 (owner: "Yes, merge when green"; PR #59, T2.06-b)
 - **Decision ID:** none (implements T2.06-b: BAT-FR-05's per-item setting, BAT-FR-12, BAT-FR-13,
   DR-13, AC-BAT-04, AC-BAT-08)
 - **Tasks:** T2.06; T2.07 (waste of a chosen batch), T2.08 (expiry queue actions)

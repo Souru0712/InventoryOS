@@ -18,9 +18,10 @@ from app.access.permissions import VIEW_COSTS
 from app.adjustments import negative_finding
 from app.batches import shortfalls
 from app.config import get_settings
+from app.daily_sales import missing_days
 from app.entitlements import allows
 from app.exceptions import apply_findings, mark_notified
-from app.models import ExceptionRecord, Location, StockItem, Tenant
+from app.models import ExceptionRecord, InventoryCategory, Location, StockItem, Tenant
 from app.notify.email import render_pair, send_email, wants
 from app.orchestration.views import expiry_positions, stock_views, tenant_currency, velocity_map
 from app.transform.alerts import AlertProposal, evaluate_expiries, evaluate_stock
@@ -42,6 +43,24 @@ def category_of(exception_type: str) -> str:
     return "expiry_alerts" if exception_type in EXPIRY_TYPES else "stock_alerts"
 
 
+def alert_windows(db: Session, org: OrgContext) -> dict[int, int]:
+    """Each stock item's expiry alert window in days (BAT-FR-09): the item's own, else its
+    category's, else the business's."""
+    tenant = get_scoped(db, org, Tenant, org.tenant_id)
+    default = tenant.expiry_alert_days if tenant is not None else 2
+    categories = {
+        c.id: c.expiry_alert_days for c in db.scalars(select_scoped(org, InventoryCategory))
+    }
+    windows = {}
+    for stock in db.scalars(select_scoped(org, StockItem)):
+        item = stock.inventory_item
+        days = item.expiry_alert_days if item is not None else None
+        if days is None and item is not None and item.category_id is not None:
+            days = categories.get(item.category_id)
+        windows[stock.id] = default if days is None else days
+    return windows
+
+
 def all_proposals(db: Session, org: OrgContext, now: datetime) -> list[AlertProposal]:
     """Stock-level alerts and expiry alerts, from one velocity computation."""
     velocity = velocity_map(db, org, now.date())
@@ -49,6 +68,7 @@ def all_proposals(db: Session, org: OrgContext, now: datetime) -> list[AlertProp
     expiry = evaluate_expiries(
         expiry_positions(db, org, velocity=velocity, now=now),
         get_settings().expiry_horizon_days,
+        alert_windows(db, org),
     )
     return stock + expiry
 
@@ -73,8 +93,14 @@ def evaluate_and_store(db: Session, org: OrgContext, now: datetime | None = None
             )
     # Stock of a batch-tracked item that no batch holds (DR-13); it clears once dated or counted.
     findings.extend(shortfalls(db, org))
+    # Open days at hand-entry locations with no sales yet (STD-FR-06); entering them clears it.
+    findings.extend(missing_days(db, org, now))
     return apply_findings(
-        db, org, findings, STOCK_TYPES | {"negative_balance", "batch_shortfall"}, now
+        db,
+        org,
+        findings,
+        STOCK_TYPES | {"negative_balance", "batch_shortfall", "sales_missing"},
+        now,
     )
 
 

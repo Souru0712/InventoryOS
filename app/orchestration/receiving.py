@@ -35,6 +35,7 @@ from app.models import (
     StockAlias,
     StockItem,
 )
+from app.receivings import record_invoice
 from app.storage import StorageError, get_storage
 from app.transform.ledger import Line, places
 from app.transform.receiving import (
@@ -336,6 +337,7 @@ def apply_document(
     applied = 0
     batches = 0
     movements: list[Line] = []
+    received: list[tuple[DocumentLine, StockItem, Decimal, Decimal | None, bool]] = []
     for decision in decisions:
         line = lines.get(decision.line_id)
         if line is None:
@@ -414,11 +416,15 @@ def apply_document(
         line.expires_on = expires_on
         line.status = LineStatus.APPLIED
         _learn_alias(db, org, document, line, item.id)
+        received.append(
+            (line, item, Decimal(quantity), cost, decision.line_total_cents is not None)
+        )
         applied += 1
 
+    posting = None
     if movements:
         supplier = document.supplier or "supplier"
-        post_transaction(
+        posting = post_transaction(
             db,
             org,
             kind="receipt",
@@ -433,6 +439,10 @@ def apply_document(
     document.status = DocumentStatus.APPLIED
     document.applied_at = now
     db.flush()
+    # Its receiving record: the delivery appears with the others, prices checked (T2.11-b).
+    record_invoice(
+        db, org, document, received, posting.id if posting is not None else None, now=now
+    )
 
     # Nothing is sent to Square (C-34): a delivery changes InventoryOS stock only.
     return {

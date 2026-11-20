@@ -7,6 +7,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.access import OrgContext
 from app.access.permissions import role_permissions
@@ -17,7 +18,7 @@ from app.ledger.posting import post_transaction, reverse_transaction
 from app.main import app
 from app.models import (
     Membership,
-    RecipeComponent,
+    ProductVariation,
     SoldItem,
     StockItem,
     TrackMode,
@@ -25,6 +26,8 @@ from app.models import (
 )
 from app.orchestration.alerts import evaluate_and_store
 from app.orchestration.dashboard import needs_attention, period_money
+from app.products import products_from_sold_items
+from app.recipes import NewLine, Owner, save_recipe
 from app.security import hash_password
 from app.transform.business_days import business_date, business_day_end, business_day_start
 from app.transform.dashboard import DateRange, RangeError, check_range, completeness_note
@@ -232,10 +235,17 @@ def test_ac_cmd_02_sales_without_a_recipe_are_named_and_use_is_labelled_incomple
     flat = SoldItem(tenant_id=tenant.id, provider_item_id="sq-flat", name="Flat white")
     db.add_all([latte, flat])
     db.flush()
-    db.add(
-        RecipeComponent(
-            tenant_id=tenant.id, sold_item_id=flat.id, stock_item_id=milk.id, qty_base_per_sale=D(1)
-        )
+    org = OrgContext(tenant_id=tenant.id, permissions=role_permissions("owner"))
+    products_from_sold_items(db, org)
+    flat_size = db.scalars(
+        select(ProductVariation).where(ProductVariation.source_sold_item_id == flat.id)
+    ).one()
+    save_recipe(
+        db,
+        org,
+        Owner("variation", flat_size.id),
+        [NewLine(milk.inventory_item_id, "1", "")],
+        from_the_start=True,
     )
     for sold, day, units in (
         (latte, today, 5),

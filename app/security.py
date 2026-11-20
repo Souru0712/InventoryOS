@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -213,6 +214,17 @@ def require_verified(user: User = Depends(require_user)) -> User:
     return user
 
 
+def member_permissions(db: Session, membership: Membership) -> frozenset[str]:
+    """The role's permissions, with what the business allows on top: an Employee enters daily
+    sales when the Owner says so (PD-37)."""
+    granted = role_permissions(membership.role)
+    if membership.role == "employee":
+        business = db.get(Tenant, membership.tenant_id)
+        if business is not None and business.employees_enter_sales:
+            granted = granted | {"sales.record"}
+    return granted
+
+
 def require_membership(
     request: Request, user: User = Depends(require_user), db: Session = Depends(get_db)
 ) -> Membership:
@@ -228,16 +240,56 @@ def require_membership(
     # For the switcher in the page header: (membership id, business name, is it this one).
     request.state.businesses = [(m.id, name, m.id == membership.id) for m, name in options]
     # For templates: menus and cost columns follow the role (USER_ROLES_AND_PERMISSIONS §5).
-    request.state.permissions = role_permissions(membership.role)
+    request.state.permissions = member_permissions(db, membership)
     # Owners and Administrators without two-step sign-in see a prompt on every page (PD-20).
     request.state.mfa_prompt = membership.role in PROMPTED_ROLES and user.mfa_enabled_at is None
     bind(tenant_id=membership.tenant_id)
     return membership
 
 
-def require_org(membership: Membership = Depends(require_membership)) -> OrgContext:
-    """The member's scope; every product query in the request runs in it (C-33)."""
-    return OrgContext.for_membership(membership)
+FLOOR_PERSON = "floor_person"  # the session key prefix for who is working a shared device
+
+
+def floor_person(request: Request, db: Session, membership: Membership) -> int | None:
+    """The person picked as working a shared floor device (PD-14, WST-FR-03), when one is: only
+    an Employee account is a shared device, and only an active member of the same business, with
+    an active account, can be picked."""
+    if membership.role != "employee":
+        return None
+    picked = request.session.get(f"{FLOOR_PERSON}:{membership.tenant_id}")
+    if not isinstance(picked, int) or picked == membership.user_id:
+        return None
+    found = db.scalars(
+        select(Membership.id)
+        .join(User, User.id == Membership.user_id)
+        .where(
+            Membership.tenant_id == membership.tenant_id,
+            Membership.user_id == picked,
+            Membership.status == "active",
+            User.is_active.is_(True),
+        )
+    ).first()
+    return picked if found is not None else None
+
+
+def require_org(
+    request: Request,
+    membership: Membership = Depends(require_membership),
+    db: Session = Depends(get_db),
+) -> OrgContext:
+    """The member's scope; every product query in the request runs in it (C-33). On a shared
+    floor device the person picked is who the records name; the device's account keeps its own
+    permissions, and its own session (PD-14)."""
+    org = OrgContext.for_membership(membership, member_permissions(db, membership))
+    picked = floor_person(request, db, membership)
+    return replace(org, user_id=picked) if picked is not None else org
+
+
+def landing(db: Session, user: User) -> str:
+    """Where a person lands after signing in: an Employee on the floor screen (WF-23), everyone
+    else on the dashboard."""
+    first = next(iter(memberships_of(db, user.id)), None)
+    return "/app/floor" if first is not None and first[0].role == "employee" else "/app"
 
 
 def require_permission(key: str):
@@ -262,14 +314,21 @@ def require_tenant(org: OrgContext = Depends(require_org), db: Session = Depends
 
 
 def location_filter(
-    location: int | None = None,
+    location: str | None = None,
     db: Session = Depends(get_db),
     org: OrgContext = Depends(require_org),
 ) -> int | None:
-    """An optional ?location= narrowing a page; a location outside the organization is not found."""
-    if location is not None and get_scoped(db, org, Location, location) is None:
+    """An optional ?location= narrowing a page; empty means every location (a form's "All"),
+    and a location outside the organization, or no location at all, is not found."""
+    if location is None or not location.strip():
+        return None
+    try:
+        wanted = int(location)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="location not found") from exc
+    if get_scoped(db, org, Location, wanted) is None:
         raise HTTPException(status_code=404, detail="location not found")
-    return location
+    return wanted
 
 
 def require_writable(

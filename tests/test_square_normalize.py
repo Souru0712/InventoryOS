@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from app.transform.square_normalize import (
+from app.providers.square.normalize import (
     daily_sales_from_orders,
     measurement_units,
     normalize_catalog,

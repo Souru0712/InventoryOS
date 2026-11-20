@@ -74,7 +74,7 @@ def health_input(
 ) -> HealthInput:
     today = now.date()
     velocity = velocity_map(db, org, today)
-    signal = sales_signal(db, org)
+    signal = sales_signal(db, org, velocity)
     items = [
         ItemHealth(view, velocity.get(view.id, ZERO), view.id in signal)
         for view in stock_views(db, org, location_id)

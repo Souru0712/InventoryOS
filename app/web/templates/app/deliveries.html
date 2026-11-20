@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Deliveries</h1>
+<p class="small muted">Receive a delivery by hand. For an invoice photo, use <a href="/app/receiving">Receiving</a>.</p>
+<form method="post" action="/app/deliveries" class="card">{{ csrf_field(request) }}
+  <div class="row">
+    <div class="field"><label for="location_id">Where</label><select id="location_id" name="location_id">{% for p in places %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="supplier_id">From</label><select id="supplier_id" name="supplier_id"><option value="">No supplier</option>{% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
+  </div>
+  <button class="btn" type="submit">Start a delivery</button>
+</form>
+{% if receivings %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Delivery</th><th>Started</th><th>Lines</th><th>Status</th></tr></thead>
+  <tbody>{% for r in receivings %}<tr><td><a href="/app/deliveries/{{ r.id }}">Delivery {{ r.id }}</a>{% if r.document_id %} <span class="small muted">from an invoice</span>{% endif %}</td><td class="small">{{ r.created_at.strftime("%d %b %Y") }}</td><td class="small">{{ r.lines|length }}</td><td class="small">{{ "Posted" if r.status == "posted" else "Draft" }}</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,81 +1,65 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Week of {{ report.period_start.strftime("%d %b") }} &ndash; {{ report.period_end.strftime("%d %b %Y") }}</h1>
-<p class="lede">This is what goes out by email every week.</p>
+<p class="lede">This is what goes out by email every week. <a href="/app/reports">All reports →</a></p>
 
 <div class="grid cols-4">
   <div class="card">
-    <div class="stat-label">Net sales</div>
-    <div class="stat">{{ report.net_cents|money }}</div>
-    {% if report.net_change_pct is not none %}
-      <div class="small muted">{{ report.net_change_pct }}% vs the week before</div>
-    {% endif %}
+    <div class="stat-label">Stock value</div>
+    <div class="stat">{{ report.stock_value_cents|money(currency) }}</div>
+    {% if report.items_without_cost %}<div class="small muted">{{ report.items_without_cost }} item{{ "s" if report.items_without_cost != 1 else "" }} without a cost</div>{% endif %}
   </div>
   <div class="card">
-    <div class="stat-label">Units sold</div>
-    <div class="stat">{{ report.orders_units }}</div>
+    <div class="stat-label">Waste last week</div>
+    <div class="stat">{{ report.waste_cents|money(currency) }}</div>
+    {% if report.waste_uncosted %}<div class="small muted">plus some with no cost</div>{% endif %}
   </div>
   <div class="card">
-    <div class="stat-label">Stock on hand</div>
-    <div class="stat">{{ report.inventory_value_cents|money }}</div>
+    <div class="stat-label">Money at risk</div>
+    <div class="stat">{{ report.at_risk_cents|money(currency) }}</div>
+    <div class="small muted">expiring or past its date</div>
   </div>
   <div class="card">
-    <div class="stat-label">Alerts</div>
-    <div class="stat">{{ report.alerts|length }}</div>
+    <div class="stat-label">Open exceptions</div>
+    <div class="stat">{{ report.exceptions_open }}</div>
   </div>
 </div>
 
-<h2>Needs attention</h2>
-{% if not report.alerts %}
-  <p class="small muted">Nothing is low. Good week.</p>
+<h2>Low stock ({{ report.low_stock_count }})</h2>
+{% if not report.low_stock %}
+  <p class="small muted">Nothing is below its reorder point.</p>
 {% else %}
 <div class="table-wrap">
 <table>
-  <thead><tr><th>Item</th><th>What is happening</th><th>Suggested order</th></tr></thead>
+  <thead><tr><th>Item</th><th>On hand</th><th>Reorder point</th></tr></thead>
   <tbody>
-  {% for alert in report.alerts %}
-    {% set item = items.get(alert.stock_item_id) %}
+  {% for item in report.low_stock %}
     <tr>
-      <td><strong>{{ item.name if item else "item" }}</strong>
-        {% if item %}<span class="pill {{ item.dimension.value }}">{{ item.dimension.value }}</span>{% endif %}
-      </td>
-      <td class="small">{{ alert.message }}</td>
-      <td>{% if item and alert.suggested_order_base > 0 %}{{ alert.suggested_order_base|qty(item.stock_unit) }}{% else %}&ndash;{% endif %}</td>
+      <td><strong>{{ item.name }}</strong>{% if item.location %}<div class="small muted">{{ item.location }}</div>{% endif %}</td>
+      <td>{{ item.qty_base|qty(item.unit) }}</td>
+      <td>{{ item.reorder_point_base|qty(item.unit) }}</td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
+{% if report.low_stock_count > report.low_stock|length %}<p class="small"><a href="/app/reorder">All {{ report.low_stock_count }} on the reorder list →</a></p>{% endif %}
 {% endif %}
 
-<h2>By stock type</h2>
+<h2>Needs attention ({{ report.exceptions_open }})</h2>
+{% if not report.exceptions %}
+  <p class="small muted">Nothing is open.</p>
+{% else %}
 <div class="table-wrap">
 <table>
-  <thead><tr><th>Type</th><th>Items</th><th>Value</th><th>At risk</th></tr></thead>
+  <thead><tr><th>What</th><th>Money at stake</th></tr></thead>
   <tbody>
-  {% for roll in report.by_dimension %}
-    <tr>
-      <td><span class="pill {{ roll.dimension }}">{{ roll.dimension }}</span></td>
-      <td>{{ roll.item_count }}</td>
-      <td>{{ roll.value_cents|money }}</td>
-      <td>{{ roll.at_risk }}</td>
-    </tr>
+  {% for e in report.exceptions %}
+    <tr><td>{{ e.title }}</td><td class="small">{% if e.money_cents %}{{ e.money_cents|money(currency) }}{% else %}&ndash;{% endif %}</td></tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
-
-<h2>Top sellers</h2>
-<div class="table-wrap">
-<table>
-  <thead><tr><th>Item</th><th>Units</th><th>Net</th></tr></thead>
-  <tbody>
-  {% for seller in report.top_sellers %}
-    <tr><td>{{ seller.name }}</td><td>{{ seller.units }}</td><td>{{ seller.net_cents|money }}</td></tr>
-  {% else %}
-    <tr><td colspan="3" class="small muted">No sales in this period.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-</div>
+{% if report.exceptions_open > report.exceptions|length %}<p class="small"><a href="/app/exceptions">All {{ report.exceptions_open }} exceptions →</a></p>{% endif %}
+{% endif %}
 {% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="small"><a href="/app/items/import">← Add items</a></p>
+<h1>{{ title }}</h1>
+{% if imported %}
+<div class="notice {{ 'ok' if not refused else 'error' }}">{{ ready }} item{{ "s" if ready != 1 else "" }} added{% if refused %}; {{ refused }} row{{ "s" if refused != 1 else "" }} could not be, listed below with why{% endif %}.</div>
+{% else %}
+<p class="lede">{{ ready }} row{{ "s" if ready != 1 else "" }} ready{% if refused %}, {{ refused }} with something to fix{% endif %}{% if place %}, to be stocked at {{ place.name }}{% endif %}.</p>
+{% endif %}
+
+{% if refused %}
+<h2>{{ "Not added" if imported else "To fix" }}</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Row</th><th>Item</th><th>Why</th></tr></thead>
+  <tbody>{% for r in results if r.error %}<tr><td class="small">{{ r.line }}</td><td>{{ r.name }}</td><td class="small">{{ r.error }}</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endif %}
+
+{% if not imported %}
+{% if ready %}
+<form method="post" action="/app/items/import/{{ digest }}" style="margin:16px 0;">{{ csrf_field(request) }}
+  <input type="hidden" name="location_id" value="{{ location }}">
+  <button class="btn" type="submit">Add the {{ ready }} ready item{{ "s" if ready != 1 else "" }}</button>
+  {% if refused %}<span class="small muted">The rows to fix are left out; fix them in the file and upload it again.</span>{% endif %}
+</form>
+{% endif %}
+<h2>Ready</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Row</th><th>Item</th><th>Unit</th></tr></thead>
+  <tbody>{% for r in results if not r.error %}<tr><td class="small">{{ r.line }}</td><td>{{ r.name }}</td><td class="small">{{ r.unit }}</td></tr>{% else %}<tr><td colspan="3" class="muted">No row is ready yet.</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% else %}
+<p><a class="btn secondary" href="/app/catalog">See your items</a> <a class="small" href="/app">Back to the dashboard</a></p>
+{% endif %}
+{% endblock %}

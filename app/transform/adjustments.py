@@ -70,5 +70,8 @@ def value_cents(qty_base: Decimal, unit_cost_cents: Decimal) -> int:
     return int((abs(qty_base) * unit_cost_cents).quantize(Decimal("1")))
 
 
-def needs_review(qty_base: Decimal, unit_cost_cents: Decimal) -> bool:
-    return value_cents(qty_base, unit_cost_cents) >= REVIEW_CENTS
+def needs_review(
+    qty_base: Decimal, unit_cost_cents: Decimal, review_cents: int = REVIEW_CENTS
+) -> bool:
+    """Worth the review amount or more ($50 unless the business set one, ADM-FR-05)."""
+    return value_cents(qty_base, unit_cost_cents) >= review_cents

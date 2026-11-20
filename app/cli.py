@@ -12,7 +12,8 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from app.access import OrgContext
+from app import jobs
+from app.access import OrgContext, select_scoped
 from app.access.system import user_by_email
 from app.batches import date_stock
 from app.config import require_deployable
@@ -26,7 +27,7 @@ from app.models import (
     Location,
     Membership,
     ProductIdentifier,
-    RecipeComponent,
+    ProductVariation,
     SoldItem,
     StockItem,
     Tenant,
@@ -54,7 +55,7 @@ from app.orchestration.receiving import parse_document
 from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
 from app.products import products_from_sold_items
-from app.recipes import recipes_from_components
+from app.recipes import NewLine, Owner, save_recipe
 from app.sales import DayOfSales, record_daily_pos_sales
 from app.security import hash_password, revoke_sessions
 from app.transform.barcodes import check_digit
@@ -316,15 +317,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             return 0
         report = weekly_report(db, OrgContext.system(args.tenant))
     print(f"week {report.period_start} to {report.period_end}")
-    print(f"  net sales        {money(report.net_cents)}")
-    print(f"  inventory value  {money(report.inventory_value_cents)}")
-    print(f"  alerts           {len(report.alerts)}")
-    for roll in report.by_dimension:
-        print(
-            f"  {roll.dimension:<7} {roll.item_count:>3} items  {money(roll.value_cents):>10}  {roll.at_risk} at risk"
-        )
-    for alert in report.alerts[:10]:
-        print(f"  ! {alert.message}")
+    print(f"  stock value      {money(report.stock_value_cents)}")
+    print(f"  waste cost       {money(report.waste_cents)}")
+    print(f"  money at risk    {money(report.at_risk_cents)}")
+    print(f"  low stock        {report.low_stock_count}")
+    print(f"  open exceptions  {report.exceptions_open}")
+    for e in report.exceptions:
+        print(f"  ! {e.title}")
     return 0
 
 
@@ -406,7 +405,11 @@ def cmd_demo(args: argparse.Namespace) -> int:
         db.flush()
 
         stock: dict[str, StockItem] = {}
+        shelf: dict[str, Decimal] = {}
+        item_ids: dict[str, int] = {}
         anchor = datetime.combine(today - timedelta(days=1), datetime.min.time(), UTC)
+        # The café opened before its sales history, which its ledger then consumed (T2.15).
+        start = datetime.combine(today - timedelta(days=args.days), datetime.min.time(), UTC)
         for name, category, dimension, unit, on_hand, reorder, par, cost, recv, pack in DEMO_STOCK:
             qty_base = to_base(on_hand, unit)
             item = StockItem(
@@ -437,20 +440,11 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 inventory_item_id=item.inventory_item_id,
                 cost=((Decimal(cost) * 100) / to_base("1", unit)).quantize(Decimal("0.0001")),
                 source_type="opening",
-                effective_at=anchor,
-            )
-            post_opening(
-                db,
-                OrgContext.system(tenant.id),
-                location_id=location.id,
-                inventory_item_id=item.inventory_item_id,
-                qty_base=qty_base,
-                source_type="demo",
-                source_id=str(item.id),
-                occurred_at=anchor,
-                actor_user_id=SYSTEM,
+                effective_at=start,
             )
             stock[name] = item
+            shelf[name] = qty_base
+            item_ids[name] = item.inventory_item_id
             if retail := DEMO_RETAIL.get(name):
                 item.retail_per_base_cents = (Decimal(retail) * 100) / to_base("1", unit)
             if body := DEMO_CODES.get(name):
@@ -465,7 +459,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
                 )
 
         sold: dict[str, SoldItem] = {}
-        for name, category, price, recipe, _daily in DEMO_MENU:
+        for name, category, price, _recipe, _daily in DEMO_MENU:
             sold_item = SoldItem(
                 tenant_id=tenant.id,
                 provider="demo",
@@ -477,19 +471,31 @@ def cmd_demo(args: argparse.Namespace) -> int:
             db.add(sold_item)
             db.flush()
             sold[name] = sold_item
-            for stock_name, quantity, unit in recipe:
-                db.add(
-                    RecipeComponent(
-                        tenant_id=tenant.id,
-                        sold_item_id=sold_item.id,
-                        stock_item_id=stock[stock_name].id,
-                        qty_base_per_sale=to_base(quantity, unit),
-                    )
-                )
 
-        # What the café sells, as products it owns (T2.01, DM-9's rule).
-        products_from_sold_items(db, OrgContext.system(tenant.id))
-        recipes_from_components(db, OrgContext.system(tenant.id))
+        # What the café sells, as products it owns (T2.01), each with the recipe it has always
+        # had, so its sales history takes ingredients out of stock.
+        system = OrgContext.system(tenant.id)
+        products_from_sold_items(db, system)
+        sizes = {
+            v.source_sold_item_id: v
+            for v in db.scalars(select_scoped(system, ProductVariation))
+            if v.source_sold_item_id is not None
+        }
+        per_sale: dict[str, list[tuple[str, Decimal]]] = {}
+        for name, _category, _price, recipe, _daily in DEMO_MENU:
+            version = save_recipe(
+                db,
+                system,
+                Owner("variation", sizes[sold[name].id].id),
+                [NewLine(item_ids[s], q, u) for s, q, u in recipe],
+                from_the_start=True,
+            )
+            if version is None:
+                raise RuntimeError(f"demo recipe for {name} was not saved")
+            by_item = {item_ids[s]: s for s, _q, _u in recipe}
+            per_sale[name] = [
+                (by_item[line.inventory_item_id], Decimal(line.qty_base)) for line in version.lines
+            ]
 
         sales_days = []
         for offset in range(args.days):
@@ -506,32 +512,52 @@ def cmd_demo(args: argparse.Namespace) -> int:
                         location.id, day, sold[name], Decimal(units), gross, int(gross * 0.96)
                     )
                 )
-        # The demo's sales arrive as its POS would send them: one daily transaction a day.
-        # They are its history from before the opening balances, so they are kept for velocity
-        # and reports but never consumed: the opening quantities already reflect them.
-        record_daily_pos_sales(db, OrgContext.system(tenant.id), "demo", sales_days, consume=False)
-        db.flush()
+        # Each item opened with what is on the shelf today plus what the history will use.
+        used: dict[str, Decimal] = {name: Decimal(0) for name in stock}
+        for entry in sales_days:
+            for stock_name, qty in per_sale[entry.sold_item.name]:
+                used[stock_name] += qty * entry.units
+        for name, item in stock.items():
+            post_opening(
+                db,
+                system,
+                location_id=location.id,
+                inventory_item_id=item_ids[name],
+                qty_base=shelf[name] + used[name],
+                source_type="demo",
+                source_id=str(item.id),
+                occurred_at=start,
+                actor_user_id=SYSTEM,
+            )
+        # The sales arrive as the POS would send them, a transaction a day, each consumed by a
+        # job; they run before any stock is dated, so no lot is taken by the history.
+        record_daily_pos_sales(db, system, "demo", sales_days)
+        tenant_id = tenant.id
+        stock_ids = {name: item.id for name, item in stock.items()}
 
-        # The history above consumed nothing, so each lot is a share of the opening quantity.
+    while jobs.drain(limit=500)["done"]:
+        pass
+
+    with session_scope() as db:
+        stock = {name: db.get_one(StockItem, item_id) for name, item_id in stock_ids.items()}
         for name, share, days in DEMO_LOTS:
             item = stock[name]
             step = Decimal("1") if item.dimension is Dimension.COUNT else Decimal("0.0001")
-            lot_base = (Decimal(item.qty_base) * Decimal(share)).quantize(step)
+            lot_base = (Decimal(shelf[name]) * Decimal(share)).quantize(step)
             if lot_base <= 0:
                 # Random demo sales can empty an item; a lot of nothing is not a lot.
                 continue
             date_stock(
                 db,
-                OrgContext.system(tenant.id),
+                OrgContext.system(tenant_id),
                 item,
                 lot_base,
                 today + timedelta(days=days),
                 now=anchor,
             )
         db.flush()
-        stats = evaluate_and_store(db, OrgContext.system(tenant.id))
-        record_snapshot(db, OrgContext.system(tenant.id))
-        tenant_id = tenant.id
+        stats = evaluate_and_store(db, OrgContext.system(tenant_id))
+        record_snapshot(db, OrgContext.system(tenant_id))
 
     print(f"seeded tenant {tenant_id} ({args.name})")
     print(f"  log in: {args.email} / {args.password}")

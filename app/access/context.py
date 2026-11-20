@@ -26,8 +26,11 @@ class OrgContext:
         return key in self.permissions
 
     @classmethod
-    def for_membership(cls, membership: Membership) -> OrgContext:
-        """A signed-in member's scope: their business, and its locations they may work at."""
+    def for_membership(
+        cls, membership: Membership, permissions: frozenset[str] | None = None
+    ) -> OrgContext:
+        """A signed-in member's scope: their business, and its locations they may work at;
+        their role's permissions unless the business adjusted them (`member_permissions`)."""
         locations = (
             None
             if membership.all_locations
@@ -37,7 +40,9 @@ class OrgContext:
             tenant_id=membership.tenant_id,
             user_id=membership.user_id,
             location_ids=locations,
-            permissions=role_permissions(membership.role),
+            permissions=permissions
+            if permissions is not None
+            else role_permissions(membership.role),
         )
 
     @classmethod

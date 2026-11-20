@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-COST_SOURCES = ("opening", "receipt", "override", "migration")
+COST_SOURCES = ("opening", "receipt", "override", "migration", "production")
 BASIS = "latest receipt cost, unless overridden"
 ZERO = Decimal("0")
 

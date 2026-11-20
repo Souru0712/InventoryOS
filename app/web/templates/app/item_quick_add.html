@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/items/import">← Add items</a></p>
+<h1>Quick add</h1>
+<p class="small muted">One item per row; only the name is needed. Empty rows are skipped.</p>
+{% if not places %}
+<div class="card"><p style="margin:0;">Set up a location first. <a href="/app/locations">Add a location →</a></p></div>
+{% else %}
+<form method="post" action="/app/items/quick-add">{{ csrf_field(request) }}
+  <div class="field" style="max-width:320px;"><label for="location_id">Stock them at</label><select id="location_id" name="location_id">{% for p in places %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+  <datalist id="unit-list">{% for u in units %}<option value="{{ u }}">{% endfor %}</datalist>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>Unit</th><th>On hand</th><th>Reorder point</th><th>Cost per unit</th><th>Category</th></tr></thead>
+    <tbody>
+    {% for n in rows %}
+      <tr>
+        <td><input name="name_{{ n }}" aria-label="Name {{ n }}" maxlength="300"></td>
+        <td><input name="unit_{{ n }}" aria-label="Unit {{ n }}" list="unit-list" placeholder="each" maxlength="16" size="6"></td>
+        <td><input name="qty_{{ n }}" aria-label="On hand {{ n }}" inputmode="decimal" size="6"></td>
+        <td><input name="reorder_{{ n }}" aria-label="Reorder point {{ n }}" inputmode="decimal" size="6"></td>
+        <td><input name="cost_{{ n }}" aria-label="Cost per unit {{ n }}" inputmode="decimal" size="6"></td>
+        <td><input name="category_{{ n }}" aria-label="Category {{ n }}" maxlength="200" size="10"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <button class="btn" type="submit" style="margin-top:12px;">Add these items</button>
+</form>
+{% endif %}
+{% endblock %}

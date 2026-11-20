@@ -16,12 +16,15 @@ from app.db import Base
 from app.models import (
     Alert,
     AuditEvent,
+    BusinessSettings,
     Document,
     DocumentLine,
     EmailLog,
     EmailSuppression,
     ExtractionCorrection,
     HealthSnapshot,
+    ImportMapping,
+    ImportName,
     InventoryCategory,
     InventoryCount,
     InventoryEvent,
@@ -36,13 +39,16 @@ from app.models import (
     Location,
     Membership,
     Modifier,
+    ModifierScale,
+    Onboarding,
     Product,
     ProductIdentifier,
     ProductVariation,
     Promotion,
     ProviderConnection,
+    Receiving,
+    ReceivingLine,
     Recipe,
-    RecipeComponent,
     RecipeLine,
     RecipeVersion,
     SalesLineModifier,
@@ -56,9 +62,14 @@ from app.models import (
     StockCount,
     StockCountLine,
     StockItem,
+    Supplier,
+    SupplierItem,
     SyncRun,
     Tenant,
     User,
+    WasteEvent,
+    WasteLine,
+    WasteReason,
     WebhookEvent,
 )
 
@@ -77,6 +88,7 @@ APPEND_ONLY: frozenset[type[Base]] = frozenset(
         ItemCostHistory,
         RecipeVersion,
         RecipeLine,
+        ModifierScale,
     }
 )
 
@@ -102,6 +114,14 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         EmailLog,
         HealthSnapshot,
         Job,
+        WasteReason,
+        Supplier,
+        SupplierItem,
+        BusinessSettings,
+        Onboarding,
+        ImportMapping,
+        ImportName,
+        ModifierScale,
     }
 )
 
@@ -115,7 +135,6 @@ LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
             InventoryEvent,
             ProductIdentifier,
             Promotion,
-            RecipeComponent,
             StockAlias,
             StockBatch,
         )
@@ -126,6 +145,8 @@ LOCATION_PATHS: dict[type[Base], tuple[str, type[Base]]] = {
     SalesReturnLine: ("sales_return_id", SalesReturn),
     StockCountLine: ("stock_count_id", StockCount),
     ExtractionCorrection: ("document_id", Document),
+    WasteLine: ("waste_event_id", WasteEvent),
+    ReceivingLine: ("receiving_id", Receiving),
 }
 
 

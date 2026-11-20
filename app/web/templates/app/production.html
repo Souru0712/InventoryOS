@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<h1>Production</h1>
+{% if places|length > 1 %}
+<p class="small">{% for p in places %}{% if p.id == place.id %}<strong>{{ p.name }}</strong>{% else %}<a href="/app/production?location={{ p.id }}">{{ p.name }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+
+{% if label %}
+<div class="card" style="border-style:dashed;">
+  <p class="small muted" style="margin:0;">Label the container</p>
+  <p style="margin:4px 0 0; font-size:1.3em;"><strong>{{ label.item.name if label.item else "" }}</strong></p>
+  <p style="margin:0;">Use by <strong>{{ label.batch.expires_on.strftime("%a %d %b") if label.batch else "" }}</strong> · {{ label.order.batch_code }}</p>
+  <p class="small muted" style="margin:6px 0 0;">Made {{ label.order.actual_yield_base|qty(label.item.display_unit if label.item else "") }}{% if label.order.variance_base != 0 %}, {{ "+" if label.order.variance_base > 0 else "" }}{{ label.order.variance_base|qty(label.item.display_unit if label.item else "") }} against the recipe{% endif %}.
+  {% if label.batch %}<a href="/app/expiring/batches/{{ label.batch.id }}">The batch</a>{% endif %}</p>
+</div>
+{% endif %}
+
+{% if proposal %}
+  <p class="small"><a href="/app/production?location={{ place.id }}">← Choose something else</a></p>
+  <h2>{{ proposal.item.name }}</h2>
+  <form method="get" action="/app/production" class="inline-form">
+    <input type="hidden" name="item" value="{{ proposal.item.id }}"><input type="hidden" name="location" value="{{ place.id }}">
+    <label for="times-see">Times the recipe</label>
+    <input id="times-see" name="times" value="{{ times }}" inputmode="decimal" style="width:6em;">
+    <button class="btn small secondary" type="submit">Update</button>
+  </form>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>It takes</th><th>Amount</th><th>On hand</th></tr></thead>
+    <tbody>
+    {% for input_id, qty in proposal.planned.inputs|dictsort %}
+      {% set thing = proposal.names.get(input_id) %}
+      <tr{% if input_id in proposal.short %} class="warn"{% endif %}>
+        <td>{{ thing.name if thing else "item" }}</td>
+        <td>{{ qty|qty(thing.display_unit if thing else "") }}</td>
+        <td>{{ proposal.on_hand.get(input_id, 0)|qty(thing.display_unit if thing else "") }}{% if input_id in proposal.short %} <span class="small">short: it will go below zero</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <form method="post" action="/app/production">{{ csrf_field(request) }}
+    <input type="hidden" name="location_id" value="{{ place.id }}">
+    <input type="hidden" name="inventory_item_id" value="{{ proposal.item.id }}">
+    <input type="hidden" name="times" value="{{ times }}">
+    <div class="field">
+      <label for="actual_yield">Made ({{ proposal.item.display_unit|unit }})</label>
+      <input id="actual_yield" name="actual_yield" inputmode="decimal" placeholder="{{ proposal.planned.expected_yield|qty(proposal.item.display_unit) }} expected">
+      <p class="small muted" style="margin:4px 0 0;">Leave it empty if you made what the recipe says.</p>
+    </div>
+    <div class="field"><label for="note">Note (optional)</label><input id="note" name="note" maxlength="300"></div>
+    <button class="btn" type="submit">Record it</button>
+  </form>
+{% else %}
+  {% if problem %}<div class="notice error">{{ problem }}</div>{% endif %}
+  <p class="muted">Choose what you are making.</p>
+  {% if makeable %}
+  <ul class="pick-list">{% for i in makeable %}<li><a href="/app/production?item={{ i.id }}&location={{ place.id }}">{{ i.name }}</a></li>{% endfor %}</ul>
+  {% else %}<p class="muted">No prepared item here has a recipe yet. Give one a recipe on its page.</p>{% endif %}
+{% endif %}
+
+{% if runs %}
+<h2>Recent runs</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>When</th><th>What</th><th>Made</th><th>Code</th><th></th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+    {% set thing = names.get(r.inventory_item_id) %}
+    <tr>
+      <td class="small" style="white-space:nowrap;">{{ r.occurred_at.strftime("%H:%M") }} UTC</td>
+      <td>{{ thing.name if thing else "" }}</td>
+      <td>{{ r.actual_yield_base|qty(thing.display_unit if thing else "") }}</td>
+      <td class="small">{{ r.batch_code }}</td>
+      <td>
+        {% if r.status == "voided" %}<span class="small muted">Voided</span>
+        {% elif r.recorded_at >= void_until or can(request, "production.void") %}
+        <form method="post" action="/app/production/{{ r.id }}/void" class="inline-form">{{ csrf_field(request) }}
+          {% if can(request, "production.void") %}<input name="reason" placeholder="Why void it" aria-label="Why void it" maxlength="300">{% endif %}
+          <button class="btn small secondary" type="submit">Void</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

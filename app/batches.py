@@ -172,6 +172,7 @@ class BatchView:
     remaining: Decimal
     status: str
     history: list[HistoryRow]
+    item_type: str = "raw"
 
 
 def _batch_and_stock(db: Session, org: OrgContext, batch_id: int) -> tuple[StockBatch, StockItem]:
@@ -193,6 +194,11 @@ def batch_view(
         raise NotFound(batch_id)
     held = batch_remaining(db, org, [batch.id]).get(batch.id, Decimal("0"))
     today = business_date(now or datetime.now(UTC), place.timezone, place.business_day_cutoff_hour)
+    item = (
+        get_scoped(db, org, InventoryItem, stock.inventory_item_id)
+        if stock.inventory_item_id is not None
+        else None
+    )
     return BatchView(
         batch,
         stock,
@@ -200,6 +206,7 @@ def batch_view(
         held,
         status(held, batch.expires_on, today),
         batch_history(db, org, place, batch.id),
+        item.item_type if item is not None else "raw",
     )
 
 

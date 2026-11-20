@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/waste">← Log waste</a></p>
+<h1>Waste log</h1>
+{% if can(request, "data.export") %}<p class="small"><a href="/app/reports.csv?table=waste&range=custom&from={{ filters.since.isoformat() }}&to={{ filters.until.isoformat() }}{% if filters.location %}&location={{ filters.location }}{% endif %}">Waste by reason, item, product and person as CSV</a></p>{% endif %}
+<p class="muted">Every figure here comes from the stock records, so each loss counts once. A voided entry is left out.</p>
+
+<form method="get" action="/app/waste/log" class="card">
+  <div class="row">
+    <div class="field"><label for="since">From</label><input id="since" type="date" name="since" value="{{ filters.since.isoformat() }}"></div>
+    <div class="field"><label for="until">To</label><input id="until" type="date" name="until" value="{{ filters.until.isoformat() }}"></div>
+    {% if places|length > 1 %}
+    <div class="field"><label for="location">Location</label><select id="location" name="location"><option value="">All</option>{% for p in places %}<option value="{{ p.id }}"{% if filters.location == p.id %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
+    {% endif %}
+  </div>
+  <div class="row">
+    <div class="field"><label for="reason">Reason</label><select id="reason" name="reason"><option value="">Any</option>{% for r in reasons %}<option value="{{ r.id }}"{% if filters.reason == r.id %} selected{% endif %}>{{ r.label }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="item">Item</label><select id="item" name="item"><option value="">Any</option>{% for i in items %}<option value="{{ i.id }}"{% if filters.item == i.id %} selected{% endif %}>{{ i.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="actor">Who</label><select id="actor" name="actor"><option value="">Anyone</option>{% for uid, who in people.items() %}<option value="{{ uid }}"{% if filters.actor == uid %} selected{% endif %}>{{ who }}</option>{% endfor %}</select></div>
+  </div>
+  <button class="btn secondary" type="submit">Show</button>
+</form>
+
+{% if costs %}
+<div class="card"><p style="margin:0;">Waste cost for the period: <strong>{{ summary.total_cost_cents|money(currency) }}</strong>{% if summary.uncosted %} <span class="small muted">plus items with no cost yet</span>{% endif %}</p></div>
+{% endif %}
+
+<h2>Entries</h2>
+{% if not entries %}
+  <div class="card"><p style="margin:0;">No waste logged in this period.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>When</th><th>What</th><th>Why</th><th>Who</th>{% if costs %}<th>Cost</th>{% endif %}<th></th></tr></thead>
+  <tbody>
+  {% for entry in entries %}
+    {% set e = entry.event %}
+    <tr>
+      <td class="small" style="white-space:nowrap;">{{ e.occurred_at.strftime("%d %b %H:%M") }} UTC</td>
+      <td>
+        {% if entry.losses[0].product %}<strong>{{ entry.losses[0].product }}</strong> × {{ e.quantity|num }}<br>{% endif %}
+        {% for loss in entry.losses %}<span class="small">{{ loss.qty_base|qty(loss.unit) }} {{ loss.item }}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}
+      </td>
+      <td class="small">{{ e.reason_label }}{% if e.note %}: {{ e.note }}{% endif %}</td>
+      <td class="small">{{ entry.losses[0].person }}</td>
+      {% if costs %}<td class="small" style="white-space:nowrap;">{% if entry.cost_cents is none %}<span class="muted">unknown</span>{% else %}{{ entry.cost_cents|money(currency) }}{% endif %}</td>{% endif %}
+      <td>
+        {% if can(request, "waste.void") or e.recorded_at >= void_until %}
+        <form method="post" action="/app/waste/{{ e.id }}/void" class="inline-form">{{ csrf_field(request) }}
+          <input type="hidden" name="back" value="/app/waste/log">
+          {% if can(request, "waste.void") %}<input name="reason" placeholder="Why void it" aria-label="Why void it" maxlength="300">{% endif %}
+          <button class="btn small secondary" type="submit">Void</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Report</h2>
+<div class="row">
+  <div class="card">
+    <h3>By reason</h3>
+    <table><tbody>{% for name, t in summary.by_reason|dictsort %}<tr><td>{{ name }}</td><td class="small">{{ t.events }} entr{{ "y" if t.events == 1 else "ies" }}</td>{% if costs %}<td class="small">{{ t.cost_cents|money(currency) }}</td>{% endif %}</tr>{% endfor %}</tbody></table>
+  </div>
+  <div class="card">
+    <h3>By person</h3>
+    <table><tbody>{% for name, t in summary.by_person|dictsort %}<tr><td>{{ name }}</td><td class="small">{{ t.events }} entr{{ "y" if t.events == 1 else "ies" }}</td>{% if costs %}<td class="small">{{ t.cost_cents|money(currency) }}</td>{% endif %}</tr>{% endfor %}</tbody></table>
+  </div>
+</div>
+<div class="row">
+  <div class="card">
+    <h3>{% if costs %}Top items by cost{% else %}Items{% endif %}</h3>
+    {% set units = {} %}{% for entry in entries %}{% for loss in entry.losses %}{% set _ = units.update({loss.item: loss.unit}) %}{% endfor %}{% endfor %}
+    <table><tbody>{% for name, t in (summary.top_items(5) if costs else summary.by_item|dictsort) %}<tr><td>{{ name }}</td><td class="small">{{ t.qty_base|qty(units.get(name, "")) }}</td>{% if costs %}<td class="small">{{ t.cost_cents|money(currency) }}{% if t.uncosted %} +{% endif %}</td>{% endif %}</tr>{% endfor %}</tbody></table>
+  </div>
+  {% if summary.by_product %}
+  <div class="card">
+    <h3>By product</h3>
+    <table><tbody>{% for name, t in summary.by_product|dictsort %}<tr><td>{{ name }}</td><td class="small">{{ t.events }} entr{{ "y" if t.events == 1 else "ies" }}</td>{% if costs %}<td class="small">{{ t.cost_cents|money(currency) }}</td>{% endif %}</tr>{% endfor %}</tbody></table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<h2>Found short at counts</h2>
+<p class="small muted">Stock that counts found missing in the same period: loss nobody logged.</p>
+{% if not short %}
+  <div class="card"><p style="margin:0;">Counts found nothing missing in this period.</p></div>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>Missing</th>{% if costs %}<th>Cost</th>{% endif %}</tr></thead>
+  <tbody>{% for s in short %}<tr><td>{{ s.item }}</td><td>{{ s.qty_base|qty(s.display_unit) }}</td>{% if costs %}<td class="small">{% if s.cost_cents is none %}<span class="muted">unknown</span>{% else %}{{ s.cost_cents|money(currency) }}{% endif %}</td>{% endif %}</tr>{% endfor %}</tbody>
+</table>
+</div>
+{% endif %}
+
+{% if can(request, "settings.manage") %}
+<h2 id="reasons">Reasons</h2>
+<p class="small muted">Renaming a reason keeps past waste under the name it was logged with.</p>
+<div class="table-wrap">
+<table><tbody>
+{% for r in reasons %}
+  <tr>
+    <td>
+      <form method="post" action="/app/waste/reasons/{{ r.id }}" class="inline-form">{{ csrf_field(request) }}
+        <input name="label" value="{{ r.label }}" aria-label="Reason name" maxlength="80">
+        <button class="btn small secondary" type="submit">Rename</button>
+      </form>
+    </td>
+    <td>
+      <form method="post" action="/app/waste/reasons/{{ r.id }}" class="inline-form">{{ csrf_field(request) }}
+        <input type="hidden" name="active" value="{{ 'no' if r.is_active else 'yes' }}">
+        <button class="btn small secondary" type="submit">{{ "Archive" if r.is_active else "Bring back" }}</button>
+      </form>
+    </td>
+  </tr>
+{% endfor %}
+</tbody></table>
+</div>
+<form method="post" action="/app/waste/reasons" class="inline-form">{{ csrf_field(request) }}
+  <input name="label" placeholder="A new reason" aria-label="A new reason" maxlength="80" required>
+  <button class="btn small secondary" type="submit">Add</button>
+</form>
+{% endif %}
+{% endblock %}

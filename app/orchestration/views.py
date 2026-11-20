@@ -10,17 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
 from app.catalog import active_stock, by_item_name
+from app.ledger.history import item_moves
 from app.ledger.posting import batch_remaining
-from app.models import (
-    Location,
-    RecipeComponent,
-    SoldItem,
-    StockBatch,
-    StockItem,
-    TrackMode,
-)
-from app.sales import daily_sales
-from app.transform.business_days import business_date
+from app.models import Location, StockBatch, StockItem
+from app.recipes import ingredients_in_effect
+from app.transform.business_days import business_date, business_day_start
 from app.transform.expiry import (
     Batch,
     Coverage,
@@ -28,14 +22,8 @@ from app.transform.expiry import (
     coverage,
     project_batches,
 )
-from app.transform.inventory import (
-    ZERO,
-    Component,
-    SaleRow,
-    StockView,
-    consumption_by_day,
-    daily_velocity,
-)
+from app.transform.inventory import ZERO, StockView, daily_velocity
+from app.transform.reorder import USAGE_TYPES
 
 VELOCITY_WINDOW_DAYS = 28
 
@@ -85,81 +73,49 @@ def tenant_currency(db: Session, org: OrgContext) -> str:
     return location.currency if location else "USD"
 
 
-def sale_rows(db: Session, org: OrgContext, since: date | None = None) -> list[SaleRow]:
-    """Counted sales per POS sale item and day, read from the sales model (DR-30)."""
-    by_item: dict[tuple[int, date], list] = {}
-    for sale in daily_sales(db, org, since):
-        if sale.sold_item_id is None:
-            continue
-        total = by_item.setdefault((sale.sold_item_id, sale.day), [Decimal(0), 0])
-        total[0] += sale.units
-        total[1] += sale.net_cents
-    return [SaleRow(item, day, units, net) for (item, day), (units, net) in by_item.items()]
-
-
-def sold_item_names(db: Session, org: OrgContext) -> dict[int, str]:
-    return {item.id: item.name for item in db.scalars(select_scoped(org, SoldItem))}
-
-
-def components(db: Session, org: OrgContext) -> list[Component]:
-    return [
-        Component(row.sold_item_id, row.stock_item_id, Decimal(row.qty_base_per_sale))
-        for row in db.scalars(select_scoped(org, RecipeComponent))
-    ]
-
-
-def _provider_items(db: Session, org: OrgContext) -> list[StockItem]:
-    return list(
-        db.scalars(
-            select_scoped(org, StockItem).where(
-                StockItem.track_mode == TrackMode.PROVIDER,
-                StockItem.provider_variation_id.is_not(None),
-            )
-        )
-    )
-
-
-def provider_consumption(
-    db: Session, org: OrgContext, since: date | None = None
-) -> dict[int, dict[date, Decimal]]:
-    """Sales of POS-tracked SKUs, which have no recipe: each unit sold at a location is one gone there."""
-    stock = {
-        (item.location_id, item.provider_variation_id): item.id for item in _provider_items(db, org)
+def stock_ids(db: Session, org: OrgContext) -> dict[tuple[int, int], int]:
+    """Each stock row by its location and catalog item."""
+    return {
+        (row.location_id, row.inventory_item_id): row.id
+        for row in db.scalars(select_scoped(org, StockItem))
+        if row.inventory_item_id is not None
     }
-    if not stock:
-        return {}
-    provider_ids = {
-        sold.id: sold.provider_item_id for sold in db.scalars(select_scoped(org, SoldItem))
-    }
-    result: dict[int, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
-    for sale in daily_sales(db, org, since):
-        if sale.sold_item_id is None:
-            continue
-        item_id = stock.get((sale.location_id, provider_ids.get(sale.sold_item_id)))
-        if item_id is not None:
-            result[item_id][sale.day] += sale.units
-    return {item_id: dict(days) for item_id, days in result.items()}
 
 
 def consumption(
     db: Session, org: OrgContext, since: date | None = None
 ) -> dict[int, dict[date, Decimal]]:
-    """Base units consumed per stock item per day: via recipes, plus direct sales of POS SKUs."""
-    daily = consumption_by_day(sale_rows(db, org, since), components(db, org))
-    for item_id, days in provider_consumption(db, org, since).items():
-        merged = daily.setdefault(item_id, {})
-        for day, qty in days.items():
-            merged[day] = merged.get(day, ZERO) + qty
-    return daily
+    """Base units used per stock item per business day: what sales, production and usage
+    records took from the ledger, net of their reversals (ROR-FR-01, T2.15)."""
+    first = since or date(2000, 1, 1)
+    places = {place.id: place for place in db.scalars(select_scoped(org, Location))}
+    windows = {
+        place.id: (
+            business_day_start(first, place.timezone, place.business_day_cutoff_hour),
+            datetime.now(UTC),
+        )
+        for place in places.values()
+    }
+    stock = stock_ids(db, org)
+    daily: dict[int, dict[date, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+    for move in item_moves(db, org, windows):
+        if move.movement_type not in USAGE_TYPES:
+            continue
+        item_id = stock.get((move.location_id, move.inventory_item_id))
+        if item_id is None:
+            continue
+        place = places[move.location_id]
+        day = business_date(move.occurred_at, place.timezone, place.business_day_cutoff_hour)
+        daily[item_id][day] -= move.qty_base
+    return {item_id: dict(days) for item_id, days in daily.items()}
 
 
-def sales_signal(db: Session, org: OrgContext) -> set[int]:
-    """Stock items whose depletion shows up in sales: POS-tracked, or linked by a recipe.
-
-    For anything else a velocity of zero means "unknown", not "not selling".
-    """
-    linked = {row.stock_item_id for row in db.scalars(select_scoped(org, RecipeComponent))}
-    return linked | {item.id for item in _provider_items(db, org)}
+def sales_signal(db: Session, org: OrgContext, velocity: dict[int, Decimal]) -> set[int]:
+    """Stock items whose use shows up in the ledger: used by a recipe in effect, or used over
+    the window. For anything else a velocity of zero means "unknown", not "not selling"."""
+    used = ingredients_in_effect(db, org)
+    in_recipes = {stock_id for (_, item), stock_id in stock_ids(db, org).items() if item in used}
+    return in_recipes | {item_id for item_id, speed in velocity.items() if speed > ZERO}
 
 
 def batches_by_item(db: Session, org: OrgContext) -> dict[int, list[tuple[Batch, Decimal]]]:
@@ -223,7 +179,7 @@ def expiry_positions(
         return []
     days = {} if today is not None else business_dates(db, org, now)
     velocity = velocity if velocity is not None else velocity_map(db, org, today or now.date())
-    signal = sales_signal(db, org)
+    signal = sales_signal(db, org, velocity)
 
     result = []
     for item in stock_views(db, org, location_id):

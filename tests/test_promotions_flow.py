@@ -14,7 +14,6 @@ from app.models import (
     Location,
     Promotion,
     PromotionStatus,
-    SoldItem,
     StockItem,
     Tenant,
     TrackMode,
@@ -22,7 +21,7 @@ from app.models import (
 from app.orchestration.promotions import accept, dismiss, end, running, snooze, suggestions_for
 from app.units import Dimension
 from tests.batch_helpers import dated
-from tests.sales_helpers import sold_on
+from tests.ledger_helpers import consumed_on, counted_to
 
 TODAY = date(2026, 9, 13)
 
@@ -43,14 +42,12 @@ def gatorade(db, tenant, location):
         cost_per_base_cents=Decimal("80"),
         retail_per_base_cents=Decimal("199"),
     )
-    sold = SoldItem(
-        tenant_id=tenant.id, provider_item_id="VAR-GAT", name="Gatorade", price_cents=199
-    )
-    db.add_all([item, sold])
+    db.add(item)
     db.flush()
     for back in range(28):
         if back % 5:
-            sold_on(db, location, sold, TODAY - timedelta(days=back), "1.5")
+            consumed_on(db, item, TODAY - timedelta(days=back), "1.5")
+    counted_to(db, item, 24)
     dated(db, item, 24, TODAY + timedelta(days=9), cost=80)
     db.commit()
     return item
@@ -126,10 +123,9 @@ def test_a_snooze_wears_off(db, tenant, gatorade):
 def test_a_running_markdown_reports_what_sales_did(db, tenant, location, gatorade):
     [suggestion] = suggestions_for(db, OrgContext.system(tenant.id), TODAY)
     accept(db, OrgContext.system(tenant.id), suggestion, 149, today=TODAY - timedelta(days=2))
-    sold = db.query(SoldItem).one()
     for back in range(3):
         day = TODAY - timedelta(days=back)
-        sold_on(db, location, sold, day, "6")  # four times the usual rate since the markdown
+        consumed_on(db, gatorade, day, "6")  # four times the usual rate since the markdown
     db.commit()
 
     [live] = running(db, OrgContext.system(tenant.id), TODAY)
