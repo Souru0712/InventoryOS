@@ -23,6 +23,7 @@ from app.audit import record_audit
 from app.consumption import queue_consumption
 from app.exceptions import record_exception
 from app.models import (
+    ExternalModifier,
     ExternalProduct,
     Location,
     ProductMapping,
@@ -596,3 +597,82 @@ def remap_lines(
         changed.add(transaction.id)
     db.flush()
     return sorted(changed)
+
+
+# --- POS orders (T3.05) ---------------------------------------------------------------------------
+
+
+def record_pos_order(
+    db: Session,
+    org: OrgContext,
+    provider: str,
+    location_id: int,
+    *,
+    reference: str,
+    occurred_at: datetime,
+    lines: Sequence[SaleLine],
+    gross_cents: int | None = None,
+    net_cents: int | None = None,
+) -> SalesTransaction | None:
+    """A completed POS order as one sale at its location and moment, through the location's POS
+    source (created on first use); None when a resend changes nothing."""
+    location = get_scoped(db, org, Location, location_id)
+    if location is None:
+        raise NotFound(location_id)
+    day = business_date(occurred_at, location.timezone, location.business_day_cutoff_hour)
+    source = _pos_source(db, org, location_id, provider, day)
+    return record_sale(
+        db,
+        org,
+        source,
+        source_reference=reference,
+        lines=lines,
+        occurred_at=occurred_at,
+        gross_cents=gross_cents,
+        net_cents=net_cents,
+    )
+
+
+def void_sale(db: Session, org: OrgContext, transaction: SalesTransaction, reason: str) -> bool:
+    """A completed sale that no longer stands: it stops counting and what it took from stock is
+    given back (WF-12); False when it was not completed."""
+    if transaction.status != "completed":
+        return False
+    transaction.status = "voided"
+    db.flush()
+    queue_consumption(db, org, transaction, reason)
+    return True
+
+
+def retire_daily_totals(
+    db: Session, org: OrgContext, provider: str, since: date, reason: str
+) -> int:
+    """Void the POS's legacy daily totals from a business date on, where its order lines take
+    over (T3.05): the same orders, counted once. How many days were voided."""
+    totals = list(
+        db.scalars(
+            select_scoped(org, SalesTransaction)
+            .join(SalesSource, SalesSource.id == SalesTransaction.sales_source_id)
+            .where(
+                SalesSource.provider == provider,
+                SalesSource.kind == "pos_adapter",
+                SalesTransaction.status == "completed",
+                SalesTransaction.source_reference.startswith("daily:"),
+                SalesTransaction.business_date >= since,
+            )
+        )
+    )
+    return sum(void_sale(db, org, t, reason) for t in totals)
+
+
+def mapped_modifiers(db: Session, org: OrgContext, provider: str) -> dict[str, int]:
+    """Each POS modifier id the business has mapped, to its modifier."""
+    rows = db.execute(
+        select_scoped(org, ProductMapping)
+        .with_only_columns(ExternalModifier.external_modifier_id, ProductMapping.modifier_id)
+        .join(ExternalModifier, ExternalModifier.id == ProductMapping.external_modifier_id)
+        .join(ProviderConnection, ProviderConnection.id == ExternalModifier.connection_id)
+        .where(ProductMapping.status == "active", ProviderConnection.provider == provider)
+        .order_by(ProviderConnection.id)
+    ).tuples()
+    return {external: modifier for external, modifier in rows if modifier is not None}

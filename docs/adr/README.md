@@ -110,3 +110,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0076](0076-connection-lifecycle.md) | The POS connection lifecycle | T3.02 | Proposed |
 | [ADR-0077](0077-external-catalog-and-location-mapping.md) | The external catalog and location mapping | T3.03 | Proposed |
 | [ADR-0078](0078-product-mapping-and-reprocessing.md) | Product mapping and reprocessing | T3.04 | Proposed |
+| [ADR-0079](0079-order-line-ingestion.md) | Order-line ingestion | T3.05 | Proposed |

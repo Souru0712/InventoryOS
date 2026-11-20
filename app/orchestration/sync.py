@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
@@ -20,7 +20,6 @@ from app.load.upsert import (
     sync_catalog_presence,
     sync_identifiers_from_catalog,
     sync_retail_prices,
-    upsert_sales_daily,
     upsert_sold_items,
 )
 from app.models import (
@@ -43,7 +42,6 @@ from app.providers.square.client import (
     physical_count_change,
 )
 from app.providers.square.normalize import (
-    daily_sales_from_orders,
     normalize_catalog,
     normalize_counts,
     to_location,
@@ -54,7 +52,6 @@ from app.units import from_base
 
 log = logging.getLogger(__name__)
 
-SALES_LOOKBACK_DAYS = 60
 # Square answers 401 once the merchant revoked the authorization (SQ-01).
 UNAUTHORIZED = 401
 
@@ -149,12 +146,10 @@ def sync_catalog(db: Session, org: OrgContext) -> dict:
     return stats
 
 
-def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS) -> dict:
-    """Full pull for one tenant. Idempotent, safe to re-run.
-
-    This is the reconciliation pass: webhooks keep counts current between runs, and this run
-    is what makes them right again if one was missed, dropped, or arrived out of order.
-    """
+def run_sync(db: Session, org: OrgContext) -> dict:
+    """Full pull for one tenant: catalog and locations, and Square's counts while write-back is
+    on. Idempotent, safe to re-run. Sales arrive as order lines (`app/order_ingestion.py`,
+    T3.05); this run no longer reads orders."""
     connection = active_connection(db, org)
     run = SyncRun(tenant_id=org.tenant_id, provider=connection.provider, kind="full")
     db.add(run)
@@ -169,7 +164,6 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
 
             locations = _square_locations(db, org, active_only=True)
             provider_location_ids = [square_id for square_id, _ in locations.values()]
-            timezones = dict(locations.values())
 
             if provider_location_ids:
                 tracked_ids = [
@@ -185,12 +179,6 @@ def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS)
                             client.inventory_counts(tracked_ids, provider_location_ids)
                         ),
                     )
-
-                end = datetime.now(UTC)
-                orders = client.orders(provider_location_ids, end - timedelta(days=days_back), end)
-                stats["sales_rows"] = upsert_sales_daily(
-                    db, org.tenant_id, daily_sales_from_orders(orders, timezones)
-                )
 
         # Square may hand back more locations than the plan covers; the extras stay on record.
         tenant = get_scoped(db, org, Tenant, org.tenant_id)

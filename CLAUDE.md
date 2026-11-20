@@ -136,6 +136,12 @@ implementation sessions; the detail lives in `docs/`.
   (`mapped_variations()`). Past sales change only by a previewed reprocessing job
   (`reprocess_mapping`: `remap_lines()` then `reprocess_sale()`), from the last count of what
   the size uses, at most 30 days back (PD-17).
+- POS orders arrive through `app/order_ingestion.py` (ADR-0079), the only writer of
+  `external_orders`, their lines and `order_cursors`: the `ingest_orders` job reads changed
+  orders from the cursor (less an overlap) through the adapter; a completed order at a tracked
+  location is one sale via `record_pos_order()`, a line per uid, so a resend is a revision.
+  Business dates from the cursor's `lines_from` are order lines; earlier days keep their daily
+  totals. The hourly `run_sync` reads no orders.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,

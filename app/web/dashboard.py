@@ -23,6 +23,7 @@ from app.costs import value_stock
 from app.db import get_db
 from app.entitlements import require
 from app.items import entered_base
+from app.jobs import enqueue
 from app.ledger.posting import post_count
 from app.models import (
     Location,
@@ -563,6 +564,9 @@ def manual_sync(
     except Exception:
         log.exception("manual sync failed for tenant %s", tenant.id)
         return RedirectResponse("/app?error=sync_failed", status_code=303)
+    # Orders are read as a job (T3.05): now, rather than at the next scheduled read.
+    enqueue(db, org, "ingest_orders", dedupe_key="orders")
+    db.commit()
     return RedirectResponse("/app", status_code=303)
 
 

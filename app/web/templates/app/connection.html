@@ -42,6 +42,15 @@
 <p class="small">{{ catalog.items }} item{{ "" if catalog.items == 1 else "s" }}, {{ catalog.variations }} variation{{ "" if catalog.variations == 1 else "s" }} and {{ catalog.modifiers }} modifier{{ "" if catalog.modifiers == 1 else "s" }} imported. Archived or deleted ones are kept, marked inactive. <a href="/app/mappings">Map them to your products</a>.</p>
 {% endif %}
 
+{% if orders %}
+<h2>{{ provider }} sales</h2>
+{% if orders.lines_from %}
+<p class="small">Sales arrive order by order from {{ orders.lines_from.isoformat() }}: {{ orders.orders }} order{{ "" if orders.orders == 1 else "s" }} read, {{ orders.sales }} recorded as sales at tracked locations. Last read {{ orders.through.strftime("%d %b %H:%M") }} UTC. Days before then keep their daily totals.</p>
+{% else %}
+<p class="small muted">Orders are read every few minutes once a location tracks a {{ provider }} location.</p>
+{% endif %}
+{% endif %}
+
 {% if places %}
 <h2>{{ provider }} locations</h2>
 <p class="small muted">Choose which of your locations tracks each {{ provider }} location. Sales from a location no one tracks are not brought in.{% if can_map and not own_locations %} <a href="/app/locations/new">Add a location</a> first.{% endif %}</p>

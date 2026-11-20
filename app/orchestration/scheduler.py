@@ -51,6 +51,19 @@ def sync_all_tenants() -> None:
                 log.exception("scheduled sync failed for tenant %s", tenant_id)
 
 
+def queue_order_ingestion() -> None:
+    """Read each connected business's changed orders as a job (T3.05, SQ-11)."""
+    with session_scope() as db:
+        tenant_ids = connected_tenant_ids(db)
+    for tenant_id in tenant_ids:
+        with log_context(tenant_id=tenant_id):
+            try:
+                with session_scope() as db:
+                    enqueue(db, OrgContext.system(tenant_id), "ingest_orders", dedupe_key="orders")
+            except Exception:
+                log.exception("could not queue order ingestion for tenant %s", tenant_id)
+
+
 def _local(now: datetime, zone: str | None) -> datetime:
     """The instant on the business's own clock; an unknown zone reads as UTC."""
     try:
@@ -196,6 +209,12 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         id="queue_evaluations",
         max_instances=1,
         coalesce=True,
+    )
+    scheduler.add_job(
+        _job(queue_order_ingestion),
+        "interval",
+        minutes=settings.orders_interval_minutes,
+        id="queue_order_ingestion",
     )
     scheduler.add_job(
         _job(sync_all_tenants),

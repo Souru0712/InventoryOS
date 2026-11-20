@@ -99,7 +99,7 @@ class SquareAdapter:
         until: datetime,
         cursor: str | None = None,
     ) -> OrderPage:
-        """Completed orders closed in the window; the client follows Square's cursor itself."""
+        """Orders changed in the window, in any state; the client follows Square's cursor."""
         with SquareClient(credentials.access_token) as client:
             try:
                 raw = client.orders(location_ids, since, until)

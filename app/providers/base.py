@@ -123,6 +123,7 @@ class NormalizedOrder:
     external_location_id: str
     lines: tuple[NormalizedOrderLine, ...] = ()
     refunds: tuple[NormalizedRefund, ...] = ()
+    updated_at: datetime | None = None  # the POS's last change: what an incremental read follows
 
 
 @dataclass(frozen=True)
@@ -167,7 +168,9 @@ class PosAdapter(Protocol):
         since: datetime,
         until: datetime,
         cursor: str | None = None,
-    ) -> OrderPage: ...
+    ) -> OrderPage:
+        """Orders at those locations changed between `since` and `until`, in any state."""
+        ...
 
     def parse_webhook(
         self, raw: bytes, headers: Mapping[str, str], url: str

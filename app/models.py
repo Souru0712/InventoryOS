@@ -112,6 +112,7 @@ def positive(table: str, column: str) -> CheckConstraint:
 
 # connected → revoked (the provider ended it) or disconnected (the business did) (DOMAIN_MODEL §5).
 CONNECTION_STATUSES = ("active", "revoked", "disconnected")
+ORDER_STATES = ("open", "completed", "canceled")
 
 
 def one_of(table: str, column: str, values: tuple[str, ...]) -> CheckConstraint:
@@ -575,6 +576,76 @@ class ProductMapping(Base):
     mapped_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
     mapped_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     superseded_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class OrderCursor(Base):
+    """How far a connection's orders have been read (T3.05, SQ-11): orders changed up to
+    `through` are in. Business dates from `lines_from` on are sold as order lines; earlier days
+    keep the daily totals the legacy sync recorded."""
+
+    __tablename__ = "order_cursors"
+    __table_args__ = (UniqueConstraint("connection_id", name="uq_order_cursors_connection"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"))
+    lines_from: Mapped[date] = mapped_column(Date)
+    through: Mapped[datetime] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ExternalOrder(Base):
+    """A POS order as the POS last told it (T3.05, DOMAIN_MODEL staging): normalized into one
+    sale when it is completed at a tracked location. A newer version replaces it; an older or
+    repeated one changes nothing."""
+
+    __tablename__ = "external_orders"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_order_id", name="uq_external_orders_external_id"
+        ),
+        one_of("external_orders", "state", ORDER_STATES),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"), index=True)
+    external_order_id: Mapped[str] = mapped_column(String(120))
+    version: Mapped[int] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String(12))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    external_location_id: Mapped[str] = mapped_column(String(120))
+    # The business's location that tracked it when it arrived; None: not tracked, not a sale.
+    location_id: Mapped[int | None] = mapped_column(ref("locations.id"))
+    # The sale it last became (its latest revision); None while it is not one.
+    sales_transaction_id: Mapped[int | None] = mapped_column(ref("sales_transactions.id"))
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    lines: Mapped[list[ExternalOrderLine]] = relationship(
+        back_populates="order", order_by="ExternalOrderLine.id", cascade="all, delete-orphan"
+    )
+
+
+class ExternalOrderLine(Base):
+    """A line of a POS order, by its line uid: the idempotency grain (SQ-10)."""
+
+    __tablename__ = "external_order_lines"
+    __table_args__ = (UniqueConstraint("order_id", "line_uid", name="uq_external_order_lines_uid"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    order_id: Mapped[int] = mapped_column(owned_by("external_orders.id"), index=True)
+    line_uid: Mapped[str] = mapped_column(String(120))
+    # None for a custom amount: kept here, never a sale line (SQ-18).
+    external_variation_id: Mapped[str | None] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(300))
+    quantity: Mapped[Decimal] = mapped_column(Qty)
+    modifiers: Mapped[str] = mapped_column(Text, default="[]")  # JSON: [[id, name, qty], ...]
+    gross_cents: Mapped[int | None] = mapped_column(Integer)
+    net_cents: Mapped[int | None] = mapped_column(Integer)
+
+    order: Mapped[ExternalOrder] = relationship(back_populates="lines")
 
 
 class Location(Base):

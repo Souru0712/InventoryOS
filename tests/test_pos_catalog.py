@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
+from app import order_ingestion
 from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
 from app.main import app
@@ -24,7 +25,9 @@ from app.models import (
     Tenant,
 )
 from app.orchestration import sync
+from app.order_ingestion import ingest_orders
 from app.pos_catalog import MappingError, NotFound, Summary, summary, track_location
+from app.providers.base import OrderPage
 from tests.accounts import confirm_email
 
 CATALOG = [
@@ -231,13 +234,13 @@ def test_g11_the_sync_records_square_locations_and_never_creates_one(db, tenant,
     assert (main.name, main.timezone, main.active) == ("Main St", "America/New_York", True)
     assert main.address and "1 Main St" in main.address
     assert kiosk.active is False
-    assert fake.order_locations == [], "no location tracks Square's: no sales are read"
+    assert ingest_orders(db, org_of(tenant)) == {"untracked": 1}, "no sales read untracked"
 
 
 def test_pos_fr_03_a_square_location_is_tracked_by_one_of_the_business_locations(
-    db, tenant, location, square
+    db, tenant, location, square, monkeypatch
 ):
-    connection, fake = square
+    connection, _fake = square
     org = org_of(tenant)
     sync.sync_catalog(db, org)
     kitchen = Location(tenant_id=tenant.id, name="Kitchen", timezone="UTC")
@@ -251,8 +254,17 @@ def test_pos_fr_03_a_square_location_is_tracked_by_one_of_the_business_locations
     with pytest.raises(MappingError, match="already tracks"):
         track_location(db, org, kiosk.id, location.id)
     db.commit()
-    sync.run_sync(db, org)
-    assert fake.order_locations == [["SQ-1"]], "the tracked location's sales are read"
+    asked: list[list[str]] = []
+
+    class Reader:
+        def fetch_orders(self, _credentials, location_ids, _since, _until, cursor=None):
+            asked.append(location_ids)
+            return OrderPage(())
+
+    monkeypatch.setattr(order_ingestion, "adapter_for", lambda _provider: Reader())
+    monkeypatch.setattr(order_ingestion, "credentials", lambda *_args, **_kw: None)
+    ingest_orders(db, org)
+    assert asked == [["SQ-1"]], "the tracked location's orders are read"
 
     assert track_location(db, org, main.id, kitchen.id) is True  # moved
     assert location.provider_location_id is None and kitchen.provider_location_id == "SQ-1"

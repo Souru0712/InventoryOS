@@ -84,7 +84,7 @@ def _waiting(db: Session, org: OrgContext, kind: str, dedupe_key: str | None) ->
 def _handlers() -> dict[str, Handler]:
     # Imported here: these modules queue follow-up work through this one.
     from app.business_settings import alert_email_key
-    from app.connections import email_owners
+    from app.connections import NotConnected, email_owners
     from app.consumption import consume_sale
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
@@ -92,6 +92,7 @@ def _handlers() -> dict[str, Handler]:
     from app.orchestration.alerts import evaluate_and_store, send_alert_digest
     from app.orchestration.receiving import parse_document
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
+    from app.order_ingestion import ingest_orders
     from app.waste import dispose_expired
 
     def evaluate(db: Session, org: OrgContext, payload: dict) -> None:
@@ -140,6 +141,13 @@ def _handlers() -> dict[str, Handler]:
     def consume(db: Session, org: OrgContext, payload: dict) -> None:
         consume_sale(db, org, int(payload["sales_transaction_id"]), payload.get("reason"))
 
+    def orders(db: Session, org: OrgContext, payload: dict) -> None:
+        try:
+            ingest_orders(db, org)
+        except NotConnected:
+            # Revoked or disconnected since it was queued: nothing to read, nothing to retry.
+            log.info("tenant %s has no connection to read orders from", org.tenant_id)
+
     def remap(db: Session, org: OrgContext, payload: dict) -> None:
         # A repeat finds every line already on the mapped size and reprocesses nothing.
         reprocess_mapping(db, org, int(payload["mapping_id"]), date.fromisoformat(payload["since"]))
@@ -153,6 +161,7 @@ def _handlers() -> dict[str, Handler]:
         "consume_sale": consume,
         "connection_revoked_email": revoked_email,
         "reprocess_mapping": remap,
+        "ingest_orders": orders,
         "verify_ledger": verify,
         "send_alert_digest": digest,
         "send_weekly_report": weekly,

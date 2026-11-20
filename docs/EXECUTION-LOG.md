@@ -5,6 +5,43 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-20 — T3.05 Order-line ingestion (built on branch)
+
+**Implemented**
+- -a: `external_orders` / `external_order_lines` staged per connection (unique per connection and
+  order id, per order and line uid; a newer version replaces, an older or repeated one changes
+  nothing) and `order_cursors` (orders changed since the last read, less a 10-minute overlap),
+  written only by `app/order_ingestion.py` through the adapter contract (`updated_at` added).
+  Square's order search follows `updated_at` in every state, ten locations per request.
+- -b: a completed order at a tracked location is one sale (`record_pos_order()`), a line per
+  order line by uid, so a resend or new version is a revision; consumption follows as the
+  `consume_sale` job at the completion moment. Open, cancelled and untracked orders are staged
+  only; custom amounts are no sale line; an unmapped modifier raises `unmapped_product` until
+  mapped.
+- Cutover: the first read sets `lines_from` seven days back and voids the legacy daily totals
+  from it (`retire_daily_totals()`); the hourly sync reads no orders (its writers go in T3.12).
+- `ingest_orders` job queued every 5 minutes per connected business and by "Sync now"; a revoked
+  authorization is marked, not retried; each read is a `SyncRun` of kind `orders`; the CLI sync
+  reads orders too (`--days` gone).
+- `/app/connection` shows the order import summary.
+
+**Verified**
+- `tests/test_order_ingestion.py` (10): one sale per order with a line per uid and once-only
+  consumption across a resend, a new version and an old version (AC-POS-03 ingestion side);
+  open/cancelled/untracked/pre-cutover orders staged only; the cursor and overlap; daily totals
+  voided from the cutover, counted once; unmapped modifier exception; revoked vs passing failure;
+  the hourly sync reads no orders; Square's search body; the schedule; the CLI. Related suites,
+  ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0079 (Proposed).
+
+**Open issues**
+- AC-POS-02 (within 5 minutes, sandbox) runs in T3.11; webhooks (T3.06) bring it nearer real time.
+- An order cancelled after completion stays a sale until T3.07.
+
+---
+
 ## 2026-11-19 — T3.04 Product mapping and reprocessing (built on branch)
 
 **Implemented**

@@ -14,6 +14,7 @@ from app.access import OrgContext, select_scoped
 from app.connections import NotConnected, current, disconnect, name_of, sync_health
 from app.db import get_db
 from app.models import Location, SyncRun, Tenant, User
+from app.order_ingestion import order_summary
 from app.pos_catalog import MappingError, NotFound, external_locations, summary, track_location
 from app.security import require_permission, require_tenant, require_verified
 from app.throttle import client_ip
@@ -66,6 +67,7 @@ def connection_page(
             "own_locations": own,
             "can_map": active,
             "catalog": summary(db, org, connection) if connection else None,
+            "orders": order_summary(db, org, connection) if connection else None,
         },
     )
 

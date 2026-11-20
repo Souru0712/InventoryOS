@@ -19,6 +19,9 @@ MAX_ATTEMPTS = 4
 BATCH_SIZE = 250
 
 
+ORDER_SEARCH_LOCATIONS = 10
+
+
 class SquareError(RuntimeError):
     """Square API failure with the context needed to debug it."""
 
@@ -115,23 +118,29 @@ class SquareClient:
         return counts
 
     def orders(self, location_ids: list[str], start_at: datetime, end_at: datetime) -> list[dict]:
-        body = {
-            "location_ids": location_ids,
-            "limit": 200,
-            "query": {
-                "filter": {
-                    "date_time_filter": {
-                        "closed_at": {
-                            "start_at": _rfc3339(start_at),
-                            "end_at": _rfc3339(end_at),
-                        }
+        """Orders changed in the window, open, completed or cancelled (SQ-11): an incremental
+        read follows `updated_at`, so a completion or a later edit is seen again."""
+        found: list[dict] = []
+        # Square searches ten locations at most per request.
+        for first in range(0, len(location_ids), ORDER_SEARCH_LOCATIONS):
+            body = {
+                "location_ids": location_ids[first : first + ORDER_SEARCH_LOCATIONS],
+                "limit": 200,
+                "query": {
+                    "filter": {
+                        "date_time_filter": {
+                            "updated_at": {
+                                "start_at": _rfc3339(start_at),
+                                "end_at": _rfc3339(end_at),
+                            }
+                        },
+                        "state_filter": {"states": ["OPEN", "COMPLETED", "CANCELED"]},
                     },
-                    "state_filter": {"states": ["COMPLETED"]},
+                    "sort": {"sort_field": "UPDATED_AT", "sort_order": "ASC"},
                 },
-                "sort": {"sort_field": "CLOSED_AT", "sort_order": "ASC"},
-            },
-        }
-        return list(self._paginate("POST", "/v2/orders/search", body, "orders"))
+            }
+            found.extend(self._paginate("POST", "/v2/orders/search", body, "orders"))
+        return found
 
     # --- write-back ---
 

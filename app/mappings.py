@@ -344,6 +344,10 @@ def map_modifier(
             )
         )
         db.flush()
+        # Order lines raised it while unmapped (T3.05); mapping is the fix.
+        clear(
+            db, org, ("unmapped_product", "pos_modifier", external.external_modifier_id[:80]), now
+        )
     name = f"{external.list_name}: {external.name}" if external.list_name else external.name
     record_audit(
         db,

@@ -54,6 +54,7 @@ from app.orchestration.health import record_snapshot
 from app.orchestration.receiving import parse_document
 from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
+from app.order_ingestion import ingest_orders
 from app.products import products_from_sold_items
 from app.recipes import NewLine, Owner, save_recipe
 from app.sales import DayOfSales, record_daily_pos_sales
@@ -294,8 +295,11 @@ def cmd_billing(args: argparse.Namespace) -> int:
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
+    org = OrgContext.system(args.tenant)
     with session_scope() as db:
-        stats = run_sync(db, OrgContext.system(args.tenant), days_back=args.days)
+        stats = run_sync(db, org)
+    with session_scope() as db:
+        stats |= {f"orders_{k}": v for k, v in ingest_orders(db, org).items()}
     print(f"tenant {args.tenant}: {stats}")
     return 0
 
@@ -618,9 +622,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tenant", type=int, required=True)
     p.set_defaults(func=cmd_billing)
 
-    p = sub.add_parser("sync", help="pull Square data for one tenant")
+    p = sub.add_parser(
+        "sync", help="pull Square's catalog, then its changed orders, for one tenant"
+    )
     p.add_argument("--tenant", type=int, required=True)
-    p.add_argument("--days", type=int, default=60)
     p.set_defaults(func=cmd_sync)
 
     p = sub.add_parser("alerts", help="re-evaluate low stock")

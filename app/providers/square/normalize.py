@@ -325,6 +325,7 @@ def to_order(raw: dict[str, Any]) -> NormalizedOrder:
         external_location_id=raw.get("location_id") or "",
         lines=tuple(lines),
         refunds=refunds,
+        updated_at=_moment(raw.get("updated_at")),
     )
 
 

@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     stripe_price_pro: str = ""
 
     sync_interval_minutes: int = 60
+    # How often each connected business's orders are read (T3.05; webhooks arrive with T3.06).
+    orders_interval_minutes: int = 5
     # Every business's stock and expiry is checked this often, with or without a POS (T1.20).
     evaluation_interval_minutes: int = 60
     # How often the scheduler process's worker looks for due background jobs.
