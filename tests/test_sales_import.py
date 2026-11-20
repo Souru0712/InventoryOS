@@ -39,7 +39,15 @@ def shop(db, tenant, location):
     for n in range(1, 19):
         product = create_product(db, org, name=f"Drink {n}", variations=[NewVariation("Regular")])
         sizes.append(product.variations[0])
-    save_recipe(db, org, Owner("variation", sizes[0].id), [NewLine(beans.id, "18", "g")])
+    # In effect from the start, so every imported day of it consumes whatever the clock says
+    # (a recipe from now would miss the import's last day once a run crosses midnight).
+    save_recipe(
+        db,
+        org,
+        Owner("variation", sizes[0].id),
+        [NewLine(beans.id, "18", "g")],
+        from_the_start=True,
+    )
     db.commit()
     return org, sizes
 
@@ -69,11 +77,11 @@ def test_ac_sal_04_preview_posts_matched_lists_unmatched_and_reimport_adds_nothi
     assert shown.days[TODAY][sizes[0].id] == D(3)
     assert post(db, org, first.id) == 7
     db.commit()
-    assert len(_sale_postings(db)) == 1  # only today's drink has a recipe in effect
+    assert len(_sale_postings(db)) == 7  # Drink 1 on each of the 7 days; the rest have none
     again = upload(db, org, location_id=location.id, filename="week.csv", content=_csv(NAMES))
     assert post(db, org, again.id) == 0
     db.commit()
-    assert len(_sale_postings(db)) == 1  # no duplicate consumption
+    assert len(_sale_postings(db)) == 7  # no duplicate consumption
     origins = {t.origin for t in db.scalars(select(SalesTransaction))}
     assert origins == {"file_import"}
 

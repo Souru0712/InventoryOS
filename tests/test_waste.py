@@ -193,7 +193,7 @@ def test_ac_wst_04_a_wasted_product_takes_its_recipes_ingredients(db, kitchen, t
     }
     assert moved == {(carrots.id, "waste"): -to_base("0.5", "lb"), (cup.id, "waste"): D(-1)}
     assert event.recipe_version_id is not None and len(event.lines) == 2
-    [entry] = logged(db, staff, since=TODAY, until=TODAY)
+    [entry] = logged(db, staff, since=event.occurred_at.date(), until=event.occurred_at.date())
     assert {loss.product for loss in entry.losses} == {"Golden State 16 oz"}
 
 
@@ -336,9 +336,11 @@ def test_waste_of_an_item_with_no_cost_is_kept_and_its_cost_is_unknown(db, kitch
             quantity="5",
         ),
     )
-    _waste(db, staff, location, why, herbs, "1", unit="")
+    event = _waste(db, staff, location, why, herbs, "1", unit="")
     db.commit()
-    [entry] = logged(db, staff, since=TODAY, until=TODAY)
+    # The day it was recorded, not the day the module loaded: a run can cross midnight.
+    day = event.occurred_at.date()
+    [entry] = logged(db, staff, since=day, until=day)
     assert entry.cost_cents is None
     assert (
         db.scalars(select(ExceptionRecord).where(ExceptionRecord.type == "missing_cost"))

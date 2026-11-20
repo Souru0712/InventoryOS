@@ -39,7 +39,11 @@ def bar(db, tenant, location):
     )
     golden = create_product(db, org, name="Golden State", variations=[NewVariation("16 oz")])
     size = golden.variations[0]
-    save_recipe(db, org, Owner("variation", size.id), [NewLine(juice.id, "480", "ml")])
+    # In effect from the start: a day saved for TODAY (fixed at import) still has a recipe when
+    # a run crosses midnight.
+    save_recipe(
+        db, org, Owner("variation", size.id), [NewLine(juice.id, "480", "ml")], from_the_start=True
+    )
     db.commit()
     return org, juice, size
 
