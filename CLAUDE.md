@@ -131,6 +131,11 @@ implementation sessions; the detail lives in `docs/`.
   products (per variation) and modifiers, unique per (connection, external id), never deleted
   (unlisted → inactive). The sync never creates a location: a POS location is tracked by one of
   the business's locations (`provider_location_id`) through `track_location()`.
+- POS mappings are written only by `app/mappings.py` (ADR-0078): one active mapping per
+  external product or modifier, a change supersedes it; new POS sales take their size from it
+  (`mapped_variations()`). Past sales change only by a previewed reprocessing job
+  (`reprocess_mapping`: `remap_lines()` then `reprocess_sale()`), from the last count of what
+  the size uses, at most 30 days back (PD-17).
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,

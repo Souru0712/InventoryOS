@@ -37,6 +37,7 @@ from app.web import (
     health,
     item_import,
     locations,
+    mappings,
     marketing,
     mfa,
     onboarding,
@@ -138,6 +139,7 @@ app.include_router(item_import.router)
 app.include_router(onboarding.router)
 app.include_router(floor.router)
 app.include_router(connections.router)
+app.include_router(mappings.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

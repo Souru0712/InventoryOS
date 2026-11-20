@@ -39,7 +39,7 @@
 
 {% if catalog %}
 <h2>{{ provider }} catalog</h2>
-<p class="small">{{ catalog.items }} item{{ "" if catalog.items == 1 else "s" }}, {{ catalog.variations }} variation{{ "" if catalog.variations == 1 else "s" }} and {{ catalog.modifiers }} modifier{{ "" if catalog.modifiers == 1 else "s" }} imported. Archived or deleted ones are kept, marked inactive.</p>
+<p class="small">{{ catalog.items }} item{{ "" if catalog.items == 1 else "s" }}, {{ catalog.variations }} variation{{ "" if catalog.variations == 1 else "s" }} and {{ catalog.modifiers }} modifier{{ "" if catalog.modifiers == 1 else "s" }} imported. Archived or deleted ones are kept, marked inactive. <a href="/app/mappings">Map them to your products</a>.</p>
 {% endif %}
 
 {% if places %}

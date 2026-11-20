@@ -39,6 +39,7 @@ from app.transform.ledger import (
     MOVEMENT_TYPES,
     TRANSACTION_KINDS,
 )
+from app.transform.mappings import MAPPING_STATUSES
 from app.transform.onboarding import ANSWERS as ONBOARDING_ANSWERS
 from app.transform.production import STATUSES as PRODUCTION_STATUSES
 from app.transform.products import MODIFIER_EFFECTS, PRODUCTION_MODES
@@ -523,6 +524,57 @@ class ExternalModifier(Base):
     name: Mapped[str] = mapped_column(String(200))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ProductMapping(Base):
+    """What a POS product or modifier is in the business's own catalog (T3.04, ADR-0078): an
+    external variation to a product size, an external modifier to a modifier. Written only by
+    `app/mappings.py`. A change supersedes the active row, so who mapped what, and when, stays."""
+
+    __tablename__ = "product_mappings"
+    __table_args__ = (
+        one_of("product_mappings", "status", MAPPING_STATUSES),
+        CheckConstraint(
+            "(external_product_id IS NOT NULL AND product_variation_id IS NOT NULL"
+            " AND external_modifier_id IS NULL AND modifier_id IS NULL)"
+            " OR (external_modifier_id IS NOT NULL AND modifier_id IS NOT NULL"
+            " AND external_product_id IS NULL AND product_variation_id IS NULL)",
+            name="ck_product_mappings_target",
+        ),
+        CheckConstraint(
+            "status <> 'superseded' OR superseded_at IS NOT NULL",
+            name="ck_product_mappings_superseded_at",
+        ),
+        # One active mapping per external id (DOMAIN_MODEL §5).
+        Index(
+            "uq_product_mappings_active_product",
+            "external_product_id",
+            unique=True,
+            sqlite_where=text("status = 'active' AND external_product_id IS NOT NULL"),
+            postgresql_where=text("status = 'active' AND external_product_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_product_mappings_active_modifier",
+            "external_modifier_id",
+            unique=True,
+            sqlite_where=text("status = 'active' AND external_modifier_id IS NOT NULL"),
+            postgresql_where=text("status = 'active' AND external_modifier_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    external_product_id: Mapped[int | None] = mapped_column(ref("external_products.id"), index=True)
+    external_modifier_id: Mapped[int | None] = mapped_column(
+        ref("external_modifiers.id"), index=True
+    )
+    product_variation_id: Mapped[int | None] = mapped_column(ref("product_variations.id"))
+    modifier_id: Mapped[int | None] = mapped_column(ref("modifiers.id"))
+    status: Mapped[str] = mapped_column(String(12), default="active")
+    # None when the product made it: carried over from sold items (DM-13).
+    mapped_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    mapped_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    superseded_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class Location(Base):

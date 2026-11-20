@@ -23,8 +23,11 @@ from app.audit import record_audit
 from app.consumption import queue_consumption
 from app.exceptions import record_exception
 from app.models import (
+    ExternalProduct,
     Location,
+    ProductMapping,
     ProductVariation,
+    ProviderConnection,
     SalesLineModifier,
     SalesSource,
     SalesTransaction,
@@ -477,6 +480,8 @@ def record_daily_pos_sales(
         for v in db.scalars(select_scoped(org, ProductVariation))
         if v.source_sold_item_id is not None
     }
+    # A mapping wins over the size a sold item was made into (T3.04): it is the business's word.
+    mapped = mapped_variations(db, org, provider)
     first: dict[int, date] = {}
     for location_id, day in by_day:
         first[location_id] = min(day, first.get(location_id, day))
@@ -487,7 +492,7 @@ def record_daily_pos_sales(
             SaleLine(
                 f"item:{e.sold_item.provider_item_id}",
                 e.units,
-                variation_of.get(e.sold_item.id),
+                mapped.get(e.sold_item.provider_item_id, variation_of.get(e.sold_item.id)),
                 e.sold_item.provider_item_id,
                 e.sold_item.name,
                 (),
@@ -510,3 +515,84 @@ def record_daily_pos_sales(
         written += made is not None
     log.info("recorded %d days of %s sales for tenant %s", written, provider, org.tenant_id)
     return written
+
+
+# --- POS lines and their mappings (T3.04, WF-28) --------------------------------------------------
+
+
+def mapped_variations(db: Session, org: OrgContext, provider: str) -> dict[str, int]:
+    """Each POS variation id the business has mapped, to its product size (the latest
+    connection's mapping when two connections name the same id)."""
+    rows = db.execute(
+        select_scoped(org, ProductMapping)
+        .with_only_columns(
+            ExternalProduct.external_variation_id, ProductMapping.product_variation_id
+        )
+        .join(ExternalProduct, ExternalProduct.id == ProductMapping.external_product_id)
+        .join(ProviderConnection, ProviderConnection.id == ExternalProduct.connection_id)
+        .where(ProductMapping.status == "active", ProviderConnection.provider == provider)
+        .order_by(ProviderConnection.id)
+    ).tuples()
+    return {external: variation for external, variation in rows if variation is not None}
+
+
+def _pos_lines(
+    db: Session,
+    org: OrgContext,
+    provider: str,
+    external_ref: str | None = None,
+    since: date | None = None,
+) -> list[tuple[SalesTransaction, SalesTransactionLine]]:
+    """Counted lines of the provider's sales that name a POS item."""
+    query = (
+        select_scoped(org, SalesTransactionLine)
+        .add_columns(SalesTransaction)
+        .join(SalesTransaction, SalesTransaction.id == SalesTransactionLine.sales_transaction_id)
+        .join(SalesSource, SalesSource.id == SalesTransaction.sales_source_id)
+        .where(
+            SalesSource.provider == provider,
+            SalesTransaction.status == "completed",
+            SalesTransaction.of_record.is_(True),
+            SalesTransactionLine.external_ref.is_not(None),
+        )
+    )
+    if external_ref is not None:
+        query = query.where(SalesTransactionLine.external_ref == external_ref)
+    if since is not None:
+        query = query.where(SalesTransaction.business_date >= since)
+    return [(transaction, line) for line, transaction in db.execute(query).tuples()]
+
+
+def unmapped_units(db: Session, org: OrgContext, provider: str) -> dict[str, Decimal]:
+    """How many of each POS item were sold with no product size (AC-RCP-08's counterpart for
+    the POS): its sales used nothing from stock."""
+    totals: dict[str, Decimal] = defaultdict(Decimal)
+    for _transaction, line in _pos_lines(db, org, provider):
+        if line.product_variation_id is None and line.external_ref:
+            totals[line.external_ref] += Decimal(line.quantity)
+    return dict(totals)
+
+
+def lines_to_remap(
+    db: Session, org: OrgContext, provider: str, external_ref: str, variation_id: int, since: date
+) -> list[tuple[SalesTransaction, SalesTransactionLine]]:
+    """The counted lines since a business date that do not yet name this size for the POS item:
+    what reprocessing a mapping changes."""
+    return [
+        (transaction, line)
+        for transaction, line in _pos_lines(db, org, provider, external_ref, since)
+        if line.product_variation_id != variation_id
+    ]
+
+
+def remap_lines(
+    db: Session, org: OrgContext, provider: str, external_ref: str, variation_id: int, since: date
+) -> list[int]:
+    """Point those lines at the mapped size, so the next resolution uses it; the sales whose
+    lines changed. Nothing about the sale itself changes."""
+    changed: set[int] = set()
+    for transaction, line in lines_to_remap(db, org, provider, external_ref, variation_id, since):
+        line.product_variation_id = variation_id
+        changed.add(transaction.id)
+    db.flush()
+    return sorted(changed)

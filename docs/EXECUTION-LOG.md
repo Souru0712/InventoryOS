@@ -5,6 +5,37 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-19 — T3.04 Product mapping and reprocessing (built on branch)
+
+**Implemented**
+- `product_mappings`: a POS variation to a product size, a POS modifier to a modifier; one active
+  mapping per external id, a change supersedes (history kept), written only by
+  `app/mappings.py`, audited under the new `mapping` category.
+- `/app/mappings`: POS products (unmapped and most sold first, with sales counts), suggestions by
+  name, "make it one of my products", modifiers; mapping clears the item's open
+  `unmapped_product`.
+- New POS sales take their size from the mapping. Reprocessing: a preview (sales, units, what
+  they would take from stock) from the last count of what the size uses, at most 30 days back
+  (PD-17); confirmed, a `reprocess_mapping` job points the lines at the size and reverses and
+  re-posts each sale at its own moment; a repeat changes nothing.
+- DM-13's mapping half (migration `d5a8c2e6f9b1`): carried-over POS products mapped to the size
+  their sold item became.
+
+**Verified**
+- `tests/test_mappings.py` (11): suggestions, the window rules, AC-POS-06 (unmapped, mapped,
+  previewed, reprocessed once at the original moment), a remap, the last-count start, new sales
+  through the mapping, history and audit, make-it-mine, a retired size refused, the screens, the
+  single-writer rule. DM-13 mapping migration test; isolation cases for four routes; related
+  suites, ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0078 (Proposed).
+
+**Open issues**
+- A modifier mapping applies to sales recorded after it (past lines kept no POS modifier).
+
+---
+
 ## 2026-11-19 — T3.03 Location mapping and catalog sync (built on branch)
 
 **Implemented**

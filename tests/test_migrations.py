@@ -1435,3 +1435,56 @@ def test_dm13_square_rows_become_the_external_catalog(fresh_url):
             assert connection.execute(text("SELECT COUNT(*) FROM sold_items")).scalar_one() == 3
     finally:
         engine.dispose()
+
+
+def test_dm13_each_carried_over_pos_product_maps_to_the_size_its_sold_item_became(fresh_url):
+    """T3.04, DM-13's mapping half: a Square sold item became a product size (DM-9) and an
+    external product (T3.03); the two are mapped, by the product, and a demo item is not."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_PRODUCTS)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO tenants (name, plan, subscription_status, report_day,"
+                    " report_hour, timezone, created_at) VALUES ('Corner', 'PRO', 'TRIALING',"
+                    " 0, 7, 'UTC', '2026-11-13 12:00:00')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO provider_connections (tenant_id, provider, merchant_id,"
+                    " access_token_enc, status, created_at) VALUES (1, 'square', 'M-1', 'x',"
+                    " 'active', '2026-11-13 12:00:00')"
+                )
+            )
+            for provider, ref, name in (
+                ("square", "VAR-1", "Latte - 12 oz"),
+                ("demo", "DEMO-1", "Muffin"),
+            ):
+                connection.execute(
+                    text(
+                        "INSERT INTO sold_items (tenant_id, provider, provider_item_id, name,"
+                        " category, price_cents, currency, sell_unit, is_active) VALUES (1,"
+                        " :provider, :ref, :name, NULL, 450, 'USD', 'each', true)"
+                    ),
+                    {"provider": provider, "ref": ref, "name": name},
+                )
+        command.upgrade(config, "d5a8c2e6f9b1")
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT e.external_variation_id, s.provider_item_id, m.status,"
+                    " m.mapped_by_user_id FROM product_mappings m"
+                    " JOIN external_products e ON e.id = m.external_product_id"
+                    " JOIN product_variations v ON v.id = m.product_variation_id"
+                    " JOIN sold_items s ON s.id = v.source_sold_item_id"
+                )
+            ).all()
+        assert [tuple(r) for r in rows] == [("VAR-1", "VAR-1", "active", None)]
+        command.downgrade(config, "b7d2f4c8e1a6")
+        with engine.connect() as connection:
+            assert "product_mappings" not in inspect(connection).get_table_names()
+    finally:
+        engine.dispose()

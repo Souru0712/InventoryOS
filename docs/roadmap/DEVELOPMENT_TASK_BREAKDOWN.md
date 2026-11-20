@@ -97,7 +97,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T3.01 | Adapter interface and boundary check | P1 | M | M5 | T2.04 | Built on branch, not merged (PosAdapter protocol and normalized types, registry, Square as first adapter, boundary check extended) |
 | T3.02 | Square connection lifecycle | P1 | M | M5 | T3.01, T1.12 | Built on branch, not merged (connection service, one active connection per merchant, product-only scopes, disconnect, revocation detection; PA4 retired) |
 | T3.03 | Location mapping and catalog sync | P1 | M | M5 | T3.02 | Built on branch, not merged (external locations, products and modifiers per connection; Square locations tracked by the business's own; milligram fix; DM-13 backfill, mappings with T3.04) |
-| T3.04 | Product mapping and reprocessing | P1 | M | M5 | T3.03, T2.05 | Not started |
+| T3.04 | Product mapping and reprocessing | P1 | M | M5 | T3.03, T2.05 | Built on branch, not merged (product_mappings with history, suggestions by name, make-it-mine, previewed reprocessing as a job from the last count, max 30 days; DM-13 mappings) |
 | T3.05 | Order-line ingestion | P1 | L | M5 | T3.04, T1.20 | Not started |
 | T3.06 | Webhooks with dedupe via jobs | P1 | M | M5 | T3.05 | Not started |
 | T3.07 | Refunds, voids, discounts | P1 | M | M5 | T3.05 | Not started |

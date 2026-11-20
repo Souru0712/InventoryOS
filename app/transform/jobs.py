@@ -30,6 +30,8 @@ KINDS: Mapping[str, JobKind] = {
     "consume_sale": JobKind("Taking a sale's ingredients out of stock"),
     # A POS stopped accepting the connection: the Owners hear at once (T3.02, AC-POS-09).
     "connection_revoked_email": JobKind("Telling the Owner the POS connection ended"),
+    # Past sales of a newly mapped POS product, reversed and posted again (T3.04, WF-28).
+    "reprocess_mapping": JobKind("Reprocessing sales after a mapping"),
 }
 JOB_KINDS = tuple(KINDS)
 

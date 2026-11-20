@@ -25,6 +25,8 @@ from app.models import (
     DocumentStatus,
     ExceptionRecord,
     ExternalLocation,
+    ExternalModifier,
+    ExternalProduct,
     InventoryCategory,
     Invitation,
     ItemPackage,
@@ -321,6 +323,16 @@ CASES = {
     ("POST", "/app/connection/locations/{external_location_id}"): lambda ids: {
         "data": {"location_id": ids["location"]}
     },
+    ("POST", "/app/mappings/products/{external_product_id}"): lambda ids: {
+        "data": {"target": ids["variation"]}
+    },
+    ("POST", "/app/mappings/modifiers/{external_modifier_id}"): lambda ids: {
+        "data": {"modifier_id": ids["modifier"]}
+    },
+    ("GET", "/app/mappings/products/{external_product_id}/reprocess"): lambda ids: {},
+    ("POST", "/app/mappings/products/{external_product_id}/reprocess"): lambda ids: {
+        "data": {"start": "2026-11-19"}
+    },
     ("POST", "/app/organizations/switch"): lambda ids: {
         "data": {"membership_id": ids["membership"]}
     },
@@ -399,6 +411,8 @@ PATH_ROWS = {
     "import_id": "sales_import",
     "digest": "item_file",
     "external_location_id": "external_location",
+    "external_product_id": "external_product",
+    "external_modifier_id": "external_modifier",
 }
 
 
@@ -429,6 +443,22 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
         name=f"{tag} on Square",
     )
     db.add(square_place)
+    db.flush()
+    square_product = ExternalProduct(
+        tenant_id=tenant_id,
+        connection_id=square.id,
+        external_item_id=f"{tag}-ITEM",
+        external_variation_id=f"{tag}-VAR",
+        name=f"{tag} Juice",
+    )
+    square_modifier = ExternalModifier(
+        tenant_id=tenant_id,
+        connection_id=square.id,
+        external_modifier_id=f"{tag}-MOD",
+        list_name="Ice",
+        name="Light ice",
+    )
+    db.add_all([square_product, square_modifier])
     db.flush()
 
     def item(slug: str, name: str) -> StockItem:
@@ -621,6 +651,8 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
         "tenant": tenant_id,
         "location": location.id,
         "external_location": square_place.id,
+        "external_product": square_product.id,
+        "external_modifier": square_modifier.id,
         "item": bars.id,
         "promo_item": brew.id,
         "batch": batch.id,

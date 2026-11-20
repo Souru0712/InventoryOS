@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/connection">&larr; {{ provider }} connection</a></p>
+<h1>Product mapping</h1>
+{% if not connection %}
+  <p>Connect {{ provider }} to map its products to yours.</p>
+{% else %}
+<p class="small muted">Each {{ provider }} product is one of your product sizes. Its sales use that size's recipe; an unmapped product's sales use nothing from stock.</p>
+
+<h2>{{ provider }} products</h2>
+{% if not rows %}<p class="small">No products yet: they arrive with the next sync.</p>{% else %}
+<table>
+  <thead><tr><th>{{ provider }} product</th><th>Sold unmapped</th><th>Your size</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.external.name }}{% if row.external.variation_name %} <span class="muted">{{ row.external.variation_name }}</span>{% endif %}</td>
+      <td>{% if row.unmapped_units %}{{ row.unmapped_units.normalize() }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>
+      <td>
+        <form method="post" action="/app/mappings/products/{{ row.external.id }}" class="inline-form">{{ csrf_field(request) }}
+          <select name="target" aria-label="Size for {{ row.external.name }}">
+            <option value="">{% if row.mapped %}Unmap{% else %}Not mapped{% endif %}</option>
+            {% if row.suggestions %}
+            <optgroup label="Suggested">
+              {% for vid in row.suggestions %}{% set v = sizes_by_id[vid] %}<option value="{{ v.id }}">{{ v.product.name }} &mdash; {{ v.name }}</option>{% endfor %}
+            </optgroup>
+            {% endif %}
+            <optgroup label="Your sizes">
+              {% for v in sizes %}<option value="{{ v.id }}"{% if row.mapped and row.mapped.id == v.id %} selected{% endif %}>{{ v.product.name }} &mdash; {{ v.name }}</option>{% endfor %}
+            </optgroup>
+            {% if not row.mapped %}<option value="new">Make it one of my products</option>{% endif %}
+          </select>
+          <button class="btn small secondary" type="submit">Save</button>
+        </form>
+        {% if row.mapped and row.unmapped_units %}<a class="small" href="/app/mappings/products/{{ row.external.id }}/reprocess">Reprocess its sales</a>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if modifiers %}
+<h2>{{ provider }} modifiers</h2>
+<table>
+  <thead><tr><th>{{ provider }} modifier</th><th>Your modifier</th></tr></thead>
+  <tbody>
+  {% for external, target in modifiers %}
+    <tr>
+      <td>{% if external.list_name %}<span class="muted">{{ external.list_name }}:</span> {% endif %}{{ external.name }}</td>
+      <td>
+        <form method="post" action="/app/mappings/modifiers/{{ external.id }}" class="inline-form">{{ csrf_field(request) }}
+          <select name="modifier_id" aria-label="Modifier for {{ external.name }}">
+            <option value="">Not mapped</option>
+            {% for m in own_modifiers %}<option value="{{ m.id }}"{% if target and target.id == m.id %} selected{% endif %}>{{ m.name }}</option>{% endfor %}
+          </select>
+          <button class="btn small secondary" type="submit">Save</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if not own_modifiers %}<p class="small"><a href="/app/products">Add your modifiers</a> to map these.</p>{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

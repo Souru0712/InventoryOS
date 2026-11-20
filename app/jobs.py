@@ -16,7 +16,7 @@ import os
 import socket
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -88,6 +88,7 @@ def _handlers() -> dict[str, Handler]:
     from app.consumption import consume_sale
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
+    from app.mappings import reprocess as reprocess_mapping
     from app.orchestration.alerts import evaluate_and_store, send_alert_digest
     from app.orchestration.receiving import parse_document
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
@@ -139,6 +140,10 @@ def _handlers() -> dict[str, Handler]:
     def consume(db: Session, org: OrgContext, payload: dict) -> None:
         consume_sale(db, org, int(payload["sales_transaction_id"]), payload.get("reason"))
 
+    def remap(db: Session, org: OrgContext, payload: dict) -> None:
+        # A repeat finds every line already on the mapped size and reprocesses nothing.
+        reprocess_mapping(db, org, int(payload["mapping_id"]), date.fromisoformat(payload["since"]))
+
     def revoked_email(db: Session, org: OrgContext, payload: dict) -> None:
         # A repeat finds the exception already notified and sends nothing.
         email_owners(db, org, int(payload["connection_id"]))
@@ -147,6 +152,7 @@ def _handlers() -> dict[str, Handler]:
         "evaluate_exceptions": evaluate,
         "consume_sale": consume,
         "connection_revoked_email": revoked_email,
+        "reprocess_mapping": remap,
         "verify_ledger": verify,
         "send_alert_digest": digest,
         "send_weekly_report": weekly,
