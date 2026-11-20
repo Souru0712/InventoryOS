@@ -215,7 +215,7 @@ def test_the_hourly_sync_reads_square_counts_but_never_applies_them(
 
 def test_a_catalog_event_re_reads_the_catalog_once_for_a_burst(db, tenant, connected):
     """Square sends an event per change; a burst of edits must not mean a pull per edit."""
-    from app.web.webhooks import _catalog_read_recently
+    from app.pos_catalog import read_recently as _catalog_read_recently
 
     sync.sync_catalog(db, OrgContext.system(tenant.id))
     db.commit()

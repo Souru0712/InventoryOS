@@ -142,6 +142,9 @@ implementation sessions; the detail lives in `docs/`.
   location is one sale via `record_pos_order()`, a line per uid, so a resend is a revision.
   Business dates from the cursor's `lines_from` are order lines; earlier days keep their daily
   totals. The hourly `run_sync` reads no orders.
+- Provider webhooks are stored once by event id before anything acts on them, only through
+  `app/webhook_events.py` (ADR-0080); the route answers at once: order and catalog events queue
+  `ingest_orders` / `refresh_catalog`, which mark their events processed when they succeed.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,

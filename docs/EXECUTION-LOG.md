@@ -5,6 +5,35 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-20 — T3.06 Webhooks with dedupe via jobs (built on branch)
+
+**Implemented**
+- `webhook_events` generalized (status received/processed/ignored, the job that acts on it,
+  entity ids, processed time), written only by `app/webhook_events.py`; a verified event is
+  stored by (provider, event id) before anything acts on it, so a repeat is answered `duplicate`.
+- `/webhooks/square` answers at once: order events queue `ingest_orders`, catalog events the new
+  `refresh_catalog` (provider-neutral, skips a read within a minute), both deduplicated per
+  business; revocation and Square's counts are acted on as they arrive; unknown merchants and
+  unread types are stored as ignored; a bad signature or missing id is refused, logged without
+  payload.
+- A job that succeeds marks the events of its kind received before it started; a failure leaves
+  them received and retries.
+
+**Verified**
+- `tests/test_webhook_jobs.py` (8): AC-POS-10; stored once and answered without reading Square;
+  AC-POS-03 (three deliveries, two more edits and a reconciliation read consume once); a failed
+  read leaves events waiting; a catalog burst is one read; ignored events; mid-run events wait;
+  the single-writer rule. `tests/test_webhooks.py` events now carry ids. Related suites, ruff,
+  mypy, docs checker.
+
+**Decisions**
+- ADR-0080 (Proposed).
+
+**Open issues**
+- A catalog change reaches the legacy `sold_items` rows with the hourly sync until T3.12.
+
+---
+
 ## 2026-11-20 — T3.05 Order-line ingestion (built on branch)
 
 **Implemented**

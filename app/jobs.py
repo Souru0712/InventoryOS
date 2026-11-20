@@ -93,7 +93,9 @@ def _handlers() -> dict[str, Handler]:
     from app.orchestration.receiving import parse_document
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
     from app.order_ingestion import ingest_orders
+    from app.pos_catalog import refresh_catalog
     from app.waste import dispose_expired
+    from app.webhook_events import processed_by
 
     def evaluate(db: Session, org: OrgContext, payload: dict) -> None:
         # Expired prepared batches leave first (BAT-FR-11), so their alerts clear in this run.
@@ -142,11 +144,22 @@ def _handlers() -> dict[str, Handler]:
         consume_sale(db, org, int(payload["sales_transaction_id"]), payload.get("reason"))
 
     def orders(db: Session, org: OrgContext, payload: dict) -> None:
+        started = datetime.now(UTC)
         try:
             ingest_orders(db, org)
         except NotConnected:
             # Revoked or disconnected since it was queued: nothing to read, nothing to retry.
             log.info("tenant %s has no connection to read orders from", org.tenant_id)
+        # The webhook events it was queued for are acted on (T3.06).
+        processed_by(db, org.tenant_id, "ingest_orders", started)
+
+    def catalog(db: Session, org: OrgContext, payload: dict) -> None:
+        started = datetime.now(UTC)
+        try:
+            refresh_catalog(db, org)
+        except NotConnected:
+            log.info("tenant %s has no connection to read a catalog from", org.tenant_id)
+        processed_by(db, org.tenant_id, "refresh_catalog", started)
 
     def remap(db: Session, org: OrgContext, payload: dict) -> None:
         # A repeat finds every line already on the mapped size and reprocesses nothing.
@@ -162,6 +175,7 @@ def _handlers() -> dict[str, Handler]:
         "connection_revoked_email": revoked_email,
         "reprocess_mapping": remap,
         "ingest_orders": orders,
+        "refresh_catalog": catalog,
         "verify_ledger": verify,
         "send_alert_digest": digest,
         "send_weekly_report": weekly,

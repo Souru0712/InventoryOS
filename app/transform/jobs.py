@@ -34,6 +34,8 @@ KINDS: Mapping[str, JobKind] = {
     "reprocess_mapping": JobKind("Reprocessing sales after a mapping"),
     # A connection's changed orders, read from its cursor (T3.05, SQ-11).
     "ingest_orders": JobKind("Reading the POS's orders"),
+    # A catalog change at the POS, read as a job, never in the webhook's request (T3.06).
+    "refresh_catalog": JobKind("Reading the POS's catalog"),
 }
 JOB_KINDS = tuple(KINDS)
 

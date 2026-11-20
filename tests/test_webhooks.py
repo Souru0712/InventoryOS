@@ -6,6 +6,7 @@ Since T1.18 its count is noted, never applied: the ledger owns every item's quan
 import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -80,6 +81,7 @@ def connected():
 
 def event(quantity: str, calculated_at: datetime) -> dict:
     return {
+        "event_id": uuid4().hex,  # Square names every event; a retry repeats the id (DR-21)
         "merchant_id": MERCHANT,
         "type": "inventory.count.updated",
         "data": {
@@ -167,9 +169,9 @@ def test_a_count_calculated_before_our_last_read_is_ignored(client, connected):
 
 def test_another_event_type_is_acknowledged_and_ignored(client, connected):
     payload = event("1", datetime.now(UTC))
-    payload["type"] = "order.created"
+    payload["type"] = "payment.created"
     body = post(client, payload).json()
-    assert body["ignored"] == "order.created"
+    assert body["ignored"] == "payment.created"
     assert quantity_now(connected) == Decimal("34")
 
 

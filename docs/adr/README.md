@@ -111,3 +111,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0077](0077-external-catalog-and-location-mapping.md) | The external catalog and location mapping | T3.03 | Proposed |
 | [ADR-0078](0078-product-mapping-and-reprocessing.md) | Product mapping and reprocessing | T3.04 | Proposed |
 | [ADR-0079](0079-order-line-ingestion.md) | Order-line ingestion | T3.05 | Proposed |
+| [ADR-0080](0080-webhook-events-as-jobs.md) | Webhook events stored once and processed as jobs | T3.06 | Proposed |

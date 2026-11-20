@@ -113,6 +113,7 @@ def positive(table: str, column: str) -> CheckConstraint:
 # connected → revoked (the provider ended it) or disconnected (the business did) (DOMAIN_MODEL §5).
 CONNECTION_STATUSES = ("active", "revoked", "disconnected")
 ORDER_STATES = ("open", "completed", "canceled")
+WEBHOOK_STATUSES = ("received", "processed", "ignored")
 
 
 def one_of(table: str, column: str, values: tuple[str, ...]) -> CheckConstraint:
@@ -2284,10 +2285,15 @@ class StockAlias(Base):
 
 
 class WebhookEvent(Base):
-    """Provider events already acted on, so a retried delivery changes nothing."""
+    """A verified provider event, stored once by its id before anything acts on it (T3.06,
+    DR-21, DOMAIN_MODEL's SyncEvent): a repeated delivery changes nothing. Written only by
+    `app/webhook_events.py`."""
 
     __tablename__ = "webhook_events"
-    __table_args__ = (UniqueConstraint("provider", "event_id"),)
+    __table_args__ = (
+        UniqueConstraint("provider", "event_id"),
+        one_of("webhook_events", "status", WEBHOOK_STATUSES),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     provider: Mapped[str] = mapped_column(String(32))
@@ -2295,6 +2301,14 @@ class WebhookEvent(Base):
     event_type: Mapped[str] = mapped_column(String(80))
     tenant_id: Mapped[int | None] = mapped_column(ref("tenants.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # received → processed, or ignored (an unknown merchant, a type nothing reads).
+    status: Mapped[str] = mapped_column(
+        String(12), default="received", server_default=text("'received'")
+    )
+    # The kind of job that acts on it; None when it is acted on as it arrives.
+    handled_by: Mapped[str | None] = mapped_column(String(40))
+    entity_ids: Mapped[str] = mapped_column(Text, default="[]", server_default=text("'[]'"))
+    processed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class BusinessSettings(Base):

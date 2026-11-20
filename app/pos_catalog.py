@@ -13,16 +13,17 @@ Only existing, active locations can track one, so the count stays within the pla
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
 
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
-from app.connections import ACTIVE, name_of
+from app.connections import ACTIVE, credentials, mark_revoked, name_of
 from app.models import (
     Base,
     ExternalLocation,
@@ -30,8 +31,11 @@ from app.models import (
     ExternalProduct,
     Location,
     ProviderConnection,
+    SyncRun,
+    SyncStatus,
 )
-from app.providers.base import Catalog, NormalizedLocation
+from app.providers import adapter_for
+from app.providers.base import AdapterError, Catalog, NormalizedLocation
 
 Row = TypeVar("Row", bound=Base)
 
@@ -282,3 +286,56 @@ def track_location(
         ip=ip,
     )
     return True
+
+
+# --- a catalog change, read as a job (T3.06) ------------------------------------------------------
+
+# Square sends an event per edit; a burst is one read.
+CATALOG_DEBOUNCE = timedelta(seconds=60)
+
+
+def read_recently(db: Session, org: OrgContext, now: datetime | None = None) -> bool:
+    last = db.scalars(
+        select_scoped(org, SyncRun)
+        .where(SyncRun.kind == "catalog")
+        .order_by(SyncRun.started_at.desc())
+        .limit(1)
+    ).first()
+    now = now or datetime.now(UTC)
+    return bool(last and now - last.started_at < CATALOG_DEBOUNCE)
+
+
+def refresh_catalog(db: Session, org: OrgContext, now: datetime | None = None) -> dict[str, int]:
+    """Read each active connection's locations and catalog through its adapter, as a catalog
+    change asks (SQ-07). The legacy rows follow with the hourly sync until T3.12. A revoked
+    authorization is marked, not retried; a passing failure raises so the job tries again."""
+    now = now or datetime.now(UTC)
+    if read_recently(db, org, now):
+        return {"skipped": 1}
+    totals: dict[str, int] = {}
+    for connection in db.scalars(
+        select_scoped(org, ProviderConnection).where(ProviderConnection.status == ACTIVE)
+    ):
+        held = credentials(db, org, connection, now)
+        run = SyncRun(tenant_id=org.tenant_id, provider=connection.provider, kind="catalog")
+        db.add(run)
+        db.flush()
+        adapter = adapter_for(connection.provider)
+        try:
+            places = adapter.list_locations(held)
+            catalog = adapter.sync_catalog(held)
+        except AdapterError as exc:
+            run.status, run.finished_at, run.error = SyncStatus.FAILED, now, str(exc)[:500]
+            if not exc.revoked:
+                db.flush()
+                raise
+            mark_revoked(db, org, connection, now=now)
+            totals["revoked"] = totals.get("revoked", 0) + 1
+            continue
+        stats = {"locations": sum(store_locations(db, org, connection, places, now).values())}
+        stats |= store_catalog(db, org, connection, catalog, now)
+        run.status, run.finished_at, run.stats_json = SyncStatus.SUCCESS, now, json.dumps(stats)
+        db.flush()
+        for key, value in stats.items():
+            totals[key] = totals.get(key, 0) + value
+    return totals
