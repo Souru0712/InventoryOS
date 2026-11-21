@@ -5,6 +5,36 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-20 — T3.07 Refunds, voids, discounts (built on branch)
+
+**Implemented**
+- A completed POS refund is a sales return (`record_pos_refund()`), once per refund id, on the
+  day money went back, linked to the order's sale and, by line key, to its lines (amount = share
+  of the line's net); never restocks (DR-26); pending/rejected/failed wait.
+- A refund before its order keeps its reference and line keys (`original_reference`,
+  `line_key`, migration `a9e4c7b2d6f3`) and is linked when the sale is recorded.
+- A completed order voided at the POS voids its sale (consumption given back); cancelled before
+  completion was never a sale. Discounts and comps change money, never consumption.
+- `sales_money()`: counted sales less refunds of the source of record. Square returns name their
+  original order; several refunds on one order are recorded by amount only.
+- `/app/connection` counts refunds and unmatched ones; the amount only for `inventory.view_costs`.
+
+**Verified**
+- `tests/test_refunds_voids.py` (8): AC-POS-04, a completed order voided, AC-POS-05 (linked,
+  partial line amount, net lowered, stock unchanged, recorded once), a refund before its order,
+  a pending refund, a comp, Square's return shape, the page. Related suites, ruff, mypy, docs
+  checker.
+
+**Decisions**
+- ADR-0081 (Proposed).
+
+**Open issues**
+- **Owner decision proposed:** WF-17's info exception for an orphan refund has no REC-FR-12
+  type; add `orphan_refund` (info)? Until then the connection page counts unmatched refunds.
+- Square's refund and return shape to be confirmed on the sandbox (T3.11).
+
+---
+
 ## 2026-11-20 — T3.06 Webhooks with dedupe via jobs (built on branch)
 
 **Implemented**

@@ -27,7 +27,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext, select_scoped
+from app.access import OrgContext, get_scoped, select_scoped
 from app.connections import ACTIVE, credentials, mark_revoked, name_of
 from app.exceptions import record_exception
 from app.models import (
@@ -36,6 +36,9 @@ from app.models import (
     Location,
     OrderCursor,
     ProviderConnection,
+    SalesReturn,
+    SalesSource,
+    SalesTransaction,
     SyncRun,
     SyncStatus,
 )
@@ -45,7 +48,9 @@ from app.sales import (
     mapped_modifiers,
     mapped_variations,
     record_pos_order,
+    record_pos_refund,
     retire_daily_totals,
+    void_sale,
 )
 from app.transform.business_days import business_date
 from app.transform.exceptions import Finding
@@ -56,7 +61,8 @@ log = logging.getLogger(__name__)
 BACKFILL_DAYS = 7
 OVERLAP = timedelta(minutes=10)
 DAILY_RETIRED = "Replaced by the POS's order lines (T3.05)"
-COMPLETED = "completed"
+COMPLETED, CANCELED = "completed", "canceled"
+VOIDED = "Voided at the POS after it was completed"
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,9 @@ class OrderSummary:
     sales: int
     lines_from: date | None
     through: datetime | None
+    refunds: int = 0
+    unmatched_refunds: int = 0  # their order has not arrived (or a daily-total day owns it)
+    refunded_cents: int = 0
 
 
 def _tracked(db: Session, org: OrgContext, provider: str) -> dict[str, Location]:
@@ -219,6 +228,40 @@ def _sale_lines(
     return lines
 
 
+def _refunds_and_voids(
+    db: Session,
+    org: OrgContext,
+    connection: ProviderConnection,
+    order: NormalizedOrder,
+    row: ExternalOrder,
+    place: Location,
+    now: datetime,
+) -> Counter[str]:
+    """WF-17: a completed order voided at the POS gives back what it took; a completed refund is
+    a sales return that lowers net sales and never puts stock back (DR-26)."""
+    stats: Counter[str] = Counter()
+    if order.state == CANCELED and row.sales_transaction_id is not None:
+        sale = get_scoped(db, org, SalesTransaction, row.sales_transaction_id)
+        if sale is not None and void_sale(db, org, sale, VOIDED):
+            stats["voided"] += 1
+    for refund in order.refunds:
+        if refund.status != COMPLETED:
+            continue  # pending, rejected or failed: no money went back yet
+        made = record_pos_refund(
+            db,
+            org,
+            connection.provider,
+            place.id,
+            reference=f"refund:{refund.external_refund_id}",
+            original_reference=f"order:{refund.external_order_id}",
+            occurred_at=refund.occurred_at or order.updated_at or now,
+            amount_cents=refund.amount_cents,
+            lines=[(f"line:{line.line_uid}", line.qty) for line in refund.lines],
+        )
+        stats["refunds"] += made is not None
+    return stats
+
+
 def _ingest_connection(
     db: Session, org: OrgContext, connection: ProviderConnection, now: datetime
 ) -> Counter[str]:
@@ -254,6 +297,8 @@ def _ingest_connection(
         if not changed:
             stats["unchanged"] += 1
             continue
+        if place is not None:
+            stats.update(_refunds_and_voids(db, org, connection, order, row, place, now))
         if order.state != COMPLETED or place is None:
             stats["staged"] += 1  # open, cancelled or untracked: no sale (SQ-13)
             continue
@@ -312,9 +357,19 @@ def order_summary(db: Session, org: OrgContext, connection: ProviderConnection) 
             ExternalOrder.sales_transaction_id.is_not(None),
         )
     )
+    returns = list(
+        db.scalars(
+            select_scoped(org, SalesReturn)
+            .join(SalesSource, SalesSource.id == SalesReturn.sales_source_id)
+            .where(SalesSource.provider == connection.provider)
+        )
+    )
     return OrderSummary(
         orders or 0,
         sales or 0,
         cursor.lines_from if cursor else None,
         cursor.through if cursor else None,
+        refunds=len(returns),
+        unmatched_refunds=len([r for r in returns if r.sales_transaction_id is None]),
+        refunded_cents=sum(r.amount_cents or 0 for r in returns),
     )

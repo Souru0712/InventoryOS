@@ -30,6 +30,8 @@ from app.models import (
     ProductVariation,
     ProviderConnection,
     SalesLineModifier,
+    SalesReturn,
+    SalesReturnLine,
     SalesSource,
     SalesTransaction,
     SalesTransactionLine,
@@ -621,7 +623,7 @@ def record_pos_order(
         raise NotFound(location_id)
     day = business_date(occurred_at, location.timezone, location.business_day_cutoff_hour)
     source = _pos_source(db, org, location_id, provider, day)
-    return record_sale(
+    sale = record_sale(
         db,
         org,
         source,
@@ -631,6 +633,9 @@ def record_pos_order(
         gross_cents=gross_cents,
         net_cents=net_cents,
     )
+    if sale is not None:
+        link_waiting_refunds(db, org, sale)
+    return sale
 
 
 def void_sale(db: Session, org: OrgContext, transaction: SalesTransaction, reason: str) -> bool:
@@ -676,3 +681,138 @@ def mapped_modifiers(db: Session, org: OrgContext, provider: str) -> dict[str, i
         .order_by(ProviderConnection.id)
     ).tuples()
     return {external: modifier for external, modifier in rows if modifier is not None}
+
+
+# --- refunds and sales money (T3.07, WF-17, DR-26) ------------------------------------------------
+
+
+def _link_return(
+    db: Session, org: OrgContext, row: SalesReturn, original: SalesTransaction
+) -> None:
+    """Tie a return to its sale and each returned line, by its key, to the line given back; a
+    returned line's amount is its share of that line's net."""
+    row.sales_transaction_id = original.id
+    by_key = {ln.line_key: ln for ln in original.lines}
+    for back in row.lines:
+        sold = by_key.get(back.line_key or "")
+        if sold is None:
+            continue
+        back.sales_transaction_line_id = sold.id
+        if sold.net_cents is not None and Decimal(sold.quantity) > 0:
+            back.amount_cents = int(
+                (
+                    Decimal(sold.net_cents) * Decimal(back.quantity) / Decimal(sold.quantity)
+                ).quantize(Decimal(1))
+            )
+    db.flush()
+
+
+def record_pos_refund(
+    db: Session,
+    org: OrgContext,
+    provider: str,
+    location_id: int,
+    *,
+    reference: str,
+    original_reference: str,
+    occurred_at: datetime,
+    amount_cents: int | None,
+    lines: Sequence[tuple[str, Decimal]] = (),
+) -> SalesReturn | None:
+    """A POS refund as a sales return linked to its sale (POS-FR-08): it lowers net sales and
+    never puts stock back (DR-26). Recorded once per refund id; None when it was before. A refund
+    whose order has not arrived keeps its lines by key and is linked when the order does."""
+    location = get_scoped(db, org, Location, location_id)
+    if location is None:
+        raise NotFound(location_id)
+    day = business_date(occurred_at, location.timezone, location.business_day_cutoff_hour)
+    source = _pos_source(db, org, location_id, provider, day)
+    taken = db.scalars(
+        select_scoped(org, SalesReturn).where(
+            SalesReturn.sales_source_id == source.id, SalesReturn.source_reference == reference
+        )
+    ).first()
+    if taken is not None:
+        return None
+    row = SalesReturn(
+        tenant_id=org.tenant_id,
+        location_id=location_id,
+        sales_source_id=source.id,
+        origin=source.kind,
+        source_reference=reference[:200],
+        original_reference=original_reference[:200],
+        business_date=day,
+        amount_cents=amount_cents,
+    )
+    db.add(row)
+    db.flush()
+    for line_key, quantity in lines:
+        if quantity > 0:
+            db.add(
+                SalesReturnLine(
+                    tenant_id=org.tenant_id,
+                    sales_return_id=row.id,
+                    line_key=line_key[:120],
+                    quantity=quantity,
+                )
+            )
+    db.flush()
+    db.refresh(row)
+    original = _latest(db, org, source, original_reference)
+    if original is not None:
+        _link_return(db, org, row, original)
+    return row
+
+
+def link_waiting_refunds(db: Session, org: OrgContext, original: SalesTransaction) -> int:
+    """Refunds that arrived before their order, linked to it now (WF-17); how many."""
+    waiting = list(
+        db.scalars(
+            select_scoped(org, SalesReturn).where(
+                SalesReturn.sales_source_id == original.sales_source_id,
+                SalesReturn.original_reference == original.source_reference,
+                SalesReturn.sales_transaction_id.is_(None),
+            )
+        )
+    )
+    for row in waiting:
+        _link_return(db, org, row, original)
+    return len(waiting)
+
+
+@dataclass(frozen=True)
+class SalesMoney:
+    """Counted sales over business dates, and what was given back (AC-POS-05)."""
+
+    gross_cents: int
+    refunded_cents: int
+
+    @property
+    def net_cents(self) -> int:
+        return self.gross_cents - self.refunded_cents
+
+
+def sales_money(
+    db: Session, org: OrgContext, since: date, until: date, location_id: int | None = None
+) -> SalesMoney:
+    """Net sales of the source of record, less the refunds of the source of record on the days
+    they were given (DR-26: a refund changes money, never stock)."""
+    query = select_scoped(org, SalesTransaction).where(
+        SalesTransaction.status == "completed",
+        SalesTransaction.of_record.is_(True),
+        SalesTransaction.business_date >= since,
+        SalesTransaction.business_date <= until,
+    )
+    returns = select_scoped(org, SalesReturn).where(
+        SalesReturn.business_date >= since, SalesReturn.business_date <= until
+    )
+    if location_id is not None:
+        query = query.where(SalesTransaction.location_id == location_id)
+        returns = returns.where(SalesReturn.location_id == location_id)
+    gross = sum(t.net_cents or 0 for t in db.scalars(query))
+    refunded = 0
+    for row in db.scalars(returns):
+        record = source_of_record(db, org, row.location_id, row.business_date)
+        if record is not None and record.id == row.sales_source_id:
+            refunded += row.amount_cents or 0
+    return SalesMoney(gross, refunded)

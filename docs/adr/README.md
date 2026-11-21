@@ -112,3 +112,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0078](0078-product-mapping-and-reprocessing.md) | Product mapping and reprocessing | T3.04 | Proposed |
 | [ADR-0079](0079-order-line-ingestion.md) | Order-line ingestion | T3.05 | Proposed |
 | [ADR-0080](0080-webhook-events-as-jobs.md) | Webhook events stored once and processed as jobs | T3.06 | Proposed |
+| [ADR-0081](0081-refunds-voids-discounts.md) | Refunds, voids and discounts from the POS | T3.07 | Proposed |

@@ -105,11 +105,14 @@ class RefundLine:
 
 @dataclass(frozen=True)
 class NormalizedRefund:
+    """Money given back on an order (WF-17): `external_order_id` names the original order."""
+
     external_refund_id: str
     external_order_id: str
     lines: tuple[RefundLine, ...] = ()
     amount_cents: int | None = None
     status: str = "completed"
+    occurred_at: datetime | None = None
 
 
 @dataclass(frozen=True)

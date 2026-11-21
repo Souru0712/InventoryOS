@@ -1288,6 +1288,9 @@ class SalesReturn(Base):
     sales_transaction_id: Mapped[int | None] = mapped_column(ref("sales_transactions.id"))
     origin: Mapped[str] = mapped_column(String(16))
     source_reference: Mapped[str] = mapped_column(String(200))
+    # The original sale's reference (e.g. "order:<id>"): how a refund that arrived first is
+    # linked once its order does (WF-17).
+    original_reference: Mapped[str | None] = mapped_column(String(200))
     business_date: Mapped[date] = mapped_column(Date)
     amount_cents: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(12), default="recorded")
@@ -1309,6 +1312,8 @@ class SalesReturnLine(Base):
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
     sales_return_id: Mapped[int] = mapped_column(owned_by("sales_returns.id"), index=True)
     sales_transaction_line_id: Mapped[int | None] = mapped_column(ref("sales_transaction_lines.id"))
+    # The sale line's key, kept so a refund that arrived first is matched to it later.
+    line_key: Mapped[str | None] = mapped_column(String(120))
     quantity: Mapped[Decimal] = mapped_column(Qty)
     amount_cents: Mapped[int | None] = mapped_column(Integer)
 

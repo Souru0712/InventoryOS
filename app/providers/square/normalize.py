@@ -296,23 +296,30 @@ def to_order(raw: dict[str, Any]) -> NormalizedOrder:
             )
         )
     returned: dict[str, list[RefundLine]] = defaultdict(list)
+    source_order = raw["id"]
     for ret in raw.get("returns") or []:
+        # A return names the order it gives back from; a refund on an order is that order's.
+        source_order = ret.get("source_order_id") or source_order
         for item in ret.get("return_line_items") or []:
             returned[ret.get("uid") or ""].append(
                 RefundLine(
                     item.get("source_line_item_uid") or "", _decimal(item.get("quantity"), "1")
                 )
             )
+    raw_refunds = [refund for refund in raw.get("refunds") or [] if refund.get("id")]
+    # Square does not say which return a refund paid for: with one refund the returned lines are
+    # its own; with several, each is recorded by its amount alone rather than guessed at.
+    items = tuple(line for lines_ in returned.values() for line in lines_)
     refunds = tuple(
         NormalizedRefund(
             external_refund_id=refund["id"],
-            external_order_id=raw["id"],
-            lines=tuple(line for lines_ in returned.values() for line in lines_),
+            external_order_id=source_order,
+            lines=items if len(raw_refunds) == 1 else (),
             amount_cents=_cents(refund.get("amount_money")),
             status=(refund.get("status") or "COMPLETED").lower(),
+            occurred_at=_moment(refund.get("created_at")),
         )
-        for refund in raw.get("refunds") or []
-        if refund.get("id")
+        for refund in raw_refunds
     )
     occurred = _moment(raw.get("closed_at")) or _moment(raw.get("created_at"))
     if occurred is None:

@@ -49,6 +49,9 @@
 {% else %}
 <p class="small muted">Orders are read every few minutes once a location tracks a {{ provider }} location.</p>
 {% endif %}
+{% if orders.refunds %}
+<p class="small">{{ orders.refunds }} refund{{ "" if orders.refunds == 1 else "s" }} recorded{% if can(request, "inventory.view_costs") %} ({{ "%.2f"|format(orders.refunded_cents / 100) }}){% endif %}, lowering net sales; refunds never put stock back.{% if orders.unmatched_refunds %} {{ orders.unmatched_refunds }} {{ "is" if orders.unmatched_refunds == 1 else "are" }} not matched to an order yet.{% endif %}</p>
+{% endif %}
 {% endif %}
 
 {% if places %}

@@ -145,6 +145,9 @@ implementation sessions; the detail lives in `docs/`.
 - Provider webhooks are stored once by event id before anything acts on them, only through
   `app/webhook_events.py` (ADR-0080); the route answers at once: order and catalog events queue
   `ingest_orders` / `refresh_catalog`, which mark their events processed when they succeed.
+- POS refunds are sales returns (`record_pos_refund()`, ADR-0081): linked to the sale and its
+  lines, never restocking (DR-26); a completed order voided at the POS goes through
+  `void_sale()`; net sales money is read through `sales_money()`.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,
