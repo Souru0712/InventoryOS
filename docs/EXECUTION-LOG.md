@@ -5,6 +5,36 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-21 — T3.11 run kit prepared (the run itself waits for the owner)
+
+**Implemented**
+- `docs/roadmap/SQUARE_SANDBOX_RUN.md`: what to set up in Square and the app, 19 steps each naming
+  its acceptance criterion (AC-POS-01..11, AC-SAL-06, POS-FR-06/26, SQ-02/04) and what must be
+  true after it, a run log to copy here, and the questions the run answers.
+- `scripts/seed_square_sandbox.py` reworked: `catalog` (a café: Latte 12/16 oz, Cold brew,
+  Croissant, Saffron by the milligram; Milk and Ice modifier lists; categories) and `sell`
+  (paid, completes; `--comp`), `open`, `cancel`, `refund`, `orders`. Sandbox only, the seller's
+  token never printed.
+- `python -m app.cli pos-report --tenant N` (`app/pos_report.py`): connection and health, tracked
+  locations, catalog with units and categories, mappings, orders and sales, refunds, open
+  exceptions, recent runs, webhook events.
+- The Square normalizers read an item's category from `reporting_category`, `categories` or the
+  older `category_id` (Square deprecated `category_id`).
+
+**Verified**
+- `tests/test_sandbox_kit.py` (9): the exact catalog the script creates, as Square returns it,
+  normalizes to the five sizes with categories, `mg` and three modifiers; re-runs create only what
+  is missing; order bodies (modifiers, comp); sandbox-only and token checks; category fields; the
+  report. Ruff, mypy, docs checker.
+
+**Decisions for the owner**
+- **PD-52 (new):** where the run happens: staging (C-49, about $24.50 a month) or this computer with
+  a tunnel (recommended).
+- **OD-05:** the Square developer account with a sandbox seller (already open).
+- Still open: PD-43 to PD-51.
+
+---
+
 ## 2026-11-21 — T3.10 Mode switching with cutover (built on branch)
 
 **Implemented**

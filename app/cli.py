@@ -55,6 +55,7 @@ from app.orchestration.receiving import parse_document
 from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
 from app.order_ingestion import ingest_orders
+from app.pos_report import pos_report
 from app.products import products_from_sold_items
 from app.recipes import NewLine, Owner, save_recipe
 from app.sales import DayOfSales, record_daily_pos_sales
@@ -570,6 +571,14 @@ def cmd_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pos_report(args: argparse.Namespace) -> int:
+    """What has reached InventoryOS from the POS, line by line, for the T3.11 run log."""
+    with session_scope() as db:
+        for line in pos_report(db, OrgContext.system(args.tenant)):
+            print(line)
+    return 0
+
+
 def cmd_health(args: argparse.Namespace) -> int:
     """Print the health score and its reasons; --snapshot also keeps tonight's record."""
     with session_scope() as db:
@@ -662,6 +671,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tenant", type=int, required=True)
     p.add_argument("--document", type=int, required=True)
     p.set_defaults(func=cmd_parse_doc)
+
+    p = sub.add_parser("pos-report", help="what has reached InventoryOS from the POS")
+    p.add_argument("--tenant", type=int, required=True)
+    p.set_defaults(func=cmd_pos_report)
 
     p = sub.add_parser("health", help="inventory health score and today's actions")
     p.add_argument("--tenant", type=int, required=True)

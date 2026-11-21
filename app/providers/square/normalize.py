@@ -48,6 +48,14 @@ def _decimal(value: object, default: str = "0") -> Decimal:
         return Decimal(default)
 
 
+def category_of(item_data: dict[str, Any]) -> str:
+    """The item's category id. Square replaced `category_id` with `reporting_category` and
+    `categories` (2023-12); a catalog may carry any of them."""
+    reporting = (item_data.get("reporting_category") or {}).get("id")
+    listed = [c.get("id") for c in item_data.get("categories") or [] if c.get("id")]
+    return reporting or (listed[0] if listed else "") or item_data.get("category_id") or ""
+
+
 def measurement_units(raw_objects: list[dict[str, Any]]) -> dict[str, tuple[str, Dimension]]:
     """Map MEASUREMENT_UNIT object ids to (unit_code, dimension)."""
     mapping: dict[str, tuple[str, Dimension]] = {}
@@ -78,7 +86,7 @@ def normalize_catalog(raw_objects: list[dict[str, Any]]) -> list[dict[str, Any]]
         if obj.get("type") != "ITEM" or obj.get("is_deleted"):
             continue
         item_data = obj.get("item_data") or {}
-        category = categories.get(item_data.get("category_id", ""), "") or None
+        category = categories.get(category_of(item_data), "") or None
         item_name = item_data.get("name") or obj["id"]
 
         for variation in item_data.get("variations") or []:
@@ -239,7 +247,7 @@ def to_products(raw_objects: list[dict[str, Any]]) -> tuple[NormalizedProduct, .
                     external_variation_id=variation["id"],
                     name=data.get("name") or obj["id"],
                     variation_name=vdata.get("name") or "",
-                    category=categories.get(data.get("category_id", "")),
+                    category=categories.get(category_of(data)),
                     active=not data.get("is_archived", False),
                     price_cents=_cents(vdata.get("price_money")),
                     unit=units.get(vdata.get("measurement_unit_id", ""), ("each", Dimension.COUNT))[

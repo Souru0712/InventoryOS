@@ -104,7 +104,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T3.08 | Reconciliation and failure recovery | P1 | M | M5 | T3.06 | Built on branch, not merged (hourly 2-hour re-read; daily check of the last 3 closed days opens and recovers pos_reconciliation_mismatch; failed reads kept as sync_failure, cleared by the next success; sync history screen) |
 | T3.09 | Integration health and sales-source status | P1 | S | M5 | T3.08 | Built on branch, not merged (per-location status on the dashboard: Connected health with a stale warning after 2 h, Standalone last day and missing days; health table on the connection page; PD-49 proposed) |
 | T3.10 | Mode switching with cutover | P1 | M | M5 | T3.05, T2.12 | Built on branch, not merged (one cutover for both directions: old source stops, its sales from D voided, the new source's counted; the cutover sticks; Owner-only previewed switch; onboarding step 8; PD-50, PD-51 proposed) |
-| T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Not started |
+| T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Not started (run kit on the branch: [SQUARE_SANDBOX_RUN.md](SQUARE_SANDBOX_RUN.md), sandbox script, `pos-report`; waits for OD-05 and PD-52) |
 | T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Not started |
 | T4.01 | Plan and entitlement data model (C-41) | P1 | M | M6 | T1.06 | Not started |
 | T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Not started |
@@ -1060,7 +1060,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Objective:** the full Connected path verified against a real Square sandbox seller (NFR §8 gate 4).
 - **Business reason:** nothing Square-related has ever run live (TR-11).
 - **Requirements:** AC-POS-01..11 (sandbox parts), OA-2.
-- **Technical:** on staging: seed the sandbox seller (`scripts/` seeding script), connect, map, sell, refund, void, disconnect; record the run.
+- **Technical:** on staging: seed the sandbox seller (`scripts/` seeding script), connect, map, sell, refund, void, disconnect; record the run. Steps and log: [SQUARE_SANDBOX_RUN.md](SQUARE_SANDBOX_RUN.md).
 - **Existing code:** sandbox seeding script; `scripts/send_test_webhook.py`.
 - **DB · API · UI:** none.
 - **Security:** sandbox credentials in staging env only.
