@@ -439,8 +439,12 @@ def _pos_source(
         if s.kind == "pos_adapter" and s.provider == provider
     ]
     if existing:
-        source = existing[0]
-        if source.of_record and first_day < source.active_from:
+        # The one counting that day, else the one of record, else the latest.
+        source = next(
+            (s for s in existing if s.of_record and _span(s).overlaps(Span(first_day))),
+            next((s for s in reversed(existing) if s.of_record), existing[-1]),
+        )
+        if source.of_record and not source.fixed_from and first_day < source.active_from:
             earlier = Span(first_day, source.active_from - timedelta(days=1))
             others = [s for s in sources(db, org, location_id) if s.of_record and s.id != source.id]
             if not any(_span(s).overlaps(earlier) for s in others):
@@ -816,3 +820,107 @@ def sales_money(
         if record is not None and record.id == row.sales_source_id:
             refunded += row.amount_cents or 0
     return SalesMoney(gross, refunded)
+
+
+# --- cutover between sources (T3.10, WF-25, DR-31) -------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Cutover:
+    """What moving a location's sales to another source from a business date does."""
+
+    voided: tuple[tuple[date, str], ...]  # counted sales of the old source from then: (day, origin)
+    counted: tuple[date, ...]  # sales the new source already recorded from then, now counted
+
+
+def _target(
+    db: Session, org: OrgContext, location_id: int, kind: str, provider: str | None
+) -> SalesSource | None:
+    found = [
+        s
+        for s in sources(db, org, location_id)
+        if s.kind == kind and (provider is None or s.provider == provider)
+    ]
+    return max(found, key=lambda s: (s.of_record, s.active_from), default=None)
+
+
+def _counted_from(
+    db: Session, org: OrgContext, source_ids: Iterable[int], since: date, of_record: bool
+) -> list[SalesTransaction]:
+    ids = list(source_ids)
+    if not ids:
+        return []
+    return list(
+        db.scalars(
+            select_scoped(org, SalesTransaction).where(
+                SalesTransaction.sales_source_id.in_(ids),
+                SalesTransaction.status == "completed",
+                SalesTransaction.of_record.is_(of_record),
+                SalesTransaction.business_date >= since,
+            )
+        )
+    )
+
+
+def cutover_plan(
+    db: Session,
+    org: OrgContext,
+    location_id: int,
+    kind: str,
+    provider: str | None,
+    cutover: date,
+) -> Cutover:
+    """The preview of `cut_over()`: nothing is written."""
+    target = _target(db, org, location_id, kind, provider)
+    others = [s for s in sources(db, org, location_id) if s.of_record and s is not target]
+    voided = _counted_from(db, org, (s.id for s in others), cutover, True)
+    counted = _counted_from(db, org, [target.id] if target else [], cutover, False)
+    return Cutover(
+        tuple(sorted((t.business_date, t.origin) for t in voided)),
+        tuple(sorted({t.business_date for t in counted})),
+    )
+
+
+def cut_over(
+    db: Session,
+    org: OrgContext,
+    location_id: int,
+    kind: str,
+    provider: str | None,
+    cutover: date,
+    reason: str,
+) -> Cutover:
+    """From `cutover` on, the location's sales come from `kind` (and `provider`) and from it
+    alone (DR-31): every other source of record stops the day before, its counted sales from then
+    are voided (their consumption given back), and what the new source already recorded from then
+    is counted and consumed. Earlier days are untouched."""
+    plan = cutover_plan(db, org, location_id, kind, provider, cutover)
+    target = _target(db, org, location_id, kind, provider)
+    for source in sources(db, org, location_id):
+        if source is target or not source.of_record:
+            continue
+        if source.active_from >= cutover:
+            source.of_record = False  # it never began before the cutover: retired whole
+        elif source.active_to is None or source.active_to >= cutover:
+            source.active_to = cutover - timedelta(days=1)
+    db.flush()
+    for sale in _counted_from(
+        db, org, (s.id for s in sources(db, org, location_id) if s is not target), cutover, True
+    ):
+        void_sale(db, org, sale, reason)
+    if target is None:
+        target = add_source(
+            db, org, location_id=location_id, kind=kind, provider=provider, active_from=cutover
+        )
+    elif not target.of_record or target.active_from > cutover:
+        target.active_from = cutover
+    target.of_record, target.active_to, target.fixed_from = True, None, True
+    db.flush()
+    for sale in _counted_from(db, org, [target.id], cutover, False):
+        sale.of_record = True
+        for line in sale.lines:
+            if line.consumption_status == "skipped":
+                line.consumption_status = "pending"
+        queue_consumption(db, org, sale, reason)
+    db.flush()
+    return plan

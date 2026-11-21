@@ -115,3 +115,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0081](0081-refunds-voids-discounts.md) | Refunds, voids and discounts from the POS | T3.07 | Proposed |
 | [ADR-0082](0082-reconciliation-and-failure-recovery.md) | Reconciliation and failure recovery | T3.08 | Proposed |
 | [ADR-0083](0083-integration-health-and-sales-source-status.md) | Integration health and sales-source status | T3.09 | Proposed |
+| [ADR-0084](0084-mode-switching-with-cutover.md) | Mode switching with a cutover business date | T3.10 | Proposed |

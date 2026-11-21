@@ -28,6 +28,7 @@ from app.models import (
     ItemLocation,
     Location,
     Onboarding,
+    ProductMapping,
     ProviderConnection,
     Receiving,
     Recipe,
@@ -133,11 +134,41 @@ def checklist(db: Session, org: OrgContext) -> list[Step]:
         (
             "sales",
             *sales,
-            _any(db, select_scoped(org, SalesSource))
+            # Connected (SAAS §5 step 7): connected, and a location takes Square's sales.
+            (
+                _any(
+                    db,
+                    select_scoped(org, ProviderConnection).where(
+                        ProviderConnection.status == "active"
+                    ),
+                )
+                and _any(
+                    db,
+                    select_scoped(org, Location).where(Location.provider_location_id.is_not(None)),
+                )
+            )
+            if connected
+            else _any(db, select_scoped(org, SalesSource))
             or _any(
                 db,
                 select_scoped(org, ProviderConnection).where(ProviderConnection.status == "active"),
             ),
+        ),
+        *(
+            [
+                (
+                    "mapping",
+                    "Map your Square products",
+                    "Link each one to your product sizes, so its sales use their recipes.",
+                    "/app/mappings",
+                    _any(
+                        db,
+                        select_scoped(org, ProductMapping).where(ProductMapping.status == "active"),
+                    ),
+                )
+            ]
+            if connected
+            else []
         ),
         (
             "alerts",

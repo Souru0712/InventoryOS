@@ -31,7 +31,8 @@ dates and reports follow the location's clock.</p>
       <td>
         <a href="/app/locations/{{ location.id }}">{{ location.name }}</a>
         {% if location.address %}<div class="small muted">{{ location.address }}</div>{% endif %}
-        {% if location.provider_location_id %}<div class="small muted">From Square</div>{% endif %}
+        {% if location.provider_location_id %}<div class="small muted">Tracks a Square location</div>{% endif %}
+        {% if can(request, "subscription.manage") and not location.archived_at %}<div class="small"><a href="/app/locations/{{ location.id }}/sales-source{% if location.provider_location_id %}?to=pos{% endif %}">Where sales come from</a></div>{% endif %}
       </td>
       <td>{{ location.timezone }}</td>
       <td>{{ "%02d:00"|format(location.business_day_cutoff_hour) }}</td>

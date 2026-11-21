@@ -49,6 +49,7 @@ from app.web import (
     recipes,
     reports,
     sales_import,
+    sales_modes,
     scanning,
     stock,
     suppliers,
@@ -140,6 +141,7 @@ app.include_router(onboarding.router)
 app.include_router(floor.router)
 app.include_router(connections.router)
 app.include_router(mappings.router)
+app.include_router(sales_modes.router)
 app.include_router(webhooks.router)
 app.include_router(billing.router)
 

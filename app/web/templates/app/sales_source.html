@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="/app/locations">&larr; Locations</a></p>
+<h1>Where sales come from</h1>
+<p class="small muted">Each location takes its sales from one source each business day. Switching keeps everything recorded so far; only days from the date you choose change.</p>
+
+<form method="get" class="card">
+  <fieldset style="border:0; padding:0; margin:0 0 12px;">
+    <legend class="small">From the first business date below, sales come from</legend>
+    {% if pos_ready %}<label><input type="radio" name="to" value="pos"{% if to == "pos" %} checked{% endif %}> {{ provider }} (each order as it happens)</label><br>{% endif %}
+    <label><input type="radio" name="to" value="hand"{% if to == "hand" %} checked{% endif %}> Hand entry (each day's totals)</label><br>
+    <label><input type="radio" name="to" value="file"{% if to == "file" %} checked{% endif %}> Sales file imports</label>
+  </fieldset>
+  {% if preview %}
+  <label for="cutover">First business date</label>
+  <input id="cutover" type="date" name="cutover" value="{{ preview.cutover.isoformat() }}" min="{{ preview.earliest.isoformat() }}" max="{{ preview.latest.isoformat() }}">
+  {% endif %}
+  <button class="btn small secondary" type="submit">Preview</button>
+</form>
+
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+{% if preview %}
+<div class="card">
+  <p><strong>{{ preview.location.name }}</strong> takes its sales from <strong>{{ target }}</strong> from <strong>{{ preview.cutover.strftime("%a %d %b %Y") }}</strong>.</p>
+  <ul class="small">
+    {% if preview.plan.voided %}
+    <li>{{ preview.plan.voided|length }} day{{ "" if preview.plan.voided|length == 1 else "s" }} of sales recorded another way from then stop counting, and what they took from stock is given back: {% for day, origin in preview.plan.voided %}{{ day.strftime("%d %b") }}{{ ", " if not loop.last }}{% endfor %}.</li>
+    {% else %}<li>No sales recorded another way from then.</li>{% endif %}
+    {% if preview.plan.counted %}
+    <li>{{ preview.plan.counted|length }} day{{ "" if preview.plan.counted|length == 1 else "s" }} of {{ target }} sales already recorded from then start counting and take from stock: {% for day in preview.plan.counted %}{{ day.strftime("%d %b") }}{{ ", " if not loop.last }}{% endfor %}.</li>
+    {% endif %}
+    <li>Earlier days keep their sales as they are.</li>
+  </ul>
+  <form method="post" action="/app/locations/{{ location_id }}/sales-source">{{ csrf_field(request) }}
+    <input type="hidden" name="to" value="{{ to }}">
+    <input type="hidden" name="cutover" value="{{ preview.cutover.isoformat() }}">
+    <button class="btn" type="submit">Switch from {{ preview.cutover.strftime("%d %b") }}</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

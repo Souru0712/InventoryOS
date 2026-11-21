@@ -5,6 +5,44 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-21 — T3.10 Mode switching with cutover (built on branch)
+
+**Implemented**
+- `cut_over()` / `cutover_plan()` in `app/sales.py`: from business date D a location's sales come
+  from one source (POS provider, hand entry, file imports); every other source of record stops the
+  day before (or is retired whole), its counted sales from D are voided (consumption given back),
+  and the chosen source's sales from D are counted and consumed; earlier days untouched.
+- The cutover sticks: `sales_sources.fixed_from` (migration `c4e8a2f6b9d1`) stops a late POS sale
+  for an earlier day from moving the start back; the POS source a sale lands in is the one
+  counting that day.
+- `app/sales_modes.py`: Connected needs a tracking location of an active connection; D within 30
+  days of today; no switch to the source already in use; default D today, or the day after the
+  POS's last sales day when leaving it; audited `settings.sales_mode`.
+- `/app/locations/{id}/sales-source` (Owner, `subscription.manage`): preview of the days that stop
+  and start counting, then the switch; linked per location. Onboarding: Connected step 7 needs a
+  tracking location; step 8 "Map your Square products" added.
+
+**Verified**
+- `tests/test_sales_modes.py` (6): AC-SAL-06 from a past cutover (hand day voided, POS from D
+  counted, POS before D ignored, prior history intact, hand entry refused, audit); Connected to
+  Standalone at the default D; the cutover in New York's business day (22:00 the day before stays
+  out); the rules; the onboarding step; the page. Isolation cases for both routes. Related suites,
+  ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0084 (Proposed).
+
+**Decisions for the owner**
+- **PD-50 (new):** how far a cutover may reach (built: 30 days either way).
+- **PD-51 (new):** should disconnecting switch locations to hand entry? (built: no, a deliberate
+  switch).
+- Still open: PD-43 to PD-49.
+
+**Open issues**
+- The plan following the mode at cutover is T4.02's (PD-39).
+
+---
+
 ## 2026-11-20 — T3.09 Integration health and sales-source status (built on branch)
 
 **Implemented**

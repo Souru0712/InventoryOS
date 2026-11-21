@@ -140,7 +140,11 @@ def disconnect_pos(
         return RedirectResponse(PAGE, status_code=303)
     db.commit()
     if confirmed:
-        flash(request, "Square is disconnected. Your history is kept.")
+        flash(
+            request,
+            "Square is disconnected. Your history is kept. To enter sales by hand, choose where "
+            "each location's sales come from on the Locations page.",
+        )
     else:
         flash(
             request,

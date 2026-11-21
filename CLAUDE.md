@@ -155,6 +155,9 @@ implementation sessions; the detail lives in `docs/`.
 - Whether sales are arriving is `sales_status()` (ADR-0083), per location: Connected shows its
   connection's health (rules in `app/transform/integration_health.py`, stale after 2 h);
   Standalone shows the last day with sales and the missing days. The dashboard reads it.
+- A location changes where its sales come from only through `cut_over()` (via
+  `app/sales_modes.py`, ADR-0084): from a cutover date the chosen source alone counts, the old
+  source's sales from then are voided, earlier days untouched; a chosen start is `fixed_from`.
 - Every choice that needs the owner is logged as an OPEN `PD-nn` in PRODUCT_DECISIONS §3 and
   cited under "Decisions for the owner" in the task's execution-log entry.
 - Pure business rules in `app/transform/` (no ORM, no I/O).

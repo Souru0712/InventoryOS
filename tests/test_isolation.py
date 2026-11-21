@@ -320,6 +320,10 @@ CASES = {
         }
     },
     ("POST", "/app/locations/{location_id}/archive"): lambda ids: {},
+    ("GET", "/app/locations/{location_id}/sales-source"): lambda ids: {"params": {"to": "hand"}},
+    ("POST", "/app/locations/{location_id}/sales-source"): lambda ids: {
+        "data": {"to": "hand", "cutover": datetime.now(UTC).date().isoformat()}
+    },
     ("POST", "/app/connection/locations/{external_location_id}"): lambda ids: {
         "data": {"location_id": ids["location"]}
     },

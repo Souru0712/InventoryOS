@@ -1166,6 +1166,8 @@ class SalesSource(Base):
     # Whether its sales count for its days. A POS left connected while sales are entered by
     # hand is not: its sales are kept and flagged, never counted (DR-31).
     of_record: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Its first day was chosen (a cutover, T3.10): older sales arriving late never move it back.
+    fixed_from: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
