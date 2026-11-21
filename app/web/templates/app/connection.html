@@ -38,6 +38,19 @@
   {% endif %}
 </div>
 
+{% if integration %}
+<h2>Health</h2>
+<table class="small" data-health="{{ integration.state }}">
+  <tbody>
+    <tr><th>Last successful read</th><td>{% if integration.reads.last_success %}{{ integration.reads.last_success.strftime("%d %b %H:%M") }} UTC{% if integration.stale %} <strong>(over two hours ago)</strong>{% endif %}{% else %}none yet{% endif %}</td></tr>
+    <tr><th>Reads failed in the last 24 hours</th><td>{{ integration.reads.failures_24h }} of {{ integration.reads.runs_24h }}{% if integration.failing %} &mdash; the last one failed{% endif %}</td></tr>
+    <tr><th>Webhook events waiting</th><td>{{ integration.waiting_events }}{% if integration.waiting_events %} (received over 15 minutes ago, not yet acted on){% endif %}</td></tr>
+    <tr><th>Access token</th><td>{% if integration.status == "revoked" %}<strong>revoked by {{ provider }}</strong>{% elif integration.token_expires_at %}renewed automatically before {{ integration.token_expires_at.strftime("%d %b %Y") }}{% else %}held{% endif %}</td></tr>
+    <tr><th>Products sold but not mapped</th><td>{{ integration.unmapped }}{% if integration.unmapped %} &mdash; <a href="/app/mappings">map them</a>{% endif %}</td></tr>
+  </tbody>
+</table>
+{% endif %}
+
 {% if catalog %}
 <h2>{{ provider }} catalog</h2>
 <p class="small">{{ catalog.items }} item{{ "" if catalog.items == 1 else "s" }}, {{ catalog.variations }} variation{{ "" if catalog.variations == 1 else "s" }} and {{ catalog.modifiers }} modifier{{ "" if catalog.modifiers == 1 else "s" }} imported. Archived or deleted ones are kept, marked inactive. <a href="/app/mappings">Map them to your products</a>.</p>

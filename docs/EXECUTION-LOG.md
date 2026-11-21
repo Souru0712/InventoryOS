@@ -5,6 +5,36 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-20 — T3.09 Integration health and sales-source status (built on branch)
+
+**Implemented**
+- `app/transform/integration_health.py` (pure): a connection judged from its order reads (last
+  success, last failure, 24-hour tally and error rate), webhook events waiting over 15 minutes,
+  its status and how many locations it feeds: ok, setup, warning (stale over 2 h, failing,
+  events behind), critical (revoked), off.
+- `app/sales_status.py`: per location, Connected (tracking a POS location of an active or revoked
+  connection: its health) or Standalone (last business day with sales, missing open days).
+- The dashboard shows each location's status (replacing the business-wide "last synced" line): a
+  stale POS shows the last success and "may be missing, not zero" (AC-CMD-05); Standalone shows
+  the last day entered and the missing days (AC-CMD-06); revoked asks for a reconnect.
+- `/app/connection` health table: last successful read, failed reads in 24 h, waiting events,
+  token, products sold but not mapped.
+
+**Verified**
+- `tests/test_sales_status.py` (12): every health state, the error rate, AC-CMD-05 and AC-CMD-06
+  through the pages, waiting events and the "behind" warning, connected/standalone/revoked/
+  disconnected classification and the location filter. Related suites, ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0083 (Proposed).
+
+**Decisions for the owner**
+- **PD-49 (new):** should a quiet POS (over 2 h without sales, no failure) email the Owner, or
+  is the dashboard warning enough? Recommended: warning now, the daily alert email later.
+- Still open: PD-43 to PD-48.
+
+---
+
 ## 2026-11-20 — T3.08 Reconciliation and failure recovery (built on branch)
 
 **Implemented**

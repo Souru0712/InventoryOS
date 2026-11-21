@@ -74,3 +74,18 @@ def processed_by(db: Session, tenant_id: int, job: str, started: datetime) -> in
         row.status, row.processed_at = PROCESSED, now
     db.flush()
     return len(rows)
+
+
+def waiting(db: Session, tenant_id: int, received_before: datetime) -> int:
+    """A business's events received before an instant and still not acted on (POS-FR-27)."""
+    return len(
+        list(
+            db.scalars(
+                select(WebhookEvent.id).where(
+                    WebhookEvent.tenant_id == tenant_id,
+                    WebhookEvent.status == RECEIVED,
+                    WebhookEvent.received_at < received_before,
+                )
+            )
+        )
+    )

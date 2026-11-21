@@ -102,7 +102,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T3.06 | Webhooks with dedupe via jobs | P1 | M | M5 | T3.05 | Built on branch, not merged (events stored once by id before acting; order and catalog events queue jobs, processed when they succeed; revocation and counts on arrival; bad signatures refused) |
 | T3.07 | Refunds, voids, discounts | P1 | M | M5 | T3.05 | Built on branch, not merged (refunds as linked sales returns that lower net sales and never restock; orphans linked later; completed-then-voided reverses; discounts change money only; orphan exception type proposed) |
 | T3.08 | Reconciliation and failure recovery | P1 | M | M5 | T3.06 | Built on branch, not merged (hourly 2-hour re-read; daily check of the last 3 closed days opens and recovers pos_reconciliation_mismatch; failed reads kept as sync_failure, cleared by the next success; sync history screen) |
-| T3.09 | Integration health and sales-source status | P1 | S | M5 | T3.08 | Not started |
+| T3.09 | Integration health and sales-source status | P1 | S | M5 | T3.08 | Built on branch, not merged (per-location status on the dashboard: Connected health with a stale warning after 2 h, Standalone last day and missing days; health table on the connection page; PD-49 proposed) |
 | T3.10 | Mode switching with cutover | P1 | M | M5 | T3.05, T2.12 | Not started |
 | T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Not started |
 | T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Not started |

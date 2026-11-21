@@ -7,6 +7,7 @@ disconnect. Provider-neutral: everything goes through `app/connections.py`.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -18,6 +19,7 @@ from app.db import get_db
 from app.models import Location, SyncRun, Tenant, User
 from app.order_ingestion import order_summary
 from app.pos_catalog import MappingError, NotFound, external_locations, summary, track_location
+from app.sales_status import connection_health
 from app.security import require_permission, require_tenant, require_verified
 from app.throttle import client_ip
 from app.web.flash import flash, pop_flash
@@ -70,6 +72,9 @@ def connection_page(
             "can_map": active,
             "catalog": summary(db, org, connection) if connection else None,
             "orders": order_summary(db, org, connection) if connection else None,
+            "integration": connection_health(db, org, connection, datetime.now(UTC))
+            if connection and connection.status in ("active", "revoked")
+            else None,
         },
     )
 

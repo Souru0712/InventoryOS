@@ -137,6 +137,7 @@ launch.
 | PD-46 | P2 | **Order-line backfill on first connection** (T3.05, ADR-0079) | The first order read reaches back 7 business days and voids the legacy daily totals in that window, posting the same orders again as order lines (same stock in total, finer history); earlier days keep their daily totals | **OPEN** — recommended: keep 7 days |
 | PD-47 | P2 | **Adjustment reason list** (T1.24, ADR-0046) | WF-10 lists "internal use" and "returned to supplier"; INV-FR-19 and AC-INV-08 list "sample" and "transfer in from outside". The build follows INV-FR-19 | **OPEN** — recommended: align WF-10 to INV-FR-19 (or make reasons configurable, ADM-FR-04) |
 | PD-48 | P1 | **Make "Standalone (no POS)" a required check** (T2.22, ADR-0074) | The CI job runs every R1 workflow with no POS on every PR but is not required by the "Protect main" ruleset, which is the owner's to change | **OPEN** — recommended: add it to the required checks before the M4/M5 gate |
+| PD-49 | P2 | **Alerts on POS health thresholds** (T3.09, ADR-0083) | POS-FR-27 says "alerts on thresholds". Built: a failed read raises `sync_failure`, a revoked connection emails the Owners, and a connection quiet for over 2 h (or with webhook events waiting) shows a dashboard warning; nothing is emailed for staleness alone | **OPEN** — recommended: keep the dashboard warning; add stale POS to the daily alert email when T4's alert preferences arrive |
 
 ## 4. Assumptions (to confirm)
 

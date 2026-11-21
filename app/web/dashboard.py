@@ -18,7 +18,7 @@ from app.audit import changes, record_audit
 from app.batches import NotFound as BatchNotFound
 from app.batches import batch_view, count_batch, date_stock, undate_batch
 from app.config import get_settings
-from app.connections import MerchantTaken, NotConnected, connect, sync_health
+from app.connections import MerchantTaken, NotConnected, connect
 from app.costs import value_stock
 from app.db import get_db
 from app.entitlements import require
@@ -29,7 +29,6 @@ from app.models import (
     Location,
     ProviderConnection,
     StockItem,
-    SyncRun,
     Tenant,
     User,
 )
@@ -52,6 +51,7 @@ from app.orchestration.views import (
 )
 from app.providers import adapter_for
 from app.providers.base import AdapterError
+from app.sales_status import sales_status
 from app.security import (
     SESSION_STATE_KEY,
     location_filter,
@@ -183,10 +183,6 @@ def dashboard(
     connection = db.scalars(
         select_scoped(org, ProviderConnection).where(ProviderConnection.status == "active")
     ).first()
-    last_run = db.scalars(
-        select_scoped(org, SyncRun).order_by(SyncRun.started_at.desc()).limit(1)
-    ).first()
-    sync = sync_health(db, org, connection, last_run)
 
     by_dimension: dict[str, dict] = {}
     for row in rows:
@@ -226,8 +222,8 @@ def dashboard(
             "locations": _locations(db, org),
             "selected_location": location,
             "connection": connection,
-            "last_run": last_run,
-            "sync": sync,
+            # Whether sales are arriving, per location (T3.09, AC-CMD-05, AC-CMD-06).
+            "statuses": sales_status(db, org, now, location),
             "attention": attention[:ATTENTION_SHOWN],
             "attention_total": len(attention),
             "fix_links": FIX_LINKS,

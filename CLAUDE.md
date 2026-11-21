@@ -152,6 +152,9 @@ implementation sessions; the detail lives in `docs/`.
   comparing the POS's completed orders and lines per closed business day with ours
   (`pos_reconciliation_mismatch`, recovered and cleared by the next match). A failed read is a
   failed sync run plus `sync_failure`, never raised inside the job; the next success clears it.
+- Whether sales are arriving is `sales_status()` (ADR-0083), per location: Connected shows its
+  connection's health (rules in `app/transform/integration_health.py`, stale after 2 h);
+  Standalone shows the last day with sales and the missing days. The dashboard reads it.
 - Every choice that needs the owner is logged as an OPEN `PD-nn` in PRODUCT_DECISIONS §3 and
   cited under "Decisions for the owner" in the task's execution-log entry.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
