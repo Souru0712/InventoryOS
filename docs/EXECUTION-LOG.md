@@ -5,6 +5,43 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-20 — T3.08 Reconciliation and failure recovery (built on branch)
+
+**Implemented**
+- Hourly wider re-read: once an hour (`order_cursors.reread_at`, migration `b3d7f1a5c8e2`) the
+  order read goes back two hours, so a late order (offline payment, lost webhook) is in within the
+  hour (AC-POS-07).
+- `reconcile_orders` job (every 6 hours): for each tracked location's last 3 closed business days,
+  the POS's completed orders by completion time (new adapter capability `completed_orders()`;
+  Square by `closed_at`) against our staged completed orders, orders and lines. A difference opens
+  `pos_reconciliation_mismatch` (both counts in its title), the differing orders are read again,
+  and the next matching check resolves it; per-day counts on a `reconciliation` sync run.
+- A failed read marks its sync run failed and adds to a `sync_failure` (warning) on the connection;
+  the job finishes, the cursor stays, the next read retries; the next success clears it; webhook
+  events wait meanwhile.
+- `/app/connection/history`: the last 50 reads, catalog reads and checks with what each did or its
+  error; mismatch exceptions link to it.
+
+**Verified**
+- `tests/test_reconciliation.py` (8): AC-POS-07 with a fake that honours windows; AC-POS-08
+  (opened, recovered, resolved by the next check); a line-count difference; a failure kept and
+  cleared; a failed check resolves nothing; the schedule; Square's day search; the history page.
+  T3.05/T3.06 failure tests updated to the kept-failure behaviour. Related suites, ruff, mypy,
+  docs checker.
+
+**Decisions**
+- ADR-0082 (Proposed).
+
+**Decisions for the owner**
+- None new in this task. Open register (PRODUCT_DECISIONS §3): PD-43 one Square account per
+  business, PD-44 `orphan_refund` exception, PD-45 `unmapped_product` from sales only, PD-46
+  7-day order-line backfill, PD-47 adjustment reason list, PD-48 Standalone as a required check.
+
+**Open issues**
+- "No success beyond a threshold" as `sync_failure` is lag: T3.09.
+
+---
+
 ## 2026-11-20 — T3.07 Refunds, voids, discounts (built on branch)
 
 **Implemented**

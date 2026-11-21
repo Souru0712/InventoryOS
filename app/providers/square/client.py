@@ -142,6 +142,31 @@ class SquareClient:
             found.extend(self._paginate("POST", "/v2/orders/search", body, "orders"))
         return found
 
+    def completed_orders(
+        self, location_ids: list[str], start_at: datetime, end_at: datetime
+    ) -> list[dict]:
+        """Orders completed in the window, by completion time (SQ-17's daily count)."""
+        found: list[dict] = []
+        for first in range(0, len(location_ids), ORDER_SEARCH_LOCATIONS):
+            body = {
+                "location_ids": location_ids[first : first + ORDER_SEARCH_LOCATIONS],
+                "limit": 200,
+                "query": {
+                    "filter": {
+                        "date_time_filter": {
+                            "closed_at": {
+                                "start_at": _rfc3339(start_at),
+                                "end_at": _rfc3339(end_at),
+                            }
+                        },
+                        "state_filter": {"states": ["COMPLETED"]},
+                    },
+                    "sort": {"sort_field": "CLOSED_AT", "sort_order": "ASC"},
+                },
+            }
+            found.extend(self._paginate("POST", "/v2/orders/search", body, "orders"))
+        return found
+
     # --- write-back ---
 
     def apply_inventory_changes(self, changes: list[dict], idempotency_key: str) -> dict:

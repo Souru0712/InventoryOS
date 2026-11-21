@@ -107,6 +107,16 @@ class SquareAdapter:
                 raise _api_failed(exc) from exc
         return OrderPage(tuple(to_order(order) for order in raw if order.get("id")))
 
+    def completed_orders(
+        self, credentials: Credentials, location_ids: list[str], start: datetime, end: datetime
+    ) -> OrderPage:
+        with SquareClient(credentials.access_token) as client:
+            try:
+                raw = client.completed_orders(location_ids, start, end)
+            except SquareError as exc:
+                raise _api_failed(exc) from exc
+        return OrderPage(tuple(to_order(order) for order in raw if order.get("id")))
+
     def parse_webhook(
         self, raw: bytes, headers: Mapping[str, str], url: str
     ) -> NormalizedEvent | None:

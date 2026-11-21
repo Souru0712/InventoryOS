@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     sync_interval_minutes: int = 60
     # How often each connected business's orders are read (T3.05; webhooks arrive with T3.06).
     orders_interval_minutes: int = 5
+    # How often each connected business's closed days are checked against the POS (T3.08).
+    reconciliation_interval_hours: int = 6
     # Every business's stock and expiry is checked this often, with or without a POS (T1.20).
     evaluation_interval_minutes: int = 60
     # How often the scheduler process's worker looks for due background jobs.

@@ -148,6 +148,12 @@ implementation sessions; the detail lives in `docs/`.
 - POS refunds are sales returns (`record_pos_refund()`, ADR-0081): linked to the sale and its
   lines, never restocking (DR-26); a completed order voided at the POS goes through
   `void_sale()`; net sales money is read through `sales_money()`.
+- POS reads recover themselves (ADR-0082): an hourly two-hour re-read, and `reconcile_orders`
+  comparing the POS's completed orders and lines per closed business day with ours
+  (`pos_reconciliation_mismatch`, recovered and cleared by the next match). A failed read is a
+  failed sync run plus `sync_failure`, never raised inside the job; the next success clears it.
+- Every choice that needs the owner is logged as an OPEN `PD-nn` in PRODUCT_DECISIONS §3 and
+  cited under "Decisions for the owner" in the task's execution-log entry.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,

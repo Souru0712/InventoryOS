@@ -17,6 +17,7 @@
   {% endif %}
 
   {% if connection %}
+  <p class="small"><a href="/app/connection/history">Sync history</a></p>
   <ul class="small">
     <li>Last successful sync: {% if health.last_success_at %}{{ health.last_success_at.strftime("%d %b %Y %H:%M") }} UTC{% else %}none yet{% endif %}</li>
     {% if health.error %}<li>Last attempt failed{% if health.failed_at %} at {{ health.failed_at.strftime("%d %b %H:%M") }} UTC{% endif %}: {{ health.error }}</li>{% endif %}

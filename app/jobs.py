@@ -92,7 +92,7 @@ def _handlers() -> dict[str, Handler]:
     from app.orchestration.alerts import evaluate_and_store, send_alert_digest
     from app.orchestration.receiving import parse_document
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
-    from app.order_ingestion import ingest_orders
+    from app.order_ingestion import ingest_orders, reconcile_orders
     from app.pos_catalog import refresh_catalog
     from app.waste import dispose_expired
     from app.webhook_events import processed_by
@@ -146,12 +146,22 @@ def _handlers() -> dict[str, Handler]:
     def orders(db: Session, org: OrgContext, payload: dict) -> None:
         started = datetime.now(UTC)
         try:
-            ingest_orders(db, org)
+            read = ingest_orders(db, org)
         except NotConnected:
             # Revoked or disconnected since it was queued: nothing to read, nothing to retry.
             log.info("tenant %s has no connection to read orders from", org.tenant_id)
-        # The webhook events it was queued for are acted on (T3.06).
-        processed_by(db, org.tenant_id, "ingest_orders", started)
+            read = {}
+        # The webhook events it was queued for are acted on (T3.06), unless the read failed:
+        # then they wait for the next read (T3.08).
+        if not read.get("failed"):
+            processed_by(db, org.tenant_id, "ingest_orders", started)
+
+    def reconcile(db: Session, org: OrgContext, payload: dict) -> None:
+        try:
+            checked = reconcile_orders(db, org)
+        except NotConnected:
+            return
+        log.info("reconciled POS sales for tenant %s: %s", org.tenant_id, checked)
 
     def catalog(db: Session, org: OrgContext, payload: dict) -> None:
         started = datetime.now(UTC)
@@ -176,6 +186,7 @@ def _handlers() -> dict[str, Handler]:
         "reprocess_mapping": remap,
         "ingest_orders": orders,
         "refresh_catalog": catalog,
+        "reconcile_orders": reconcile,
         "verify_ledger": verify,
         "send_alert_digest": digest,
         "send_weekly_report": weekly,

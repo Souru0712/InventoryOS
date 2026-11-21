@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.connections import ACTIVE, credentials, mark_revoked, name_of
-from app.exceptions import record_exception
+from app.exceptions import apply_findings, clear, record_exception
 from app.models import (
     ExternalOrder,
     ExternalOrderLine,
@@ -52,7 +52,7 @@ from app.sales import (
     retire_daily_totals,
     void_sale,
 )
-from app.transform.business_days import business_date
+from app.transform.business_days import business_date, business_day_end, business_day_start
 from app.transform.exceptions import Finding
 from app.transform.sales import SaleLine
 
@@ -60,6 +60,9 @@ log = logging.getLogger(__name__)
 
 BACKFILL_DAYS = 7
 OVERLAP = timedelta(minutes=10)
+REREAD_EVERY = timedelta(hours=1)
+REREAD_WINDOW = timedelta(hours=2)
+RECONCILE_DAYS = 3  # closed business days checked each time, so a fixed day is seen to match
 DAILY_RETIRED = "Replaced by the POS's order lines (T3.05)"
 COMPLETED, CANCELED = "completed", "canceled"
 VOIDED = "Voided at the POS after it was completed"
@@ -262,6 +265,82 @@ def _refunds_and_voids(
     return stats
 
 
+def _take(
+    db: Session,
+    org: OrgContext,
+    connection: ProviderConnection,
+    order: NormalizedOrder,
+    tracked: dict[str, Location],
+    lines_from: date,
+    mapped: tuple[dict[str, int], dict[str, int]],
+    now: datetime,
+) -> Counter[str]:
+    """One order, staged and, if it is a completed sale at a tracked location, recorded."""
+    stats: Counter[str] = Counter({"fetched": 1})
+    place = tracked.get(order.external_location_id)
+    row, changed = _stage(db, org, connection, order, place)
+    if not changed:
+        stats["unchanged"] += 1
+        return stats
+    if place is not None:
+        stats.update(_refunds_and_voids(db, org, connection, order, row, place, now))
+    if order.state != COMPLETED or place is None:
+        stats["staged"] += 1  # open, cancelled or untracked: no sale (SQ-13)
+        return stats
+    day = business_date(order.occurred_at, place.timezone, place.business_day_cutoff_hour)
+    lines = _sale_lines(db, org, order, place, *mapped)
+    if day < lines_from or not lines:
+        stats["staged"] += 1  # a day the daily totals own, or nothing countable
+        return stats
+    sale = record_pos_order(
+        db,
+        org,
+        connection.provider,
+        place.id,
+        reference=f"order:{order.external_order_id}",
+        occurred_at=order.occurred_at,
+        lines=lines,
+        gross_cents=sum(ln.gross_cents or 0 for ln in lines),
+        net_cents=sum(ln.net_cents or 0 for ln in lines),
+    )
+    if sale is not None:
+        row.sales_transaction_id = sale.id
+        stats["sales"] += 1
+    return stats
+
+
+def _failure(connection: ProviderConnection, what: str) -> Finding:
+    return Finding(
+        type="sync_failure",
+        subject_type="provider_connection",
+        subject_id=str(connection.id),
+        title=f"{what} from {name_of(connection.provider)} failed; it is tried again on the "
+        "next read",
+    )
+
+
+def _failed(
+    db: Session,
+    org: OrgContext,
+    connection: ProviderConnection,
+    run: SyncRun,
+    exc: AdapterError,
+    what: str,
+    now: datetime,
+) -> Counter[str]:
+    """A read that failed: kept on its sync run and as an exception, never retried blind. A
+    revoked authorization is marked (AC-POS-09); anything else waits for the next read."""
+    run.status, run.finished_at, run.error = SyncStatus.FAILED, now, str(exc)[:500]
+    if exc.revoked:
+        mark_revoked(db, org, connection, now=now)
+        db.flush()
+        return Counter({"revoked": 1})
+    record_exception(db, org, _failure(connection, what), now=now)
+    db.flush()
+    log.warning("%s read failed for connection %s", connection.provider, connection.id)
+    return Counter({"failed": 1})
+
+
 def _ingest_connection(
     db: Session, org: OrgContext, connection: ProviderConnection, now: datetime
 ) -> Counter[str]:
@@ -272,58 +351,32 @@ def _ingest_connection(
         return stats  # no location takes its sales yet: nothing to read
     held = credentials(db, org, connection, now)
     cursor = _cursor(db, org, connection, tracked, now)
+    since = cursor.through - OVERLAP
+    wide = cursor.reread_at is None or now - cursor.reread_at >= REREAD_EVERY
+    if wide:
+        # Once an hour the read goes back a whole window: an order Square delivers late with an
+        # earlier time (an offline payment, a missed webhook) is still picked up (AC-POS-07).
+        since = min(since, now - REREAD_WINDOW)
     run = SyncRun(tenant_id=org.tenant_id, provider=connection.provider, kind="orders")
     db.add(run)
     db.flush()
     try:
-        page = adapter_for(connection.provider).fetch_orders(
-            held, sorted(tracked), cursor.through - OVERLAP, now
-        )
+        page = adapter_for(connection.provider).fetch_orders(held, sorted(tracked), since, now)
     except AdapterError as exc:
-        run.status, run.finished_at, run.error = SyncStatus.FAILED, now, str(exc)[:500]
-        if not exc.revoked:
-            db.flush()
-            raise  # a passing failure: the job tries again
-        # Revoked: marked, a person told (AC-POS-09), and nothing to retry until they reconnect.
-        mark_revoked(db, org, connection, now=now)
-        stats["revoked"] += 1
-        return stats
-    variations = mapped_variations(db, org, connection.provider)
-    modifiers = mapped_modifiers(db, org, connection.provider)
+        return stats + _failed(db, org, connection, run, exc, "Reading orders", now)
+    mapped = (
+        mapped_variations(db, org, connection.provider),
+        mapped_modifiers(db, org, connection.provider),
+    )
     for order in page.orders:
-        stats["fetched"] += 1
-        place = tracked.get(order.external_location_id)
-        row, changed = _stage(db, org, connection, order, place)
-        if not changed:
-            stats["unchanged"] += 1
-            continue
-        if place is not None:
-            stats.update(_refunds_and_voids(db, org, connection, order, row, place, now))
-        if order.state != COMPLETED or place is None:
-            stats["staged"] += 1  # open, cancelled or untracked: no sale (SQ-13)
-            continue
-        day = business_date(order.occurred_at, place.timezone, place.business_day_cutoff_hour)
-        lines = _sale_lines(db, org, order, place, variations, modifiers)
-        if day < cursor.lines_from or not lines:
-            stats["staged"] += 1  # a day the daily totals own, or nothing countable
-            continue
-        sale = record_pos_order(
-            db,
-            org,
-            connection.provider,
-            place.id,
-            reference=f"order:{order.external_order_id}",
-            occurred_at=order.occurred_at,
-            lines=lines,
-            gross_cents=sum(ln.gross_cents or 0 for ln in lines),
-            net_cents=sum(ln.net_cents or 0 for ln in lines),
-        )
-        if sale is not None:
-            row.sales_transaction_id = sale.id
-            stats["sales"] += 1
+        stats.update(_take(db, org, connection, order, tracked, cursor.lines_from, mapped, now))
     cursor.through, cursor.updated_at = now, now
+    if wide:
+        cursor.reread_at = now
+        stats["reread"] += 1
     run.status, run.finished_at = SyncStatus.SUCCESS, now
     run.stats_json = json.dumps(dict(stats))
+    clear(db, org, _failure(connection, "").key, now)  # the next success clears it
     db.flush()
     log.info("read %s orders for tenant %s: %s", name_of(connection.provider), org.tenant_id, stats)
     return stats
@@ -373,3 +426,114 @@ def order_summary(db: Session, org: OrgContext, connection: ProviderConnection) 
         unmatched_refunds=len([r for r in returns if r.sales_transaction_id is None]),
         refunded_cents=sum(r.amount_cents or 0 for r in returns),
     )
+
+
+# --- daily reconciliation (T3.08, SQ-17, AC-POS-08) ------------------------------------------------
+
+
+def _ours(
+    db: Session,
+    org: OrgContext,
+    connection: ProviderConnection,
+    external_location_id: str,
+    start: datetime,
+    end: datetime,
+) -> dict[str, int]:
+    """Our staged completed orders at a POS location in a window: order id -> its line count."""
+    rows = db.scalars(
+        select_scoped(org, ExternalOrder).where(
+            ExternalOrder.connection_id == connection.id,
+            ExternalOrder.external_location_id == external_location_id,
+            ExternalOrder.state == COMPLETED,
+            ExternalOrder.occurred_at >= start,
+            ExternalOrder.occurred_at < end,
+        )
+    )
+    return {row.external_order_id: len(row.lines) for row in rows}
+
+
+def _reconcile_connection(
+    db: Session,
+    org: OrgContext,
+    connection: ProviderConnection,
+    now: datetime,
+    findings: list[Finding],
+) -> Counter[str]:
+    stats: Counter[str] = Counter()
+    tracked = _tracked(db, org, connection.provider)
+    cursor = db.scalars(
+        select_scoped(org, OrderCursor).where(OrderCursor.connection_id == connection.id)
+    ).first()
+    if not tracked or cursor is None:
+        return stats  # nothing read yet: nothing to compare
+    held = credentials(db, org, connection, now)
+    run = SyncRun(tenant_id=org.tenant_id, provider=connection.provider, kind="reconciliation")
+    db.add(run)
+    db.flush()
+    adapter = adapter_for(connection.provider)
+    mapped = (
+        mapped_variations(db, org, connection.provider),
+        mapped_modifiers(db, org, connection.provider),
+    )
+    days = []
+    for external_id, place in sorted(tracked.items()):
+        today = business_date(now, place.timezone, place.business_day_cutoff_hour)
+        for back in range(1, RECONCILE_DAYS + 1):
+            day = today - timedelta(days=back)
+            if day < cursor.lines_from:
+                continue  # the daily totals own it: nothing of ours to compare
+            start = business_day_start(day, place.timezone, place.business_day_cutoff_hour)
+            end = business_day_end(day, place.timezone, place.business_day_cutoff_hour)
+            try:
+                page = adapter.completed_orders(held, [external_id], start, end)
+            except AdapterError as exc:
+                return stats + _failed(db, org, connection, run, exc, "Checking sales", now)
+            ours = _ours(db, org, connection, external_id, start, end)
+            theirs = (len(page.orders), sum(len(o.lines) for o in page.orders))
+            mine = (len(ours), sum(ours.values()))
+            days.append({"location": place.id, "day": day.isoformat(), "pos": theirs, "ours": mine})
+            stats["days"] += 1
+            if theirs == mine:
+                continue
+            stats["mismatched"] += 1
+            missing = [o for o in page.orders if ours.get(o.external_order_id) != len(o.lines)]
+            findings.append(
+                Finding(
+                    type="pos_reconciliation_mismatch",
+                    subject_type="location_day",
+                    subject_id=f"{place.id}:{day.isoformat()}",
+                    title=(
+                        f"{name_of(connection.provider)} recorded {theirs[0]} orders "
+                        f"({theirs[1]} lines) at {place.name} on {day:%d %b}; InventoryOS had "
+                        f"{mine[0]} ({mine[1]}). The {len(missing)} that differed were read "
+                        "again; this clears when the next check matches."
+                    ),
+                    location_id=place.id,
+                )
+            )
+            # Recovery: what the POS has and we lack goes through the same path as any read.
+            for order in missing:
+                stats.update(
+                    _take(db, org, connection, order, tracked, cursor.lines_from, mapped, now)
+                )
+    run.status, run.finished_at = SyncStatus.SUCCESS, now
+    run.stats_json = json.dumps({**dict(stats), "checked": days})
+    db.flush()
+    return stats
+
+
+def reconcile_orders(db: Session, org: OrgContext, now: datetime | None = None) -> dict[str, int]:
+    """Compare the POS's completed orders and lines for each tracked location's last closed
+    business days with ours (SQ-17); a mismatch opens `pos_reconciliation_mismatch` and the
+    difference is read again. A day that matches clears its exception (a job)."""
+    now = now or datetime.now(UTC)
+    totals: Counter[str] = Counter()
+    findings: list[Finding] = []
+    for connection in db.scalars(
+        select_scoped(org, ProviderConnection).where(ProviderConnection.status == ACTIVE)
+    ):
+        totals.update(_reconcile_connection(db, org, connection, now, findings))
+    if not totals["failed"]:
+        # A complete check answers for its type: what it no longer finds is resolved.
+        apply_findings(db, org, findings, frozenset({"pos_reconciliation_mismatch"}), now)
+    return dict(totals)

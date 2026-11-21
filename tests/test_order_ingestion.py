@@ -268,11 +268,13 @@ def test_an_unmapped_modifier_is_an_exception_until_it_is_mapped(db, shop):
 
 
 def test_a_revoked_authorization_stops_the_read_and_a_passing_failure_retries(db, shop):
+    """T3.08: a passing failure is kept (sync run, exception) and the next read tries again."""
     org, pos, connection, _milk, _shot = shop
     pos.fails = AdapterError("square refused", revoked=False)
-    with pytest.raises(AdapterError):
-        ingest_orders(db, org, NOW)
-    db.rollback()
+    assert ingest_orders(db, org, NOW)["failed"] == 1
+    db.commit()
+    cursor = db.scalars(select(OrderCursor)).one()
+    assert cursor.through < NOW, "the cursor stays where it was: nothing is skipped"
     pos.fails = AdapterError("unauthorized", revoked=True)
     assert ingest_orders(db, org, NOW) == {"revoked": 1}
     db.commit()

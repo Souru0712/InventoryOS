@@ -592,6 +592,8 @@ class OrderCursor(Base):
     connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"))
     lines_from: Mapped[date] = mapped_column(Date)
     through: Mapped[datetime] = mapped_column(UTCDateTime)
+    # The last read that went back a whole window, for orders that arrive late (T3.08).
+    reread_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 

@@ -99,14 +99,20 @@ def test_ac_pos_03_three_deliveries_and_a_reconciliation_consume_once(square, lo
     assert {e.status for e in events()} == {"processed"}
 
 
-def test_a_failed_read_leaves_its_events_waiting_and_the_job_tries_again(square):
-    client, (_org, pos, *_rest) = square
+def test_a_failed_read_leaves_its_events_waiting_for_the_next_read(square):
+    """T3.08: the failure is kept as a sync run and an exception; the next read picks them up."""
+    client, (org, pos, *_rest) = square
     pos.fails = AdapterError("square is down", revoked=False)
     deliver(client, "evt-1")
     _jobs()
     assert events()[0].status == "received"
-    [job] = jobs("ingest_orders")
-    assert job.status == "pending" and job.attempts == 1
+    with SessionLocal() as db:
+        assert ingest_orders(db, org)["failed"] == 1
+        db.rollback()
+    pos.fails = None
+    deliver(client, "evt-2")
+    _jobs()
+    assert {e.status for e in events()} == {"processed"}
 
 
 def test_a_catalog_burst_is_one_read_as_a_job(square, monkeypatch):

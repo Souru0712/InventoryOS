@@ -29,6 +29,7 @@ FIX_LINKS = {
     "waste_risk": "/app/expiring",
     "batch_expired_unresolved": "/app/expiring",
     "sync_failure": "/app/connection",
+    "pos_reconciliation_mismatch": "/app/connection/history",
 }
 
 

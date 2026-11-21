@@ -6,6 +6,8 @@ disconnect. Provider-neutral: everything goes through `app/connections.py`.
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -68,6 +70,53 @@ def connection_page(
             "can_map": active,
             "catalog": summary(db, org, connection) if connection else None,
             "orders": order_summary(db, org, connection) if connection else None,
+        },
+    )
+
+
+KINDS = {
+    "full": "Hourly sync",
+    "catalog": "Catalog",
+    "orders": "Orders",
+    "reconciliation": "Daily check",
+}
+
+
+def _summary(run: SyncRun) -> str:
+    """What a run did, in a few words (POS-FR-10's sync history)."""
+    try:
+        stats = json.loads(run.stats_json or "{}")
+    except ValueError:
+        return ""
+    if run.kind == "reconciliation":
+        checked, off = stats.get("checked") or [], stats.get("mismatched", 0)
+        return f"{len(checked)} day(s) checked, {off} differed" if checked else "nothing to check"
+    if run.kind == "orders":
+        return f"{stats.get('fetched', 0)} order(s) read, {stats.get('sales', 0)} recorded" + (
+            " (hourly re-read)" if stats.get("reread") else ""
+        )
+    return ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in stats.items() if v)[:160]
+
+
+@router.get(PAGE + "/history", response_class=HTMLResponse)
+def sync_history(
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_permission("pos.manage")),
+):
+    """Every recent read, check and failure, newest first, with what each did (POS-FR-10)."""
+    runs = list(
+        db.scalars(select_scoped(org, SyncRun).order_by(SyncRun.started_at.desc()).limit(50))
+    )
+    return templates.TemplateResponse(
+        request,
+        "app/sync_history.html",
+        {
+            "title": "Sync history",
+            "tenant": tenant,
+            "provider": name_of(PROVIDER),
+            "runs": [(run, KINDS.get(run.kind, run.kind), _summary(run)) for run in runs],
         },
     )
 

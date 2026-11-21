@@ -214,6 +214,9 @@ def test_ac_pos_12_another_adapter_needs_no_square_type():
         def fetch_orders(self, credentials, location_ids, since, until, cursor=None):
             return OrderPage((to_order(ORDER),))
 
+        def completed_orders(self, credentials, location_ids, start, end):
+            return OrderPage(())
+
         def parse_webhook(self, raw, headers, url):
             return None
 

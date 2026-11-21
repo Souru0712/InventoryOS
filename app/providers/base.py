@@ -175,6 +175,13 @@ class PosAdapter(Protocol):
         """Orders at those locations changed between `since` and `until`, in any state."""
         ...
 
+    def completed_orders(
+        self, credentials: Credentials, location_ids: list[str], start: datetime, end: datetime
+    ) -> OrderPage:
+        """Orders completed between `start` and `end`, by completion time: the POS's own count
+        of a business day, for reconciliation (SQ-17)."""
+        ...
+
     def parse_webhook(
         self, raw: bytes, headers: Mapping[str, str], url: str
     ) -> NormalizedEvent | None: ...
