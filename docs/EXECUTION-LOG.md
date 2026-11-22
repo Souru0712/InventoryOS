@@ -30,7 +30,9 @@ issues · decisions · next task.
 **Decisions for the owner**
 - **PD-52 (new):** where the run happens: staging (C-49, about $24.50 a month) or this computer with
   a tunnel (recommended).
-- **OD-05:** the Square developer account with a sandbox seller (already open).
+- **OD-05:** provided. Correction 2026-11-22: the sandbox application credentials, seller token
+  and webhook key were already in the owner's local `.env`, and `APP_BASE_URL` is an ngrok address;
+  this entry first listed them as missing.
 - Still open: PD-43 to PD-51.
 
 ---
