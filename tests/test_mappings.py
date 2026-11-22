@@ -204,6 +204,31 @@ def test_ac_pos_06_mapping_then_reprocessing_posts_once_at_the_original_moment(d
     assert reprocessed[0].after["sales"] == 1
 
 
+def test_the_preview_reads_the_recipe_in_effect_at_each_sale_as_the_job_does(db, location, shop):
+    """T3.11 sandbox run: a product made from Square after its first sale, given a recipe only
+    then. The preview promised the new recipe's milk; the job (rightly) posted nothing."""
+    org, pos_latte, _ice, _latte, _flat, _modifier, milk, feed = shop
+    early = _sell(db, org, feed, "o-1", 1, datetime.now(UTC) - timedelta(minutes=10))
+    cold = create_product(db, org, name="Cold brew", variations=[NewVariation("16 oz")])
+    assert map_product(db, org, pos_latte.id, cold.variations[0].id) is True
+    save_recipe(db, org, Owner("variation", cold.variations[0].id), [NewLine(milk.id, "100", "ml")])
+    db.commit()
+    shown = preview(db, org, pos_latte.id)
+    assert (shown.sales, shown.uses, shown.before_recipe) == (1, (), 1)
+
+    later = _sell(db, org, feed, "o-2", 2, datetime.now(UTC) + timedelta(seconds=1))
+    both = preview(db, org, pos_latte.id)
+    assert (both.sales, both.uses, both.before_recipe) == (2, (("Milk", "200 ml"),), 1)
+    queue_reprocess(db, org, pos_latte.id, both.start)
+    db.commit()
+    _jobs()
+    db.expire_all()
+    assert balance(db, org, location.id, milk.id) == D(-200), "the job agrees with the preview"
+    posted = [t for t in standing(db, org, SOURCE, str(later.id)) if t.kind == "sale"]
+    assert len(posted) == 1
+    assert not [t for t in standing(db, org, SOURCE, str(early.id)) if t.kind == "sale"]
+
+
 def test_a_remap_gives_back_the_old_size_and_posts_the_new(db, location, shop):
     org, pos_latte, _ice, latte, flat, _modifier, milk, feed = shop
     _sell(db, org, feed, "o-1", 2)

@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -140,7 +141,7 @@ def test_square_returns_name_their_original_order_and_two_refunds_keep_to_amount
             }
         ],
         "refunds": [
-            {"id": "r-1", "status": "COMPLETED", "amount_money": {"amount": 450}},
+            {"id": "r-1", "status": "APPROVED", "amount_money": {"amount": 450}},
         ],
     }
     [one] = to_order(raw).refunds
@@ -150,6 +151,45 @@ def test_square_returns_name_their_original_order_and_two_refunds_keep_to_amount
     first, second = to_order(raw).refunds
     assert first.lines == () and second.lines == (), "which return each paid for is unknown"
     assert first.occurred_at is not None and second.status == "pending"
+
+
+@pytest.mark.parametrize(
+    ("square", "ours"),
+    [
+        ("APPROVED", "completed"),
+        ("PENDING", "pending"),
+        ("REJECTED", "rejected"),
+        ("FAILED", "failed"),
+        ("SOMETHING_NEW", "pending"),
+    ],
+)
+def test_a_return_orders_refund_counts_once_square_approves_it(square, ours):
+    """The shape the T3.11 sandbox run returned: the refund sits on a return order, APPROVED."""
+    raw = {
+        "id": "2Gmrm",
+        "state": "COMPLETED",
+        "location_id": "L1",
+        "closed_at": "2026-11-22T15:46:24.772Z",
+        "returns": [
+            {
+                "uid": "ret",
+                "source_order_id": "6U4ZQ",
+                "return_line_items": [
+                    {"source_line_item_uid": "A", "quantity": "1", "catalog_object_id": "V12"}
+                ],
+            }
+        ],
+        "refunds": [
+            {
+                "id": "9qLYn",
+                "status": square,
+                "amount_money": {"amount": 450, "currency": "USD"},
+                "created_at": "2026-11-22T15:46:24.620Z",
+            }
+        ],
+    }
+    [one] = to_order(raw).refunds
+    assert (one.external_order_id, one.status, one.amount_cents) == ("6U4ZQ", ours, 450)
 
 
 def test_the_connection_page_counts_refunds_and_shows_money_only_to_cost_roles(monkeypatch):

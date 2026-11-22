@@ -18,7 +18,8 @@
     {% if preview.uses %}
     <ul>{% for name, amount in preview.uses %}<li>{{ name }}: {{ amount }}</li>{% endfor %}</ul>
     {% endif %}
-    {% if preview.incomplete %}<p class="small">Its recipe leaves something out, so part of these sales will still use nothing from stock.</p>{% endif %}
+    {% if preview.before_recipe %}<p class="small">{{ preview.before_recipe }} of {{ "it" if preview.sales == 1 else "them" }} happened before {{ preview.variation.product.name }} {{ preview.variation.name }} had a recipe, so {{ "it" if preview.before_recipe == 1 else "they" }} will still use nothing from stock: a recipe counts from when it is saved.</p>
+    {% elif preview.incomplete %}<p class="small">Its recipe leaves something out, so part of these sales will still use nothing from stock.</p>{% endif %}
     <form method="post" action="/app/mappings/products/{{ preview.external.id }}/reprocess">{{ csrf_field(request) }}
       <input type="hidden" name="start" value="{{ preview.start.isoformat() }}">
       <button class="btn" type="submit">Reprocess {{ preview.sales }} sale{{ "" if preview.sales == 1 else "s" }}</button>

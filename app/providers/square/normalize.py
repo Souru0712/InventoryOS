@@ -189,6 +189,15 @@ def daily_sales_from_orders(
 # --- into the adapter contract's normalized types (T3.01, INTEGRATION_REQUIREMENTS §2) ----------
 
 _STATES = {"COMPLETED": "completed", "OPEN": "open", "CANCELED": "canceled", "DRAFT": "open"}
+# An order's refund is APPROVED once the money is given back: the Orders API never says COMPLETED
+# there (only the Refunds API does), as the T3.11 sandbox run showed.
+_REFUND_STATES = {
+    "APPROVED": "completed",
+    "COMPLETED": "completed",
+    "PENDING": "pending",
+    "REJECTED": "rejected",
+    "FAILED": "failed",
+}
 
 
 def _moment(stamp: str | None) -> datetime | None:
@@ -324,7 +333,7 @@ def to_order(raw: dict[str, Any]) -> NormalizedOrder:
             external_order_id=source_order,
             lines=items if len(raw_refunds) == 1 else (),
             amount_cents=_cents(refund.get("amount_money")),
-            status=(refund.get("status") or "COMPLETED").lower(),
+            status=_REFUND_STATES.get(refund.get("status") or "APPROVED", "pending"),
             occurred_at=_moment(refund.get("created_at")),
         )
         for refund in raw_refunds

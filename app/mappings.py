@@ -13,6 +13,7 @@ the last count of what the size uses, and never more than 30 days back (PD-17).
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
-from app.consumption import reprocess_sale, resolve_variation
+from app.consumption import reprocess_sale, resolve_variation, sale_moment
 from app.exceptions import clear
 from app.jobs import enqueue
 from app.ledger.history import counted_at
@@ -380,6 +381,7 @@ class Preview:
     units: Decimal
     uses: tuple[tuple[str, str], ...]  # (item, how much), what those sales would take from stock
     incomplete: bool  # the size's recipe leaves something out (no recipe, an unmade item)
+    before_recipe: int = 0  # sales from before the size had a recipe: they still use nothing
 
 
 def _today(db: Session, org: OrgContext, now: datetime) -> date:
@@ -437,16 +439,28 @@ def preview(
         start,
     )
     units = sum((Decimal(line.quantity) for _, line in pairs), Decimal(0))
-    used = resolve_variation(db, org, variation, units, now)
+    # Each sale reads the recipe in effect at its own moment, as the job will (DR-16): a recipe
+    # saved after a sale gives that sale nothing.
+    total: dict[int, Decimal] = defaultdict(Decimal)
+    incomplete = False
+    before_recipe: set[int] = set()
+    for transaction, line in pairs:
+        moment = sale_moment(db, org, transaction)
+        used = resolve_variation(db, org, variation, Decimal(line.quantity), moment)
+        for item_id, qty in used.uses.items():
+            total[item_id] += qty
+        incomplete = incomplete or bool(used.gaps)
+        if not used.versions:
+            before_recipe.add(transaction.id)
     items = {
         i.id: i
         for i in db.scalars(
-            select_scoped(org, InventoryItem).where(InventoryItem.id.in_(list(used.uses)))
+            select_scoped(org, InventoryItem).where(InventoryItem.id.in_(list(total)))
         )
     }
     uses = tuple(
         (items[item].name, format_qty(qty, items[item].display_unit))
-        for item, qty in sorted(used.uses.items(), key=lambda kv: items[kv[0]].name.casefold())
+        for item, qty in sorted(total.items(), key=lambda kv: items[kv[0]].name.casefold())
         if item in items
     )
     return Preview(
@@ -459,7 +473,8 @@ def preview(
         len({transaction.id for transaction, _ in pairs}),
         units,
         uses,
-        bool(used.gaps) and units > 0,
+        incomplete and units > 0,
+        len(before_recipe),
     )
 
 

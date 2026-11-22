@@ -50,7 +50,7 @@ ORDER = {
     "returns": [
         {"uid": "ret-1", "return_line_items": [{"source_line_item_uid": "line-a", "quantity": "1"}]}
     ],
-    "refunds": [{"id": "ref-1", "status": "COMPLETED", "amount_money": {"amount": 400}}],
+    "refunds": [{"id": "ref-1", "status": "APPROVED", "amount_money": {"amount": 400}}],
 }
 CREDENTIALS = Credentials("token", "refresh", None, "merchant-1")
 
