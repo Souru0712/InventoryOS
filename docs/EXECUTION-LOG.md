@@ -5,6 +5,86 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-22 — T3.11 Square sandbox run (recorded; step 16 waits for the business day to close)
+
+Run on this computer through the owner's ngrok tunnel (PD-52), against the sandbox seller
+"InventoryOS" (ML0A0YB948E8F), its own test account so the run shares no menu with JuJu or the
+Data Engineering project. App: `stage3` with a scratch SQLite database, scheduler in the web
+process, email off. The owner signed in and clicked Allow; test logins were entered on localhost.
+
+**Run** (times UTC; full notes in the run log kept with the run)
+
+| # | Result | Notes |
+|---|---|---|
+| 1 | pass | Catalog seeded at L4F1A4F8G5ZJ9; a second run creates nothing |
+| 2 | pass | Sandbox Run Cafe, location Main (America/New_York) |
+| 3 | pass | Connected to ML0A0YB948E8F; granted scopes exactly MERCHANT_PROFILE_READ, ITEMS_READ, ORDERS_READ. No consent screen here (the app was already authorized in the console); it showed at step 18 |
+| 4 | pass | Main tracks the Square location; 4 items, 5 variations, 3 modifiers; units `each`, `mg`; categories Coffee, Bakery, Pantry. The legacy hourly sync created no stock items this time |
+| 4b | pass | Added: a second Square location (Downtown) tracked by a second location; a latte sold at each took milk only at its own location (5,000 → 4,760 ml; 9,180 → 8,940 ml) |
+| 5 | pass | A second business connecting the same seller: "That Square account is already connected to another business"; the first connection and its token unaffected |
+| 6 | pass | Latte 12/16 oz and Croissant made the business's products (16 oz added as a size of Latte), modifiers mapped, audited; Latte 12 oz recipe milk 240 ml |
+| 7 | pass | Main switched to Square from 22 Nov; hand entry for that day refused |
+| 8 | pass | 2 × Latte 12 oz with oat milk: arrived by webhook in 3 s; milk −480 ml at the order's completion time; dashboard "Square sales last arrived 22 Nov 15:41 UTC" |
+| 9 | pass | The console cannot resend events: the order.created event, resent 3 times signed with the subscription key, answered `duplicate` each time; revision 1, milk unchanged; the scheduled re-read changed nothing |
+| 10 | pass | Forged signature 400, nothing stored |
+| 11 | pass | Open and cancelled orders staged; no sale, no consumption |
+| 12 | **fail → fixed**, pass on retest | Defect (T3.06): see Fixed. Retest 20:31: $2.50 refund recorded in 6 s, linked to its sale, net 20.50 → 18.00, stock unchanged |
+| 13 | pass | Comp: 240 ml used, net 0 |
+| 14 | **pass after fix** | Defect (T3.04): see Fixed. With a recipe in effect, the remapped sale posted once at its own time (−100 ml); `unmapped_product` opened and resolved on mapping |
+| 15 | pass | Subscription disabled; the sale arrived by the 5-minute read 2 minutes after completion; re-enabled |
+| 16 | **pending** | 22 Nov closes at 05:00 UTC; needs the connection back (it was disconnected at step 18) |
+| 17 | pass (method changed) | The sandbox dashboard has no apps page, and the console revokes only its own token: the authorization was revoked through Square's API from outside the app. `oauth.authorization.revoked` arrived in 12 s: connection revoked, critical `sync_failure`, Owner email logged, dashboard "Square stopped accepting the connection" |
+| 18 | pass | Reconnect showed Square's consent screen (InventoryOS account, three read permissions); Allow resolved the exception; reads resumed. Disconnect: tokens cleared, history kept, Square's revocation event ignored |
+
+`pos-report` at the end: connection disconnected; 2 Square locations, 2 tracked; catalog 4 items,
+5 variations, 3 modifiers; orders canceled 1, completed 9 (2 of them return orders), open 1, 7
+became sales; refunds 1 recorded, 0 unmatched; sales 7 (lines gap 2, posted 5); money sales
+34.75, refunded 2.50, net 32.25; webhook events order.created 10, order.updated 24, revocation 1
+processed; payment and refund events ignored.
+
+**Answers to the runbook's questions**
+- **Refund shape:** Square puts a refund on a new *return order* (state COMPLETED, `returns` naming
+  the source order, `refunds` with the money); the original order gets neither. The Orders API's
+  refund status is APPROVED, never COMPLETED.
+- **Categories:** `reporting_category` reached the external products.
+- **Completion:** a paid order with no fulfilment completed on payment.
+
+**Fixed** (commit e317fd2, with tests)
+- Square's APPROVED refunds were never recorded: the normalizer now reads APPROVED (and COMPLETED)
+  as completed; the recorded fixtures used COMPLETED, which Square does not send there.
+- The reprocess preview resolved recipes at the present moment while the job uses each sale's own
+  moment (DR-16), so it promised stock use the job never posted. It now resolves per sale and says
+  how many sales predate the size's recipe.
+- Run kit (commit 0f2f5cc): `--location` and `location NAME` in the sandbox script.
+
+**Verified**
+- The run above. Suites touching the changes (184 tests), ruff, mypy, docs checker.
+
+**Decisions for the owner**
+- **PD-53 (new):** may a size's first recipe cover sales made before it was saved? Built: no
+  (DR-16); a sale of a product made from Square before it had a recipe stays a gap, and its
+  exception can only be dismissed.
+- Still open: PD-43 to PD-52.
+
+**Open issues**
+- Step 16 (daily check) after 22 Nov closes: reconnect, run `reconcile_orders`, record.
+- The refund from the first attempt at step 12 stays unrecorded: the computer slept through the
+  hourly re-read, and the 2-hour window no longer reaches it.
+- Revoking at Square also ended the console token the sandbox script uses; renew it in the console
+  before placing more orders.
+- Findings for later tasks:
+  - the hand-entry refusal names the source "pos";
+  - the hand-entry form still shows on a POS day;
+  - a size made from Square carries no price;
+  - cost per ml displays as $0.00;
+  - the suggested size appears twice in the mapping menu;
+  - a comp sale stores no discount;
+  - the reprocess start ignores the opening count;
+  - return orders count as completed orders in `pos-report` and on the connection page;
+  - the header still says StockPulse.
+
+---
+
 ## 2026-11-21 — T3.11 run kit prepared (the run itself waits for the owner)
 
 **Implemented**
