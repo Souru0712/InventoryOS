@@ -73,6 +73,19 @@ def test_orders_are_built_from_skus_and_modifier_keys():
         kit.parse_lines(["LATTE-12:1:soy"])
 
 
+def test_a_location_is_picked_by_name_or_id_and_only_an_active_one():
+    places = [
+        {"id": "L1", "name": "InventoryOS"},
+        {"id": "L2", "name": "Downtown"},
+        {"id": "L3", "name": "Closed", "status": "INACTIVE"},
+    ]
+    assert kit.pick_location(places, None) == ("L1", "InventoryOS")
+    assert kit.pick_location(places, "downtown") == ("L2", "Downtown")
+    assert kit.pick_location(places, "L2") == ("L2", "Downtown")
+    with pytest.raises(SystemExit, match="no active location 'Closed'"):
+        kit.pick_location(places, "Closed")
+
+
 def test_the_script_drives_only_a_sandbox_and_never_without_a_token(monkeypatch):
     monkeypatch.delenv("SQUARE_SANDBOX_ACCESS_TOKEN", raising=False)
     monkeypatch.setattr(kit, "from_env_file", lambda _key: "")

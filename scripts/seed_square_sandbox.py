@@ -11,6 +11,8 @@ run needs: paid ones that complete, an open one, a cancelled one, and refunds.
     python scripts/seed_square_sandbox.py cancel LATTE-12:1                # created, then cancelled
     python scripts/seed_square_sandbox.py refund ORDER_ID --cents 250      # money back on a sale
     python scripts/seed_square_sandbox.py orders                           # the latest, by state
+    python scripts/seed_square_sandbox.py location Downtown                # a second location
+    python scripts/seed_square_sandbox.py --location Downtown sell LATTE-12:1
 
 The token is the sandbox seller's (Developer Dashboard -> app -> Sandbox -> Credentials ->
 "Sandbox Access token"), from SQUARE_SANDBOX_ACCESS_TOKEN in the environment or .env, or --token.
@@ -228,12 +230,23 @@ class Square:
         self._client.close()
 
 
-def main_location(square: Square) -> tuple[str, str]:
-    locations = square.call("GET", "/v2/locations").get("locations") or []
+def pick_location(locations: list[dict], wanted: str | None) -> tuple[str, str]:
+    """The active location named or numbered `wanted`, else the first active one."""
     active = [row for row in locations if row.get("status", "ACTIVE") == "ACTIVE"]
     if not active:
         raise SystemExit("this sandbox account has no active location")
+    if wanted:
+        key = wanted.casefold()
+        found = [r for r in active if key in (r["id"].casefold(), (r.get("name") or "").casefold())]
+        if not found:
+            names = ", ".join(r.get("name") or r["id"] for r in active)
+            raise SystemExit(f"no active location {wanted!r}; there are: {names}")
+        active = found
     return active[0]["id"], active[0].get("name") or active[0]["id"]
+
+
+def main_location(square: Square, wanted: str | None = None) -> tuple[str, str]:
+    return pick_location(square.call("GET", "/v2/locations").get("locations") or [], wanted)
 
 
 def catalog_ids(square: Square) -> tuple[dict[str, str], dict[str, str], set[str]]:
@@ -292,7 +305,19 @@ def _report(order: dict) -> None:
 
 
 def run(args: argparse.Namespace, square: Square) -> int:
-    location, name = main_location(square)
+    if args.command == "location":
+        places = square.call("GET", "/v2/locations").get("locations") or []
+        held = [p for p in places if (p.get("name") or "").casefold() == args.name.casefold()]
+        made = (
+            held[0]
+            if held
+            else square.call("POST", "/v2/locations", json={"location": {"name": args.name}})[
+                "location"
+            ]
+        )
+        print(f"location {made.get('name')} ({made['id']}){' already there' if held else ''}")
+        return 0
+    location, name = main_location(square, getattr(args, "location", None))
     if args.command == "catalog":
         variations, _modifiers, lists = catalog_ids(square)
         objects = catalog_objects(set(variations), lists)
@@ -373,7 +398,10 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--token", help="sandbox access token; else SQUARE_SANDBOX_ACCESS_TOKEN")
+    parser.add_argument("--location", help="the seller location's name or id (default: first)")
     sub = parser.add_subparsers(dest="command", required=True)
+    place = sub.add_parser("location", help="add a location to the seller (once per name)")
+    place.add_argument("name")
     catalog = sub.add_parser("catalog", help="create the café catalog")
     catalog.add_argument("--dry-run", action="store_true", help="say what it would create")
     for name, text in (
