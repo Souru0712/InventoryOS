@@ -5,7 +5,7 @@ issues · decisions · next task.
 
 ---
 
-## 2026-11-22 — T3.11 Square sandbox run (recorded; step 16 waits for the business day to close)
+## 2026-11-25 — T3.11 Square sandbox run (every step passing; run 22–25 Nov)
 
 Run on this computer through the owner's ngrok tunnel (PD-52), against the sandbox seller
 "InventoryOS" (ML0A0YB948E8F), its own test account so the run shares no menu with JuJu or the
@@ -32,7 +32,7 @@ process, email off. The owner signed in and clicked Allow; test logins were ente
 | 13 | pass | Comp: 240 ml used, net 0 |
 | 14 | **pass after fix** | Defect (T3.04): see Fixed. With a recipe in effect, the remapped sale posted once at its own time (−100 ml); `unmapped_product` opened and resolved on mapping |
 | 15 | pass | Subscription disabled; the sale arrived by the 5-minute read 2 minutes after completion; re-enabled |
-| 16 | **pending** | 22 Nov closes at 05:00 UTC; needs the connection back (it was disconnected at step 18) |
+| 16 | pass (25 Nov) | Reconnected (consent screen, Allow), then the `reconcile_orders` job: sync history "Daily check · OK · 6 day(s) checked, 0 differed": Main and Downtown, 22–24 Nov; 22 Nov Main 8 orders and 6 lines at Square and here, Downtown 1 and 1; no `pos_reconciliation_mismatch` |
 | 17 | pass (method changed) | The sandbox dashboard has no apps page, and the console revokes only its own token: the authorization was revoked through Square's API from outside the app. `oauth.authorization.revoked` arrived in 12 s: connection revoked, critical `sync_failure`, Owner email logged, dashboard "Square stopped accepting the connection" |
 | 18 | pass | Reconnect showed Square's consent screen (InventoryOS account, three read permissions); Allow resolved the exception; reads resumed. Disconnect: tokens cleared, history kept, Square's revocation event ignored |
 
@@ -67,7 +67,7 @@ processed; payment and refund events ignored.
 - Still open: PD-43 to PD-52.
 
 **Open issues**
-- Step 16 (daily check) after 22 Nov closes: reconnect, run `reconcile_orders`, record.
+- The run leaves Sandbox Run Cafe connected again (step 16 needed it).
 - The refund from the first attempt at step 12 stays unrecorded: the computer slept through the
   hourly re-read, and the 2-hour window no longer reaches it.
 - Revoking at Square also ended the console token the sandbox script uses; renew it in the console
