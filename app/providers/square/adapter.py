@@ -86,7 +86,10 @@ class SquareAdapter:
     def sync_catalog(self, credentials: Credentials, since: datetime | None = None) -> Catalog:
         with SquareClient(credentials.access_token) as client:
             try:
-                raw = client.catalog_objects(("ITEM", "MODIFIER_LIST", "CATEGORY"))
+                # MEASUREMENT_UNIT carries a variation's unit (a milligram stays mg, SQ8).
+                raw = client.catalog_objects(
+                    ("ITEM", "MODIFIER_LIST", "CATEGORY", "MEASUREMENT_UNIT")
+                )
             except SquareError as exc:
                 raise _api_failed(exc) from exc
         return Catalog(to_products(raw), to_modifiers(raw))

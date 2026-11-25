@@ -305,12 +305,15 @@ def read_recently(db: Session, org: OrgContext, now: datetime | None = None) -> 
     return bool(last and now - last.started_at < CATALOG_DEBOUNCE)
 
 
-def refresh_catalog(db: Session, org: OrgContext, now: datetime | None = None) -> dict[str, int]:
-    """Read each active connection's locations and catalog through its adapter, as a catalog
-    change asks (SQ-07). The legacy rows follow with the hourly sync until T3.12. A revoked
-    authorization is marked, not retried; a passing failure raises so the job tries again."""
+def refresh_catalog(
+    db: Session, org: OrgContext, now: datetime | None = None, *, force: bool = False
+) -> dict[str, int]:
+    """Read each active connection's locations and catalog through its adapter: as a catalog
+    change asks (SQ-07), hourly as a job, and at once when someone asks (`force`). A burst of
+    events reads once. A revoked authorization is marked, not retried; a passing failure raises
+    so the job tries again."""
     now = now or datetime.now(UTC)
-    if read_recently(db, org, now):
+    if not force and read_recently(db, org, now):
         return {"skipped": 1}
     totals: dict[str, int] = {}
     for connection in db.scalars(

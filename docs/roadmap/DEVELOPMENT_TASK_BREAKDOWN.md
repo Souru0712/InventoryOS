@@ -105,7 +105,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T3.09 | Integration health and sales-source status | P1 | S | M5 | T3.08 | Built on branch, not merged (per-location status on the dashboard: Connected health with a stale warning after 2 h, Standalone last day and missing days; health table on the connection page; PD-49 proposed) |
 | T3.10 | Mode switching with cutover | P1 | M | M5 | T3.05, T2.12 | Built on branch, not merged (one cutover for both directions: old source stops, its sales from D voided, the new source's counted; the cutover sticks; Owner-only previewed switch; onboarding step 8; PD-50, PD-51 proposed) |
 | T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Built on branch, not merged (run recorded 22–25 Nov locally through the owner's ngrok tunnel, every step passing; two defects found and fixed on the branch; PD-53 proposed) |
-| T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Not started |
+| T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Built on branch, not merged (`run_sync` and the hourly read are adapter catalog reads, the hourly one a job per business; no code path writes POS daily totals, sale items or POS-counted stock items, or reads Square's counts; MEASUREMENT_UNIT added to the adapter's read; ADR-0085) |
 | T4.01 | Plan and entitlement data model (C-41) | P1 | M | M6 | T1.06 | Not started |
 | T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Not started |
 | T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Not started |

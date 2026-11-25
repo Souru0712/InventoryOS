@@ -55,6 +55,7 @@ from app.transform.items import (
     clean_name,
     display_unit_for,
     known_item_type,
+    slugify,
     unique_slug,
 )
 from app.units import Dimension, UnitError, to_base
@@ -280,8 +281,6 @@ def _quantity(raw: str, unit: str) -> Decimal:
 
 def create_item(db: Session, org: OrgContext, new: NewItem, ip: str | None = None) -> InventoryItem:
     """An item stocked at the chosen locations, each with an opening count (AC-INV-01)."""
-    from app.load.upsert import slugify
-
     name = clean_name(new.name)
     try:
         dimension = Dimension(new.dimension)

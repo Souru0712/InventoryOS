@@ -7,6 +7,7 @@ so it becomes its own item with the dimension in its slug.
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 
 from app.units import BASE_UNIT, UNITS, Dimension
@@ -63,6 +64,12 @@ def check_levels(reorder: Decimal, par: Decimal | None, minimum: Decimal | None)
         raise ItemRuleError("Levels cannot be negative.")
     if par is not None and (par < reorder or (minimum is not None and par < minimum)):
         raise ItemRuleError("Par is the most you keep: set it at or above the other levels.")
+
+
+def slugify(text: str) -> str:
+    """Lower-case letters and digits joined by hyphens, at most 160 characters."""
+    slug = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    return slug[:160] or "item"
 
 
 def unique_slug(base: str, taken: set[str]) -> str:

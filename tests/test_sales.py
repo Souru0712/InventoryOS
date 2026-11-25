@@ -10,7 +10,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.access import OrgContext
-from app.load.upsert import upsert_sales_daily
 from app.models import (
     ExceptionRecord,
     SalesReturn,
@@ -18,7 +17,15 @@ from app.models import (
     SoldItem,
 )
 from app.products import NewVariation, create_product, save_modifier
-from app.sales import add_source, daily_sales, record_sale, source_of_record, stop_source
+from app.sales import (
+    DayOfSales,
+    add_source,
+    daily_sales,
+    record_daily_pos_sales,
+    record_sale,
+    source_of_record,
+    stop_source,
+)
 from app.transform.sales import (
     SaleLine,
     SalesRuleError,
@@ -164,42 +171,22 @@ def test_a_sale_belongs_to_its_locations_business_day(db, tenant, location):
 # --- the legacy daily feed and the freeze (DM-7) -----------------------------------------------
 
 
-def test_the_legacy_square_feed_becomes_daily_transactions(db, tenant, location):
+def test_a_daily_pos_feed_becomes_daily_transactions(db, tenant, location):
+    """The daily feed the demo seeds (and the legacy Square sync wrote until T3.12)."""
     location.provider_location_id = "SQ-LOC"
-    db.add(SoldItem(tenant_id=tenant.id, provider_item_id="VAR-1", name="Latte - 12 oz"))
-    db.commit()
-    rows = [
-        {
-            "provider_location_id": "SQ-LOC",
-            "provider_item_id": "VAR-1",
-            "dt": DAY - timedelta(1),
-            "units": D(5),
-            "gross_cents": 2000,
-            "net_cents": 1900,
-        },
-        {
-            "provider_location_id": "SQ-LOC",
-            "provider_item_id": "VAR-1",
-            "dt": DAY,
-            "units": D(7),
-            "gross_cents": 2800,
-            "net_cents": 2700,
-        },
-        {
-            "provider_location_id": "SQ-ELSEWHERE",
-            "provider_item_id": "VAR-1",
-            "dt": DAY,
-            "units": D(9),
-            "gross_cents": 0,
-            "net_cents": 0,
-        },
-    ]
-    assert upsert_sales_daily(db, tenant.id, rows) == 2
-    assert upsert_sales_daily(db, tenant.id, rows) == 0  # the next sync: nothing new
-    rows[1]["units"] = D(8)
-    assert upsert_sales_daily(db, tenant.id, rows) == 1  # the day changed: its next revision
+    latte = SoldItem(tenant_id=tenant.id, provider_item_id="VAR-1", name="Latte - 12 oz")
+    db.add(latte)
     db.commit()
     org = OrgContext.system(tenant.id)
+    days = [
+        DayOfSales(location.id, DAY - timedelta(1), latte, D(5), 2000, 1900),
+        DayOfSales(location.id, DAY, latte, D(7), 2800, 2700),
+    ]
+    assert record_daily_pos_sales(db, org, "square", days) == 2
+    assert record_daily_pos_sales(db, org, "square", days) == 0  # the same again: nothing new
+    days[1] = DayOfSales(location.id, DAY, latte, D(8), 2800, 2700)
+    assert record_daily_pos_sales(db, org, "square", days) == 1  # the day changed: a revision
+    db.commit()
     sold = db.scalars(select(SoldItem)).one()
     assert sorted((s.day, s.units, s.sold_item_id) for s in daily_sales(db, org)) == [
         (DAY - timedelta(1), D("5.0000"), sold.id),

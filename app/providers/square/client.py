@@ -16,7 +16,6 @@ log = logging.getLogger(__name__)
 
 RETRY_STATUS = {429, 500, 502, 503, 504}
 MAX_ATTEMPTS = 4
-BATCH_SIZE = 250
 
 
 ORDER_SEARCH_LOCATIONS = 10
@@ -104,18 +103,6 @@ class SquareClient:
         """Items with their variations attached as related objects."""
         body = {"object_types": list(types), "include_related_objects": True, "limit": 200}
         return list(self._paginate("POST", "/v2/catalog/search", body, "objects"))
-
-    def inventory_counts(
-        self, catalog_object_ids: list[str], location_ids: list[str]
-    ) -> list[dict]:
-        counts: list[dict] = []
-        for start in range(0, len(catalog_object_ids), BATCH_SIZE):
-            chunk = catalog_object_ids[start : start + BATCH_SIZE]
-            body = {"catalog_object_ids": chunk, "location_ids": location_ids}
-            counts.extend(
-                self._paginate("POST", "/v2/inventory/counts/batch-retrieve", body, "counts")
-            )
-        return counts
 
     def orders(self, location_ids: list[str], start_at: datetime, end_at: datetime) -> list[dict]:
         """Orders changed in the window, open, completed or cancelled (SQ-11): an incremental

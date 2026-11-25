@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from app import order_ingestion
+from app import order_ingestion, pos_catalog
 from app.access import OrgContext
 from app.access.permissions import role_permissions
 from app.db import SessionLocal
@@ -34,11 +34,13 @@ from app.order_ingestion import BACKFILL_DAYS, OVERLAP, ingest_orders
 from app.products import NewVariation, create_product, save_modifier
 from app.providers.base import (
     AdapterError,
+    Credentials,
     LineModifier,
     NormalizedOrder,
     NormalizedOrderLine,
     OrderPage,
 )
+from app.providers.square import adapter as square_adapter
 from app.providers.square.client import SquareClient
 from app.recipes import NewLine, Owner, save_recipe
 from app.sales import DayOfSales, record_daily_pos_sales
@@ -305,8 +307,10 @@ def test_the_hourly_sync_reads_no_orders(db, tenant, shop, monkeypatch):
         def orders(self, *_args):
             raise AssertionError("order lines own the sales (T3.05)")
 
-    monkeypatch.setattr(sync, "SquareClient", Client)
-    monkeypatch.setattr(sync, "_access_token", lambda *_: "token")
+    monkeypatch.setattr(square_adapter, "SquareClient", Client)
+    monkeypatch.setattr(
+        pos_catalog, "credentials", lambda *_a, **_k: Credentials("token", None, None, "M-1")
+    )
     assert "sales_rows" not in sync.run_sync(db, OrgContext.system(tenant.id))
 
 

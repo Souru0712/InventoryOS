@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, get_scoped, select_scoped
 from app.costs import history
 from app.models import (
+    ExternalProduct,
     InventoryItem,
     ItemCostHistory,
     Location,
@@ -316,8 +317,14 @@ def sold_without_recipe(
     variations = {v.id: v for v in by_sold.values()}
     for v in db.scalars(select_scoped(org, ProductVariation)):
         variations.setdefault(v.id, v)
-    # Keyed by the owned size where the line names one, else by the POS sale item.
-    units: dict[tuple[str, int], Decimal] = {}
+    # A POS product with no size of ours is named as the POS lists it (T3.12).
+    external = {
+        p.external_variation_id: f"{p.name} {p.variation_name}".strip()
+        for p in db.scalars(select_scoped(org, ExternalProduct))
+    }
+    # Keyed by the owned size where the line names one, else by the POS sale item, else by
+    # the POS's own id.
+    units: dict[tuple[str, int | str], Decimal] = {}
     for place in db.scalars(select_scoped(org, Location).where(Location.is_active.is_(True))):
         today = business_date(now, place.timezone, place.business_day_cutoff_hour)
         first, last = span.days_at(today)
@@ -332,14 +339,22 @@ def sold_without_recipe(
                 and (place.id, provider_ids.get(sale.sold_item_id)) in counted_by_pos
             ):
                 continue
-            key = ("v", variation.id) if variation else ("s", sale.sold_item_id or 0)
+            key: tuple[str, int | str]
+            if variation:
+                key = ("v", variation.id)
+            elif sale.sold_item_id is None and sale.external_ref:
+                key = ("x", sale.external_ref)
+            else:
+                key = ("s", sale.sold_item_id or 0)
             if sale.units > 0:
                 units[key] = units.get(key, Decimal(0)) + sale.units
     found = []
     for (kind, ident), count in units.items():
         if kind == "v":
-            size = variations[ident]
+            size = variations[int(ident)]
             found.append(Unrecipied(f"{size.product.name} {size.name}", size.id, count))
+        elif kind == "x":
+            found.append(Unrecipied(external.get(str(ident)) or "A POS item", None, count))
         else:
-            found.append(Unrecipied(names.get(ident, "A POS item"), None, count))
+            found.append(Unrecipied(names.get(int(ident), "A POS item"), None, count))
     return sorted(found, key=lambda u: (-u.units, u.name))

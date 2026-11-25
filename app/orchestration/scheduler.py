@@ -28,7 +28,6 @@ from app.jobs import drain, enqueue
 from app.observability import log_context, new_request_id
 from app.orchestration.health import record_snapshot
 from app.orchestration.subscriptions import expire_due_trials
-from app.orchestration.sync import run_sync
 from app.throttle import prune
 
 log = logging.getLogger(__name__)
@@ -38,17 +37,20 @@ LOCK_CHECK_SECONDS = 60
 STANDBY_POLL_SECONDS = 30
 
 
-def sync_all_tenants() -> None:
+def queue_catalog_refresh() -> None:
+    """Re-read each connected business's POS catalog and locations as a job (T3.12, ADR-0085):
+    what a missed catalog event left behind is caught within the hour, one business at a time."""
     with session_scope() as db:
         tenant_ids = connected_tenant_ids(db)
     for tenant_id in tenant_ids:
         with log_context(tenant_id=tenant_id):
             try:
                 with session_scope() as db:
-                    stats = run_sync(db, OrgContext.system(tenant_id))
-                log.info("synced tenant %s: %s", tenant_id, stats)
+                    enqueue(
+                        db, OrgContext.system(tenant_id), "refresh_catalog", dedupe_key="catalog"
+                    )
             except Exception:
-                log.exception("scheduled sync failed for tenant %s", tenant_id)
+                log.exception("could not queue a catalog read for tenant %s", tenant_id)
 
 
 def queue_order_ingestion() -> None:
@@ -238,10 +240,10 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         id="queue_order_reconciliation",
     )
     scheduler.add_job(
-        _job(sync_all_tenants),
+        _job(queue_catalog_refresh),
         "interval",
         minutes=settings.sync_interval_minutes,
-        id="sync_all_tenants",
+        id="queue_catalog_refresh",
         max_instances=1,
         coalesce=True,
     )

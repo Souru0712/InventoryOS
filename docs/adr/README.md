@@ -116,3 +116,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0082](0082-reconciliation-and-failure-recovery.md) | Reconciliation and failure recovery | T3.08 | Proposed |
 | [ADR-0083](0083-integration-health-and-sales-source-status.md) | Integration health and sales-source status | T3.09 | Proposed |
 | [ADR-0084](0084-mode-switching-with-cutover.md) | Mode switching with a cutover business date | T3.10 | Proposed |
+| [ADR-0085](0085-legacy-square-sync-removed.md) | Legacy Square sync removed; the hourly catalog read is a job | T3.12 | Proposed |

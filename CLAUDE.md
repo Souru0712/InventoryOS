@@ -130,7 +130,12 @@ implementation sessions; the detail lives in `docs/`.
 - What a POS reports is written only by `app/pos_catalog.py` (ADR-0077): external locations,
   products (per variation) and modifiers, unique per (connection, external id), never deleted
   (unlisted → inactive). The sync never creates a location: a POS location is tracked by one of
-  the business's locations (`provider_location_id`) through `track_location()`.
+  the business's locations (`provider_location_id`) through `track_location()`. The catalog is
+  read only through the adapter by `refresh_catalog()`: a catalog event or the hourly
+  `queue_catalog_refresh` queues it as a job, and `run_sync` ("Sync now", connecting) forces it.
+  The legacy sync is gone (T3.12, ADR-0085): nothing writes `sold_items`, POS daily totals
+  (the demo seed apart) or POS-counted stock items, and Square's counts are never read; a test
+  enforces it.
 - POS mappings are written only by `app/mappings.py` (ADR-0078): one active mapping per
   external product or modifier, a change supersedes it; new POS sales take their size from it
   (`mapped_variations()`). Past sales change only by a previewed reprocessing job
@@ -141,7 +146,7 @@ implementation sessions; the detail lives in `docs/`.
   orders from the cursor (less an overlap) through the adapter; a completed order at a tracked
   location is one sale via `record_pos_order()`, a line per uid, so a resend is a revision.
   Business dates from the cursor's `lines_from` are order lines; earlier days keep their daily
-  totals. The hourly `run_sync` reads no orders.
+  totals.
 - Provider webhooks are stored once by event id before anything acts on them, only through
   `app/webhook_events.py` (ADR-0080); the route answers at once: order and catalog events queue
   `ingest_orders` / `refresh_catalog`, which mark their events processed when they succeed.
@@ -197,7 +202,7 @@ implementation sessions; the detail lives in `docs/`.
 - What a business sells is its own catalog (C-36, ADR-0050): `products`, `product_variations`
   (sizes, informational price) and `modifiers` (none, scale, add), changed only through
   `app/products.py` and never deleted. A POS catalog is mapped onto it (T3.03, T3.04); the
-  Square sync writes `sold_items` and the external catalog only. A price is money: behind
+  Square sync writes the external catalog only. A price is money: behind
   `inventory.view_costs`.
 - Recipes are versioned (ADR-0051): `recipes`, `recipe_versions`, `recipe_lines`, written only
   by `app/recipes.py` (`save_recipe()`). Versions and lines are append-only: an edit is the

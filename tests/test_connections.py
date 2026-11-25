@@ -28,9 +28,18 @@ from app.crypto import decrypt
 from app.db import Base, SessionLocal, engine
 from app.jobs import drain
 from app.main import app
-from app.models import AuditEvent, ExceptionRecord, Membership, ProviderConnection, Tenant, User
+from app.models import (
+    AuditEvent,
+    ExceptionRecord,
+    Membership,
+    ProviderConnection,
+    SyncRun,
+    Tenant,
+    User,
+)
 from app.orchestration import sync
-from app.providers.base import Credentials
+from app.providers.base import AdapterError, Credentials
+from app.providers.square import adapter as square_adapter
 from app.providers.square import oauth
 from app.providers.square.client import SquareError
 from app.providers.square.webhooks import signature_for
@@ -350,14 +359,15 @@ def test_square_refusing_the_sync_marks_the_connection_revoked(db, tenant, squar
         def locations(self):
             raise SquareError("GET", "/v2/locations", status["code"], "{}")
 
-    monkeypatch.setattr(sync, "SquareClient", RefusingClient)
-    with pytest.raises(SquareError):
+    monkeypatch.setattr(square_adapter, "SquareClient", RefusingClient)
+    with pytest.raises(AdapterError):
         sync.run_sync(db, org)
     assert connection_of(db, tenant.id).status == "active", "a passing failure is not revocation"
+    failed = db.scalars(select(SyncRun)).one()
+    assert (failed.kind, failed.status.value) == ("catalog", "failed"), "kept for the history"
 
     status["code"] = 401
-    with pytest.raises(SquareError):
-        sync.run_sync(db, org)
+    assert sync.run_sync(db, org) == {"revoked": 1}, "marked, not retried"
     assert connection_of(db, tenant.id).status == "revoked"
     assert sync_failures(db)[0].severity == "critical"
 

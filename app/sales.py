@@ -354,6 +354,7 @@ class DailySale:
     product_variation_id: int | None
     units: Decimal
     net_cents: int
+    external_ref: str | None = None  # the POS's id, for a line that is neither of the above
 
 
 def daily_sales(
@@ -400,17 +401,25 @@ def daily_sales(
             sold_item = sold.get((provider, line.external_ref)) if line.external_ref else None
             if sold_item is None and line.product_variation_id is not None:
                 sold_item = from_sold.get(line.product_variation_id)
+            # A POS line that is neither one of our sizes nor a legacy sale item keeps the POS's
+            # own id, so each unmapped product stays apart (T3.12: no new sale items).
+            ref = (
+                line.external_ref
+                if sold_item is None and line.product_variation_id is None
+                else None
+            )
             key = (
                 transaction.location_id,
                 transaction.business_date,
                 sold_item,
                 line.product_variation_id,
+                ref,
             )
             totals[key][0] += Decimal(line.quantity)
             totals[key][1] += line.net_cents or 0
     return [
-        DailySale(location, day, sold_item, variation, units, net)
-        for (location, day, sold_item, variation), (units, net) in totals.items()
+        DailySale(location, day, sold_item, variation, units, net, ref)
+        for (location, day, sold_item, variation, ref), (units, net) in totals.items()
     ]
 
 
@@ -419,8 +428,8 @@ def daily_sales(
 
 @dataclass(frozen=True)
 class DayOfSales:
-    """One POS sale item's sales at a location on a day, as the legacy Square sync and the demo
-    produce them."""
+    """One POS sale item's sales at a location on a day, as the demo produces them (the legacy
+    Square sync that also did is gone, T3.12; its days stay as history)."""
 
     location_id: int
     day: date

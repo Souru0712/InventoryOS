@@ -5,6 +5,55 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-25 — T3.12 Remove the legacy Square sync path (built on branch)
+
+**Implemented**
+- **`run_sync`** (connecting, "Sync now", `cli sync`) is now a forced `refresh_catalog()`
+  through the adapter. A failed read stays in the sync history, and a 401 marks the connection
+  revoked.
+- **The hourly read:** the scheduler's per-tenant `sync_all_tenants` loop is replaced by
+  `queue_catalog_refresh`, one `refresh_catalog` job per connected business (SCL-06). Exceptions
+  and the digest stay with the evaluation job.
+- **Removed:**
+  - `_pull_catalog` and the legacy catalog rows (sale items, POS-counted stock items, Square SKUs
+    and prices on them, presence);
+  - Square count reads (`inventory_counts`, `normalize_counts`, `apply_provider_counts`);
+  - the count-webhook handling: `inventory.count.updated` is now stored once and ignored;
+  - the daily-totals writer `upsert_sales_daily` and its aggregator `daily_sales_from_orders`;
+  - `app/load/`. Its `slugify` moved to `app/transform/items.py`.
+- **Fixed:** the adapter's catalog read now asks for MEASUREMENT_UNIT objects. Without them,
+  Saffron's `mg` flipped back and forth between the two paths in the T3.11 run, and would have
+  been lost once only the adapter read the catalog.
+- **Unmapped Square products:** `daily_sales()` keeps a POS line's own id when the line is
+  neither a size nor a legacy sale item. "Sold without a recipe" and the completeness note name
+  and count each unmapped Square product from the external catalog, instead of lumping them as
+  "A POS item".
+
+**Verified**
+- **`tests/test_legacy_sync_removed.py` (5):**
+  - a sync writes only the external catalog and never reads counts, even with write-back on;
+  - "Sync now" reads at once while events are debounced;
+  - the hourly job is queued per business and merged, and the old loop is gone;
+  - unmapped products are named from the catalog;
+  - a static check that nothing writes the legacy rows (the acceptance).
+- **Rewritten onto the adapter path:** catalog, connection, webhook, sales, normalizer and
+  ingestion tests.
+- **Removed:** `tests/test_square_catalog.py`, which covered only the legacy rows.
+- Full suite, ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0085 (Proposed).
+
+**Decisions for the owner**
+- None new. Still open: PD-43 to PD-53.
+
+**Open issues**
+- Square barcodes and prices are no longer copied onto stock items. They applied only to
+  POS-counted items, which C-34 and C-38 retired. Existing rows stay as history.
+- T3.11's smaller findings are unchanged; candidates for a later Stage 3 or Stage 4 task.
+
+---
+
 ## 2026-11-25 — T3.11 Square sandbox run (every step passing; run 22–25 Nov)
 
 Run on this computer through the owner's ngrok tunnel (PD-52), against the sandbox seller

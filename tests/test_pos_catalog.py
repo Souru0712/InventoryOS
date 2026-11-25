@@ -1,6 +1,7 @@
 """T3.03: location mapping and the external catalog (POS-FR-03, POS-FR-04, SQ-05..09, G11, DM-13).
 
-Square is replaced at its client with recorded-shape payloads; nothing reaches the network.
+Square is replaced at its client, inside the adapter, with recorded-shape payloads; nothing reaches
+the network.
 """
 
 import re
@@ -11,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app import order_ingestion
+from app import order_ingestion, pos_catalog
 from app.access import OrgContext
 from app.db import Base, SessionLocal, engine
 from app.main import app
@@ -27,7 +28,8 @@ from app.models import (
 from app.orchestration import sync
 from app.order_ingestion import ingest_orders
 from app.pos_catalog import MappingError, NotFound, Summary, summary, track_location
-from app.providers.base import OrderPage
+from app.providers.base import Credentials, OrderPage
+from app.providers.square import adapter as square_adapter
 from tests.accounts import confirm_email
 
 CATALOG = [
@@ -126,12 +128,19 @@ class FakeSquare:
         self.types = types
         return self.objects
 
-    def inventory_counts(self, *_args):
-        return []
-
     def orders(self, location_ids, _start, _end):
         self.order_locations.append(list(location_ids))
         return []
+
+
+def held(*_args, **_kwargs) -> Credentials:
+    """A connection's credentials, without decrypting anything."""
+    return Credentials("token", None, None, "M-1")
+
+
+def read(db, org) -> dict[str, int]:
+    """Read the catalog now, as connecting or "Sync now" does (the hourly job is debounced)."""
+    return pos_catalog.refresh_catalog(db, org, force=True)
 
 
 @pytest.fixture
@@ -144,8 +153,8 @@ def square(db, tenant, location, monkeypatch):
     db.add(connection)
     db.commit()
     fake = FakeSquare()
-    monkeypatch.setattr(sync, "SquareClient", fake)
-    monkeypatch.setattr(sync, "_access_token", lambda *_: "token")
+    monkeypatch.setattr(square_adapter, "SquareClient", fake)
+    monkeypatch.setattr(pos_catalog, "credentials", held)
     return connection, fake
 
 
@@ -166,9 +175,10 @@ def test_a_catalog_with_modifiers_imports_with_its_units_and_a_resync_changes_no
     db, tenant, square
 ):
     connection, fake = square
-    sync.sync_catalog(db, org_of(tenant))
+    read(db, org_of(tenant))
     db.commit()
     assert "MODIFIER_LIST" in fake.types
+    assert "MEASUREMENT_UNIT" in fake.types, "a variation's unit lives in its own object"
 
     products = {p.external_variation_id: p for p in db.scalars(select(ExternalProduct))}
     assert set(products) == {"var-12", "var-16", "var-saffron"}
@@ -187,7 +197,7 @@ def test_a_catalog_with_modifiers_imports_with_its_units_and_a_resync_changes_no
         items=2, variations=3, modifiers=2, locations=1, tracked=0
     )
 
-    again = sync.sync_catalog(db, org_of(tenant))
+    again = read(db, org_of(tenant))
     db.commit()
     assert {k: v for k, v in again.items() if k.startswith(("products_", "modifiers_"))} == {
         f"{kind}_{change}": 0
@@ -201,7 +211,7 @@ def test_a_catalog_with_modifiers_imports_with_its_units_and_a_resync_changes_no
 def test_what_square_stops_listing_is_kept_inactive_and_comes_back(db, tenant, square):
     """SQ-08: an archived or deleted variation keeps its row, so a mapping and history stay."""
     _connection, fake = square
-    sync.sync_catalog(db, org_of(tenant))
+    read(db, org_of(tenant))
     latte = next(o for o in fake.objects if o["id"] == "item-latte")
     fake.objects = [o for o in fake.objects if o["id"] not in {"item-latte", "ml-milk"}] + [
         {
@@ -209,14 +219,14 @@ def test_what_square_stops_listing_is_kept_inactive_and_comes_back(db, tenant, s
             "item_data": {**latte["item_data"], "variations": latte["item_data"]["variations"][:1]},
         }
     ]
-    sync.sync_catalog(db, org_of(tenant))
+    read(db, org_of(tenant))
     db.commit()
     active = {p.external_variation_id: p.active for p in db.scalars(select(ExternalProduct))}
     assert active == {"var-12": True, "var-16": False, "var-saffron": True}
     assert not any(m.active for m in db.scalars(select(ExternalModifier)))
 
     fake.objects = list(CATALOG)
-    sync.sync_catalog(db, org_of(tenant))
+    read(db, org_of(tenant))
     db.commit()
     assert all(p.active for p in db.scalars(select(ExternalProduct)))
 
@@ -242,7 +252,7 @@ def test_pos_fr_03_a_square_location_is_tracked_by_one_of_the_business_locations
 ):
     connection, _fake = square
     org = org_of(tenant)
-    sync.sync_catalog(db, org)
+    read(db, org)
     kitchen = Location(tenant_id=tenant.id, name="Kitchen", timezone="UTC")
     db.add(kitchen)
     db.commit()
@@ -325,9 +335,9 @@ def owner(monkeypatch):
         )
         db.commit()
         fake = FakeSquare()
-        monkeypatch.setattr(sync, "SquareClient", fake)
-        monkeypatch.setattr(sync, "_access_token", lambda *_: "token")
-        sync.sync_catalog(db, OrgContext.system(tenant.id))
+        monkeypatch.setattr(square_adapter, "SquareClient", fake)
+        monkeypatch.setattr(pos_catalog, "credentials", held)
+        read(db, OrgContext.system(tenant.id))
         db.commit()
     yield client
     client.__exit__(None, None, None)

@@ -1,4 +1,4 @@
-"""Square webhook signatures, and reading an inventory event off the payload."""
+"""Square webhook signatures and the event types InventoryOS acts on."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import base64
 import hashlib
 import hmac
 
-INVENTORY_COUNT_UPDATED = "inventory.count.updated"
 CATALOG_VERSION_UPDATED = "catalog.version.updated"
 # The merchant removed the application in Square (SQ-01): the connection is over.
 OAUTH_AUTHORIZATION_REVOKED = "oauth.authorization.revoked"
@@ -29,14 +28,6 @@ def verify_signature(
         return False
     expected = signature_for(notification_url, body, signature_key)
     return hmac.compare_digest(expected, signature)
-
-
-def inventory_counts(event: dict) -> list[dict]:
-    """The counts carried by an inventory.count.updated event, in Square's own shape."""
-    if event.get("type") != INVENTORY_COUNT_UPDATED:
-        return []
-    obj = ((event.get("data") or {}).get("object")) or {}
-    return obj.get("inventory_counts") or []
 
 
 def merchant_id(event: dict) -> str:
