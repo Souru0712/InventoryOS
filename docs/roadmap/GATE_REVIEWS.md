@@ -8,6 +8,93 @@ Stage 1 ends when gates G1 and G2 both pass ([MASTER_DEVELOPMENT_ROADMAP](MASTER
 Stage 1 exit criteria). The owner signed off both on 2026-11-13 ("Sign off both"), so Stage 1
 is complete.
 
+Stage 2's gates G3 and G4 have no review yet: Stage 2 is merged, but its evidence has not been
+gathered here.
+
+---
+
+## G5 Square connected (M5)
+
+**Status:** evidence prepared 2026-11-25; not yet passed. It needs:
+1. CI green on PostgreSQL. The Stage 3 pull request (`stage3` → `main`) is not open yet, so no
+   CI run covers this branch.
+2. The owner's sign-off.
+
+**Pass condition**
+([TESTING_AND_QUALITY_STRATEGY §5](TESTING_AND_QUALITY_STRATEGY.md#5-stage-exit-gates)):
+- AC-POS-01..12 pass, with the sandbox run recorded (T3.11);
+- AC-SAL-06 passes;
+- the Standalone job is still green;
+- a duplicate delivery ×3 posts once;
+- probe PA4 is retired.
+
+**Local evidence** on `stage3` at `724c8e0`:
+- the full suite on SQLite: 1327 passed, 33 skipped (the Postgres-only tests);
+- the 30 tests cited below, run together on 2026-11-25: 30 passed.
+
+The sandbox run (22–25 Nov, seller "InventoryOS", every step passing) is recorded in
+`docs/EXECUTION-LOG.md` (T3.11).
+
+### Pass condition, item by item
+
+**1. AC-POS-01..12.** Met, with caveats (a) to (c).
+
+| Criterion | Test | Sandbox run |
+|---|---|---|
+| AC-POS-01 connect, choose a location, import summary, tokens encrypted | `tests/test_connections.py::test_ac_pos_01_connecting_asks_for_product_scopes_and_stores_tokens_encrypted`; `tests/test_pos_catalog.py::test_the_connection_screen_shows_the_import_and_maps_a_location` | Steps 3, 4, 18: three read scopes only; "4 items, 5 variations and 3 modifiers"; consent screen shown on reconnect |
+| AC-POS-02 a completed order posts consumption within 5 minutes (M) | `tests/test_order_ingestion.py::test_a_completed_order_is_one_sale_a_line_per_order_line_used_once` | Step 8: 2 × Latte 12 oz arrived by webhook in 3 s; milk −480 ml at the order's completion time |
+| AC-POS-03 webhook ×3 and reconciliation consume once | `tests/test_webhook_jobs.py::test_ac_pos_03_three_deliveries_and_a_reconciliation_consume_once` | Step 9: the event resent 3 times, `duplicate` each time; revision 1; the scheduled re-read changed nothing |
+| AC-POS-04 cancelled before completion uses nothing | `tests/test_refunds_voids.py::test_ac_pos_04_an_order_cancelled_before_completion_uses_nothing` | Step 11 |
+| AC-POS-05 refund recorded, linked, lowers net, no stock | `tests/test_refunds_voids.py::test_ac_pos_05_a_refund_is_recorded_linked_lowers_net_sales_and_restocks_nothing`; `::test_a_return_orders_refund_counts_once_square_approves_it` | Step 12: failed first (defect, fixed), passed on retest |
+| AC-POS-06 unmapped, then mapped and reprocessed, posts once at the original moment | `tests/test_mappings.py::test_ac_pos_06_mapping_then_reprocessing_posts_once_at_the_original_moment`; `::test_the_preview_reads_the_recipe_in_effect_at_each_sale_as_the_job_does` | Step 14, after a fix; see (b) |
+| AC-POS-07 a missed webhook is recovered within 60 minutes | `tests/test_reconciliation.py::test_ac_pos_07_an_order_delivered_late_is_picked_up_within_the_hour` | Step 15: subscription off, the sale arrived by the 5-minute read in 2 minutes |
+| AC-POS-08 a skipped order opens `pos_reconciliation_mismatch` | `tests/test_reconciliation.py::test_ac_pos_08_a_skipped_order_opens_a_mismatch_is_read_again_and_clears` | Step 16: "6 day(s) checked, 0 differed"; see (c) |
+| AC-POS-09 revocation: revoked, critical `sync_failure`, Owner emailed | `tests/test_connections.py::test_ac_pos_09_a_revoked_authorization_is_marked_raised_and_emailed_to_the_owner` | Step 17: event in 12 s; see (a) |
+| AC-POS-10 an invalid signature is refused and does nothing | `tests/test_webhook_jobs.py::test_ac_pos_10_an_invalid_signature_is_refused_and_does_nothing` | Step 10: 400, nothing stored |
+| AC-POS-11 one merchant, one organization | `tests/test_connections.py::test_ac_pos_11_a_second_business_cannot_connect_the_same_merchant` | Step 5: "already connected to another business" |
+| AC-POS-12 business logic needs no Square type | `tests/test_pos_adapter.py::test_ac_pos_12_another_adapter_needs_no_square_type` | Not a sandbox step |
+
+Caveats:
+- **(a) AC-POS-09:** the sandbox dashboard has no apps page, so the authorization was revoked
+  through Square's API from outside the app. InventoryOS heard of it only by Square's signed
+  `oauth.authorization.revoked` event, as it would when a seller removes the app.
+- **(b) AC-POS-06** holds when the mapped size had a recipe in effect at the sale's moment.
+  - A product first made from Square after it was sold cannot be given a recipe that covers that
+    sale (DR-16). Its exception can only be dismissed.
+  - **PD-53 (open)** asks whether a size's first recipe may start earlier.
+- **(c) AC-POS-08:** a sandbox order cannot be skipped on purpose. The run proves a clean daily
+  check; the suite proves that a mismatch is detected, read again and cleared.
+
+**2. AC-SAL-06 passes.** Met.
+- `tests/test_sales_modes.py::test_ac_sal_06_standalone_to_connected_from_a_past_cutover`;
+- `tests/test_daily_sales.py::test_ac_sal_06_a_day_from_a_pos_is_not_entered_by_hand`;
+- sandbox step 7: hand entry for a Square day refused.
+
+**3. The Standalone job is still green.** Met locally; CI pending.
+- `tests/test_standalone.py` passes on `stage3`, including the boundary checks that keep
+  provider code at the POS seams.
+- CI runs it as its own job, "Standalone (no POS)", on every pull request.
+
+**4. A duplicate delivery ×3 posts once.** Met.
+- AC-POS-03 above, in the suite and in sandbox step 9.
+
+**5. Probe PA4 retired.** Met.
+- Retired in T3.02: a partial unique index allows one active connection per merchant.
+- `tests/test_connections.py::test_pa4_retired_a_merchant_is_actively_connected_to_one_business_at_most`;
+  the note is in `docs/audit/probes/test_phase2_probes.py`.
+
+**Also done in Stage 3**
+- The legacy Square sync is removed (T3.12, ADR-0085). `tests/test_legacy_sync_removed.py`
+  checks that no code path writes the legacy rows.
+- Risk register:
+  - TR-11 (nothing external run live): addressed by the sandbox run.
+  - TR-25 (60-day re-read) and TR-29 (milligram unit): addressed by T3.05, T3.12 and the
+    MEASUREMENT_UNIT fix.
+  - TR-26 (never deployed): stays open until T0.09 or T4.09.
+
+**Recommendation:** pass G5 once the Stage 3 pull request is green in CI, PostgreSQL included.
+PD-43 to PD-53 stay open either way; none blocks the gate.
+
 ---
 
 ## G2 Ledger engine (M2)
@@ -109,5 +196,6 @@ task (T1.01 to T1.12) was merged by 2026-11-11, and the evidence was still green
 |---|---|---|
 | G1 Tenancy & access | Passed ("Sign off both") | 2026-11-13 |
 | G2 Ledger engine | Passed ("Sign off both"); R6 moved to G3 as decided on 2026-11-12 | 2026-11-13 |
+| G5 Square connected | Evidence prepared; awaiting CI on PostgreSQL (Stage 3 PR) and sign-off | — |
 
 Stage 1 is complete. Stage 2 starts with T2.01 Owned product catalog.
