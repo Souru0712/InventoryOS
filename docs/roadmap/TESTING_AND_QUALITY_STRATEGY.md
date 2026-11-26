@@ -73,7 +73,7 @@ holds the security and commercial items.
 | **G3 Operations engine** | M3 | AC-RCP, AC-PRD, AC-WST, AC-BAT, AC-RCV R1 criteria pass; waste counted once (AC-WST-08); batch conservation property test passes (DR-13); probe R6 retired (T2.06) |
 | **G4 Standalone end-to-end** | M4 | AC-SAL-01..05, -07, -08, AC-REC, AC-ROR, AC-ANL R1 criteria pass; Standalone end-to-end job green with no POS settings; AC-SAAS-10 observed with a non-founder |
 | **G5 Square connected** | M5 | AC-POS-01..12 pass (sandbox run recorded, T3.11); AC-SAL-06 passes; Standalone job still green; duplicate delivery ×3 posts once; probe PA4 retired |
-| **G-R1 Launch** | M6 | Every R1 AC has a passing test or documented manual check (traceability script empty); every item in the security and release checklist evidenced; NFR §8 gates 1–12 evidenced; probe PA2 retired; DM-16 applied |
+| **G-R1 Launch** | M6 | Every R1 AC has a passing test or documented manual check (traceability script empty); every item in the security and release checklist evidenced; NFR §8 gates 1–12 evidenced; probe PA2 retired; DM-16 applied; staging validated before any production deploy (C-52: database behaviour, Square OAuth and webhooks, retries and duplicates, background jobs, disconnection and recovery, receiving and sales reconciliation) |
 
 ### Data-integrity gate conditions (brief §10)
 

@@ -215,7 +215,7 @@ Every tenant-owned entity carries `organization_id` (DR-09); location-scoped one
 | SalesTransaction | source, location, source reference (order id, file row set, entry id), occurred_at **or** business date (daily entries), status (completed / voided), revision | recorded → corrected / voided | Unique (source, source reference, revision) |
 | SalesTransactionLine | transaction, line key, product variation, modifiers, qty, consumption status (posted / gap / skipped), recipe version used | — | Unique (transaction, line key) |
 | SalesReturn | transaction, source reference (e.g. refund id), lines, amount, status, classification (restock / waste, R1.1) | recorded → classified | Unique (source, source reference); never auto-restocks (DR-26) |
-| IntegrationConnection | provider, external merchant id, external location id ↔ BusinessLocation, encrypted tokens, scopes, status, last success/failure | connected → error / revoked → disconnected | One active connection per (provider, external merchant, external location) across all orgs (DR-22) |
+| IntegrationConnection | provider, external merchant id, external location id ↔ BusinessLocation, encrypted tokens, scopes, status, last success/failure | connected → error / revoked → disconnected | One active connection per (provider, external merchant) across all orgs (DR-22, C-50) |
 | ExternalProduct | connection, external item id, external variation id, name, variation name, active | synced | Unique (connection, external variation id) |
 | ExternalModifier | connection, external modifier id, name, list | synced | Unique (connection, external id) |
 | ProductMapping | external product → ProductVariation · external modifier → Modifier; mapped_by, at | active / superseded | One active mapping per external id |
@@ -254,7 +254,7 @@ Every tenant-owned entity carries `organization_id` (DR-09); location-scoped one
 
 | Type | Detected when | Auto-resolves when | Fix link |
 |---|---|---|---|
-| `unmapped_product` | Sale line or catalog item without mapping | Mapped | Mapping screen (+ reprocess) |
+| `unmapped_product` | A sold line without a mapping (an unsold catalog item is listed on the mapping screen instead, C-50) | Mapped | Mapping screen (+ reprocess) |
 | `negative_balance` | Recorded < 0 | Count or receipt brings ≥ 0 | Count item |
 | `count_variance_high` | Posted count line beyond threshold | Manager reviews | Count line |
 | `batch_expired_unresolved` | Expiry passed, remaining > 0 | Remaining = 0 | Expiry queue |
@@ -294,7 +294,7 @@ Every tenant-owned entity carries `organization_id` (DR-09); location-scoped one
 | DR-19 | Historical cost preservation: every movement stores its unit-cost snapshot; ItemCostHistory is append-only. Reports for past periods use snapshots |
 | DR-20 | Time: instants stored as UTC-aware timestamps; business dates (reports, "today", expiry) computed in the location time zone; expiry stored as a calendar date, or as a date-time for short-life prepared items (PD-40). Event time (`occurred_at`) is distinct from processing time (`recorded_at`) |
 | DR-21 | External events de-duplicated by provider event id; external entities unique per (connection, external id); order-line consumption keyed by external line identity |
-| DR-22 | One active connection per external merchant + location across all organizations; webhooks route deterministically |
+| DR-22 | One active connection per provider account (external merchant) across all organizations, so one business per Square account, with any number of its locations (C-50); webhooks route deterministically |
 | DR-23 | Non-movement changes to master data, settings, roles, mappings and recipes write AuditEvents |
 | DR-24 | Referenced master data (items, suppliers, products, batches) is deactivated, not deleted. Hard deletion only via the account-deletion process |
 | DR-25 | Receiving: 0 ≤ accepted ≤ arrived per line; a receiving posts exactly once |

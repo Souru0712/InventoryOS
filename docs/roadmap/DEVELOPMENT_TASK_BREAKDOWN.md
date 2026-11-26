@@ -44,7 +44,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | M0 | T0.01 | Completed (2026-11-05; probe R7 retired) |
 | T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | Completed (2026-11-05; no async routes, 60 s Anthropic timeout) |
 | T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | M0 | T0.01 | Completed (2026-11-05; write-back only, Square count overwrite left to T1.18 by the owner) |
-| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Deferred (C-49: until T3.11 needs a public URL; render.yaml on main, Blueprint and C-48 photo storage to do) |
+| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Deferred (C-49, C-52: T3.11 ran on this computer through a tunnel; staging is mandatory before production and validates the C-52 list; render.yaml on main, Blueprint and C-48 photo storage to do) |
 | T0.10 | Structured logs and request ids | P1 | S | M0 | T0.01 | Completed (2026-11-06; JSON logs with request, tenant and user ids) |
 | T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | M0 | — | Completed (2026-11-06; one ADR per approved ID, enforced by the docs checker) |
 | T1.01 | Schema hygiene: timestamptz, constraints, delete rules | P0 | M | M1 | T0.02, T0.05 | Completed (2026-11-06; DM-2 applied, probe PA5 retired) |
@@ -255,6 +255,11 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Deferred (C-49, 2026-11-06):** `render.yaml` is on `main` (PR #17). The Blueprint, its
   secrets, the C-48 photo storage and the acceptance checks wait until before T3.11, the first
   task that needs a public HTTPS endpoint. G0 is met without this task.
+- **Mandatory before production (C-52, 2026-11-26):** T3.11 ran on this computer through a tunnel
+  (PD-52), which proves development, not production readiness. Before T4.09 deploys to real
+  customers, staging validates: production-like database behaviour; Square OAuth and webhook
+  authentication; webhook retries and duplicate events; background processing; disconnection and
+  recovery; receiving and sales reconciliation.
 
 ### T0.10 Structured logs and request ids · P1 · S
 - **Objective:** JSON logs with request id, tenant id and user id; no personal payloads (OBS-01).

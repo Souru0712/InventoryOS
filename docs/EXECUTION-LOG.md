@@ -5,6 +5,43 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — Gate G5 passed; Stage 3 decisions PD-43 to PD-53 made
+
+**Decisions**
+- The owner signed off gate G5 (Square connected) on the evidence in
+  [GATE_REVIEWS](roadmap/GATE_REVIEWS.md) ("sign off G5 as well"). Stage 3 is complete once PR
+  #63 is merged, on the owner's word.
+- **C-50**, approved: PD-43, -44, -45, -46, -47, -48, -49, -51. DR-22 restated, WF-10 aligned.
+  PD-44 stays as built (an unresolved refund, no exception).
+- **C-51**, PD-53 modified: a recipe version may take an explicit earlier effective date; past
+  sales change only by an authorized, previewed reprocessing within PD-17's bounds.
+- **C-52**, PD-52 modified: a local tunnel for development; staging mandatory before
+  production, with a validation list (T0.09 and the G-R1 gate updated).
+- **C-53**, PD-50 with a safeguard: 30 days, never past the location's last count.
+- AC-WST-01 (G3) was recorded earlier the same day.
+
+**Verified**
+- CI on PR #63's head `dbeb10d`: all six jobs green, PostgreSQL 16 included.
+
+**Files changed**
+- `docs/product/PRODUCT_DECISIONS.md` (C-50 to C-53, PD-43 to PD-53 decided, PD-54 rewritten),
+  `DOMAIN_MODEL.md` (DR-22), `BUSINESS_WORKFLOWS.md` (WF-10), `docs/roadmap/GATE_REVIEWS.md`,
+  `DEVELOPMENT_TASK_BREAKDOWN.md` (T0.09), `TESTING_AND_QUALITY_STRATEGY.md` (G-R1),
+  `docs/roadmap/README.md`; this log.
+
+**Open issues** (to build, each on the owner's word)
+- C-51: back-dated recipe versions and an explicit "apply to past sales" reprocessing (DR-16
+  amended when built).
+- C-53: refuse a cutover date before the location's last count.
+- C-50, PD-48: add "Standalone (no POS)" to the "Protect main" required checks (the owner's
+  setting).
+- PD-54, if approved as proposed: a "no sales today" record and one-off closed days.
+
+**Decisions for the owner**
+- PD-54 stays open.
+
+---
+
 ## 2026-11-26 — AC-SAL-08 completed: sales origin and Standalone coverage (G4 follow-up)
 
 The G4 review found AC-SAL-08 half built: every sale stored its origin, but no report showed it

@@ -15,8 +15,8 @@ passed: G3 waits on two manual checks, and G4 on an unbuilt criterion and two ma
 
 ## G5 Square connected (M5)
 
-**Status:** evidence prepared 2026-11-25; CI green 2026-11-26; not yet passed. It needs only
-the owner's sign-off.
+**Status:** passed, 2026-11-26. Signed off by the owner ("sign off G5 as well"). PR #63's head
+`dbeb10d` is green on all six jobs. Stage 3 is complete once PR #63 is merged.
 
 **CI evidence.** The Stage 3 pull request (#63, `stage3` → `main`) is green on all six jobs at
 `601c7d1`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,
@@ -63,7 +63,8 @@ Caveats:
 - **(b) AC-POS-06** holds when the mapped size had a recipe in effect at the sale's moment.
   - A product first made from Square after it was sold cannot be given a recipe that covers that
     sale (DR-16). Its exception can only be dismissed.
-  - **PD-53 (open)** asks whether a size's first recipe may start earlier.
+  - PD-53 asked whether a size's first recipe may start earlier: yes, with an explicit date;
+    past sales change only by an authorized reprocessing (C-51, 2026-11-26; to build).
 - **(c) AC-POS-08:** a sandbox order cannot be skipped on purpose. The run proves a clean daily
   check; the suite proves that a mismatch is detected, read again and cleared.
 
@@ -95,7 +96,7 @@ Caveats:
   - TR-26 (never deployed): stays open until T0.09 or T4.09.
 
 **Recommendation:** pass G5; the Stage 3 pull request is green in CI, PostgreSQL included.
-PD-43 to PD-53 stay open either way; none blocks the gate.
+None of PD-43 to PD-54 blocked the gate. PD-43 to PD-53 were decided on 2026-11-26 (C-50 to C-53); PD-54 stays open.
 
 ---
 
@@ -308,6 +309,6 @@ task (T1.01 to T1.12) was merged by 2026-11-11, and the evidence was still green
 | G2 Ledger engine | Passed ("Sign off both"); R6 moved to G3 as decided on 2026-11-12 | 2026-11-13 |
 | G3 Operations engine | Evidence prepared; AC-WST-01 recorded; awaiting AC-RCV-04's manual half, then sign-off | — |
 | G4 Standalone end-to-end | Evidence prepared; AC-SAL-08 built; awaiting manual checks AC-ANL-07 and AC-SAAS-10, then sign-off | — |
-| G5 Square connected | Evidence prepared; PR #63 green on all six jobs, PostgreSQL included; awaiting sign-off | — |
+| G5 Square connected | Passed ("sign off G5 as well"); PR #63 green on all six jobs at `dbeb10d` | 2026-11-26 |
 
 Stage 1 is complete. Stage 2 starts with T2.01 Owned product catalog.
