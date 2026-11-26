@@ -97,8 +97,11 @@ SES is cheapest at volume and the most work.
 - [x] Into `.env`: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
 - [x] From-addresses on that domain: `SMTP_FROM`, and optionally one per kind of email
       (`SMTP_FROM_ACCOUNT`, `SMTP_FROM_ALERTS`, `SMTP_FROM_REPORTS`; blank uses `SMTP_FROM`)
-- [ ] `SUPPORT_EMAIL`: the Reply-To on every email, an inbox you read. Set to
-      `support@vontry.app`; it still needs a Cloudflare Email Routing rule (mail to it bounced)
+- [x] `SUPPORT_EMAIL`: the Reply-To on every email, an inbox you read. Set to
+      `support@vontry.app`, forwarded to your Gmail by a Cloudflare Email Routing rule (a test
+      from Resend was forwarded and arrived, 2026-11-27 00:33 UTC).
+      Resend's own receiving stays off: its MX would take the root from Cloudflare; a subdomain
+      if Vontry ever reads mail itself
 - [ ] A Gmail address and an Outlook/Hotmail address you control, for the delivery test
       (Gmail delivered 2026-11-26, AC-ANL-07; Outlook not tried)
 

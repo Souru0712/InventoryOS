@@ -47,8 +47,15 @@ issues · decisions · next task.
   `email.complained` at `https://<APP_BASE_URL>/webhooks/resend` and put its signing secret in
   `.env`. That needs a public URL (NEEDS-YOU §2). Not configured in Resend from here.
 - Resend keeps its own suppression list. `email --allow` clears only Vontry's.
-- `support@vontry.app` still bounces until a Cloudflare Email Routing rule exists for it. This
-  webhook will then record such a bounce instead of leaving it unseen.
+- Resolved the same day. `vontry.app` had no routing rule, only a disabled catch-all, so
+  earlier tests to `support@vontry.app` bounced with "recipient not found". (One was briefly
+  recorded as arrived.) With the owner's approval ("Yes, create it"), a rule now forwards
+  `support@vontry.app` to the owner's verified Gmail. The owner removed the address from
+  Resend's own suppression list, where the bounces had put it. A test (id
+  `01a21a6b-9b09-7443-bb68-305ba153ee80`) then shows as Forwarded in Cloudflare's activity log,
+  and the owner confirmed it arrived in their Gmail.
+  The root's MX is still Cloudflare's alone. Resend receiving stays off: its MX would take the
+  root from Email Routing.
 - The full suite was not run here, only the targeted tests above. CI runs it on the PR.
 - ADR-0088 is Proposed until the owner accepts it. T4.09 stays open (backups, production).
 
