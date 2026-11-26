@@ -28,4 +28,4 @@ NEEDS ATTENTION
 
 The full reports: {{ base_url }}/app/reports
 
-Delivered by StockPulse. Choose which emails you get at {{ base_url }}/app/settings
+Delivered by Vontry. Choose which emails you get at {{ base_url }}/app/settings

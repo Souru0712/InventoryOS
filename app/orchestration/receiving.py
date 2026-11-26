@@ -444,7 +444,7 @@ def apply_document(
         db, org, document, received, posting.id if posting is not None else None, now=now
     )
 
-    # Nothing is sent to Square (C-34): a delivery changes InventoryOS stock only.
+    # Nothing is sent to Square (C-34): a delivery changes Vontry stock only.
     return {
         "applied": applied,
         "batches": batches,

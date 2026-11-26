@@ -1,4 +1,4 @@
-"""Square webhook signatures and the event types InventoryOS acts on."""
+"""Square webhook signatures and the event types Vontry acts on."""
 
 from __future__ import annotations
 

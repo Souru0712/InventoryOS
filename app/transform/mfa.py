@@ -14,7 +14,7 @@ from datetime import datetime
 
 import pyotp
 
-ISSUER = "StockPulse"
+ISSUER = "Vontry"
 DRIFT = 1  # steps either side of now
 RECOVERY_CODES = 10
 _ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/o, 1/l/i: read aloud and typed by hand

@@ -57,7 +57,7 @@ PLANS = [
 @router.get("/", response_class=HTMLResponse)
 def landing(request: Request):
     return templates.TemplateResponse(
-        request, "marketing/landing.html", {"plans": PLANS, "title": "StockPulse"}
+        request, "marketing/landing.html", {"plans": PLANS, "title": "Vontry"}
     )
 
 

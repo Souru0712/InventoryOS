@@ -19,7 +19,7 @@ Last updated: 2026-09-20, after the landing-page comps and the app redesign.
 Phase A, item by item, as you listed it:
 
 1. Invoice receiving → Square adjustment — **superseded 2026-11-05 (C-34, T0.08): write-back is
-   off until R1.1.** InventoryOS writes nothing to Square; receiving and counts change InventoryOS
+   off until R1.1.** Vontry writes nothing to Square; receiving and counts change Vontry
    only, and the push functions refuse to run while `SQUARE_WRITE_BACK` is off. In R1.1 they come
    back through the outbox, still sending a delivery as an adjustment and only an observation as a
    count. Until T1.18, Square's next sync still replaces the count of an item Square tracks.

@@ -1,6 +1,6 @@
 # ADR-0086: Location days: confirmed no-sales days and one-off closures
 
-- **Status:** Proposed, 2026-11-26 (built on branch `after-stage3`)
+- **Status:** Accepted, 2026-11-26 (owner: "merge PR #65"; merge commit 3c5755d)
 - **Decision ID:** none (implements C-54, PD-54; AC-SAL-08, STD-FR-07)
 - **Tasks:** none (owner decision C-54, a follow-up to T2.12 and AC-SAL-08)
 

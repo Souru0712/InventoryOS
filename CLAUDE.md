@@ -1,7 +1,9 @@
-# InventoryOS — project instructions for Claude Code
+# Vontry — project instructions for Claude Code
 
-InventoryOS is a multi-tenant inventory and operations SaaS for independent food-service
-businesses, built on this Python/FastAPI codebase (formerly StockPulse). These instructions govern
+Vontry is a multi-tenant inventory and operations SaaS for independent food-service
+businesses, built on this Python/FastAPI codebase (formerly StockPulse). The product was named
+InventoryOS until 2026-11-26 (C-55): the repository, stored codes (`inventoryos_pos`), internal
+`stockpulse` identifiers and historical records keep the old names. These instructions govern
 implementation sessions; the detail lives in `docs/`.
 
 ## Read before working

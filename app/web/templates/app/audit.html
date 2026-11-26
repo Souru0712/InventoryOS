@@ -32,7 +32,7 @@
   {% for event, email in rows %}
     <tr>
       <td class="small" style="white-space:nowrap;">{{ event.at.strftime("%b %d, %Y %H:%M") }}</td>
-      <td class="small">{% if event.actor_kind == "system" %}<span class="muted">StockPulse</span>{% elif event.actor_kind == "support" %}Support{% if email %} ({{ email }}){% endif %}{% else %}{{ email or "A former member" }}{% endif %}</td>
+      <td class="small">{% if event.actor_kind == "system" %}<span class="muted">Vontry</span>{% elif event.actor_kind == "support" %}Support{% if email %} ({{ email }}){% endif %}{% else %}{{ email or "A former member" }}{% endif %}</td>
       <td style="min-width:260px;">
         {{ event.summary }}
         {% if event.before and event.after %}

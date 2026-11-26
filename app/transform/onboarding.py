@@ -2,7 +2,7 @@
 
 Step 0 asks how the business takes payments today and routes it: a supported POS connects
 (Complete); everything else starts Standalone, recording the POS a business would want supported
-(adapter demand) or its interest in an InventoryOS POS (Scenario C). Plans are not changed here.
+(adapter demand) or its interest in a Vontry POS (Scenario C). Plans are not changed here.
 """
 
 from __future__ import annotations

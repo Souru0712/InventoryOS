@@ -5,6 +5,52 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — Stage 3 follow-ups merged (PR #65)
+
+**Implemented**
+- PR #65 merged into `main` with a merge commit (`3c5755d`, owner: "merge PR #65"): C-53, PD-54
+  (C-54) and C-51. ADR-0086 and ADR-0087 are Accepted.
+
+**Verified**
+- CI on `566ebdb`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,
+  Dependency audit and Docker image all green.
+
+**Open issues**
+- PD-55 stays open (back-dating limited to product sizes).
+
+---
+
+## 2026-11-26 — Product renamed to Vontry (C-55)
+
+**Implemented**
+- What people read says Vontry:
+  - the app's title and logo, page text and the system actor shown in histories;
+  - email subjects and footers, the default sender (`smtp_from`) and the authenticator label
+    (`ISSUER`; existing codes keep working);
+  - the marketing pages, the "Vontry POS" origin label;
+  - the living documents: `CLAUDE.md`, `README.md`, `NEEDS-YOU.md`, `docs/product/`,
+    `docs/roadmap/` and the ADR index.
+- Kept on purpose:
+  - the repository name, and paths and URLs that contain it;
+  - the stored origin code `inventoryos_pos`;
+  - internal `stockpulse` identifiers (logger, CLI prog, default database file, demo email);
+  - historical records: this log, ADRs, audits, gate reviews, the decision records and
+    implementation decisions, and the Square sandbox run, whose test seller is named InventoryOS.
+
+**Verified**
+- USPTO search (at the owner's request): no live or dead record contains VONTRY, and none for
+  VONTR\*, VONTRI\*, VONTRE\*, VAUNTR\* or FONTR\*. Nearest: VONT (Vont, LLC; classes 035 and
+  042: web design and hosting, marketing). Federal register only, not a legal clearance.
+- Full suite, ruff, mypy and the docs checker.
+
+**Decisions for the owner**
+- C-55 recorded. Outside the code, the owner's to change:
+  - the Square application's name in the Square Developer Console (shown on the consent screen);
+  - the GitHub repository name (GitHub redirects the old address);
+  - the domain and the Resend sending domain (AC-ANL-07).
+
+---
+
 ## 2026-11-26 — C-53, PD-54 (C-54) and C-51 built (branch `after-stage3`)
 
 **Implemented**

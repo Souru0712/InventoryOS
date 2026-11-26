@@ -9,7 +9,7 @@ Authoritative source for **offerings, pricing hypotheses, packaging and entitlem
 
 ## 1. Three pricing dimensions
 
-InventoryOS pricing is not one ladder of tiers. It combines three independent dimensions
+Vontry pricing is not one ladder of tiers. It combines three independent dimensions
 [CONFIRMED]:
 
 | Dimension | Values | What it changes |
@@ -37,23 +37,23 @@ plans and entitlements, not separate systems.
 
 | Offering | Customer scenario | Pricing hypothesis | Sold at launch? |
 |---|---|---|---|
-| **InventoryOS Complete** | A — already has a POS and keeps it | **$99 / location / month** | Yes |
-| **InventoryOS Standalone** | B — no POS and doesn't want one | **$99 / month, one location** | Yes |
-| **InventoryOS POS** (native) | C — no POS but wants one | **$149–199 / month starting**; payment processing, hardware, card readers, transaction fees, taxes and third-party services **not included** | **No** — future, validation required |
+| **Vontry Complete** | A — already has a POS and keeps it | **$99 / location / month** | Yes |
+| **Vontry Standalone** | B — no POS and doesn't want one | **$99 / month, one location** | Yes |
+| **Vontry POS** (native) | C — no POS but wants one | **$149–199 / month starting**; payment processing, hardware, card readers, transaction fees, taxes and third-party services **not included** | **No** — future, validation required |
 | Multi-location (expansion) | Several locations, centralized management | **~$149–199+ / month**, depending on location count and features; per-location pricing or packages, configurable | No — expansion roadmap |
 | Advanced (expansion) | Sophisticated requirements | **~$199–299+ / month**, subject to validation and scope | No — expansion roadmap |
 
 ## 3. Packaging matrix
 
-| | **Complete** | **Standalone** | **InventoryOS POS (future)** | **Multi-location** | **Advanced** |
+| | **Complete** | **Standalone** | **Vontry POS (future)** | **Multi-location** | **Advanced** |
 |---|---|---|---|---|---|
 | **Customer type** | Independent operator with Square (or another supported POS) | Operator with no POS by choice: cash/card terminal, markets, catering, production kitchens, very small shops | Operator who wants checkout and inventory in one system | Operator with 2+ stores | Growing operator needing forecasting, automation, APIs |
-| **POS requirement** | Supported external POS (Square first) | None | None — InventoryOS provides it | Any mode | Any mode |
+| **POS requirement** | Supported external POS (Square first) | None | None — Vontry provides it | Any mode | Any mode |
 | **Operating mode** | Connected | Standalone | Native POS | Combines with any mode | Combines with any mode |
 | **Included capabilities** | Complete core (§4) + POS connection, product/variant/modifier mapping, automatic order-line consumption, refunds/voids handling, POS reconciliation, integration health | Complete core (§4) + daily sales entry, sales file import, manual usage records, count-based usage, missing-day detection | Checkout, menu, orders, transactions, sales reporting, payment-processor integration, automatic consumption, unified reporting | Multiple stores, location-specific stock, transfers, centralized and comparative reporting, location-scoped roles, consolidated purchasing, cross-location visibility, central admin | Advanced analytics, demand/inventory forecasting, automated replenishment, advanced procurement, supplier performance, advanced reporting, API access, expanded integrations, custom automation, granular/custom permissions, extended audit history, configurable business rules |
 | **Limitations** | Only supported POS providers; consumption accuracy depends on mappings and recipes | Sales data is as good as what is entered or imported; **automatic sales-to-inventory reconciliation is limited**; daily (not per-order) granularity; manual and imported records are labelled as such | Not built; requires validation of demand, scope, regulation, costs | Not built beyond a location-aware data model | Not built; contents unvalidated |
 | **Pricing hypothesis** | $99 / location / month | $99 / month (one location) | $149–199 / month starting + pass-through costs | ~$149–199+ / month | ~$199–299+ / month |
-| **Upgrade path** | → Multi-location (add locations); → Advanced; → Standalone if the POS is dropped | → Complete when a supported POS is adopted (same data, cutover date); → Multi-location; → Advanced; → InventoryOS POS if launched | → Multi-location; → Advanced | Combines with Advanced | — |
+| **Upgrade path** | → Multi-location (add locations); → Advanced; → Standalone if the POS is dropped | → Complete when a supported POS is adopted (same data, cutover date); → Multi-location; → Advanced; → Vontry POS if launched | → Multi-location; → Advanced | Combines with Advanced | — |
 | **Cost drivers** | Hosting/DB per tenant, POS API sync volume, webhook processing, invoice extraction, email, support for mapping | Hosting/DB, invoice extraction, email, support for setting up sales entry/imports | Payment processor fees and compliance, hardware logistics, offline operation, tax and receipts, device support, much higher support load | Per-location data volume, cross-location reporting, onboarding per store | Compute for forecasting, API traffic and abuse protection, integration maintenance |
 | **Questions requiring validation** | Will owners pay $99/location? Is per-location acceptable for 2–3 store operators? Which POS after Square? | Is there enough demand from no-POS businesses? Is $99 right when sales data is manual? How much do they want daily entry vs imports? | Do Scenario C prospects exist in numbers? Will they pay $149–199 plus processing? Build, white-label or partner? Regulatory and support burden? | Price per location vs package? Which features justify the premium over N × Complete? | Which advanced features do customers ask for first? Price sensitivity? |
 
@@ -108,7 +108,7 @@ reports, export, standard roles.
      │                                                   │
      ├──► + locations ──► Multi-location ◄── + locations ┤
      └──► + Advanced add-on ◄────────────────────────────┘
- Standalone ──(if InventoryOS POS launches)──► InventoryOS POS
+ Standalone ──(if Vontry POS launches)──► Vontry POS
 ```
 
 ## 7. Cost model notes [ASSUMED, to verify]

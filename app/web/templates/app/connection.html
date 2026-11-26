@@ -13,7 +13,7 @@
   {% elif connection %}
     <p><strong>Disconnected.</strong> Your history is kept; sales are entered by hand or imported until you reconnect.</p>
   {% else %}
-    <p><strong>Not connected.</strong> Connect {{ provider }} to bring in your catalog and sales. InventoryOS asks only to read your business profile, catalog and orders.</p>
+    <p><strong>Not connected.</strong> Connect {{ provider }} to bring in your catalog and sales. Vontry asks only to read your business profile, catalog and orders.</p>
   {% endif %}
 
   {% if connection %}
@@ -34,7 +34,7 @@
     {% endif %}
   </div>
   {% if connection and connection.status == "active" %}
-    <p class="small muted">Disconnecting revokes InventoryOS's access at {{ provider }} and stops new sales coming in. Everything recorded so far stays.</p>
+    <p class="small muted">Disconnecting revokes Vontry's access at {{ provider }} and stops new sales coming in. Everything recorded so far stays.</p>
   {% endif %}
 </div>
 

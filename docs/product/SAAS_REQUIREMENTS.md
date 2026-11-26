@@ -1,7 +1,7 @@
 # SaaS Requirements
 
 Authoritative source for **tenancy, authentication, account lifecycle, subscription/billing,
-onboarding, data export and deletion**. InventoryOS is a multi-tenant commercial SaaS [CONFIRMED].
+onboarding, data export and deletion**. Vontry is a multi-tenant commercial SaaS [CONFIRMED].
 
 ## 1. Tenancy and isolation
 
@@ -45,7 +45,7 @@ and SMTP email; it lacks verification, reset, throttling (audit S1/S2) and revoc
 
 | Option | What it means here | Strengths | Costs and risks |
 |---|---|---|---|
-| **1. Finish the in-app auth** [RECOMMENDED] | Keep the existing login and add verification, reset, throttling, server-side sessions and TOTP MFA, using maintained libraries for hashing, tokens and one-time codes | No vendor or per-user fees; users, memberships and roles stay in one database with the tenant model (SAAS-T-03); fits the server-rendered app; much of the flow exists | InventoryOS owns this security code and its tests; throttling must use shared storage (the database) to work across app instances; signed-cookie sessions cannot be revoked, so a server-side session table replaces them |
+| **1. Finish the in-app auth** [RECOMMENDED] | Keep the existing login and add verification, reset, throttling, server-side sessions and TOTP MFA, using maintained libraries for hashing, tokens and one-time codes | No vendor or per-user fees; users, memberships and roles stay in one database with the tenant model (SAAS-T-03); fits the server-rendered app; much of the flow exists | Vontry owns this security code and its tests; throttling must use shared storage (the database) to work across app instances; signed-cookie sessions cannot be revoked, so a server-side session table replaces them |
 | **2. Managed identity provider** (e.g. Auth0, Clerk, WorkOS, AWS Cognito) | The provider hosts sign-up, login, verification, reset, throttling and bot protection, MFA and later SSO; the app keeps Organization, Membership and roles and trusts the provider's sign-in | Least security code to own; MFA, breached-password checks and SSO are usually built in | Monthly cost grows with users (prices change; compare at decision time); lock-in, since leaving can force password resets where hashes cannot be exported; user data in two places; another sub-processor and outage dependency; redirect-based login adds integration work |
 | **3. Self-hosted open-source identity server** (e.g. Keycloak, Ory, Authentik) | Run an identity service next to the app | Option 2's features without per-user fees | Another service to operate, patch, secure and back up; heavy for a one-founder team at 21 customers |
 | Supabase Auth | JuJu's approach | Works and is proven in JuJu | Ruled out: a managed provider like option 2 that also ties the Python app to a Supabase project it does not otherwise use |
@@ -80,7 +80,7 @@ signed_up (unverified) → verified → onboarding → active (trialing|paid) �
 
 | ID | Requirement | Rel |
 |---|---|---|
-| SAAS-B-01 | Plans at launch: **InventoryOS Complete** (hypothesis $99/location/month, Connected) and **InventoryOS Standalone** (hypothesis $99/month, one location); both include the complete core product. Catalogue and prices: [PRICING_AND_PACKAGING](PRICING_AND_PACKAGING.md) [CONFIRMED as hypotheses] | R1 |
+| SAAS-B-01 | Plans at launch: **Vontry Complete** (hypothesis $99/location/month, Connected) and **Vontry Standalone** (hypothesis $99/month, one location); both include the complete core product. Catalogue and prices: [PRICING_AND_PACKAGING](PRICING_AND_PACKAGING.md) [CONFIRMED as hypotheses] | R1 |
 | SAAS-B-02 | Provider: **Stripe** [CONFIRMED]. Hosted Checkout for purchase; Customer Portal for card update, invoices, cancellation | R1 |
 | SAAS-B-03 | Subscription status mirrors Stripe: `trialing`, `active`, `past_due`, `unpaid`, `canceled`, `incomplete`, `incomplete_expired`, `paused` → mapped to access states in §3 | R1 |
 | SAAS-B-04 | Webhooks: signature verified; processed idempotently by event id; out-of-order events resolved by re-fetching the subscription from Stripe (or event-time ordering) — never by arrival order | R1 |
@@ -99,20 +99,20 @@ signed_up (unverified) → verified → onboarding → active (trialing|paid) �
 | SAAS-B-17 | Entitlement set per subscription: allowed modes, max locations, capability flags, usage limits; one server-side check (E-02) | R1 |
 | SAAS-B-18 | Complete billed by location quantity (active Connected locations); per-location pricing supports quantity or package models by configuration (E-06) | R1 |
 | SAAS-B-19 | Self-serve plan change Standalone ↔ Complete tied to the operating-mode cutover (WF-25), prorated by Stripe; no data migration (E-10) | R1 |
-| SAAS-B-20 | InventoryOS POS is not sold; interest in it is captured at signup as validation evidence (PD-35, PD-36) | R1 |
+| SAAS-B-20 | Vontry POS is not sold; interest in it is captured at signup as validation evidence (PD-35, PD-36) | R1 |
 | SAAS-B-21 | Multi-location and Advanced are added as configuration (plans/add-ons), combinable with either mode, when the roadmap reaches them | Expansion / Advanced |
 
 Existing-app note: billing lifecycle, entitlements and read-only lapse are built and tested
 against recorded Stripe payloads, but for **two** plans (Starter $29 / Pro $59) and never run in
-Stripe test mode (audit D1). InventoryOS requires the catalogue in §4.1; the existing capability-flag pattern is reusable, its plan list is not.
+Stripe test mode (audit D1). Vontry requires the catalogue in §4.1; the existing capability-flag pattern is reusable, its plan list is not.
 
 ### 4.1 Plan catalogue (pricing hypotheses)
 
 | Plan | Mode | Locations | Pricing hypothesis | Sold at launch |
 |---|---|---|---|---|
-| InventoryOS Complete | Connected | Quantity-based | $99 / location / month | Yes |
-| InventoryOS Standalone | Standalone | One | $99 / month | Yes |
-| InventoryOS POS | Native POS | — | $149–199 / month starting + pass-through costs | No — validation first |
+| Vontry Complete | Connected | Quantity-based | $99 / location / month | Yes |
+| Vontry Standalone | Standalone | One | $99 / month | Yes |
+| Vontry POS | Native POS | — | $149–199 / month starting + pass-through costs | No — validation first |
 | Multi-location | Any | Several | ~$149–199+ / month, configurable per location or package | No — expansion |
 | Advanced | Any | Any | ~$199–299+ / month | No — expansion |
 
@@ -132,7 +132,7 @@ opening count and first day's sales entered — in the same time.
 |---|---|---|
 | "I use Square" (or another supported POS) | Connected | Complete |
 | "No POS, and I don't want one" | Standalone | Standalone |
-| "No POS, but I want one" | Standalone now, or a supported POS + Complete; interest recorded for InventoryOS POS validation | Standalone or Complete (PD-36) |
+| "No POS, but I want one" | Standalone now, or a supported POS + Complete; interest recorded for Vontry POS validation | Standalone or Complete (PD-36) |
 | "I use a POS you don't support yet" | Standalone with sales file import; POS name recorded as adapter demand | Standalone |
 
 | # | Step [CONFIRMED list] | Square-connected path | Standalone path |

@@ -4,8 +4,8 @@
 <p class="small"><a href="/app/counts">&larr; Counts</a></p>
 <h1>Count {{ count.id }}</h1>
 <p class="lede">{{ scopes[count.scope] }} at {{ location.name if location else "" }}.
-{% if count.status == "open" %}Started {{ count.started_at.strftime("%d %b %H:%M") }} UTC by {{ people.get(count.started_by_user_id, "StockPulse") }}.
-{% else %}Posted {{ count.posted_at.strftime("%d %b %Y %H:%M") }} UTC by {{ people.get(count.posted_by_user_id, "StockPulse") }}.{% endif %}</p>
+{% if count.status == "open" %}Started {{ count.started_at.strftime("%d %b %H:%M") }} UTC by {{ people.get(count.started_by_user_id, "Vontry") }}.
+{% else %}Posted {{ count.posted_at.strftime("%d %b %Y %H:%M") }} UTC by {{ people.get(count.posted_by_user_id, "Vontry") }}.{% endif %}</p>
 
 {% if count.status == "open" %}
   {% if not entries %}
@@ -82,7 +82,7 @@
         <td>{% if line.variance_qty_base %}{{ line.variance_qty_base|change(unit) }}{% else %}<span class="muted">none</span>{% endif %}</td>
         {% if costs %}<td class="small">{{ line.variance_cents|signed_money(currency) }}</td>{% endif %}
         <td class="small">{{ reasons.get(line.reason, "") if line.reason else "" }}</td>
-        <td class="small">{{ people.get(line.counted_by_user_id, "StockPulse") }}</td>
+        <td class="small">{{ people.get(line.counted_by_user_id, "Vontry") }}</td>
       </tr>
     {% endfor %}
     </tbody>

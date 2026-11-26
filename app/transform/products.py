@@ -1,6 +1,6 @@
 """The owned product catalog's rules (T2.01; RCP-FR-01, -03, C-36). Pure.
 
-InventoryOS owns what a business sells: products, each sold in variations (sizes) with an
+Vontry owns what a business sells: products, each sold in variations (sizes) with an
 informational price, and modifiers with an inventory effect. A POS catalog is mapped onto this
 catalog later (T3.03, T3.04), never the reverse.
 """

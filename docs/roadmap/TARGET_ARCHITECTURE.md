@@ -16,7 +16,7 @@ are not yet in the code.
 | Every sale from every source becomes a SalesTransaction; one consumption engine | DR-29..31, POS-FR-17 |
 | No POS is required for any core workflow | DR-29, STD-FR-01 |
 | Tenant isolation through one mandatory scoped data-access layer | C-33 |
-| InventoryOS owns the product catalog; POS catalogs are mapped to it | C-36 |
+| Vontry owns the product catalog; POS catalogs are mapped to it | C-36 |
 | Plans and entitlements are configuration; prices never in domain code | DR-32, DR-36, C-41 |
 | Scale: 21 organizations at launch, design headroom 500 | A-03, SCL-01 |
 | Solo founder operating it | baseline audit; TR-16 |
@@ -169,7 +169,7 @@ failure: job retries with back-off → dead letter → `sync_failure` exception 
 | Tenant isolation | `OrgContext` from the session's active membership; scoped repositories; static test bans unscoped queries; parametrized isolation suite; RLS later | C-33; [testing strategy](TESTING_AND_QUALITY_STRATEGY.md) |
 | Authentication | In-app (C-32): bcrypt (existing), server-side sessions, verification/reset tokens, DB-backed throttling, TOTP, CSRF | SAAS-A-01..09 |
 | Authorization | Permission keys per operation; role presets; location scope on membership; cost fields hidden from Employee | USER_ROLES_AND_PERMISSIONS |
-| Billing boundary | Stripe owns payment methods, invoices, proration; InventoryOS stores subscription state from verified webhooks only | SEC-20 |
+| Billing boundary | Stripe owns payment methods, invoices, proration; Vontry stores subscription state from verified webhooks only | SEC-20 |
 | Plans and entitlements | Plan and Entitlement rows; `allows()` single check reads them; operating mode, location count and capability flags are separate dimensions | C-41; [SaaS plan](SAAS_AND_PRICING_IMPLEMENTATION_PLAN.md) |
 
 ## 7. Frontend

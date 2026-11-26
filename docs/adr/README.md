@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Technical decisions for InventoryOS, one file each. Product decisions live in
+Technical decisions for Vontry, one file each. Product decisions live in
 [PRODUCT_DECISIONS](../product/PRODUCT_DECISIONS.md) as `C-nn`; these records cover how the product
 is built ([ADR-0020](0020-architecture-decision-records.md)). Where they disagree,
 PRODUCT_DECISIONS wins until one of them is corrected.
@@ -117,5 +117,5 @@ Task status and the record of work follow the roadmap's
 | [ADR-0083](0083-integration-health-and-sales-source-status.md) | Integration health and sales-source status | T3.09 | Accepted |
 | [ADR-0084](0084-mode-switching-with-cutover.md) | Mode switching with a cutover business date | T3.10 | Accepted |
 | [ADR-0085](0085-legacy-square-sync-removed.md) | Legacy Square sync removed; the hourly catalog read is a job | T3.12 | Accepted |
-| [ADR-0086](0086-location-days-and-standalone-coverage.md) | Location days: confirmed no-sales days and one-off closures | C-54 | Proposed |
-| [ADR-0087](0087-back-dated-size-recipes.md) | A size's recipe may start in the past; past sales take it only when applied | C-51 | Proposed |
+| [ADR-0086](0086-location-days-and-standalone-coverage.md) | Location days: confirmed no-sales days and one-off closures | C-54 | Accepted |
+| [ADR-0087](0087-back-dated-size-recipes.md) | A size's recipe may start in the past; past sales take it only when applied | C-51 | Accepted |

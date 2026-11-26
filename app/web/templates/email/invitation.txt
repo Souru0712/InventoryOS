@@ -1,6 +1,6 @@
-Join {{ business }} on StockPulse
+Join {{ business }} on Vontry
 
-{{ business }} invited you to join their StockPulse account as {{ role }}. Open this link to accept:
+{{ business }} invited you to join their Vontry account as {{ role }}. Open this link to accept:
 
 {{ link }}
 

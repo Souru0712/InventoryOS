@@ -572,7 +572,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
 
 def cmd_pos_report(args: argparse.Namespace) -> int:
-    """What has reached InventoryOS from the POS, line by line, for the T3.11 run log."""
+    """What has reached Vontry from the POS, line by line, for the T3.11 run log."""
     with session_scope() as db:
         for line in pos_report(db, OrgContext.system(args.tenant)):
             print(line)
@@ -672,7 +672,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--document", type=int, required=True)
     p.set_defaults(func=cmd_parse_doc)
 
-    p = sub.add_parser("pos-report", help="what has reached InventoryOS from the POS")
+    p = sub.add_parser("pos-report", help="what has reached Vontry from the POS")
     p.add_argument("--tenant", type=int, required=True)
     p.set_defaults(func=cmd_pos_report)
 

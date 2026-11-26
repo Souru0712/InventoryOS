@@ -19,5 +19,5 @@ See what to do: {{ base_url }}/app/expiring
 Open inventory: {{ base_url }}/app
 {% endif %}
 
-Delivered by StockPulse. Adjust your reorder points to change what shows up here,
+Delivered by Vontry. Adjust your reorder points to change what shows up here,
 or choose which emails you get at {{ base_url }}/app/settings

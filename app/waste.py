@@ -485,7 +485,7 @@ def logged(
                 product,
                 people.get(event.actor_user_id or 0, "A former member")
                 if event.actor_user_id
-                else "StockPulse",
+                else "Vontry",
                 -qty,
                 None
                 if (event_id, item) in uncosted

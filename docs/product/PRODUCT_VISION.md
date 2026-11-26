@@ -1,6 +1,6 @@
 # Product Vision
 
-**Product:** InventoryOS · **Status:** Phase 1 product definition, 2026-11-04
+**Product:** Vontry · **Status:** Phase 1 product definition, 2026-11-04
 
 Statement tags used across the package: **[CONFIRMED]** stated by the owner · **[PROPOSED]**
 requirement proposed here · **[RECOMMENDED]** recommendation · **[ASSUMED]** inference to validate ·
@@ -12,12 +12,12 @@ outcomes below are hypotheses.
 
 ## 1. Three separate entities
 
-| | **InventoryOS** | **InventoryOS codebase (formerly StockPulse)** | **JuJu Juice** |
+| | **Vontry** | **Vontry codebase (formerly StockPulse)** | **JuJu Juice** |
 |---|---|---|---|
 | What it is | The commercial SaaS product defined here — the new name for StockPulse (C-24) | The existing inventory application with Square integration | A separate juice brand/business with its own platform |
-| Code | Built on the codebase to the right (C-25); no InventoryOS release yet | `InventoryOS` repository (formerly `POS-Inventory-Automation`) | `JuJu` repository |
+| Code | Built on the codebase to the right (C-25); no Vontry release yet | `Vontry` repository (formerly `POS-Inventory-Automation`) | `JuJu` repository |
 | Role | — | **Chosen technical foundation** (C-25); Phase 2 audits it against this blueprint | **Real-world reference and demonstration environment**; must keep its own brand, customer experience, business logic and requirements |
-| Not | — | Not assumed to meet the blueprint already; its Square integration does not define InventoryOS's integration architecture | Not the commercial product; not the definition of every customer's needs |
+| Not | — | Not assumed to meet the blueprint already; its Square integration does not define Vontry's integration architecture | Not the commercial product; not the definition of every customer's needs |
 
 No shared repository, database, frontend or deployment is assumed between them [CONFIRMED].
 
@@ -25,7 +25,7 @@ No shared repository, database, frontend or deployment is assumed between them [
 
 | | |
 |---|---|
-| Name | InventoryOS |
+| Name | Vontry |
 | Category | **Inventory and operations management platform** for independent food-service businesses (vertical SaaS) — not a stock-counting app |
 | Core value proposition | Connects every movement of ingredients, products, supplies and materials to the business activity that caused it — purchasing, receiving, production, sales, waste — so owners know what they have, what they should have, what it cost and where money is lost, with far less manual work |
 | Primary problem | Inventory lives in disconnected spreadsheets, paper, POS screens and memory; nobody can say what *should* have been used versus what *was* used, so waste, over-portioning, theft, expiry losses and stockouts go unseen |
@@ -64,7 +64,7 @@ No shared repository, database, frontend or deployment is assumed between them [
 
 ## 4. Customer problems and pain points
 
-| # | Pain point | Consequence | InventoryOS answer |
+| # | Pain point | Consequence | Vontry answer |
 |---|---|---|---|
 | 1 | Actual quantities unknown | Stockouts, over-buying, emergency runs | Ledger + counts |
 | 2 | Sales don't turn into ingredient use | Stock numbers drift; low-stock alerts never fire | Recipe-driven consumption (any sales source) |
@@ -119,9 +119,9 @@ expiry; the domain allows expiry timestamps for prepared items (DR-20 note).
 
 | Scenario | Situation | Offering | Operating mode |
 |---|---|---|---|
-| **A** | Already has a POS (e.g. Square) and keeps it | **InventoryOS Complete** | Connected |
-| **B** | No POS and doesn't want one | **InventoryOS Standalone** | Standalone |
-| **C** | No POS but wants one | **InventoryOS POS** — future, validation required | Native POS (future) |
+| **A** | Already has a POS (e.g. Square) and keeps it | **Vontry Complete** | Connected |
+| **B** | No POS and doesn't want one | **Vontry Standalone** | Standalone |
+| **C** | No POS but wants one | **Vontry POS** — future, validation required | Native POS (future) |
 
 Scenario C is **not** "connect Square" (that is A). It is a possible native POS offering, validated
 before any build commitment (PD-35). Until then a Scenario C prospect is offered Standalone, or a
@@ -153,8 +153,8 @@ Packaging and prices: [PRICING_AND_PACKAGING](PRICING_AND_PACKAGING.md).
 | Stage | What happens |
 |---|---|
 | Discover | Has no POS, wants one with inventory built in |
-| Today | Offered Standalone now, or a supported POS (e.g. Square) + Complete; interest in InventoryOS POS recorded |
-| Future [FUTURE] | If InventoryOS POS launches after validation, migrates to it; sales then come from InventoryOS itself |
+| Today | Offered Standalone now, or a supported POS (e.g. Square) + Complete; interest in Vontry POS recorded |
+| Future [FUTURE] | If Vontry POS launches after validation, migrates to it; sales then come from Vontry itself |
 
 ### Journey D — Two-store operator → Multi-location [FUTURE]
 Central owner sees both stores, transfers prepared items from the main store, compares waste and
@@ -162,7 +162,7 @@ margins by store, assigns store managers to their own location only.
 
 ## 7. Competitive positioning [ASSUMED — no market research performed]
 
-| Alternative the customer uses today | Its limit | InventoryOS position |
+| Alternative the customer uses today | Its limit | Vontry position |
 |---|---|---|
 | Spreadsheets and paper | Manual, error-prone, no link to sales or cost | Automatic consumption, ledger, alerts |
 | POS-native stock features | Typically count sellable items; weak on ingredients, recipes, yields, batches, expiry and receiving reconciliation | Ingredient-level operations layer on top of the POS |
@@ -203,9 +203,9 @@ asserted here.
 | Time to first value | Recipes for top sellers + opening count within 7 days |
 | Support load | < 1 founder-hour per customer per month after onboarding |
 
-## 10. Product boundaries — what InventoryOS is not
+## 10. Product boundaries — what Vontry is not
 
-| InventoryOS is not… | Instead |
+| Vontry is not… | Instead |
 |---|---|
 | A POS (at launch) | Integrates with external POS (Connected) or runs without one (Standalone); native POS is [FUTURE] |
 | A payment processor | Payments stay with the POS/processor |
@@ -219,7 +219,7 @@ asserted here.
 ## 11. Commercial summary
 
 Pricing hypotheses (not published prices): **Complete $99/location/month**, **Standalone
-$99/month (one location)**, **InventoryOS POS $149–199/month starting** (future, validation
+$99/month (one location)**, **Vontry POS $149–199/month starting** (future, validation
 required, pass-through costs excluded), **Multi-location ~$149–199+**, **Advanced ~$199–299+**.
 The initial commercial launch prioritizes a valuable **$99 single-location** product in both
 Standalone and Connected modes [CONFIRMED]. Full matrix and validation questions:

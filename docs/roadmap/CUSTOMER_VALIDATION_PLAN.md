@@ -58,7 +58,7 @@ interviews add no new information (log "saturation" with the three entry IDs).
 | Supplier touchpoints | Produce/dairy/cup-and-packaging suppliers' counters; farmers' markets and market-vendor associations | Reaches no-POS vendors (segment 4) |
 | Local communities | NYC small-business groups, food-vendor associations, relevant local online groups | Read each group's rules; ask for conversations, not sales; no spam |
 | Trade/chamber/BID events | Neighborhood business improvement districts, chambers, food-business workshops | Mostly free to attend |
-| JuJu | The owner's own JuJu operations contacts, if applicable **[OWNER]** | Clearly separate from InventoryOS evidence |
+| JuJu | The owner's own JuJu operations contacts, if applicable **[OWNER]** | Clearly separate from Vontry evidence |
 | Referral | End every interview: "Who else runs a shop like yours that I should talk to?" | Cheapest channel once started |
 | Later: POS app marketplaces | Square App Marketplace listing (A-10 dependency) and similar, after M5 | Not available pre-launch; do not plan around it |
 | Later: landing page traffic | Experiment E-5 | Only with the same community links |
@@ -96,7 +96,7 @@ Pass = threshold met; Fail = clearly missed; between = inconclusive, extend samp
 | H-18 | Hour-level shelf life (bubble-tea toppings, prepared items) is common enough to require timestamps | PD-40, A-04 | Expiry design gap | E-1 add-on (segment 5) | Pass/decision: ≥ 3 of 6 bubble-tea/specialty owners say toppings expire in hours and are discarded on a timer |
 | H-19 | A meaningful group of no-POS-but-want-one prospects (Scenario C) exists | PD-36, PD-35 | Native POS not viable | "Would you want a POS" in screener; E-5 plan selection | Count qualified Scenario C prospects; no pass threshold at this stage beyond feeding H-21 |
 | H-20 | Scenario C prospects and POS users are dissatisfied enough with current POS to consider switching | PD-35 | Switching barrier too high | POS section of interview (§5) | Pass: ≥ 30 % of POS users name a specific recurring complaint and have looked at alternatives in the last 12 months |
-| H-21 | ≥ 10 qualified prospects will pre-commit at $149+ for an InventoryOS POS | PD-35, PRICING §8 | Native POS built without demand | E-9 non-binding LOI then refundable deposit | Pass (PD-35): ≥ 10 qualified prospects pre-commit at ≥ $149/month · Fail: < 5 |
+| H-21 | ≥ 10 qualified prospects will pre-commit at $149+ for a Vontry POS | PD-35, PRICING §8 | Native POS built without demand | E-9 non-binding LOI then refundable deposit | Pass (PD-35): ≥ 10 qualified prospects pre-commit at ≥ $149/month · Fail: < 5 |
 | H-22 | Essential checkout/payment capabilities are scoped narrowly enough to build or white-label | PD-35 | Build cost explodes | Capability checklist (§4.3) in Scenario C interviews | Output: ranked must-have list; decision input for build vs white-label vs partner costing |
 | H-23 | An integrated POS differentiates enough to justify $149–199 plus processing fees | PD-35 | Price too high vs POS-native stock features | Price questions + competitor research (sourced) | Pass: Scenario C prospects value integration above "Standalone or Square + Complete" at stated prices |
 | H-24 | Multi-location operators exist among the target and need centralized management beyond N × Complete | PD-33, A-14 | Wrong expansion | Segment 5 interviews; asks of paying customers | Qualitative: name the location count where Complete-per-location stops being enough; Pass: ≥ 3 of 4 interviewed multi-location operators identify the same top 3 needs |
@@ -113,7 +113,7 @@ Hypothesis ID range: **H-01 to H-30**. Add new IDs; never renumber.
 
 ## 4. Per-offering validation
 
-### 4.1 InventoryOS Complete, $99 per location per month (Scenario A)
+### 4.1 Vontry Complete, $99 per location per month (Scenario A)
 
 | Question | Hypotheses | Method | Evidence that confirms (proposed) |
 |---|---|---|---|
@@ -126,7 +126,7 @@ Hypothesis ID range: **H-01 to H-30**. Add new IDs; never renumber.
 Watch-outs: POS-native stock features may satisfy some owners (Vision §7 is an assumption);
 record exactly what they use and why it is enough or not.
 
-### 4.2 InventoryOS Standalone, $99 per month, one location (Scenario B)
+### 4.2 Vontry Standalone, $99 per month, one location (Scenario B)
 
 | Question | Hypotheses | Method | Evidence that confirms (proposed) |
 |---|---|---|---|
@@ -137,7 +137,7 @@ record exactly what they use and why it is enough or not.
 | Is $99 right when sales data is manual? | H-13, H-30 | Price questions; conversion/deposit after pilot | See H-13 |
 | Daily entry vs file import | H-09, H-11 | Offer both in pilot; log which they choose | Preference recorded with counts |
 
-### 4.3 Future InventoryOS POS, $149–199 per month starting (Scenario C) — future only
+### 4.3 Future Vontry POS, $149–199 per month starting (Scenario C) — future only
 
 Nothing is promised or built. Payment processing, hardware, card readers, fees and taxes are
 **not included** in the stated price; say so in every conversation. Tied to **PD-35** and **C-26**.
@@ -158,7 +158,7 @@ PD-35 gate checklist (all required before any build commitment; from PD-35 and C
 | N-1 | Scenario C interest captured at signup | PD-35 | Not started |
 | N-2 | ≥ 10 qualified prospects willing to pre-commit at $149+ | PD-35 | Not started |
 | N-3 | Build vs white-label vs partner costed | PD-35 | Not started |
-| N-4 | $1,000 MRR reached from InventoryOS | C-26 | Not started |
+| N-4 | $1,000 MRR reached from Vontry | C-26 | Not started |
 | N-5 | Regulatory, hardware, support burden assessed | PRICING §3 | Not started |
 
 "Qualified" (proposed definition): owner/decision-maker of a matching business, currently without
@@ -190,7 +190,7 @@ Count only LOI or stronger toward N-2 **[OWNER to confirm the definition]**.
 ## 5. Interview guide (30 minutes)
 
 Rules: ask open, past-behaviour questions ("tell me about the last time"), not hypotheticals. Do
-not describe InventoryOS until minute 21. Never ask "would you use...?" or "don't you think...?".
+not describe Vontry until minute 21. Never ask "would you use...?" or "don't you think...?".
 Take notes by hand or typed; record audio only with explicit consent (§10).
 
 ### 5.1 Script
@@ -420,6 +420,6 @@ owner before further build investment.
 | O-2 | Landing page tool, domain, and whether to run it before M4 (E-4) |
 | O-3 | Definition of "qualified" and of "pre-commit" for PD-35 (§4.3 proposal) |
 | O-4 | Whether deposits/prepayment are allowed pre-launch and who reviews the terms |
-| O-5 | Whether JuJu contacts may be used for InventoryOS interviews |
+| O-5 | Whether JuJu contacts may be used for Vontry interviews |
 | O-6 | Actual dates for M4, M5, G-R1: not in the source docs; timeline is milestone-aligned |
 | O-7 | Whether the concierge pilot (E-3) is acceptable founder time before any software exists |

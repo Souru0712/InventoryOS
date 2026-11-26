@@ -1,12 +1,12 @@
-# InventoryOS — Phase 3 roadmap and implementation handoff
+# Vontry — Phase 3 roadmap and implementation handoff
 
 Date 2026-11-05. **Planning only**: no application code, schema, configuration or dependency was
 changed, no migration was executed, nothing was deployed, and **no task has started**. This folder
-is the implementation source of truth for building InventoryOS on this repository's codebase.
+is the implementation source of truth for building Vontry on this repository's codebase.
 
 ## 1. Overview
 
-InventoryOS is built on the existing Python/FastAPI codebase (C-25), keeping its shell and
+Vontry is built on the existing Python/FastAPI codebase (C-25), keeping its shell and
 replacing its inventory core (C-35), in the order **shared engine → Standalone → Square** (C-27).
 The first commercial release (R1) sells **Complete** (has a POS, Square first) and **Standalone**
 (no POS) as a single-location product; multi-location and Advanced follow by evidence; a native

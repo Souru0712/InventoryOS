@@ -57,7 +57,7 @@ Now {{ place.stock.qty_base|qty(item.display_unit) }} on hand.
       <td style="white-space:nowrap;">{{ "+" if m.qty_base > 0 else "" }}{{ m.qty_base|qty(item.display_unit) }}</td>
       <td style="white-space:nowrap;">{{ m.running_base|qty(item.display_unit) }}</td>
       {% if costs %}{% set value = (m.qty_base * m.unit_cost)|round|int %}<td class="small" style="white-space:nowrap;">{{ "-" if value < 0 else "" }}{{ value|abs|money(currency) }}</td>{% endif %}
-      <td class="small">{% if m.actor_user_id %}{{ people.get(m.actor_user_id, "A former member") }}{% else %}<span class="muted">StockPulse</span>{% endif %}</td>
+      <td class="small">{% if m.actor_user_id %}{{ people.get(m.actor_user_id, "A former member") }}{% else %}<span class="muted">Vontry</span>{% endif %}</td>
       <td class="small">{{ m.reason or "" }}</td>
     </tr>
   {% endfor %}

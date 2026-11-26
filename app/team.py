@@ -198,7 +198,7 @@ def send_invitation(db: Session, invitation: Invitation, token: str, business: s
         role=ROLE_LABELS[invitation.role],
         email=invitation.email,
     )
-    subject = f"Join {business} on StockPulse"
+    subject = f"Join {business} on Vontry"
     return send_email(db, invitation.tenant_id, invitation.email, subject, html, "invitation", text)
 
 

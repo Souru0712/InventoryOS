@@ -263,7 +263,7 @@ A workflow is complete when its outcome holds end to end, in every mode it appli
 | BR-03 | No essential capability is gated by plan (PRICING_AND_PACKAGING §4) | A (entitlement tests) |
 | BR-04 | Prices and plans change by configuration only (E-01) | A |
 | BR-05 | The native POS is not required by any R1 workflow and no R1 requirement depends on it | Review |
-| BR-06 | JuJu's repository, deployment and customer experience are unchanged by InventoryOS R1 | Review |
+| BR-06 | JuJu's repository, deployment and customer experience are unchanged by Vontry R1 | Review |
 | BR-07 | Square can be disconnected and the location keeps working in Standalone mode | A |
 | BR-08 | Validation evidence is captured: POS situation at signup, Scenario C interest, unsupported POS names, conversion by offering | A (analytics events) |
 | BR-09 | Every customer-facing figure that is an estimate says so; Standalone figures never claim POS-grade automation | Review + A |

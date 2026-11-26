@@ -91,7 +91,7 @@ everything below follows from that.
 | UX-06 | Status indicators: colour + text/icon, never colour alone |
 | UX-07 | Search everywhere items are chosen; recent and favourite items first |
 | UX-08 | Units shown the way the business counts them (display units), not base units |
-| UX-09 | The InventoryOS management interface is visually and by domain distinct from any customer-facing site (e.g. JuJu's) |
+| UX-09 | The Vontry management interface is visually and by domain distinct from any customer-facing site (e.g. JuJu's) |
 
 ## 5. Maintainability
 
@@ -121,14 +121,14 @@ everything below follows from that.
 ## 7. Privacy and compliance
 
 - Personal data held: staff names/emails, supplier contacts, (via POS) no end-customer PII required
-  — InventoryOS does not ingest customer names/contacts from orders (data minimization).
+  — Vontry does not ingest customer names/contacts from orders (data minimization).
 - Privacy policy and terms before first paying customer (SAAS-D-06).
 - Data export and deletion per [SAAS_REQUIREMENTS §6](SAAS_REQUIREMENTS.md#6-data-export-retention-and-deletion).
 - Sub-processor list (host, DB, storage, email, Stripe, Square, extraction provider) published.
 
 ## 8. Production readiness standard
 
-InventoryOS is **production-ready** only when every item holds. "Built" is not production-ready
+Vontry is **production-ready** only when every item holds. "Built" is not production-ready
 (owner's standing distinction for the existing app).
 
 | # | Gate | Evidence required |
