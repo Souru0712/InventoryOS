@@ -1,6 +1,6 @@
 # ADR-0085: Legacy Square sync removed; the hourly catalog read is a job
 
-- **Status:** Proposed
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none
 - **Tasks:** T3.12
 

@@ -1,6 +1,6 @@
 # ADR-0075: The POS adapter contract
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.01: POS-FR-15, DR-29, INTEGRATION_REQUIREMENTS §2,
   AC-POS-12, AC-SAL-07)
 - **Tasks:** T3.01; T3.02–T3.12 build on it

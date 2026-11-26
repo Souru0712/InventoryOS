@@ -1,6 +1,6 @@
 # ADR-0082: Reconciliation and failure recovery
 
-- **Status:** Proposed, 2026-11-20 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.08: POS-FR-10, POS-FR-12, SQ-12, SQ-17, AC-POS-07,
   AC-POS-08)
 - **Tasks:** T3.08; T3.09 shows lag and unprocessed events from the same records

@@ -1,6 +1,6 @@
 # ADR-0084: Mode switching with a cutover business date
 
-- **Status:** Proposed, 2026-11-21 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.10: WF-25, POS-FR-19, STD-FR-11, DR-31, AC-SAL-06)
 - **Tasks:** T3.10; T4.02 adds the plan change that follows the mode (PD-39)
 

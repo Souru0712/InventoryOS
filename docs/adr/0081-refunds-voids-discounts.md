@@ -1,6 +1,6 @@
 # ADR-0081: Refunds, voids and discounts from the POS
 
-- **Status:** Proposed, 2026-11-20 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.07: POS-FR-08 (record), POS-FR-09, POS-FR-26, DR-26, PD-10,
   WF-17, AC-POS-04, AC-POS-05)
 - **Tasks:** T3.07; R1.1 adds restock or waste classification of a refunded item (PD-10)

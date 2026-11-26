@@ -5,6 +5,28 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — Stage 3 merged (PR #63)
+
+**Implemented**
+- PR #63 merged into `main` with a merge commit (`bc67035`, owner: "Merge it"): T3.01 to T3.12,
+  AC-SAL-08, the G3/G4/G5 gate reviews, AC-WST-01 and decisions C-50 to C-53. T3.01–T3.12 are
+  Completed; ADR-0075 to ADR-0085 are Accepted. Stage 3 is complete.
+
+**Verified**
+- CI on `75af512`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,
+  Dependency audit and Docker image all green.
+
+**Open issues**
+- To build, each on the owner's word: back-dated recipe versions with explicit reprocessing
+  (C-51); a cutover never past the location's last count (C-53); PD-54 if approved.
+- "Standalone (no POS)" is not yet a required check (C-50, PD-48: the owner's ruleset setting).
+- G3 waits on AC-RCV-04's manual half; G4 on AC-ANL-07 and AC-SAAS-10.
+
+**Next task**
+- T4.01 Plan and entitlement data model (C-41), or the C-51/C-53 follow-ups first.
+
+---
+
 ## 2026-11-26 — Gate G5 passed; Stage 3 decisions PD-43 to PD-53 made
 
 **Decisions**

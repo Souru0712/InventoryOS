@@ -106,14 +106,14 @@ Task status and the record of work follow the roadmap's
 | [ADR-0072](0072-step-0-and-opening-count.md) | Onboarding step 0 and the opening count | T2.20 | Accepted |
 | [ADR-0073](0073-employee-home-and-logged-by.md) | Employee home and the "logged by" picker | T2.21 | Accepted |
 | [ADR-0074](0074-standalone-suite.md) | The Standalone end-to-end suite and the adapter boundary | T2.22 | Accepted |
-| [ADR-0075](0075-pos-adapter-contract.md) | The POS adapter contract | T3.01 | Proposed |
-| [ADR-0076](0076-connection-lifecycle.md) | The POS connection lifecycle | T3.02 | Proposed |
-| [ADR-0077](0077-external-catalog-and-location-mapping.md) | The external catalog and location mapping | T3.03 | Proposed |
-| [ADR-0078](0078-product-mapping-and-reprocessing.md) | Product mapping and reprocessing | T3.04 | Proposed |
-| [ADR-0079](0079-order-line-ingestion.md) | Order-line ingestion | T3.05 | Proposed |
-| [ADR-0080](0080-webhook-events-as-jobs.md) | Webhook events stored once and processed as jobs | T3.06 | Proposed |
-| [ADR-0081](0081-refunds-voids-discounts.md) | Refunds, voids and discounts from the POS | T3.07 | Proposed |
-| [ADR-0082](0082-reconciliation-and-failure-recovery.md) | Reconciliation and failure recovery | T3.08 | Proposed |
-| [ADR-0083](0083-integration-health-and-sales-source-status.md) | Integration health and sales-source status | T3.09 | Proposed |
-| [ADR-0084](0084-mode-switching-with-cutover.md) | Mode switching with a cutover business date | T3.10 | Proposed |
-| [ADR-0085](0085-legacy-square-sync-removed.md) | Legacy Square sync removed; the hourly catalog read is a job | T3.12 | Proposed |
+| [ADR-0075](0075-pos-adapter-contract.md) | The POS adapter contract | T3.01 | Accepted |
+| [ADR-0076](0076-connection-lifecycle.md) | The POS connection lifecycle | T3.02 | Accepted |
+| [ADR-0077](0077-external-catalog-and-location-mapping.md) | The external catalog and location mapping | T3.03 | Accepted |
+| [ADR-0078](0078-product-mapping-and-reprocessing.md) | Product mapping and reprocessing | T3.04 | Accepted |
+| [ADR-0079](0079-order-line-ingestion.md) | Order-line ingestion | T3.05 | Accepted |
+| [ADR-0080](0080-webhook-events-as-jobs.md) | Webhook events stored once and processed as jobs | T3.06 | Accepted |
+| [ADR-0081](0081-refunds-voids-discounts.md) | Refunds, voids and discounts from the POS | T3.07 | Accepted |
+| [ADR-0082](0082-reconciliation-and-failure-recovery.md) | Reconciliation and failure recovery | T3.08 | Accepted |
+| [ADR-0083](0083-integration-health-and-sales-source-status.md) | Integration health and sales-source status | T3.09 | Accepted |
+| [ADR-0084](0084-mode-switching-with-cutover.md) | Mode switching with a cutover business date | T3.10 | Accepted |
+| [ADR-0085](0085-legacy-square-sync-removed.md) | Legacy Square sync removed; the hourly catalog read is a job | T3.12 | Accepted |
