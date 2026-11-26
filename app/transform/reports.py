@@ -35,12 +35,13 @@ class OpenException:
 @dataclass(frozen=True)
 class SalesData:
     """A location's sales last week: where they came from, and on its Standalone days how many
-    open days have sales (STD-FR-07, WF-24)."""
+    expected days are covered (STD-FR-07, WF-24, PD-54)."""
 
     location: str
     sales_from: str  # "" when nothing was sold
-    with_sales: int
-    open_days: int  # 0 when no day was Standalone
+    covered: int
+    expected: int  # 0 when no day was expected (not Standalone, or closed)
+    percent: Decimal | None = None
 
 
 @dataclass(frozen=True)

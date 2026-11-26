@@ -25,7 +25,7 @@
     {% if report.sales_data %}
     <h2 style="font-size:16px; margin:22px 0 8px;">Sales last week</h2>
     {% for line in report.sales_data %}
-    <p style="margin:0 0 6px; font-size:14px;"><strong>{{ line.location }}:</strong> {{ line.sales_from or "no sales recorded" }}.{% if line.open_days %} Sales on {{ line.with_sales }} of {{ line.open_days }} open days.{% endif %}</p>
+    <p style="margin:0 0 6px; font-size:14px;"><strong>{{ line.location }}:</strong> {{ line.sales_from or "no sales recorded" }}.{% if line.expected %} Covered {{ line.covered }} of {{ line.expected }} expected days ({{ line.percent }} %).{% endif %}</p>
     {% endfor %}
     {% endif %}
 

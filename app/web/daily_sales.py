@@ -1,7 +1,9 @@
-"""Daily sales entry (T2.12; STD-FR-02, -05, PD-37): /app/sales/daily.
+"""Daily sales entry (T2.12; STD-FR-02, -05, PD-37, PD-54): /app/sales/daily.
 
 A tablet-friendly grid: every product size, most sold first, with how many were sold on the
 chosen business day. Managers and above enter it; Employees too when the Owner allows (PD-37).
+Saving with nothing sold confirms a day without sales; a scheduled day can be marked closed that
+once, with a reason, and reopened (PD-54).
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
 from app.daily_sales import entered, save_day
 from app.db import get_db
+from app.location_days import DayRuleError, close_day, mark_of, reopen_day
 from app.models import Location, ProductVariation, Tenant
 from app.sales import NotFound, daily_sales
 from app.security import location_filter, require_permission, require_tenant, require_writable
@@ -75,8 +78,16 @@ def daily_page(
             "day": chosen,
             "sizes": sizes,
             "values": entered(db, org, place.id, chosen),
+            "mark": mark_of(db, org, place.id, chosen),
         },
     )
+
+
+def _day(day: str) -> date:
+    try:
+        return date.fromisoformat(day)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="bad day") from exc
 
 
 @router.post(BASE)
@@ -90,10 +101,7 @@ def save(
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("sales.record")),
 ):
-    try:
-        chosen = date.fromisoformat(day)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="bad day") from exc
+    chosen = _day(day)
     back = f"{BASE}?location={location_id}&day={chosen.isoformat()}"
     quantities: dict[int, Decimal] = {}
     try:
@@ -104,18 +112,68 @@ def save(
         flash(request, "Enter whole numbers sold, or leave a size empty.", "error")
         return RedirectResponse(back, status_code=303)
     try:
+        had = bool(entered(db, org, location_id, chosen))
         saved = save_day(
             db, org, location_id=location_id, day=chosen, quantities=quantities, reason=reason
         )
     except NotFound as exc:
         raise HTTPException(status_code=404, detail="not found") from exc
-    except SalesRuleError as exc:
+    except (SalesRuleError, DayRuleError) as exc:
         db.rollback()
         flash(request, str(exc), "error")
         return RedirectResponse(back, status_code=303)
     db.commit()
-    flash(request, "Saved. What the day used has left stock." if saved else "Nothing changed.")
+    if not had and not any(q > 0 for q in quantities.values()):
+        flash(request, f"Saved: no sales on {chosen:%a %d %b}.")
+    else:
+        flash(request, "Saved. What the day used has left stock." if saved else "Nothing changed.")
     return RedirectResponse(back, status_code=303)
+
+
+@router.post(BASE + "/close")
+def close(
+    request: Request,
+    location_id: int = Form(...),
+    day: str = Form(""),
+    reason: str = Form(""),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("sales.record")),
+):
+    """PD-54: a scheduled day closed that once, with its reason."""
+    chosen = _day(day)
+    back = f"{BASE}?location={location_id}&day={chosen.isoformat()}"
+    try:
+        close_day(db, org, location_id, chosen, reason, ip=client_ip(request))
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail="not found") from exc
+    except DayRuleError as exc:
+        db.rollback()
+        flash(request, str(exc), "error")
+        return RedirectResponse(back, status_code=303)
+    db.commit()
+    flash(request, f"Marked closed on {chosen:%a %d %b}. No sales are expected that day.")
+    return RedirectResponse(back, status_code=303)
+
+
+@router.post(BASE + "/reopen")
+def reopen(
+    request: Request,
+    location_id: int = Form(...),
+    day: str = Form(""),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("sales.record")),
+):
+    """PD-54: take a closure back; the day is expected again."""
+    chosen = _day(day)
+    try:
+        reopened = reopen_day(db, org, location_id, chosen, ip=client_ip(request))
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail="not found") from exc
+    db.commit()
+    flash(request, f"Open again on {chosen:%a %d %b}." if reopened else "Nothing changed.")
+    return RedirectResponse(f"{BASE}?location={location_id}&day={chosen.isoformat()}", 303)
 
 
 @router.post(BASE + "/settings")

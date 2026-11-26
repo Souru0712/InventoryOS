@@ -18,6 +18,7 @@ from app.costing import costing_location, size_costs
 from app.counts import counted_lines
 from app.ledger.history import ItemMove, balances_before, item_moves
 from app.ledger.posting import batch_remaining
+from app.location_days import marks
 from app.models import (
     Location,
     Product,
@@ -246,7 +247,8 @@ def sales_coverage_report(
     now: datetime | None = None,
 ) -> list[SalesCoverage]:
     """Where each location's counted sales over the period came from (manual, imported, POS),
-    and on its Standalone days, how many open days have sales (STD-FR-07, AC-SAL-08)."""
+    and how its Standalone days stand: sales, confirmed no sales, closed, missing (STD-FR-07,
+    AC-SAL-08, PD-54)."""
     now = now or datetime.now(UTC)
     spans = days(db, org, period, now, location_id)
     found = []
@@ -263,6 +265,7 @@ def sales_coverage_report(
                 place.open_days,
                 origins_of_record(db, org, place.id, first, until) if first <= until else {},
                 sold_origins(db, org, place.id, first, until) if first <= until else {},
+                marks(db, org, place.id, first, until) if first <= until else {},
             )
         )
     return found

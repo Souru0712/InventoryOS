@@ -14,9 +14,20 @@
   <button class="btn small secondary" type="submit">Show</button>
 </form>
 
-{% if not sizes %}
+{% if mark and mark.status == "closed" %}
+<div class="card" id="day-closed">
+  <p style="margin:0;"><strong>Closed this day.</strong> {{ mark.reason }}</p>
+  <p class="small muted" style="margin:6px 0 0;">No sales are expected, so it does not count against coverage.</p>
+  <form method="post" action="/app/sales/daily/reopen" class="inline-form" style="margin-top:8px;">{{ csrf_field(request) }}
+    <input type="hidden" name="location_id" value="{{ place.id }}">
+    <input type="hidden" name="day" value="{{ day.isoformat() }}">
+    <button class="btn small secondary" type="submit">Reopen the day</button>
+  </form>
+</div>
+{% elif not sizes %}
   <div class="card"><p style="margin:0;">No products yet. Add what you sell under Products first.</p></div>
 {% else %}
+{% if mark and mark.status == "no_sales" %}<p class="small" id="day-no-sales"><strong>Recorded: open, no sales.</strong> Enter sizes below if that was wrong.</p>{% endif %}
 <form method="post" action="/app/sales/daily">{{ csrf_field(request) }}
   <input type="hidden" name="location_id" value="{{ place.id }}">
   <input type="hidden" name="day" value="{{ day.isoformat() }}">
@@ -40,7 +51,17 @@
   </div>
   {% endif %}
   <button class="btn" type="submit">Save the day</button>
+  <p class="small muted" style="margin:6px 0 0;">Open but sold nothing? Leave every size empty and save: the day is recorded with no sales.</p>
 </form>
+{% if not values %}
+<form method="post" action="/app/sales/daily/close" class="inline-form" style="margin-top:16px;" id="close-day">{{ csrf_field(request) }}
+  <input type="hidden" name="location_id" value="{{ place.id }}">
+  <input type="hidden" name="day" value="{{ day.isoformat() }}">
+  <label for="close-reason">Closed this day?</label>
+  <input id="close-reason" name="reason" maxlength="200" placeholder="Why, e.g. public holiday" required>
+  <button class="btn small secondary" type="submit">Mark closed</button>
+</form>
+{% endif %}
 {% endif %}
 
 {% if can(request, "settings.manage") %}

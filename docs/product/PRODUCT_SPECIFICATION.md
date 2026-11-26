@@ -593,7 +593,7 @@ column mappings, direct usage records.
 | STD-FR-04 | Direct usage record: ingredient used without a recorded sale (staff meals, samples, catering by weight), reason required → `manual_consumption` | R1 | B |
 | STD-FR-05 | Correcting a saved day replaces it by reversal + re-post, attributed, with reason (WF-26) | R1 | B |
 | STD-FR-06 | Open business days without sales raise `sales_missing`; optional morning reminder | R1 | R |
-| STD-FR-07 | **Origin labelling**: every sales record and every sales-derived figure shows whether it came from manual entry, import or a POS; Standalone reports state coverage (days with sales ÷ open days) — never presented as automated POS data [CONFIRMED] | R1 | B |
+| STD-FR-07 | **Origin labelling**: every sales record and every sales-derived figure shows whether it came from manual entry, import or a POS; Standalone reports state coverage (covered expected days ÷ expected days: a day with sales or confirmed zero sales is covered, a one-off closure is not expected; C-54) — never presented as automated POS data [CONFIRMED] | R1 | B |
 | STD-FR-08 | Count-based actual usage (ANL-FR-14) is the primary usage measure and works with zero sales data | R1 | B |
 | STD-FR-09 | Reorder suggestions fall back to count-based usage where sales data is incomplete, and say so | R1 | B |
 | STD-FR-10 | Theoretical vs actual usage computed only over days with sales entered; other days excluded and disclosed | R1.1 | B |

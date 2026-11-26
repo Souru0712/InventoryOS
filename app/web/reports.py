@@ -311,16 +311,16 @@ class _Tables:
         )
 
     def sales_coverage(self) -> Table:
-        header = ["Location", *ORIGIN_LABELS.values(), "Open days with sales", "Open days"]
-        rows = [
-            [
-                self.places.get(c.location_id, ""),
-                *(str(c.days_by_origin.get(o, 0)) for o in ORIGIN_LABELS),
-                str(c.with_sales) if c.standalone else "",
-                str(c.open_days) if c.standalone else "",
-            ]
-            for c in self._coverage()
-        ]
+        header = ["Location", *ORIGIN_LABELS.values()]
+        header += ["With sales", "No sales", "Closed", "Missing", "Expected days", "Coverage %"]
+        rows = []
+        for c in self._coverage():
+            row = [self.places.get(c.location_id, "")]
+            row += [str(c.days_by_origin.get(o, 0)) for o in ORIGIN_LABELS]
+            figures = (c.with_sales, c.no_sales, c.closed, c.missing, c.expected)
+            row += [str(n) if c.standalone else "" for n in figures]
+            row.append("" if c.percent is None else f"{c.percent}")
+            rows.append(row)
         return header, rows
 
     def discrepancies(self) -> Table:

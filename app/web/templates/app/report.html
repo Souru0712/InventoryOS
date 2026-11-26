@@ -29,7 +29,7 @@
 <h2>Sales last week</h2>
 <div class="card" id="sales-data">
   {% for line in report.sales_data %}
-  <p class="small" style="margin:{{ '0' if loop.first else '8px 0 0' }};"><strong>{{ line.location }}:</strong> {{ line.sales_from or "no sales recorded" }}.{% if line.open_days %} Sales on {{ line.with_sales }} of {{ line.open_days }} open days.{% endif %}</p>
+  <p class="small" style="margin:{{ '0' if loop.first else '8px 0 0' }};"><strong>{{ line.location }}:</strong> {{ line.sales_from or "no sales recorded" }}.{% if line.expected %} Covered {{ line.covered }} of {{ line.expected }} expected days ({{ line.percent }} %).{% endif %}</p>
   {% endfor %}
 </div>
 {% endif %}

@@ -230,6 +230,9 @@ implementation sessions; the detail lives in `docs/`.
   transaction `day:<date>` per location and day, a changed day needs a reason (carried to the
   reversal), a POS day is refused; `sales_missing` for open hand-entry days with no sales.
   A member's permissions are `member_permissions()` (PD-37 adds `sales.record` for Employees).
+  A day without sales is accounted for only through `app/location_days.py` (ADR-0086, C-54):
+  saving nothing sold confirms `no_sales`; `close_day()` (with a reason) and `reopen_day()`
+  never touch sales or the ledger. Coverage is covered ÷ expected days (`day_status()`).
 - Reports read the ledger over each location's business days (ADR-0067): `app/reports.py`
   builds the windows, `app/transform/analytics.py` works out the figures per movement at its
   snapshot cost; never sum events, lines or today's costs for a past figure. Every report table

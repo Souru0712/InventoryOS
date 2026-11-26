@@ -10,7 +10,7 @@ Open exceptions: {{ report.exceptions_open }}
 {% if report.sales_data %}
 SALES LAST WEEK
 {% for line in report.sales_data %}
-* {{ line.location }}: {{ line.sales_from or "no sales recorded" }}.{% if line.open_days %} Sales on {{ line.with_sales }} of {{ line.open_days }} open days.{% endif %}
+* {{ line.location }}: {{ line.sales_from or "no sales recorded" }}.{% if line.expected %} Covered {{ line.covered }} of {{ line.expected }} expected days ({{ line.percent }} %).{% endif %}
 {% endfor %}
 {% endif %}
 {% if report.low_stock %}

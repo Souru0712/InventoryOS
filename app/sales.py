@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
+from sqlalchemy import exists
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
@@ -206,8 +207,10 @@ def origins_of_record(
 def sold_origins(
     db: Session, org: OrgContext, location_id: int, first: date, last: date
 ) -> dict[date, set[str]]:
-    """The origins of each business date's counted sales (DR-34: a sale keeps its source's)."""
+    """The origins of each business date's counted sales (DR-34: a sale keeps its source's). A
+    day corrected to nothing has no line, so it is not a day with sales."""
     found: dict[date, set[str]] = defaultdict(set)
+    line = exists().where(SalesTransactionLine.sales_transaction_id == SalesTransaction.id)
     for day, origin in db.execute(
         select_scoped(org, SalesTransaction)
         .with_only_columns(SalesTransaction.business_date, SalesTransaction.origin)
@@ -217,6 +220,7 @@ def sold_origins(
             SalesTransaction.business_date <= last,
             SalesTransaction.status == "completed",
             SalesTransaction.of_record.is_(True),
+            line,
         )
         .distinct()
     ):
