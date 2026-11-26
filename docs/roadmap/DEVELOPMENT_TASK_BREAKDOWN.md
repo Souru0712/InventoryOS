@@ -116,7 +116,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T4.08 | Plan and entitlements view | P1 | S | M6 | T4.01 | Not started |
 | T4.09 | Production environment, backups, email | P1 | M | M6 | T0.09 | Not started |
 | T4.10 | Monitoring and alerting | P1 | M | M6 | T4.09 | Not started |
-| T4.11 | Rebrand to Vontry | P1 | S | M6 | — | Not started |
+| T4.11 | Rebrand to Vontry | P1 | S | M6 | — | Completed (2026-11-26; pages, emails, senders and marketing say Vontry since C-55; grep test on templates, app strings and public pages; the project name stays an internal identifier) |
 | T4.12 | Legal and support pages | P1 | S | M6 | owner content | Not started |
 | T4.13 | Accessibility review and fixes | P1 | M | M6 | Stage 2 UI | Not started |
 | T4.14 | Load test at design headroom | P1 | M | M6 | T4.09 | Not started |
@@ -1234,6 +1234,10 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Acceptance:** no "StockPulse" in user-facing output (grep test on templates and emails).
 - **Tests:** grep test.
 - **Done when:** merged.
+- **Outcome (2026-11-26):** the strings were renamed with C-55 (InventoryOS, then Vontry);
+  `tests/test_brand.py` refuses either old name in templates, in the app's strings and on the
+  public pages. The `pyproject.toml` name stays `stockpulse`, with the other internal
+  identifiers C-55 keeps: it appears in `uv.lock`, which only `uv lock` should rewrite.
 
 ### T4.12 Legal and support pages · P1 · S
 - **Objective:** privacy policy, terms, support contact and sub-processor list published (NFR §8 gate 10).

@@ -1,7 +1,7 @@
 [project]
 name = "stockpulse"
 version = "0.1.0"
-description = "Automated inventory intelligence for small businesses on Square"
+description = "Vontry: inventory and operations for independent food-service businesses"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

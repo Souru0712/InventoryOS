@@ -5,6 +5,33 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — T4.11 Rebrand to Vontry
+
+**Implemented**
+- Stage 3 is complete (T3.01–T3.12, G5 passed); Stage 4 starts here. Most of T4.11 shipped
+  with C-55 (PR #66): pages, emails, sender names, marketing and the authenticator label say
+  Vontry. This adds the check that keeps it so, and the project description.
+- `tests/test_brand.py`: no template or email names StockPulse or InventoryOS (the old split
+  logo included), no string in `app/` uses either capitalized name, and the landing, pricing,
+  login and sign-up pages say Vontry.
+
+**Verified**
+- `tests/test_brand.py` (6 tests); the patterns catch `StockPulse`, `Stock<span>Pulse`,
+  `InventoryOS` and `Inventory OS`, and spare `inventoryos_pos` and lowercase identifiers.
+
+**Files changed**
+- `tests/test_brand.py` (new), `pyproject.toml` (description).
+
+**Decisions for the owner**
+- None. The `pyproject.toml` name stays `stockpulse`, an internal identifier like those C-55
+  keeps: the project is never packaged, and the name is also in `uv.lock`, which should only be
+  rewritten by `uv lock` (not installed on this computer).
+
+**Next task**
+- T4.01 Plan and entitlement data model.
+
+---
+
 ## 2026-11-26 — AC-ANL-07: the weekly summary delivered through Resend
 
 **Implemented**
