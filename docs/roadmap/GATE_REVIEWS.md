@@ -8,6 +8,204 @@ Stage 1 ends when gates G1 and G2 both pass ([MASTER_DEVELOPMENT_ROADMAP](MASTER
 Stage 1 exit criteria). The owner signed off both on 2026-11-13 ("Sign off both"), so Stage 1
 is complete.
 
+Stage 2's gates G3 and G4 were reviewed on 2026-11-25, after Stage 2 was merged. Neither has
+passed: G3 waits on two manual checks, and G4 on an unbuilt criterion and two manual checks.
+
+---
+
+## G5 Square connected (M5)
+
+**Status:** passed, 2026-11-26. Signed off by the owner ("sign off G5 as well"). PR #63's head
+`dbeb10d` is green on all six jobs. Stage 3 is complete once PR #63 is merged.
+
+**CI evidence.** The Stage 3 pull request (#63, `stage3` → `main`) is green on all six jobs at
+`601c7d1`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,
+Dependency audit, Docker image.
+
+**Pass condition**
+([TESTING_AND_QUALITY_STRATEGY §5](TESTING_AND_QUALITY_STRATEGY.md#5-stage-exit-gates)):
+- AC-POS-01..12 pass, with the sandbox run recorded (T3.11);
+- AC-SAL-06 passes;
+- the Standalone job is still green;
+- a duplicate delivery ×3 posts once;
+- probe PA4 is retired.
+
+**Local evidence** on `stage3` at `724c8e0`:
+- the full suite on SQLite: 1327 passed, 33 skipped (the Postgres-only tests);
+- the 30 tests cited below, run together on 2026-11-25: 30 passed.
+
+The sandbox run (22–25 Nov, seller "InventoryOS", every step passing) is recorded in
+`docs/EXECUTION-LOG.md` (T3.11).
+
+### Pass condition, item by item
+
+**1. AC-POS-01..12.** Met, with caveats (a) to (c).
+
+| Criterion | Test | Sandbox run |
+|---|---|---|
+| AC-POS-01 connect, choose a location, import summary, tokens encrypted | `tests/test_connections.py::test_ac_pos_01_connecting_asks_for_product_scopes_and_stores_tokens_encrypted`; `tests/test_pos_catalog.py::test_the_connection_screen_shows_the_import_and_maps_a_location` | Steps 3, 4, 18: three read scopes only; "4 items, 5 variations and 3 modifiers"; consent screen shown on reconnect |
+| AC-POS-02 a completed order posts consumption within 5 minutes (M) | `tests/test_order_ingestion.py::test_a_completed_order_is_one_sale_a_line_per_order_line_used_once` | Step 8: 2 × Latte 12 oz arrived by webhook in 3 s; milk −480 ml at the order's completion time |
+| AC-POS-03 webhook ×3 and reconciliation consume once | `tests/test_webhook_jobs.py::test_ac_pos_03_three_deliveries_and_a_reconciliation_consume_once` | Step 9: the event resent 3 times, `duplicate` each time; revision 1; the scheduled re-read changed nothing |
+| AC-POS-04 cancelled before completion uses nothing | `tests/test_refunds_voids.py::test_ac_pos_04_an_order_cancelled_before_completion_uses_nothing` | Step 11 |
+| AC-POS-05 refund recorded, linked, lowers net, no stock | `tests/test_refunds_voids.py::test_ac_pos_05_a_refund_is_recorded_linked_lowers_net_sales_and_restocks_nothing`; `::test_a_return_orders_refund_counts_once_square_approves_it` | Step 12: failed first (defect, fixed), passed on retest |
+| AC-POS-06 unmapped, then mapped and reprocessed, posts once at the original moment | `tests/test_mappings.py::test_ac_pos_06_mapping_then_reprocessing_posts_once_at_the_original_moment`; `::test_the_preview_reads_the_recipe_in_effect_at_each_sale_as_the_job_does` | Step 14, after a fix; see (b) |
+| AC-POS-07 a missed webhook is recovered within 60 minutes | `tests/test_reconciliation.py::test_ac_pos_07_an_order_delivered_late_is_picked_up_within_the_hour` | Step 15: subscription off, the sale arrived by the 5-minute read in 2 minutes |
+| AC-POS-08 a skipped order opens `pos_reconciliation_mismatch` | `tests/test_reconciliation.py::test_ac_pos_08_a_skipped_order_opens_a_mismatch_is_read_again_and_clears` | Step 16: "6 day(s) checked, 0 differed"; see (c) |
+| AC-POS-09 revocation: revoked, critical `sync_failure`, Owner emailed | `tests/test_connections.py::test_ac_pos_09_a_revoked_authorization_is_marked_raised_and_emailed_to_the_owner` | Step 17: event in 12 s; see (a) |
+| AC-POS-10 an invalid signature is refused and does nothing | `tests/test_webhook_jobs.py::test_ac_pos_10_an_invalid_signature_is_refused_and_does_nothing` | Step 10: 400, nothing stored |
+| AC-POS-11 one merchant, one organization | `tests/test_connections.py::test_ac_pos_11_a_second_business_cannot_connect_the_same_merchant` | Step 5: "already connected to another business" |
+| AC-POS-12 business logic needs no Square type | `tests/test_pos_adapter.py::test_ac_pos_12_another_adapter_needs_no_square_type` | Not a sandbox step |
+
+Caveats:
+- **(a) AC-POS-09:** the sandbox dashboard has no apps page, so the authorization was revoked
+  through Square's API from outside the app. InventoryOS heard of it only by Square's signed
+  `oauth.authorization.revoked` event, as it would when a seller removes the app.
+- **(b) AC-POS-06** holds when the mapped size had a recipe in effect at the sale's moment.
+  - A product first made from Square after it was sold cannot be given a recipe that covers that
+    sale (DR-16). Its exception can only be dismissed.
+  - PD-53 asked whether a size's first recipe may start earlier: yes, with an explicit date;
+    past sales change only by an authorized reprocessing (C-51, 2026-11-26; to build).
+- **(c) AC-POS-08:** a sandbox order cannot be skipped on purpose. The run proves a clean daily
+  check; the suite proves that a mismatch is detected, read again and cleared.
+
+**2. AC-SAL-06 passes.** Met.
+- `tests/test_sales_modes.py::test_ac_sal_06_standalone_to_connected_from_a_past_cutover`;
+- `tests/test_daily_sales.py::test_ac_sal_06_a_day_from_a_pos_is_not_entered_by_hand`;
+- sandbox step 7: hand entry for a Square day refused.
+
+**3. The Standalone job is still green.** Met locally; CI pending.
+- `tests/test_standalone.py` passes on `stage3`, including the boundary checks that keep
+  provider code at the POS seams.
+- CI runs it as its own job, "Standalone (no POS)", on every pull request.
+
+**4. A duplicate delivery ×3 posts once.** Met.
+- AC-POS-03 above, in the suite and in sandbox step 9.
+
+**5. Probe PA4 retired.** Met.
+- Retired in T3.02: a partial unique index allows one active connection per merchant.
+- `tests/test_connections.py::test_pa4_retired_a_merchant_is_actively_connected_to_one_business_at_most`;
+  the note is in `docs/audit/probes/test_phase2_probes.py`.
+
+**Also done in Stage 3**
+- The legacy Square sync is removed (T3.12, ADR-0085). `tests/test_legacy_sync_removed.py`
+  checks that no code path writes the legacy rows.
+- Risk register:
+  - TR-11 (nothing external run live): addressed by the sandbox run.
+  - TR-25 (60-day re-read) and TR-29 (milligram unit): addressed by T3.05, T3.12 and the
+    MEASUREMENT_UNIT fix.
+  - TR-26 (never deployed): stays open until T0.09 or T4.09.
+
+**Recommendation:** pass G5; the Stage 3 pull request is green in CI, PostgreSQL included.
+None of PD-43 to PD-54 blocked the gate. PD-43 to PD-53 were decided on 2026-11-26 (C-50 to C-53); PD-54 stays open.
+
+---
+
+## G4 Standalone end-to-end (M4)
+
+**Status:** evidence prepared 2026-11-25; AC-SAL-08 completed 2026-11-26; not passed. It needs:
+- two manual checks: **AC-ANL-07** and **AC-SAAS-10**;
+- the owner's sign-off.
+
+**Pass condition**
+([TESTING_AND_QUALITY_STRATEGY §5](TESTING_AND_QUALITY_STRATEGY.md#5-stage-exit-gates)):
+- the R1 criteria AC-SAL-01..05, -07, -08, AC-REC, AC-ROR and AC-ANL pass;
+- the Standalone end-to-end job is green with no POS settings;
+- AC-SAAS-10 is observed with a non-founder.
+
+**CI evidence.** Stage 2 is merged. `main` at `2c496e3` (PR #62) is green on all six jobs
+(2026-11-20):
+- Tests (SQLite);
+- Tests (PostgreSQL 16);
+- Standalone (no POS);
+- Lint and types;
+- Dependency audit;
+- Docker image.
+
+The test files below and under G3 were run together on `stage3` on 2026-11-25: 266 passed, 2
+skipped (the Postgres-only tests).
+
+### Pass condition, item by item
+
+**1. The R1 criteria.** Met, except AC-ANL-07.
+
+| Criteria | Tests |
+|---|---|
+| AC-SAL-01 every R1 workflow with no POS | `tests/test_standalone.py::test_ac_sal_01_every_r1_workflow_with_no_pos` |
+| AC-SAL-02, -03, -05 a day's sales: posts once, corrected by reversal with a reason, a missing day flagged | `tests/test_daily_sales.py` (`test_ac_sal_02_…`, `test_ac_sal_03_…`, `test_ac_sal_05_…`) |
+| AC-SAL-04 file import: preview, unmatched listed, re-import adds nothing | `tests/test_sales_import.py::test_ac_sal_04_preview_posts_matched_lists_unmatched_and_reimport_adds_nothing` |
+| AC-SAL-07 provider code only in the adapter | `tests/test_standalone.py::test_ac_sal_07_provider_code_lives_only_in_the_adapter` |
+| AC-SAL-08 origin shown; Standalone coverage "N of M open days" | **Met (2026-11-26).** Every sale stores its origin (`tests/test_sales.py`, `tests/test_daily_sales.py`, `tests/test_sales_import.py`). The reports page names where each location's sales came from and, on Standalone days, "Sales on N of M open days"; so do cost of sales, its CSV, a `sales_coverage` CSV and the weekly summary (page and email): `tests/test_sales_coverage.py`. How M is counted is PD-54 (OPEN) |
+| AC-REC-01..05 counts: storage order, expected at count time, one variance per line, review thresholds | `tests/test_count_sessions.py` (`test_ac_rec_01_…` to `test_ac_rec_04_…`), `tests/test_count_screens.py` (AC-REC-01, -05) |
+| AC-REC-06..09 exceptions: one per problem, auto-resolve, dismiss with a reason, no amounts for Employees | `tests/test_exceptions.py` (`test_ac_rec_06_…` to `test_ac_rec_09_…`) |
+| AC-ROR-01, -03, -05 reorder: worked example, count first, never orders | `tests/test_reorder.py` (`test_ac_ror_01_the_worked_example`, `test_ac_ror_03_count_first`, `test_ac_ror_05_…`) |
+| AC-ROR-02, -04 inputs and formula shown; CSV grouped by supplier | `tests/test_reorder.py::test_the_page_explains_and_the_csv_is_grouped_by_supplier` |
+| AC-ANL-01, -02 past figures at their own cost; valuation basis | `tests/test_costs.py` (`test_ac_anl_01_…`, `test_ac_anl_02_…`) |
+| AC-ANL-03..06, -08 reports on the ledger, business days, exports, usage between counts | `tests/test_reports.py`, `tests/test_reports_ii.py`, `tests/test_reorder.py::test_ac_anl_08_use_from_two_counts` |
+| AC-ANL-07 the weekly summary email reaches Owners (M) | **Not recorded.** It needs a real delivery through the production email provider (PD-24, Resend) |
+
+**2. The Standalone end-to-end job is green with no POS settings.** Met.
+- The CI job "Standalone (no POS)" passed on `main` (`2c496e3`).
+- It also passes on `stage3`, with the Stage 3 boundary checks.
+
+**3. AC-SAAS-10 observed with a non-founder (M).** **Not done.** Someone other than the founder
+has to complete onboarding and record receiving, waste, production and counts. This is the
+owner's to arrange (CUSTOMER_VALIDATION_PLAN: Standalone pilots).
+
+**To pass G4:**
+1. ~~Build AC-SAL-08's two missing parts.~~ Done 2026-11-26 (origin on sales-derived reports,
+   "N of M open days" on Standalone reports).
+2. Record AC-ANL-07 once email delivery is configured.
+3. Observe AC-SAAS-10 with a non-founder.
+
+---
+
+## G3 Operations engine (M3)
+
+**Status:** evidence prepared 2026-11-25; AC-WST-01 recorded 2026-11-26; not passed. It needs
+the manual half of **AC-RCV-04** and the owner's sign-off.
+
+**Pass condition**
+([TESTING_AND_QUALITY_STRATEGY §5](TESTING_AND_QUALITY_STRATEGY.md#5-stage-exit-gates)):
+- the R1 criteria AC-RCP, AC-PRD, AC-WST, AC-BAT and AC-RCV pass;
+- waste is counted once (AC-WST-08);
+- the batch conservation property test passes (DR-13);
+- probe R6 is retired (T2.06).
+
+**CI evidence:** `main` at `2c496e3` is green on all six jobs, as under G4.
+`test_ac_rcv_02_…`, added during this review, is on `stage3` (PR #63).
+
+### Pass condition, item by item
+
+**1. The R1 criteria.** Met, except AC-RCV-04's manual half.
+
+| Criteria | Tests |
+|---|---|
+| AC-RCP-01..09 recipes: mixed units, versions, card, modifiers, prepared items, scaling, cost changes, sold without a recipe, Employee view | `tests/test_recipes.py`, `tests/test_recipe_screens.py`, `tests/test_costing.py`, `tests/test_consumption.py` (one `test_ac_rcp_0n_…` each) |
+| AC-PRD-01..07 production: inputs to a dated batch, yield and cost, unknown cost, made-ahead vs made-to-order, void, FEFO inputs, finished goods | `tests/test_production.py`, `tests/test_consumption.py` (`test_ac_prd_0n_…`) |
+| AC-WST-01 an Employee logs waste in ≤ 3 taps at 375 px (M) | **Met (2026-11-26).** Checked in the browser at 375 × 812 on a local demo café (`stage3` at `0290f43`), signed in as an Employee who picked themself on `/app/floor`. After choosing Whole milk, the form fits one screen with the unit and the batch (soonest-expiring) already set: 1 the quantity (2), 2 the reason (Spoilage), 3 "Log waste". "Waste logged. You can void it for 30 minutes." The ledger holds `waste:1`, −2,000 ml from the batch dated 27 Nov, recorded with the Employee as actor |
+| AC-WST-02..08 waste: reason required, counted once everywhere, a product's recipe, 30-minute void, report and found-short | `tests/test_waste.py` (`test_ac_wst_02_…`, `test_ac_wst_03_and_08_…`, `test_ac_wst_04_…`, `test_ac_wst_05_…`, `test_ac_wst_06_and_07_…`) |
+| AC-BAT-01..08 batches: dated receipt, FEFO/FIFO, inferred vs explicit, conservation, expired kept until counted, expiry flags, auto-dispose, a batch's movements | `tests/test_batches.py`, `tests/test_expiry_actions.py` |
+| AC-RCV-01, -05..08 manual delivery, posts once (also concurrently), short and rejected, packs and price jumps, correction by reversal | `tests/test_receivings.py` (`test_ac_rcv_0n_…`), `tests/test_ledger_writers.py::test_ac_rcv_05_two_simultaneous_applies_post_one_set_of_movements` |
+| AC-RCV-02 an invoice photo changes nothing until posted | `tests/test_receiving_flow.py::test_ac_rcv_02_an_uploaded_and_read_invoice_changes_nothing_until_posted` (added in this review) |
+| AC-RCV-03 the same file twice is one invoice | `tests/test_receiving_flow.py::test_upload_is_deduplicated_by_content` |
+| AC-RCV-04 extraction proposes lines to review; without it, manual entry (A+M) | Automated half met: lines wait for review (`test_parse_matches_what_it_recognises_and_flags_the_rest`, `test_unchecked_lines_are_skipped_not_applied`); an unreadable photo is left for a person (`test_an_unreadable_photo_leaves_the_document_for_a_human`); manual entry posts (`test_ac_rcv_01_…`). **Manual half not recorded:** a real invoice read and reviewed by the owner |
+| AC-RCV-09 a learned match is suggested on the next invoice | `tests/test_receiving_flow.py::test_supplier_wording_is_learned_so_the_next_invoice_is_automatic`, `tests/test_receiving.py::test_matching_prefers_a_learned_alias`. The criterion says "supplier code", but C-47 rules codes out, so the learned key is the supplier's wording |
+| AC-RCV-10 extraction beyond the daily cap is refused; manual entry still works | `tests/test_receivings.py::test_reading_invoices_stops_at_the_daily_cap` (the refused invoice waits for entry "by hand") |
+
+**2. Waste counted once (AC-WST-08).** Met.
+- `tests/test_waste.py::test_ac_wst_03_and_08_two_pounds_of_carrots_count_once_everywhere`.
+
+**3. The batch conservation property test (DR-13).** Met.
+- `tests/test_batches.py::test_conservation_holds_after_any_sequence`.
+
+**4. Probe R6 retired.** Met.
+- Retired in T2.06: a removed date moves what the batch held instead of deleting it.
+- The note is in `docs/audit/probes/test_audit_probes.py`.
+
+**To pass G3:**
+1. ~~Record AC-WST-01.~~ Done 2026-11-26: three taps at 375 px.
+2. Record AC-RCV-04's manual half: one real invoice read and reviewed.
+
 ---
 
 ## G2 Ledger engine (M2)
@@ -109,5 +307,8 @@ task (T1.01 to T1.12) was merged by 2026-11-11, and the evidence was still green
 |---|---|---|
 | G1 Tenancy & access | Passed ("Sign off both") | 2026-11-13 |
 | G2 Ledger engine | Passed ("Sign off both"); R6 moved to G3 as decided on 2026-11-12 | 2026-11-13 |
+| G3 Operations engine | Evidence prepared; AC-WST-01 recorded; awaiting AC-RCV-04's manual half, then sign-off | — |
+| G4 Standalone end-to-end | Evidence prepared; AC-SAL-08 built; awaiting manual checks AC-ANL-07 and AC-SAAS-10, then sign-off | — |
+| G5 Square connected | Passed ("sign off G5 as well"); PR #63 green on all six jobs at `dbeb10d` | 2026-11-26 |
 
 Stage 1 is complete. Stage 2 starts with T2.01 Owned product catalog.

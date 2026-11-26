@@ -28,7 +28,6 @@ from app.jobs import drain, enqueue
 from app.observability import log_context, new_request_id
 from app.orchestration.health import record_snapshot
 from app.orchestration.subscriptions import expire_due_trials
-from app.orchestration.sync import run_sync
 from app.throttle import prune
 
 log = logging.getLogger(__name__)
@@ -38,17 +37,48 @@ LOCK_CHECK_SECONDS = 60
 STANDBY_POLL_SECONDS = 30
 
 
-def sync_all_tenants() -> None:
+def queue_catalog_refresh() -> None:
+    """Re-read each connected business's POS catalog and locations as a job (T3.12, ADR-0085):
+    what a missed catalog event left behind is caught within the hour, one business at a time."""
     with session_scope() as db:
         tenant_ids = connected_tenant_ids(db)
     for tenant_id in tenant_ids:
         with log_context(tenant_id=tenant_id):
             try:
                 with session_scope() as db:
-                    stats = run_sync(db, OrgContext.system(tenant_id))
-                log.info("synced tenant %s: %s", tenant_id, stats)
+                    enqueue(
+                        db, OrgContext.system(tenant_id), "refresh_catalog", dedupe_key="catalog"
+                    )
             except Exception:
-                log.exception("scheduled sync failed for tenant %s", tenant_id)
+                log.exception("could not queue a catalog read for tenant %s", tenant_id)
+
+
+def queue_order_ingestion() -> None:
+    """Read each connected business's changed orders as a job (T3.05, SQ-11)."""
+    with session_scope() as db:
+        tenant_ids = connected_tenant_ids(db)
+    for tenant_id in tenant_ids:
+        with log_context(tenant_id=tenant_id):
+            try:
+                with session_scope() as db:
+                    enqueue(db, OrgContext.system(tenant_id), "ingest_orders", dedupe_key="orders")
+            except Exception:
+                log.exception("could not queue order ingestion for tenant %s", tenant_id)
+
+
+def queue_order_reconciliation() -> None:
+    """Check each connected business's closed days against the POS as a job (T3.08, SQ-17)."""
+    with session_scope() as db:
+        tenant_ids = connected_tenant_ids(db)
+    for tenant_id in tenant_ids:
+        with log_context(tenant_id=tenant_id):
+            try:
+                with session_scope() as db:
+                    enqueue(
+                        db, OrgContext.system(tenant_id), "reconcile_orders", dedupe_key="recon"
+                    )
+            except Exception:
+                log.exception("could not queue reconciliation for tenant %s", tenant_id)
 
 
 def _local(now: datetime, zone: str | None) -> datetime:
@@ -198,10 +228,22 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         coalesce=True,
     )
     scheduler.add_job(
-        _job(sync_all_tenants),
+        _job(queue_order_ingestion),
+        "interval",
+        minutes=settings.orders_interval_minutes,
+        id="queue_order_ingestion",
+    )
+    scheduler.add_job(
+        _job(queue_order_reconciliation),
+        "interval",
+        hours=settings.reconciliation_interval_hours,
+        id="queue_order_reconciliation",
+    )
+    scheduler.add_job(
+        _job(queue_catalog_refresh),
         "interval",
         minutes=settings.sync_interval_minutes,
-        id="sync_all_tenants",
+        id="queue_catalog_refresh",
         max_instances=1,
         coalesce=True,
     )

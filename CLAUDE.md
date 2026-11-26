@@ -120,9 +120,51 @@ implementation sessions; the detail lives in `docs/`.
   `app/throttle.py` (`locked_for`, `hit`, `clear`; ADR-0032); a refusal reveals nothing more
   than a success would.
 - Provider-specific (Square) code only in `app/providers/`; core works with no POS (DR-29).
-  Only the POS seams import it (`app/orchestration/sync.py`, the connect routes in
-  `app/web/dashboard.py`, `app/web/webhooks.py`); `tests/test_standalone.py` runs every R1
-  workflow with no POS and enforces both (ADR-0074).
+  Only the POS seams import it (`app/orchestration/sync.py`, `app/web/webhooks.py`);
+  `tests/test_standalone.py` runs every R1 workflow with no POS and enforces both (ADR-0074). New POS work goes through the adapter
+  contract (`app/providers/base.py`, `adapter_for(code)`, ADR-0075) and its normalized types.
+- POS connections are written only by `app/connections.py` (ADR-0076): one active connection
+  per merchant across businesses, tokens through `credentials()` (refreshed, encrypted), a
+  provider's 401 or revocation webhook → `mark_revoked()` (critical `sync_failure`, Owners
+  emailed); `disconnect()` revokes at the provider and keeps history.
+- What a POS reports is written only by `app/pos_catalog.py` (ADR-0077): external locations,
+  products (per variation) and modifiers, unique per (connection, external id), never deleted
+  (unlisted → inactive). The sync never creates a location: a POS location is tracked by one of
+  the business's locations (`provider_location_id`) through `track_location()`. The catalog is
+  read only through the adapter by `refresh_catalog()`: a catalog event or the hourly
+  `queue_catalog_refresh` queues it as a job, and `run_sync` ("Sync now", connecting) forces it.
+  The legacy sync is gone (T3.12, ADR-0085): nothing writes `sold_items`, POS daily totals
+  (the demo seed apart) or POS-counted stock items, and Square's counts are never read; a test
+  enforces it.
+- POS mappings are written only by `app/mappings.py` (ADR-0078): one active mapping per
+  external product or modifier, a change supersedes it; new POS sales take their size from it
+  (`mapped_variations()`). Past sales change only by a previewed reprocessing job
+  (`reprocess_mapping`: `remap_lines()` then `reprocess_sale()`), from the last count of what
+  the size uses, at most 30 days back (PD-17).
+- POS orders arrive through `app/order_ingestion.py` (ADR-0079), the only writer of
+  `external_orders`, their lines and `order_cursors`: the `ingest_orders` job reads changed
+  orders from the cursor (less an overlap) through the adapter; a completed order at a tracked
+  location is one sale via `record_pos_order()`, a line per uid, so a resend is a revision.
+  Business dates from the cursor's `lines_from` are order lines; earlier days keep their daily
+  totals.
+- Provider webhooks are stored once by event id before anything acts on them, only through
+  `app/webhook_events.py` (ADR-0080); the route answers at once: order and catalog events queue
+  `ingest_orders` / `refresh_catalog`, which mark their events processed when they succeed.
+- POS refunds are sales returns (`record_pos_refund()`, ADR-0081): linked to the sale and its
+  lines, never restocking (DR-26); a completed order voided at the POS goes through
+  `void_sale()`; net sales money is read through `sales_money()`.
+- POS reads recover themselves (ADR-0082): an hourly two-hour re-read, and `reconcile_orders`
+  comparing the POS's completed orders and lines per closed business day with ours
+  (`pos_reconciliation_mismatch`, recovered and cleared by the next match). A failed read is a
+  failed sync run plus `sync_failure`, never raised inside the job; the next success clears it.
+- Whether sales are arriving is `sales_status()` (ADR-0083), per location: Connected shows its
+  connection's health (rules in `app/transform/integration_health.py`, stale after 2 h);
+  Standalone shows the last day with sales and the missing days. The dashboard reads it.
+- A location changes where its sales come from only through `cut_over()` (via
+  `app/sales_modes.py`, ADR-0084): from a cutover date the chosen source alone counts, the old
+  source's sales from then are voided, earlier days untouched; a chosen start is `fixed_from`.
+- Every choice that needs the owner is logged as an OPEN `PD-nn` in PRODUCT_DECISIONS §3 and
+  cited under "Decisions for the owner" in the task's execution-log entry.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
 - Items are defined once per business (`inventory_items`) with per-location settings
   (`item_locations`) (C-38, ADR-0036, ADR-0037). A stock item's name, category, dimension, unit,
@@ -160,7 +202,8 @@ implementation sessions; the detail lives in `docs/`.
 - What a business sells is its own catalog (C-36, ADR-0050): `products`, `product_variations`
   (sizes, informational price) and `modifiers` (none, scale, add), changed only through
   `app/products.py` and never deleted. A POS catalog is mapped onto it (T3.03, T3.04); the
-  Square sync writes `sold_items` only. A price is money: behind `inventory.view_costs`.
+  Square sync writes the external catalog only. A price is money: behind
+  `inventory.view_costs`.
 - Recipes are versioned (ADR-0051): `recipes`, `recipe_versions`, `recipe_lines`, written only
   by `app/recipes.py` (`save_recipe()`). Versions and lines are append-only: an edit is the
   next version, effective now or later, never earlier, and anything that happened reads the
@@ -190,6 +233,8 @@ implementation sessions; the detail lives in `docs/`.
   builds the windows, `app/transform/analytics.py` works out the figures per movement at its
   snapshot cost; never sum events, lines or today's costs for a past figure. Every report table
   exports through `/app/reports.csv` (ADR-0068) from the same report objects as its page.
+  Where sales came from and Standalone coverage ("N of M open days", AC-SAL-08) are
+  `sales_coverage_report()`; a figure from sales names its origins.
 - Items come in from a file or the quick-add grid through `app/item_import.py` (ADR-0071), each
   row tried through `create_item()`; the onboarding checklist (`app/onboarding.py`) is computed
   from the business's records; only step 0's answer, skipped steps and the opening count's time

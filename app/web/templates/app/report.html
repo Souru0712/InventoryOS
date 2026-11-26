@@ -25,6 +25,15 @@
   </div>
 </div>
 
+{% if report.sales_data %}
+<h2>Sales last week</h2>
+<div class="card" id="sales-data">
+  {% for line in report.sales_data %}
+  <p class="small" style="margin:{{ '0' if loop.first else '8px 0 0' }};"><strong>{{ line.location }}:</strong> {{ line.sales_from or "no sales recorded" }}.{% if line.open_days %} Sales on {{ line.with_sales }} of {{ line.open_days }} open days.{% endif %}</p>
+  {% endfor %}
+</div>
+{% endif %}
+
 <h2>Low stock ({{ report.low_stock_count }})</h2>
 {% if not report.low_stock %}
   <p class="small muted">Nothing is below its reorder point.</p>

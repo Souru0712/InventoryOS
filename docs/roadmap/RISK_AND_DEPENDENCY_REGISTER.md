@@ -63,7 +63,7 @@ provider).
 | OD-02 | Create the snack-box project repository | T0.05, and through it T1.01 and all of Stage 1 (critical path) | Done 2026-11-06: the owner created the private repository `Souru0712/Snack-box`, and the module was moved there (T0.05) |
 | OD-03 | Host, object storage and Sentry accounts | T0.09 | Deferred by the owner 2026-11-06 (C-49): Render (repository connected) and Sentry accounts exist; no storage account is needed after C-48. Before T3.11: create the Blueprint from `render.yaml` and enter its secrets |
 | OD-04 | Enable branch protection (required CI check) on GitHub | T0.02 done-definition | Open — checked 2026-11-05: no classic rule and no ruleset exist; GitHub says rulesets are not enforced on this private repository without a paid plan. Plan upgrade declined by the owner (2026-11-05). A ruleset "Protect main" (required checks Tests (SQLite) and Tests (PostgreSQL 16), block force pushes, restrict deletions) was submitted through the settings page and not saved. **Done 2026-11-05:** the owner made the repository public; ruleset "Protect main" is Active on the default branch with required checks Tests (SQLite) and Tests (PostgreSQL 16), branch up to date, no force pushes, no deletion, empty bypass list |
-| OD-05 | Square developer account with sandbox seller (OA-2) | T3.11 | Open |
+| OD-05 | Square developer account with sandbox seller (OA-2) | T3.11 | Provided (owner, 2026-11-22: sandbox application credentials, seller token and webhook key in the local `.env`; `APP_BASE_URL` is an ngrok address) |
 | OD-06 | Stripe account in test mode | T4.04 | Open |
 | OD-07 | Email provider account and domain DNS | T4.09 | Open |
 | OD-08 | Privacy policy, terms, refund policy content | T4.12 | Open |

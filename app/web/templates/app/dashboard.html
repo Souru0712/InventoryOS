@@ -44,21 +44,7 @@
 <div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap;">
   <div>
     <h1>{{ tenant.name }}</h1>
-    <p class="lede">
-      {% if not sync.connected %}
-        Square is not connected.
-      {% elif sync.last_success_at %}
-        Square connected. Last synced {{ sync.last_success_at.strftime("%d %b %H:%M") }} UTC.
-      {% else %}
-        Square connected. Not synced yet.
-      {% endif %}
-    </p>
-    {% if sync.error %}
-      <p class="small" style="color:var(--danger, #b3261e); margin:-6px 0 0;">
-        Last attempt failed{% if sync.failed_at %} at {{ sync.failed_at.strftime("%d %b %H:%M") }} UTC{% endif %}:
-        {{ sync.error }}
-      </p>
-    {% endif %}
+    {% include "app/_sales_status.html" %}
   </div>
   <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
     {% if connection and can(request, "mapping.manage") %}

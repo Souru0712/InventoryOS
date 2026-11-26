@@ -21,6 +21,7 @@ STEPS = (
     "suppliers",
     "recipes",
     "sales",
+    "mapping",  # Connected only (SAAS §5 step 8, T3.10)
     "alerts",
     "count",
     "receiving",

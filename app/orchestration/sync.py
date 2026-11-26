@@ -1,61 +1,28 @@
-"""Square sync: ingest -> normalize -> load -> derive -> alert."""
+"""Bringing a POS connection up to date on request, and the write-back kept for R1.1.
+
+The legacy hourly sync is gone (T3.12, ADR-0085): the catalog and locations arrive through the
+adapter (`app/pos_catalog.py`), orders through `app/order_ingestion.py`, both as jobs.
+"""
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.access import OrgContext, get_scoped, select_scoped
+from app.access import OrgContext, select_scoped
 from app.config import get_settings
-from app.jobs import enqueue
-from app.load.upsert import (
-    apply_provider_counts,
-    ensure_tracked_stock_items,
-    sync_catalog_presence,
-    sync_identifiers_from_catalog,
-    sync_retail_prices,
-    upsert_locations,
-    upsert_sales_daily,
-    upsert_sold_items,
-)
-from app.models import (
-    Location,
-    ProviderConnection,
-    StockItem,
-    SyncRun,
-    SyncStatus,
-    Tenant,
-    TrackMode,
-)
-from app.orchestration.alerts import evaluate_and_store
-from app.orchestration.subscriptions import apply_location_limit
-from app.providers.square.client import (
-    SquareClient,
-    adjustment_change,
-    physical_count_change,
-)
-from app.providers.square.normalize import (
-    daily_sales_from_orders,
-    normalize_catalog,
-    normalize_counts,
-    normalize_locations,
-)
-from app.providers.square.oauth import decrypt, encrypt, refresh
+from app.connections import active_connection, credentials
+from app.models import Location, ProviderConnection, StockItem, SyncRun, SyncStatus, TrackMode
+from app.pos_catalog import refresh_catalog
+from app.providers.base import AdapterError
+from app.providers.square.client import SquareClient, adjustment_change, physical_count_change
 from app.units import from_base
 
 log = logging.getLogger(__name__)
-
-SALES_LOOKBACK_DAYS = 60
-REFRESH_MARGIN = timedelta(days=7)
-
-
-class NotConnected(RuntimeError):
-    pass
 
 
 class WriteBackDisabled(RuntimeError):
@@ -84,143 +51,24 @@ def _square_locations(
     }
 
 
-def active_connection(db: Session, org: OrgContext, provider: str = "square") -> ProviderConnection:
-    connection = db.scalars(
-        select_scoped(org, ProviderConnection).where(
-            ProviderConnection.provider == provider,
-            ProviderConnection.status == "active",
-        )
-    ).first()
-    if connection is None:
-        raise NotConnected(f"tenant {org.tenant_id} has no active {provider} connection")
-    return connection
+def _access_token(db: Session, org: OrgContext, connection: ProviderConnection) -> str:
+    return credentials(db, org, connection).access_token
 
 
-def _access_token(db: Session, connection: ProviderConnection) -> str:
-    expires_at = connection.expires_at
-    if expires_at and expires_at - REFRESH_MARGIN < datetime.now(UTC):
-        if not connection.refresh_token_enc:
-            raise NotConnected(
-                f"square token for tenant {connection.tenant_id} expires at {expires_at} "
-                "and no refresh token is stored; the merchant must reconnect"
-            )
-        log.info("refreshing square token for tenant %s", connection.tenant_id)
-        token = refresh(decrypt(connection.refresh_token_enc))
-        connection.access_token_enc = encrypt(token["access_token"])
-        if token["refresh_token"]:
-            connection.refresh_token_enc = encrypt(token["refresh_token"])
-        connection.expires_at = token["expires_at"]
-        db.flush()
-    return decrypt(connection.access_token_enc)
-
-
-def _pull_catalog(db: Session, org: OrgContext, client: SquareClient) -> tuple[list[dict], dict]:
-    """Locations and catalog: the part of a sync that a catalog change invalidates."""
-    stats: dict[str, int] = {
-        "locations": upsert_locations(db, org.tenant_id, normalize_locations(client.locations()))
-    }
-    catalog_rows = normalize_catalog(
-        client.catalog_objects(("ITEM", "CATEGORY", "MEASUREMENT_UNIT"))
-    )
-    stats["sold_items"] = upsert_sold_items(db, org.tenant_id, catalog_rows)
-    stats["stock_items_created"] = ensure_tracked_stock_items(db, org.tenant_id, catalog_rows)
-    stats["identifiers"] = sync_identifiers_from_catalog(db, org.tenant_id, catalog_rows)
-    stats["prices"] = sync_retail_prices(db, org.tenant_id, catalog_rows)
-    stats["presence_changed"] = sync_catalog_presence(db, org.tenant_id, catalog_rows)
-    return catalog_rows, stats
-
-
-def sync_catalog(db: Session, org: OrgContext) -> dict:
-    """Re-read the catalog alone, which is all a catalog change needs. Safe to repeat."""
-    connection = active_connection(db, org)
-    run = SyncRun(tenant_id=org.tenant_id, provider=connection.provider, kind="catalog")
-    db.add(run)
-    db.flush()
+def run_sync(db: Session, org: OrgContext) -> dict[str, int]:
+    """Bring the connection up to date now (after connecting, "Sync now", `cli sync`): its
+    locations and catalog read through the adapter at once rather than debounced (T3.03).
+    Orders are read by their own job (T3.05); exceptions and the digest by the evaluation job.
+    Raises NotConnected without an active connection; a failed read is kept as a failed run."""
+    active_connection(db, org)
     try:
-        token = _access_token(db, connection)
-        with SquareClient(token) as client:
-            _rows, stats = _pull_catalog(db, org, client)
-    except Exception as exc:
-        run.status = SyncStatus.FAILED
-        run.finished_at = datetime.now(UTC)
-        run.error = f"{type(exc).__name__}: {exc}"
-        db.commit()
-        log.exception("catalog sync failed for tenant %s", org.tenant_id)
+        stats = refresh_catalog(db, org, force=True)
+    except AdapterError:
+        db.commit()  # the failed run stays on record for the sync history
+        log.exception("catalog read failed for tenant %s", org.tenant_id)
         raise
-
-    run.status = SyncStatus.SUCCESS
-    run.finished_at = datetime.now(UTC)
-    run.stats_json = json.dumps(stats, default=str)
-    db.flush()
-    log.info("catalog sync for tenant %s: %s", org.tenant_id, stats)
-    return stats
-
-
-def run_sync(db: Session, org: OrgContext, days_back: int = SALES_LOOKBACK_DAYS) -> dict:
-    """Full pull for one tenant. Idempotent, safe to re-run.
-
-    This is the reconciliation pass: webhooks keep counts current between runs, and this run
-    is what makes them right again if one was missed, dropped, or arrived out of order.
-    """
-    connection = active_connection(db, org)
-    run = SyncRun(tenant_id=org.tenant_id, provider=connection.provider, kind="full")
-    db.add(run)
-    db.flush()
-
-    stats: dict[str, int] = {}
-    try:
-        token = _access_token(db, connection)
-        with SquareClient(token) as client:
-            catalog_rows, catalog_stats = _pull_catalog(db, org, client)
-            stats.update(catalog_stats)
-
-            locations = _square_locations(db, org, active_only=True)
-            provider_location_ids = [square_id for square_id, _ in locations.values()]
-            timezones = dict(locations.values())
-
-            if provider_location_ids:
-                tracked_ids = [
-                    row["provider_item_id"] for row in catalog_rows if row["tracks_inventory"]
-                ]
-                if tracked_ids:
-                    stats["counts"] = apply_provider_counts(
-                        db,
-                        org.tenant_id,
-                        normalize_counts(
-                            client.inventory_counts(tracked_ids, provider_location_ids)
-                        ),
-                    )
-
-                end = datetime.now(UTC)
-                orders = client.orders(provider_location_ids, end - timedelta(days=days_back), end)
-                stats["sales_rows"] = upsert_sales_daily(
-                    db, org.tenant_id, daily_sales_from_orders(orders, timezones)
-                )
-
-        # Square may hand back more locations than the plan covers; the extras stay on record.
-        tenant = get_scoped(db, org, Tenant, org.tenant_id)
-        if tenant is not None:
-            stats["locations_set_aside"] = apply_location_limit(db, tenant)
-
-        stats.update(evaluate_and_store(db, org))
-
-        run.status = SyncStatus.SUCCESS
-        run.finished_at = datetime.now(UTC)
-        run.stats_json = json.dumps(stats, default=str)
-        db.flush()
-    except Exception as exc:
-        run.status = SyncStatus.FAILED
-        run.finished_at = datetime.now(UTC)
-        run.error = f"{type(exc).__name__}: {exc}"
-        db.flush()
-        db.commit()
-        log.exception("sync failed for tenant %s", org.tenant_id)
-        raise
-
     db.commit()
-    # The digest is a job: a failed send is retried instead of lost (T1.20).
-    enqueue(db, org, "send_alert_digest", dedupe_key="digest")
-    db.commit()
+    log.info("synced tenant %s: %s", org.tenant_id, stats)
     return stats
 
 
@@ -262,7 +110,7 @@ def push_counts_to_square(db: Session, org: OrgContext, stock_item_ids: list[int
         if item.provider_variation_id and item.location_id in locations
     ]
 
-    token = _access_token(db, connection)
+    token = _access_token(db, org, connection)
     with SquareClient(token) as client:
         client.apply_inventory_changes(changes, str(uuid.uuid4()))
 
@@ -321,7 +169,7 @@ def push_adjustments_to_square(
         return 0
 
     connection = active_connection(db, org)
-    token = _access_token(db, connection)
+    token = _access_token(db, org, connection)
     with SquareClient(token) as client:
         # A repeated push of the same receipt is dropped by Square rather than added twice.
         client.apply_inventory_changes(

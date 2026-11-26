@@ -12,6 +12,7 @@ from app.models import (
     DocumentStatus,
     InventoryTransaction,
     LineStatus,
+    SalesTransaction,
     StockAlias,
     StockItem,
     TrackMode,
@@ -156,6 +157,25 @@ def test_parse_matches_what_it_recognises_and_flags_the_rest(db, tenant, locatio
     assert by_name["Northside Full Cream Milk"].stock_item_id is None
     assert by_name["Dishwasher tablets"].stock_item_id is None
     assert by_name["Dishwasher tablets"].status is LineStatus.UNMATCHED
+
+
+def test_ac_rcv_02_an_uploaded_and_read_invoice_changes_nothing_until_posted(
+    db, tenant, location, stock
+):
+    """A photo and what the reader made of it are a proposal: no balance, cost, ledger entry or
+    sales figure moves until someone posts the receiving."""
+    before = {slug: (item.qty_base, item.cost_per_base_cents) for slug, item in stock.items()}
+    transactions = db.query(InventoryTransaction).count()
+    document = upload(db, tenant, location)
+    parse_document(db, OrgContext.system(document.tenant_id), document.id, StubExtractor(INVOICE))
+    db.commit()
+    db.expire_all()
+
+    assert document.status is DocumentStatus.NEEDS_REVIEW
+    after = {slug: (item.qty_base, item.cost_per_base_cents) for slug, item in stock.items()}
+    assert after == before
+    assert db.query(InventoryTransaction).count() == transactions
+    assert db.query(SalesTransaction).count() == 0
 
 
 def test_applying_a_delivery_raises_stock_and_files_the_record(db, tenant, location, stock):

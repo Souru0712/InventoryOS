@@ -1,19 +1,31 @@
-"""Square tells us when stock moves at the till. Only if it can prove it is Square.
+"""Square's webhooks are heard only if they prove they are Square.
 
-Since T1.18 its count is noted, never applied: the ledger owns every item's quantity (C-34).
+Square's own counts never change stock: the ledger owns every item's quantity (C-34). Since T3.12
+they are not even noted; the event is stored once and ignored.
 """
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import Base, SessionLocal, engine
 from app.main import app
-from app.models import Location, Membership, ProviderConnection, StockItem, Tenant, TrackMode, User
+from app.models import (
+    Location,
+    Membership,
+    ProviderConnection,
+    StockItem,
+    Tenant,
+    TrackMode,
+    User,
+    WebhookEvent,
+)
 from app.providers.square.webhooks import signature_for, verify_signature
 from app.security import hash_password
 from app.units import Dimension
@@ -80,6 +92,7 @@ def connected():
 
 def event(quantity: str, calculated_at: datetime) -> dict:
     return {
+        "event_id": uuid4().hex,  # Square names every event; a retry repeats the id (DR-21)
         "merchant_id": MERCHANT,
         "type": "inventory.count.updated",
         "data": {
@@ -144,32 +157,28 @@ def test_an_unsigned_call_is_refused(client, connected):
     assert quantity_now(connected) == Decimal("34")
 
 
-# --- applying -------------------------------------------------------------------------------
+# --- what is acted on -----------------------------------------------------------------------
 
 
-def test_a_count_at_the_till_is_noted_but_never_changes_our_stock(client, connected):
-    response = post(client, event("30", datetime.now(UTC)))
+def test_a_count_at_the_till_is_stored_once_and_ignored(client, connected):
+    """T3.12: Square's count is neither applied nor noted; the event is kept, marked ignored."""
+    payload = event("30", datetime.now(UTC))
+    response = post(client, payload)
     assert response.status_code == 200
-    assert response.json()["seen"] == 1
+    assert response.json() == {"ignored": "inventory.count.updated"}
+    assert post(client, payload).json() == {"duplicate": True}
     assert quantity_now(connected) == Decimal("34")
     with SessionLocal() as db:
-        assert db.get(StockItem, connected).last_synced_at is not None
-
-
-def test_a_count_calculated_before_our_last_read_is_ignored(client, connected):
-    # An offline till can deliver yesterday's number today; older news is not even noted.
-    post(client, event("30", datetime.now(UTC)))
-    stale = datetime.now(UTC) - timedelta(days=1)
-    response = post(client, event("99", stale))
-    assert response.json()["seen"] == 0
-    assert quantity_now(connected) == Decimal("34")
+        assert db.get(StockItem, connected).last_synced_at is None
+        [stored] = db.scalars(select(WebhookEvent)).all()
+        assert (stored.event_type, stored.status) == ("inventory.count.updated", "ignored")
 
 
 def test_another_event_type_is_acknowledged_and_ignored(client, connected):
     payload = event("1", datetime.now(UTC))
-    payload["type"] = "order.created"
+    payload["type"] = "payment.created"
     body = post(client, payload).json()
-    assert body["ignored"] == "order.created"
+    assert body["ignored"] == "payment.created"
     assert quantity_now(connected) == Decimal("34")
 
 

@@ -90,7 +90,7 @@ def sales_without_recipe(
         sold.id: sold.provider_item_id for sold in db.scalars(select_scoped(org, SoldItem))
     }
     units = Decimal("0")
-    products: set[int] = set()
+    products: set[object] = set()
     for location in places(db, org, location_id):
         first, last = _days(location, period, now)
         for sale in daily_sales(db, org, first, last, location.id):
@@ -101,7 +101,10 @@ def sales_without_recipe(
                 continue
             if sale.units > 0:
                 units += sale.units
-                products.add(size or -(sale.sold_item_id or 0))
+                # One product each: our size, else the legacy sale item, else the POS's id.
+                products.add(
+                    size or (sale.sold_item_id and -sale.sold_item_id) or sale.external_ref
+                )
     return completeness_note(units, len(products))
 
 

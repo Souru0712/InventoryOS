@@ -1,0 +1,27 @@
+{# Is sales data flowing, per location (T3.09; CMD-FR-08, AC-CMD-05, AC-CMD-06). #}
+<div class="sales-status">
+{% for s in statuses %}
+  {% if s.mode == "connected" %}
+    {% set h = s.health %}
+    {% if h.state == "critical" %}
+      <p class="notice error" data-status="critical"><strong>{{ s.name }}:</strong> Square stopped accepting the connection, so sales are not arriving. {% if can(request, "pos.manage") %}<a href="/app/connection">Reconnect Square</a>{% endif %}</p>
+    {% elif h.state == "setup" %}
+      <p class="small muted" data-status="setup"><strong>{{ s.name }}:</strong> Square is connected; choose which location tracks its sales. {% if can(request, "pos.manage") %}<a href="/app/connection">Choose</a>{% endif %}</p>
+    {% elif h.stale %}
+      <p class="notice error" data-status="stale"><strong>{{ s.name }}:</strong> {% if h.reads.last_success %}Square sales last arrived {{ h.reads.last_success.strftime("%d %b %H:%M") }} UTC, more than two hours ago{% else %}No Square sales have arrived yet{% endif %}. Sales since then may be missing, not zero. {% if can(request, "pos.manage") %}<a href="/app/connection">See the connection</a>{% endif %}</p>
+    {% elif h.failing %}
+      <p class="small" style="color:var(--danger, #b3261e);" data-status="failing"><strong>{{ s.name }}:</strong> the last read of Square failed; it is tried again in a few minutes. Sales last arrived {{ h.reads.last_success.strftime("%d %b %H:%M") }} UTC.</p>
+    {% elif h.waiting_events %}
+      <p class="small" style="color:var(--danger, #b3261e);" data-status="behind"><strong>{{ s.name }}:</strong> Square sales last arrived {{ h.reads.last_success.strftime("%d %b %H:%M") }} UTC, but {{ h.waiting_events }} change{{ "" if h.waiting_events == 1 else "s" }} from Square {{ "is" if h.waiting_events == 1 else "are" }} still waiting to be read.</p>
+    {% else %}
+      <p class="small muted" data-status="ok"><strong>{{ s.name }}:</strong> Square sales last arrived {{ h.reads.last_success.strftime("%d %b %H:%M") }} UTC.{% if h.unmapped and can(request, "mapping.manage") %} <a href="/app/mappings">{{ h.unmapped }} product{{ "" if h.unmapped == 1 else "s" }} not mapped</a>.{% endif %}</p>
+    {% endif %}
+  {% else %}
+    <p class="small{% if s.missing %}" style="color:var(--danger, #b3261e);{% else %} muted{% endif %}" data-status="{{ 'missing' if s.missing else 'standalone' }}"><strong>{{ s.name }}:</strong>
+      {% if s.last_sales_day %}Sales last entered for {{ s.last_sales_day.strftime("%a %d %b") }}.{% else %}No sales entered yet.{% endif %}
+      {% if s.missing %}Missing: {% for day in s.missing %}{{ day.strftime("%a %d %b") }}{{ ", " if not loop.last }}{% endfor %}.{% endif %}
+      {% if can(request, "sales.record") %}<a href="/app/sales/daily">Enter sales</a>{% endif %}
+    </p>
+  {% endif %}
+{% endfor %}
+</div>

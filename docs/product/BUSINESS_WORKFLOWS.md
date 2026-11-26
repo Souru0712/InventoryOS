@@ -307,8 +307,8 @@ Steps:
 ## WF-10 Inventory adjustment
 
 Steps:
-1. Choose item, quantity (+/−), reason (found, correction, sample, internal use, returned to
-   supplier, other), note.
+1. Choose item, quantity (+/−), reason (found, correction, sample, transfer in from outside,
+   other; INV-FR-19, C-50), note.
 2. Post; above-threshold adjustments create an Owner review exception (R1) or need approval
    (R1.1 option).
 

@@ -21,7 +21,6 @@ from app.db import SessionLocal, engine, is_postgres
 from app.extract.invoice import StubExtractor
 from app.items import NewItem, create_item, stock_at
 from app.ledger.posting import balance, movements_total, post_count, post_transaction
-from app.load.upsert import apply_provider_counts
 from app.main import app
 from app.models import (
     Document,
@@ -402,23 +401,8 @@ def test_r1_r2_sales_never_change_stock_without_a_movement(db, tenant, location)
     assert kinds(db) == ["opening"]
 
 
-# --- Square counts change nothing (C-34; probe R5 replaced) ------------------------------------
-
-
-def test_r5_a_square_count_never_changes_stock_and_a_repeat_is_harmless(db, tenant, location):
-    cups = stock(
-        db,
-        location,
-        track_mode=TrackMode.PROVIDER,
-        provider_variation_id="VAR1",
-    )
-    row = {"provider_item_id": "VAR1", "provider_location_id": "loc-1", "quantity": D(7)}
-    assert apply_provider_counts(db, tenant.id, [row]) == 1
-    assert apply_provider_counts(db, tenant.id, [row]) == 1
-    db.commit()
-    assert recorded(db, cups) == (D(10), D(10), D(10))
-    assert kinds(db) == ["opening"]
-    assert db.get(StockItem, cups.id).last_synced_at is not None  # heard, not applied
+# Square's counts change nothing (C-34; probe R5): since T3.12 they are not read at all, and a
+# count event is stored and ignored (tests/test_webhooks.py).
 
 
 # --- new stock rows open through the ledger ----------------------------------------------------

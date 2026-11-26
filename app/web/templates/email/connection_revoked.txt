@@ -1,0 +1,9 @@
+{{ provider }} is no longer connected
+
+{{ provider }} stopped accepting {{ business }}'s connection, so new sales are not coming in and stock is not being taken out for them. Your history is kept.
+
+Reconnect {{ provider }}:
+
+{{ link }}
+
+If you disconnected it on purpose, you can ignore this email.

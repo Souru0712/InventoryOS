@@ -28,6 +28,16 @@ KINDS: Mapping[str, JobKind] = {
     "verify_ledger": JobKind("Checking the ledger", max_attempts=3),
     # What a sale used leaves stock (T2.05, WF-12); a failure leaves its lines pending.
     "consume_sale": JobKind("Taking a sale's ingredients out of stock"),
+    # A POS stopped accepting the connection: the Owners hear at once (T3.02, AC-POS-09).
+    "connection_revoked_email": JobKind("Telling the Owner the POS connection ended"),
+    # Past sales of a newly mapped POS product, reversed and posted again (T3.04, WF-28).
+    "reprocess_mapping": JobKind("Reprocessing sales after a mapping"),
+    # A connection's changed orders, read from its cursor (T3.05, SQ-11).
+    "ingest_orders": JobKind("Reading the POS's orders"),
+    # A catalog change at the POS, read as a job, never in the webhook's request (T3.06).
+    "refresh_catalog": JobKind("Reading the POS's catalog"),
+    # The POS's count of each closed business day against ours (T3.08, SQ-17).
+    "reconcile_orders": JobKind("Checking the POS's sales against ours"),
 }
 JOB_KINDS = tuple(KINDS)
 

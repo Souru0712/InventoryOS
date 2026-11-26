@@ -28,6 +28,7 @@ CATEGORIES = {
     "product": "Products and modifiers",
     "recipe": "Recipes",
     "connection": "Connections",
+    "mapping": "POS mappings",
     "billing": "Plan and billing",
     "exception": "Exceptions",
 }

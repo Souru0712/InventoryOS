@@ -5,6 +5,562 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — Gate G5 passed; Stage 3 decisions PD-43 to PD-53 made
+
+**Decisions**
+- The owner signed off gate G5 (Square connected) on the evidence in
+  [GATE_REVIEWS](roadmap/GATE_REVIEWS.md) ("sign off G5 as well"). Stage 3 is complete once PR
+  #63 is merged, on the owner's word.
+- **C-50**, approved: PD-43, -44, -45, -46, -47, -48, -49, -51. DR-22 restated, WF-10 aligned.
+  PD-44 stays as built (an unresolved refund, no exception).
+- **C-51**, PD-53 modified: a recipe version may take an explicit earlier effective date; past
+  sales change only by an authorized, previewed reprocessing within PD-17's bounds.
+- **C-52**, PD-52 modified: a local tunnel for development; staging mandatory before
+  production, with a validation list (T0.09 and the G-R1 gate updated).
+- **C-53**, PD-50 with a safeguard: 30 days, never past the location's last count.
+- AC-WST-01 (G3) was recorded earlier the same day.
+
+**Verified**
+- CI on PR #63's head `dbeb10d`: all six jobs green, PostgreSQL 16 included.
+
+**Files changed**
+- `docs/product/PRODUCT_DECISIONS.md` (C-50 to C-53, PD-43 to PD-53 decided, PD-54 rewritten),
+  `DOMAIN_MODEL.md` (DR-22), `BUSINESS_WORKFLOWS.md` (WF-10), `docs/roadmap/GATE_REVIEWS.md`,
+  `DEVELOPMENT_TASK_BREAKDOWN.md` (T0.09), `TESTING_AND_QUALITY_STRATEGY.md` (G-R1),
+  `docs/roadmap/README.md`; this log.
+
+**Open issues** (to build, each on the owner's word)
+- C-51: back-dated recipe versions and an explicit "apply to past sales" reprocessing (DR-16
+  amended when built).
+- C-53: refuse a cutover date before the location's last count.
+- C-50, PD-48: add "Standalone (no POS)" to the "Protect main" required checks (the owner's
+  setting).
+- PD-54, if approved as proposed: a "no sales today" record and one-off closed days.
+
+**Decisions for the owner**
+- PD-54 stays open.
+
+---
+
+## 2026-11-26 — AC-SAL-08 completed: sales origin and Standalone coverage (G4 follow-up)
+
+The G4 review found AC-SAL-08 half built: every sale stored its origin, but no report showed it
+and no Standalone report showed coverage. This finishes it on `stage3` (STD-FR-07, WF-24).
+
+**Implemented**
+- **The rule** (`sales_coverage()` in `app/transform/analytics.py`, pure): per location over a
+  period, the business days with counted sales by origin, and on Standalone days how many open
+  days have sales. An open day counts while a hand-entry or file-import source is of record;
+  today counts once it has sales; a POS day, a closed day or a day after today never counts.
+- **The reader:** `sales_coverage_report()` in `app/reports.py`. It reads sources of record
+  (`origins_of_record()`) and counted sales (`sold_origins()`) through `app/sales.py`.
+- **Reports page:** a "Where the sales come from" card, e.g. "Entered by hand on 5 days. Sales
+  on 5 of 6 open days; figures from sales leave out the 1 day without any". Consumption and
+  cost of sales name their sales' origins.
+- **CSV:** a new `sales_coverage` table, and a "Sales from" column on `cost_of_sales`.
+- **Weekly summary** (page and both email parts): "Sales last week", per location, its origins
+  and "Sales on N of M open days" (WF-24's sales-data coverage).
+
+**Verified**
+- `tests/test_sales_coverage.py` (6): the rule (open days, today, the future, closed days,
+  non-Standalone days), origin order, the report with a hand-entry and a POS location, the page
+  and both CSV tables, and the weekly summary, its page and email.
+- The report, reports II, email, daily sales, sales, sales status, sales import, isolation,
+  headers and Standalone tests: 201 passed. Ruff, mypy and the docs checker are clean.
+
+**Decisions for the owner**
+- PD-54 (OPEN): which days Standalone coverage counts. Recommended: as built.
+
+**Open issues**
+- None. G4 still waits on the manual checks AC-ANL-07 and AC-SAAS-10, and sign-off.
+
+---
+
+## 2026-11-25 — T3.12 Remove the legacy Square sync path (built on branch)
+
+**Implemented**
+- **`run_sync`** (connecting, "Sync now", `cli sync`) is now a forced `refresh_catalog()`
+  through the adapter. A failed read stays in the sync history, and a 401 marks the connection
+  revoked.
+- **The hourly read:** the scheduler's per-tenant `sync_all_tenants` loop is replaced by
+  `queue_catalog_refresh`, one `refresh_catalog` job per connected business (SCL-06). Exceptions
+  and the digest stay with the evaluation job.
+- **Removed:**
+  - `_pull_catalog` and the legacy catalog rows (sale items, POS-counted stock items, Square SKUs
+    and prices on them, presence);
+  - Square count reads (`inventory_counts`, `normalize_counts`, `apply_provider_counts`);
+  - the count-webhook handling: `inventory.count.updated` is now stored once and ignored;
+  - the daily-totals writer `upsert_sales_daily` and its aggregator `daily_sales_from_orders`;
+  - `app/load/`. Its `slugify` moved to `app/transform/items.py`.
+- **Fixed:** the adapter's catalog read now asks for MEASUREMENT_UNIT objects. Without them,
+  Saffron's `mg` flipped back and forth between the two paths in the T3.11 run, and would have
+  been lost once only the adapter read the catalog.
+- **Unmapped Square products:** `daily_sales()` keeps a POS line's own id when the line is
+  neither a size nor a legacy sale item. "Sold without a recipe" and the completeness note name
+  and count each unmapped Square product from the external catalog, instead of lumping them as
+  "A POS item".
+
+**Verified**
+- **`tests/test_legacy_sync_removed.py` (5):**
+  - a sync writes only the external catalog and never reads counts, even with write-back on;
+  - "Sync now" reads at once while events are debounced;
+  - the hourly job is queued per business and merged, and the old loop is gone;
+  - unmapped products are named from the catalog;
+  - a static check that nothing writes the legacy rows (the acceptance).
+- **Rewritten onto the adapter path:** catalog, connection, webhook, sales, normalizer and
+  ingestion tests.
+- **Removed:** `tests/test_square_catalog.py`, which covered only the legacy rows.
+- Full suite, ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0085 (Proposed).
+
+**Decisions for the owner**
+- None new. Still open: PD-43 to PD-53.
+
+**Open issues**
+- Square barcodes and prices are no longer copied onto stock items. They applied only to
+  POS-counted items, which C-34 and C-38 retired. Existing rows stay as history.
+- T3.11's smaller findings are unchanged; candidates for a later Stage 3 or Stage 4 task.
+
+---
+
+## 2026-11-25 — T3.11 Square sandbox run (every step passing; run 22–25 Nov)
+
+Run on this computer through the owner's ngrok tunnel (PD-52), against the sandbox seller
+"InventoryOS" (ML0A0YB948E8F), its own test account so the run shares no menu with JuJu or the
+Data Engineering project. App: `stage3` with a scratch SQLite database, scheduler in the web
+process, email off. The owner signed in and clicked Allow; test logins were entered on localhost.
+
+**Run** (times UTC; full notes in the run log kept with the run)
+
+| # | Result | Notes |
+|---|---|---|
+| 1 | pass | Catalog seeded at L4F1A4F8G5ZJ9; a second run creates nothing |
+| 2 | pass | Sandbox Run Cafe, location Main (America/New_York) |
+| 3 | pass | Connected to ML0A0YB948E8F; granted scopes exactly MERCHANT_PROFILE_READ, ITEMS_READ, ORDERS_READ. No consent screen here (the app was already authorized in the console); it showed at step 18 |
+| 4 | pass | Main tracks the Square location; 4 items, 5 variations, 3 modifiers; units `each`, `mg`; categories Coffee, Bakery, Pantry. The legacy hourly sync created no stock items this time |
+| 4b | pass | Added: a second Square location (Downtown) tracked by a second location; a latte sold at each took milk only at its own location (5,000 → 4,760 ml; 9,180 → 8,940 ml) |
+| 5 | pass | A second business connecting the same seller: "That Square account is already connected to another business"; the first connection and its token unaffected |
+| 6 | pass | Latte 12/16 oz and Croissant made the business's products (16 oz added as a size of Latte), modifiers mapped, audited; Latte 12 oz recipe milk 240 ml |
+| 7 | pass | Main switched to Square from 22 Nov; hand entry for that day refused |
+| 8 | pass | 2 × Latte 12 oz with oat milk: arrived by webhook in 3 s; milk −480 ml at the order's completion time; dashboard "Square sales last arrived 22 Nov 15:41 UTC" |
+| 9 | pass | The console cannot resend events: the order.created event, resent 3 times signed with the subscription key, answered `duplicate` each time; revision 1, milk unchanged; the scheduled re-read changed nothing |
+| 10 | pass | Forged signature 400, nothing stored |
+| 11 | pass | Open and cancelled orders staged; no sale, no consumption |
+| 12 | **fail → fixed**, pass on retest | Defect (T3.06): see Fixed. Retest 20:31: $2.50 refund recorded in 6 s, linked to its sale, net 20.50 → 18.00, stock unchanged |
+| 13 | pass | Comp: 240 ml used, net 0 |
+| 14 | **pass after fix** | Defect (T3.04): see Fixed. With a recipe in effect, the remapped sale posted once at its own time (−100 ml); `unmapped_product` opened and resolved on mapping |
+| 15 | pass | Subscription disabled; the sale arrived by the 5-minute read 2 minutes after completion; re-enabled |
+| 16 | pass (25 Nov) | Reconnected (consent screen, Allow), then the `reconcile_orders` job: sync history "Daily check · OK · 6 day(s) checked, 0 differed": Main and Downtown, 22–24 Nov; 22 Nov Main 8 orders and 6 lines at Square and here, Downtown 1 and 1; no `pos_reconciliation_mismatch` |
+| 17 | pass (method changed) | The sandbox dashboard has no apps page, and the console revokes only its own token: the authorization was revoked through Square's API from outside the app. `oauth.authorization.revoked` arrived in 12 s: connection revoked, critical `sync_failure`, Owner email logged, dashboard "Square stopped accepting the connection" |
+| 18 | pass | Reconnect showed Square's consent screen (InventoryOS account, three read permissions); Allow resolved the exception; reads resumed. Disconnect: tokens cleared, history kept, Square's revocation event ignored |
+
+`pos-report` at the end: connection disconnected; 2 Square locations, 2 tracked; catalog 4 items,
+5 variations, 3 modifiers; orders canceled 1, completed 9 (2 of them return orders), open 1, 7
+became sales; refunds 1 recorded, 0 unmatched; sales 7 (lines gap 2, posted 5); money sales
+34.75, refunded 2.50, net 32.25; webhook events order.created 10, order.updated 24, revocation 1
+processed; payment and refund events ignored.
+
+**Answers to the runbook's questions**
+- **Refund shape:** Square puts a refund on a new *return order* (state COMPLETED, `returns` naming
+  the source order, `refunds` with the money); the original order gets neither. The Orders API's
+  refund status is APPROVED, never COMPLETED.
+- **Categories:** `reporting_category` reached the external products.
+- **Completion:** a paid order with no fulfilment completed on payment.
+
+**Fixed** (commit e317fd2, with tests)
+- Square's APPROVED refunds were never recorded: the normalizer now reads APPROVED (and COMPLETED)
+  as completed; the recorded fixtures used COMPLETED, which Square does not send there.
+- The reprocess preview resolved recipes at the present moment while the job uses each sale's own
+  moment (DR-16), so it promised stock use the job never posted. It now resolves per sale and says
+  how many sales predate the size's recipe.
+- Run kit (commit 0f2f5cc): `--location` and `location NAME` in the sandbox script.
+
+**Verified**
+- The run above. Suites touching the changes (184 tests), ruff, mypy, docs checker.
+
+**Decisions for the owner**
+- **PD-53 (new):** may a size's first recipe cover sales made before it was saved? Built: no
+  (DR-16); a sale of a product made from Square before it had a recipe stays a gap, and its
+  exception can only be dismissed.
+- Still open: PD-43 to PD-52.
+
+**Open issues**
+- The run leaves Sandbox Run Cafe connected again (step 16 needed it).
+- The refund from the first attempt at step 12 stays unrecorded: the computer slept through the
+  hourly re-read, and the 2-hour window no longer reaches it.
+- Revoking at Square also ended the console token the sandbox script uses; renew it in the console
+  before placing more orders.
+- Findings for later tasks:
+  - the hand-entry refusal names the source "pos";
+  - the hand-entry form still shows on a POS day;
+  - a size made from Square carries no price;
+  - cost per ml displays as $0.00;
+  - the suggested size appears twice in the mapping menu;
+  - a comp sale stores no discount;
+  - the reprocess start ignores the opening count;
+  - return orders count as completed orders in `pos-report` and on the connection page;
+  - the header still says StockPulse.
+
+---
+
+## 2026-11-21 — T3.11 run kit prepared (the run itself waits for the owner)
+
+**Implemented**
+- `docs/roadmap/SQUARE_SANDBOX_RUN.md`: what to set up in Square and the app, 19 steps each naming
+  its acceptance criterion (AC-POS-01..11, AC-SAL-06, POS-FR-06/26, SQ-02/04) and what must be
+  true after it, a run log to copy here, and the questions the run answers.
+- `scripts/seed_square_sandbox.py` reworked: `catalog` (a café: Latte 12/16 oz, Cold brew,
+  Croissant, Saffron by the milligram; Milk and Ice modifier lists; categories) and `sell`
+  (paid, completes; `--comp`), `open`, `cancel`, `refund`, `orders`. Sandbox only, the seller's
+  token never printed.
+- `python -m app.cli pos-report --tenant N` (`app/pos_report.py`): connection and health, tracked
+  locations, catalog with units and categories, mappings, orders and sales, refunds, open
+  exceptions, recent runs, webhook events.
+- The Square normalizers read an item's category from `reporting_category`, `categories` or the
+  older `category_id` (Square deprecated `category_id`).
+
+**Verified**
+- `tests/test_sandbox_kit.py` (9): the exact catalog the script creates, as Square returns it,
+  normalizes to the five sizes with categories, `mg` and three modifiers; re-runs create only what
+  is missing; order bodies (modifiers, comp); sandbox-only and token checks; category fields; the
+  report. Ruff, mypy, docs checker.
+
+**Decisions for the owner**
+- **PD-52 (new):** where the run happens: staging (C-49, about $24.50 a month) or this computer with
+  a tunnel (recommended).
+- **OD-05:** provided. Correction 2026-11-22: the sandbox application credentials, seller token
+  and webhook key were already in the owner's local `.env`, and `APP_BASE_URL` is an ngrok address;
+  this entry first listed them as missing.
+- Still open: PD-43 to PD-51.
+
+---
+
+## 2026-11-21 — T3.10 Mode switching with cutover (built on branch)
+
+**Implemented**
+- `cut_over()` / `cutover_plan()` in `app/sales.py`: from business date D a location's sales come
+  from one source (POS provider, hand entry, file imports); every other source of record stops the
+  day before (or is retired whole), its counted sales from D are voided (consumption given back),
+  and the chosen source's sales from D are counted and consumed; earlier days untouched.
+- The cutover sticks: `sales_sources.fixed_from` (migration `c4e8a2f6b9d1`) stops a late POS sale
+  for an earlier day from moving the start back; the POS source a sale lands in is the one
+  counting that day.
+- `app/sales_modes.py`: Connected needs a tracking location of an active connection; D within 30
+  days of today; no switch to the source already in use; default D today, or the day after the
+  POS's last sales day when leaving it; audited `settings.sales_mode`.
+- `/app/locations/{id}/sales-source` (Owner, `subscription.manage`): preview of the days that stop
+  and start counting, then the switch; linked per location. Onboarding: Connected step 7 needs a
+  tracking location; step 8 "Map your Square products" added.
+
+**Verified**
+- `tests/test_sales_modes.py` (6): AC-SAL-06 from a past cutover (hand day voided, POS from D
+  counted, POS before D ignored, prior history intact, hand entry refused, audit); Connected to
+  Standalone at the default D; the cutover in New York's business day (22:00 the day before stays
+  out); the rules; the onboarding step; the page. Isolation cases for both routes. Related suites,
+  ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0084 (Proposed).
+
+**Decisions for the owner**
+- **PD-50 (new):** how far a cutover may reach (built: 30 days either way).
+- **PD-51 (new):** should disconnecting switch locations to hand entry? (built: no, a deliberate
+  switch).
+- Still open: PD-43 to PD-49.
+
+**Open issues**
+- The plan following the mode at cutover is T4.02's (PD-39).
+
+---
+
+## 2026-11-20 — T3.09 Integration health and sales-source status (built on branch)
+
+**Implemented**
+- `app/transform/integration_health.py` (pure): a connection judged from its order reads (last
+  success, last failure, 24-hour tally and error rate), webhook events waiting over 15 minutes,
+  its status and how many locations it feeds: ok, setup, warning (stale over 2 h, failing,
+  events behind), critical (revoked), off.
+- `app/sales_status.py`: per location, Connected (tracking a POS location of an active or revoked
+  connection: its health) or Standalone (last business day with sales, missing open days).
+- The dashboard shows each location's status (replacing the business-wide "last synced" line): a
+  stale POS shows the last success and "may be missing, not zero" (AC-CMD-05); Standalone shows
+  the last day entered and the missing days (AC-CMD-06); revoked asks for a reconnect.
+- `/app/connection` health table: last successful read, failed reads in 24 h, waiting events,
+  token, products sold but not mapped.
+
+**Verified**
+- `tests/test_sales_status.py` (12): every health state, the error rate, AC-CMD-05 and AC-CMD-06
+  through the pages, waiting events and the "behind" warning, connected/standalone/revoked/
+  disconnected classification and the location filter. Related suites, ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0083 (Proposed).
+
+**Decisions for the owner**
+- **PD-49 (new):** should a quiet POS (over 2 h without sales, no failure) email the Owner, or
+  is the dashboard warning enough? Recommended: warning now, the daily alert email later.
+- Still open: PD-43 to PD-48.
+
+---
+
+## 2026-11-20 — T3.08 Reconciliation and failure recovery (built on branch)
+
+**Implemented**
+- Hourly wider re-read: once an hour (`order_cursors.reread_at`, migration `b3d7f1a5c8e2`) the
+  order read goes back two hours, so a late order (offline payment, lost webhook) is in within the
+  hour (AC-POS-07).
+- `reconcile_orders` job (every 6 hours): for each tracked location's last 3 closed business days,
+  the POS's completed orders by completion time (new adapter capability `completed_orders()`;
+  Square by `closed_at`) against our staged completed orders, orders and lines. A difference opens
+  `pos_reconciliation_mismatch` (both counts in its title), the differing orders are read again,
+  and the next matching check resolves it; per-day counts on a `reconciliation` sync run.
+- A failed read marks its sync run failed and adds to a `sync_failure` (warning) on the connection;
+  the job finishes, the cursor stays, the next read retries; the next success clears it; webhook
+  events wait meanwhile.
+- `/app/connection/history`: the last 50 reads, catalog reads and checks with what each did or its
+  error; mismatch exceptions link to it.
+
+**Verified**
+- `tests/test_reconciliation.py` (8): AC-POS-07 with a fake that honours windows; AC-POS-08
+  (opened, recovered, resolved by the next check); a line-count difference; a failure kept and
+  cleared; a failed check resolves nothing; the schedule; Square's day search; the history page.
+  T3.05/T3.06 failure tests updated to the kept-failure behaviour. Related suites, ruff, mypy,
+  docs checker.
+
+**Decisions**
+- ADR-0082 (Proposed).
+
+**Decisions for the owner**
+- None new in this task. Open register (PRODUCT_DECISIONS §3): PD-43 one Square account per
+  business, PD-44 `orphan_refund` exception, PD-45 `unmapped_product` from sales only, PD-46
+  7-day order-line backfill, PD-47 adjustment reason list, PD-48 Standalone as a required check.
+
+**Open issues**
+- "No success beyond a threshold" as `sync_failure` is lag: T3.09.
+
+---
+
+## 2026-11-20 — T3.07 Refunds, voids, discounts (built on branch)
+
+**Implemented**
+- A completed POS refund is a sales return (`record_pos_refund()`), once per refund id, on the
+  day money went back, linked to the order's sale and, by line key, to its lines (amount = share
+  of the line's net); never restocks (DR-26); pending/rejected/failed wait.
+- A refund before its order keeps its reference and line keys (`original_reference`,
+  `line_key`, migration `a9e4c7b2d6f3`) and is linked when the sale is recorded.
+- A completed order voided at the POS voids its sale (consumption given back); cancelled before
+  completion was never a sale. Discounts and comps change money, never consumption.
+- `sales_money()`: counted sales less refunds of the source of record. Square returns name their
+  original order; several refunds on one order are recorded by amount only.
+- `/app/connection` counts refunds and unmatched ones; the amount only for `inventory.view_costs`.
+
+**Verified**
+- `tests/test_refunds_voids.py` (8): AC-POS-04, a completed order voided, AC-POS-05 (linked,
+  partial line amount, net lowered, stock unchanged, recorded once), a refund before its order,
+  a pending refund, a comp, Square's return shape, the page. Related suites, ruff, mypy, docs
+  checker.
+
+**Decisions**
+- ADR-0081 (Proposed).
+
+**Open issues**
+- **Owner decision proposed:** WF-17's info exception for an orphan refund has no REC-FR-12
+  type; add `orphan_refund` (info)? Until then the connection page counts unmatched refunds.
+- Square's refund and return shape to be confirmed on the sandbox (T3.11).
+
+---
+
+## 2026-11-20 — T3.06 Webhooks with dedupe via jobs (built on branch)
+
+**Implemented**
+- `webhook_events` generalized (status received/processed/ignored, the job that acts on it,
+  entity ids, processed time), written only by `app/webhook_events.py`; a verified event is
+  stored by (provider, event id) before anything acts on it, so a repeat is answered `duplicate`.
+- `/webhooks/square` answers at once: order events queue `ingest_orders`, catalog events the new
+  `refresh_catalog` (provider-neutral, skips a read within a minute), both deduplicated per
+  business; revocation and Square's counts are acted on as they arrive; unknown merchants and
+  unread types are stored as ignored; a bad signature or missing id is refused, logged without
+  payload.
+- A job that succeeds marks the events of its kind received before it started; a failure leaves
+  them received and retries.
+
+**Verified**
+- `tests/test_webhook_jobs.py` (8): AC-POS-10; stored once and answered without reading Square;
+  AC-POS-03 (three deliveries, two more edits and a reconciliation read consume once); a failed
+  read leaves events waiting; a catalog burst is one read; ignored events; mid-run events wait;
+  the single-writer rule. `tests/test_webhooks.py` events now carry ids. Related suites, ruff,
+  mypy, docs checker.
+
+**Decisions**
+- ADR-0080 (Proposed).
+
+**Open issues**
+- A catalog change reaches the legacy `sold_items` rows with the hourly sync until T3.12.
+
+---
+
+## 2026-11-20 — T3.05 Order-line ingestion (built on branch)
+
+**Implemented**
+- -a: `external_orders` / `external_order_lines` staged per connection (unique per connection and
+  order id, per order and line uid; a newer version replaces, an older or repeated one changes
+  nothing) and `order_cursors` (orders changed since the last read, less a 10-minute overlap),
+  written only by `app/order_ingestion.py` through the adapter contract (`updated_at` added).
+  Square's order search follows `updated_at` in every state, ten locations per request.
+- -b: a completed order at a tracked location is one sale (`record_pos_order()`), a line per
+  order line by uid, so a resend or new version is a revision; consumption follows as the
+  `consume_sale` job at the completion moment. Open, cancelled and untracked orders are staged
+  only; custom amounts are no sale line; an unmapped modifier raises `unmapped_product` until
+  mapped.
+- Cutover: the first read sets `lines_from` seven days back and voids the legacy daily totals
+  from it (`retire_daily_totals()`); the hourly sync reads no orders (its writers go in T3.12).
+- `ingest_orders` job queued every 5 minutes per connected business and by "Sync now"; a revoked
+  authorization is marked, not retried; each read is a `SyncRun` of kind `orders`; the CLI sync
+  reads orders too (`--days` gone).
+- `/app/connection` shows the order import summary.
+
+**Verified**
+- `tests/test_order_ingestion.py` (10): one sale per order with a line per uid and once-only
+  consumption across a resend, a new version and an old version (AC-POS-03 ingestion side);
+  open/cancelled/untracked/pre-cutover orders staged only; the cursor and overlap; daily totals
+  voided from the cutover, counted once; unmapped modifier exception; revoked vs passing failure;
+  the hourly sync reads no orders; Square's search body; the schedule; the CLI. Related suites,
+  ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0079 (Proposed).
+
+**Open issues**
+- AC-POS-02 (within 5 minutes, sandbox) runs in T3.11; webhooks (T3.06) bring it nearer real time.
+- An order cancelled after completion stays a sale until T3.07.
+
+---
+
+## 2026-11-19 — T3.04 Product mapping and reprocessing (built on branch)
+
+**Implemented**
+- `product_mappings`: a POS variation to a product size, a POS modifier to a modifier; one active
+  mapping per external id, a change supersedes (history kept), written only by
+  `app/mappings.py`, audited under the new `mapping` category.
+- `/app/mappings`: POS products (unmapped and most sold first, with sales counts), suggestions by
+  name, "make it one of my products", modifiers; mapping clears the item's open
+  `unmapped_product`.
+- New POS sales take their size from the mapping. Reprocessing: a preview (sales, units, what
+  they would take from stock) from the last count of what the size uses, at most 30 days back
+  (PD-17); confirmed, a `reprocess_mapping` job points the lines at the size and reverses and
+  re-posts each sale at its own moment; a repeat changes nothing.
+- DM-13's mapping half (migration `d5a8c2e6f9b1`): carried-over POS products mapped to the size
+  their sold item became.
+
+**Verified**
+- `tests/test_mappings.py` (11): suggestions, the window rules, AC-POS-06 (unmapped, mapped,
+  previewed, reprocessed once at the original moment), a remap, the last-count start, new sales
+  through the mapping, history and audit, make-it-mine, a retired size refused, the screens, the
+  single-writer rule. DM-13 mapping migration test; isolation cases for four routes; related
+  suites, ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0078 (Proposed).
+
+**Open issues**
+- A modifier mapping applies to sales recorded after it (past lines kept no POS modifier).
+
+---
+
+## 2026-11-19 — T3.03 Location mapping and catalog sync (built on branch)
+
+**Implemented**
+- `external_locations`, `external_products`, `external_modifiers`, unique per (connection,
+  external id), written only by `app/pos_catalog.py` from the contract's normalized types; what
+  Square stops listing is kept inactive; a re-sync of the same listing changes nothing.
+- The sync records Square's locations and no longer creates or edits the business's (G11). A
+  Square location is tracked by one of the business's active locations (`provider_location_id`),
+  chosen on `/app/connection`, audited; the plan's allowance holds because only existing
+  locations can track one.
+- One catalog read (now with modifier lists) feeds the external catalog and the legacy
+  `sold_items` path the sales still read until T3.12.
+- `METRIC_MILLIGRAM` maps to `mg` (SQ8); Square units are informational (SQ-09).
+- DM-13 migration `b7d2f4c8e1a6`: Square location rows and Square-origin sold items copied to
+  the business's latest Square connection; rows of a business with no connection reported and
+  skipped.
+- `/app/connection` shows the import summary (items, variations, modifiers) and the location
+  mapping.
+
+**Verified**
+- `tests/test_pos_catalog.py` (6): import with units and modifiers, idempotent re-sync,
+  inactive-not-deleted, no location created and no sales read until tracked, the tracking rules
+  (move, untrack, refusals, other business, disconnected), the screen, the single-writer rule.
+  DM-13 migration test; isolation case for the new route; related suites, ruff, mypy, docs
+  checker.
+
+**Decisions**
+- ADR-0077 (Proposed). DM-13's mapping half moves to T3.04 with `product_mappings`.
+
+**Open issues**
+- Creating a location from a Square location in one step (today: add the location, then map).
+
+---
+
+## 2026-11-19 — T3.02 Square connection lifecycle (built on branch)
+
+**Implemented**
+- `app/connections.py`, the only writer of `provider_connections`: connect (refuses a merchant
+  another business holds), refresh before expiry, disconnect (revokes at Square, clears tokens,
+  keeps history), revocation (401, expired with nothing to refresh, or Square's
+  `oauth.authorization.revoked` webhook): status `revoked`, a critical `sync_failure`, and a
+  `connection_revoked_email` job to the Owners.
+- DM-14 migration: status CHECK, token CHECK, a partial unique index on active (provider,
+  merchant); refuses to run while two businesses share a merchant.
+- Scopes cut to merchant profile, items and orders; inventory only with write-back. Without it,
+  the legacy sync no longer reads Square's counts.
+- `/app/connection`: status, Square locations, last sync, last error, reconnect, disconnect.
+  The connect routes go through the adapter; the dashboard no longer imports Square code.
+
+**Verified**
+- `tests/test_connections.py` (13): the index and token CHECK, AC-POS-11 through the service
+  and the screens, AC-POS-01 scopes and encrypted tokens, disconnect and reconnect, a disconnect
+  Square cannot confirm, refresh, AC-POS-09 (marked, critical, Owner emailed once, cleared on
+  reconnect), 401 from the sync, the revocation webhook, the single-writer rule. Related suites,
+  ruff, mypy, docs checker.
+
+**Decisions**
+- ADR-0076 (Proposed). One active connection per merchant across businesses, stricter than
+  DR-22's merchant + location, because Square's revocation ends every token the merchant
+  granted.
+
+**Open issues**
+- Merchant business name on the connection page (the contract does not read the profile).
+- Existing connections keep their old scopes until they reconnect.
+
+---
+
+## 2026-11-19 — T3.01 Adapter interface and boundary check (built on branch)
+
+**Implemented**
+- `app/providers/base.py`: the normalized types of INTEGRATION_REQUIREMENTS §2, the `PosAdapter`
+  protocol, `Unsupported`, `Registry`; `app.providers.adapter_for()` loads providers lazily.
+- `app/providers/square/adapter.py`: Square as the first adapter (client, OAuth, signature
+  check); converters into the normalized types in `normalize.py`. Revocation is `Unsupported`
+  until T3.02.
+- The boundary check allows the contract and registry anywhere and keeps provider packages to
+  the POS seams.
+
+**Verified**
+- `tests/test_pos_adapter.py`: the registry, a recorded order (lines by uid, modifiers, a custom
+  amount, refunds), the recorded catalog, locations and events, webhook verification, the
+  adapter over a fake client, and a fake POS filling the contract with no Square type
+  (AC-POS-12); Standalone, Square normalise, webhooks, Square catalog.
+
+**Decisions**
+- ADR-0075 (Proposed).
+
+**Open issues**
+- The legacy sync still calls the Square client directly until T3.12.
+
+---
+
 ## 2026-11-19 — Stage 2 merged (PR #60)
 
 **Implemented**

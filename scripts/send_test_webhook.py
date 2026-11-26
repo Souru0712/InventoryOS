@@ -1,11 +1,11 @@
 """Send a signed Square webhook at the running app, the way Square would.
 
 Square's own "Send test event" button proves the URL is reachable. This proves the rest: that the
-signature is verified, that a forged one is refused, and that a real inventory event moves stock.
+signature is verified and that a forged one is refused. The event is an inventory count, which
+the app stores and ignores: Square's counts never change stock (C-34, T3.12).
 
     python scripts/send_test_webhook.py                  # signature check, both directions
-    python scripts/send_test_webhook.py --count 19       # a sale: set a variation to 19 on hand
-    python scripts/send_test_webhook.py --variation ABC  # which variation to move
+    python scripts/send_test_webhook.py --merchant M-1   # as a connected seller: stored, ignored
 
 Development tooling: nothing in app/ imports it.
 """
@@ -115,11 +115,7 @@ def main() -> int:
     if forged.status_code == 400 and genuine.status_code == 200:
         print("Signature verification works in both directions.")
         if '"ignored"' in genuine.text:
-            print("The event was dropped because no connected seller matches it, which is correct")
-            print(
-                "until a sandbox seller is connected. Rerun with --merchant/--variation/--location"
-            )
-            print("from a real connection to move actual stock.")
+            print("The genuine event was stored and ignored: an inventory count changes no stock.")
         return 0
     if genuine.status_code == 503:
         print("503: the app has no signature key loaded. Restart it after editing .env.")

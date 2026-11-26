@@ -7,6 +7,12 @@ Money at risk: {{ money(report.at_risk_cents) }}
 Low stock: {{ report.low_stock_count }}
 Open exceptions: {{ report.exceptions_open }}
 
+{% if report.sales_data %}
+SALES LAST WEEK
+{% for line in report.sales_data %}
+* {{ line.location }}: {{ line.sales_from or "no sales recorded" }}.{% if line.open_days %} Sales on {{ line.with_sales }} of {{ line.open_days }} open days.{% endif %}
+{% endfor %}
+{% endif %}
 {% if report.low_stock %}
 LOW STOCK
 {% for item in report.low_stock %}

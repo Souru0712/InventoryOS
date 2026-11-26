@@ -33,11 +33,13 @@ from app.reports import (
     expiry_report,
     margin_report,
     receiving_report,
+    sales_coverage_report,
     variance_report,
 )
 from app.security import location_filter, require_permission, require_tenant
-from app.transform.analytics import PARTS
+from app.transform.analytics import PARTS, SalesCoverage
 from app.transform.dashboard import DEFAULT_RANGE, DateRange, RangeError, check_range
+from app.transform.sales import ORIGIN_LABELS, origin_names
 from app.transform.waste import report as waste_report
 from app.units import from_base, to_base
 from app.waste import logged
@@ -72,6 +74,11 @@ def _costs(org: OrgContext) -> bool:
     return org.can(VIEW_COSTS) and org.can("reports.financial")
 
 
+def sales_from(coverage: list[SalesCoverage]) -> str:
+    """Every origin of the counted sales behind a figure (STD-FR-07)."""
+    return origin_names(o for c in coverage for o in c.days_by_origin)
+
+
 def _by_name(rows: dict, items: dict[int, InventoryItem]) -> list:
     """Rows keyed (location, item), in item-name order."""
     return sorted(
@@ -104,6 +111,7 @@ def reports_page(
     counted = variance_report(db, org, chosen, location_id=location, now=now)
     expired = expiry_report(db, org, chosen, location_id=location, now=now)
     margin_place, margins = margin_report(db, org, location_id=location) if costs else (None, [])
+    coverage = sales_coverage_report(db, org, chosen, location_id=location, now=now)
     query: dict[str, object] = {"range": chosen.choice}
     if location is not None:
         query["location"] = location
@@ -128,6 +136,9 @@ def reports_page(
             "consumption": used,
             "consumption_rows": _by_name(used.rows, items),
             "cost_of_sales": cost_of_sales_report(db, org, chosen, location_id=location, now=now),
+            "coverage": coverage,
+            "sales_from": sales_from(coverage),
+            "origin_labels": ORIGIN_LABELS,
             "count_usage": _by_name(
                 count_usage_report(db, org, chosen, location_id=location, now=now), items
             ),
@@ -284,13 +295,33 @@ class _Tables:
         report = cost_of_sales_report(
             self.db, self.org, self.period, location_id=self.location, now=self.now
         )
-        header = ["Period", "Sale lines", "With a recipe", "Coverage %"]
+        header = ["Period", "Sales from", "Sale lines", "With a recipe", "Coverage %"]
         coverage = report.coverage_percent
-        row = [self.period.label, str(report.lines), str(report.complete), f"{coverage or ''}"]
+        origins = sales_from(self._coverage())
+        row = [self.period.label, origins, str(report.lines), str(report.complete)]
+        row.append(f"{coverage or ''}")
         if self.costs:
             header.append("Cost of sales")
             row.append(_money(report.cents))
         return header, [row]
+
+    def _coverage(self) -> list[SalesCoverage]:
+        return sales_coverage_report(
+            self.db, self.org, self.period, location_id=self.location, now=self.now
+        )
+
+    def sales_coverage(self) -> Table:
+        header = ["Location", *ORIGIN_LABELS.values(), "Open days with sales", "Open days"]
+        rows = [
+            [
+                self.places.get(c.location_id, ""),
+                *(str(c.days_by_origin.get(o, 0)) for o in ORIGIN_LABELS),
+                str(c.with_sales) if c.standalone else "",
+                str(c.open_days) if c.standalone else "",
+            ]
+            for c in self._coverage()
+        ]
+        return header, rows
 
     def discrepancies(self) -> Table:
         report = receiving_report(
@@ -413,6 +444,7 @@ class _Tables:
 TABLES: dict[str, Callable[[_Tables], Table]] = {
     "consumption": _Tables.consumption,
     "cost_of_sales": _Tables.cost_of_sales,
+    "sales_coverage": _Tables.sales_coverage,
     "count_usage": _Tables.count_usage,
     "variance": _Tables.variance,
     "expiry": _Tables.expiry,

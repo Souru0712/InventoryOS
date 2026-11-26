@@ -360,3 +360,21 @@ def balances_before(
             key = (location_id, item_id)
             result[key] = result.get(key, Decimal(0)) + Decimal(qty)
     return result
+
+
+def counted_at(db: Session, org: OrgContext, item_ids: Iterable[int]) -> list[tuple[int, datetime]]:
+    """When each count of these items moved the ledger, as (location id, instant): a count that
+    matched the record leaves no movement and is not here."""
+    ids = sorted(set(item_ids))
+    if not ids:
+        return []
+    rows = db.execute(
+        select_scoped(org, InventoryMovement)
+        .with_only_columns(InventoryMovement.location_id, InventoryMovement.occurred_at)
+        .where(
+            InventoryMovement.inventory_item_id.in_(ids),
+            InventoryMovement.movement_type == "count_variance",
+            InventoryMovement.reverses_movement_id.is_(None),
+        )
+    ).tuples()
+    return [(location_id, occurred_at) for location_id, occurred_at in rows]

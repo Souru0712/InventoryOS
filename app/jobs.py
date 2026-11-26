@@ -16,7 +16,7 @@ import os
 import socket
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -84,13 +84,18 @@ def _waiting(db: Session, org: OrgContext, kind: str, dedupe_key: str | None) ->
 def _handlers() -> dict[str, Handler]:
     # Imported here: these modules queue follow-up work through this one.
     from app.business_settings import alert_email_key
+    from app.connections import NotConnected, email_owners
     from app.consumption import consume_sale
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
+    from app.mappings import reprocess as reprocess_mapping
     from app.orchestration.alerts import evaluate_and_store, send_alert_digest
     from app.orchestration.receiving import parse_document
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
+    from app.order_ingestion import ingest_orders, reconcile_orders
+    from app.pos_catalog import refresh_catalog
     from app.waste import dispose_expired
+    from app.webhook_events import processed_by
 
     def evaluate(db: Session, org: OrgContext, payload: dict) -> None:
         # Expired prepared batches leave first (BAT-FR-11), so their alerts clear in this run.
@@ -138,9 +143,50 @@ def _handlers() -> dict[str, Handler]:
     def consume(db: Session, org: OrgContext, payload: dict) -> None:
         consume_sale(db, org, int(payload["sales_transaction_id"]), payload.get("reason"))
 
+    def orders(db: Session, org: OrgContext, payload: dict) -> None:
+        started = datetime.now(UTC)
+        try:
+            read = ingest_orders(db, org)
+        except NotConnected:
+            # Revoked or disconnected since it was queued: nothing to read, nothing to retry.
+            log.info("tenant %s has no connection to read orders from", org.tenant_id)
+            read = {}
+        # The webhook events it was queued for are acted on (T3.06), unless the read failed:
+        # then they wait for the next read (T3.08).
+        if not read.get("failed"):
+            processed_by(db, org.tenant_id, "ingest_orders", started)
+
+    def reconcile(db: Session, org: OrgContext, payload: dict) -> None:
+        try:
+            checked = reconcile_orders(db, org)
+        except NotConnected:
+            return
+        log.info("reconciled POS sales for tenant %s: %s", org.tenant_id, checked)
+
+    def catalog(db: Session, org: OrgContext, payload: dict) -> None:
+        started = datetime.now(UTC)
+        try:
+            refresh_catalog(db, org)
+        except NotConnected:
+            log.info("tenant %s has no connection to read a catalog from", org.tenant_id)
+        processed_by(db, org.tenant_id, "refresh_catalog", started)
+
+    def remap(db: Session, org: OrgContext, payload: dict) -> None:
+        # A repeat finds every line already on the mapped size and reprocesses nothing.
+        reprocess_mapping(db, org, int(payload["mapping_id"]), date.fromisoformat(payload["since"]))
+
+    def revoked_email(db: Session, org: OrgContext, payload: dict) -> None:
+        # A repeat finds the exception already notified and sends nothing.
+        email_owners(db, org, int(payload["connection_id"]))
+
     return {
         "evaluate_exceptions": evaluate,
         "consume_sale": consume,
+        "connection_revoked_email": revoked_email,
+        "reprocess_mapping": remap,
+        "ingest_orders": orders,
+        "refresh_catalog": catalog,
+        "reconcile_orders": reconcile,
         "verify_ledger": verify,
         "send_alert_digest": digest,
         "send_weekly_report": weekly,

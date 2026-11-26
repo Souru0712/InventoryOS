@@ -39,6 +39,7 @@ from app.transform.ledger import (
     MOVEMENT_TYPES,
     TRANSACTION_KINDS,
 )
+from app.transform.mappings import MAPPING_STATUSES
 from app.transform.onboarding import ANSWERS as ONBOARDING_ANSWERS
 from app.transform.production import STATUSES as PRODUCTION_STATUSES
 from app.transform.products import MODIFIER_EFFECTS, PRODUCTION_MODES
@@ -107,6 +108,12 @@ def not_negative(table: str, column: str) -> CheckConstraint:
 
 def positive(table: str, column: str) -> CheckConstraint:
     return CheckConstraint(f"CAST({column} AS NUMERIC) > 0", name=f"ck_{table}_{column}_positive")
+
+
+# connected → revoked (the provider ended it) or disconnected (the business did) (DOMAIN_MODEL §5).
+CONNECTION_STATUSES = ("active", "revoked", "disconnected")
+ORDER_STATES = ("open", "completed", "canceled")
+WEBHOOK_STATUSES = ("received", "processed", "ignored")
 
 
 def one_of(table: str, column: str, values: tuple[str, ...]) -> CheckConstraint:
@@ -415,18 +422,233 @@ class UserSession(Base):
 
 
 class ProviderConnection(Base):
+    """A business's authorization to read one merchant's POS (T3.02, ADR-0076); written only by
+    `app/connections.py`. Disconnected and revoked rows stay as history; reconnecting reuses
+    the business's row for that merchant."""
+
     __tablename__ = "provider_connections"
-    __table_args__ = (UniqueConstraint("tenant_id", "provider", "merchant_id"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", "merchant_id"),
+        one_of("provider_connections", "status", CONNECTION_STATUSES),
+        CheckConstraint(
+            "status <> 'active' OR access_token_enc IS NOT NULL",
+            name="ck_provider_connections_token",
+        ),
+        # One business per merchant across all businesses (DR-22, AC-POS-11): webhooks name the
+        # merchant, and Square's revocation ends every token the merchant granted.
+        Index(
+            "uq_provider_connections_active",
+            "provider",
+            "merchant_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32), default="square")
     merchant_id: Mapped[str] = mapped_column(String(120))
-    access_token_enc: Mapped[str] = mapped_column(Text)
+    # None once disconnected: a connection that has let go of the merchant holds no token.
+    access_token_enc: Mapped[str | None] = mapped_column(Text)
     refresh_token_enc: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     status: Mapped[str] = mapped_column(String(32), default="active")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ExternalLocation(Base):
+    """A location the POS reports (T3.03, SQ-05). Which of the business's locations tracks it is
+    that location's `provider_location_id`; one tracking none is listed as not tracked."""
+
+    __tablename__ = "external_locations"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_location_id", name="uq_external_locations_external_id"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"), index=True)
+    external_location_id: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(200))
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    address: Mapped[str | None] = mapped_column(String(300))
+    # False once the POS closes it or stops listing it; kept for history (SQ-08).
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ExternalProduct(Base):
+    """One sellable variation in the POS's catalog (T3.03, POS-FR-04): the mapping grain. Its
+    price and unit are the POS's, informational only (RCP-FR-01, SQ-09)."""
+
+    __tablename__ = "external_products"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_variation_id", name="uq_external_products_variation"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"), index=True)
+    # Unknown on a row carried over from sold_items until the next catalog sync (DM-13).
+    external_item_id: Mapped[str | None] = mapped_column(String(120))
+    external_variation_id: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(300))
+    variation_name: Mapped[str] = mapped_column(String(200), default="")
+    category: Mapped[str | None] = mapped_column(String(200))
+    price_cents: Mapped[int | None] = mapped_column(Integer)
+    unit: Mapped[str | None] = mapped_column(String(16))
+    # False once the POS archives or deletes it; its mapping and history stay (SQ-08).
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ExternalModifier(Base):
+    """One modifier in the POS's catalog, with the list it belongs to (T3.03, POS-FR-04)."""
+
+    __tablename__ = "external_modifiers"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_modifier_id", name="uq_external_modifiers_external_id"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"), index=True)
+    external_modifier_id: Mapped[str] = mapped_column(String(120))
+    list_name: Mapped[str] = mapped_column(String(200), default="")
+    name: Mapped[str] = mapped_column(String(200))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ProductMapping(Base):
+    """What a POS product or modifier is in the business's own catalog (T3.04, ADR-0078): an
+    external variation to a product size, an external modifier to a modifier. Written only by
+    `app/mappings.py`. A change supersedes the active row, so who mapped what, and when, stays."""
+
+    __tablename__ = "product_mappings"
+    __table_args__ = (
+        one_of("product_mappings", "status", MAPPING_STATUSES),
+        CheckConstraint(
+            "(external_product_id IS NOT NULL AND product_variation_id IS NOT NULL"
+            " AND external_modifier_id IS NULL AND modifier_id IS NULL)"
+            " OR (external_modifier_id IS NOT NULL AND modifier_id IS NOT NULL"
+            " AND external_product_id IS NULL AND product_variation_id IS NULL)",
+            name="ck_product_mappings_target",
+        ),
+        CheckConstraint(
+            "status <> 'superseded' OR superseded_at IS NOT NULL",
+            name="ck_product_mappings_superseded_at",
+        ),
+        # One active mapping per external id (DOMAIN_MODEL §5).
+        Index(
+            "uq_product_mappings_active_product",
+            "external_product_id",
+            unique=True,
+            sqlite_where=text("status = 'active' AND external_product_id IS NOT NULL"),
+            postgresql_where=text("status = 'active' AND external_product_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_product_mappings_active_modifier",
+            "external_modifier_id",
+            unique=True,
+            sqlite_where=text("status = 'active' AND external_modifier_id IS NOT NULL"),
+            postgresql_where=text("status = 'active' AND external_modifier_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    external_product_id: Mapped[int | None] = mapped_column(ref("external_products.id"), index=True)
+    external_modifier_id: Mapped[int | None] = mapped_column(
+        ref("external_modifiers.id"), index=True
+    )
+    product_variation_id: Mapped[int | None] = mapped_column(ref("product_variations.id"))
+    modifier_id: Mapped[int | None] = mapped_column(ref("modifiers.id"))
+    status: Mapped[str] = mapped_column(String(12), default="active")
+    # None when the product made it: carried over from sold items (DM-13).
+    mapped_by_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    mapped_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    superseded_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class OrderCursor(Base):
+    """How far a connection's orders have been read (T3.05, SQ-11): orders changed up to
+    `through` are in. Business dates from `lines_from` on are sold as order lines; earlier days
+    keep the daily totals the legacy sync recorded."""
+
+    __tablename__ = "order_cursors"
+    __table_args__ = (UniqueConstraint("connection_id", name="uq_order_cursors_connection"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"))
+    lines_from: Mapped[date] = mapped_column(Date)
+    through: Mapped[datetime] = mapped_column(UTCDateTime)
+    # The last read that went back a whole window, for orders that arrive late (T3.08).
+    reread_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ExternalOrder(Base):
+    """A POS order as the POS last told it (T3.05, DOMAIN_MODEL staging): normalized into one
+    sale when it is completed at a tracked location. A newer version replaces it; an older or
+    repeated one changes nothing."""
+
+    __tablename__ = "external_orders"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "external_order_id", name="uq_external_orders_external_id"
+        ),
+        one_of("external_orders", "state", ORDER_STATES),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    connection_id: Mapped[int] = mapped_column(ref("provider_connections.id"), index=True)
+    external_order_id: Mapped[str] = mapped_column(String(120))
+    version: Mapped[int] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String(12))
+    occurred_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    external_location_id: Mapped[str] = mapped_column(String(120))
+    # The business's location that tracked it when it arrived; None: not tracked, not a sale.
+    location_id: Mapped[int | None] = mapped_column(ref("locations.id"))
+    # The sale it last became (its latest revision); None while it is not one.
+    sales_transaction_id: Mapped[int | None] = mapped_column(ref("sales_transactions.id"))
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    lines: Mapped[list[ExternalOrderLine]] = relationship(
+        back_populates="order", order_by="ExternalOrderLine.id", cascade="all, delete-orphan"
+    )
+
+
+class ExternalOrderLine(Base):
+    """A line of a POS order, by its line uid: the idempotency grain (SQ-10)."""
+
+    __tablename__ = "external_order_lines"
+    __table_args__ = (UniqueConstraint("order_id", "line_uid", name="uq_external_order_lines_uid"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
+    order_id: Mapped[int] = mapped_column(owned_by("external_orders.id"), index=True)
+    line_uid: Mapped[str] = mapped_column(String(120))
+    # None for a custom amount: kept here, never a sale line (SQ-18).
+    external_variation_id: Mapped[str | None] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(300))
+    quantity: Mapped[Decimal] = mapped_column(Qty)
+    modifiers: Mapped[str] = mapped_column(Text, default="[]")  # JSON: [[id, name, qty], ...]
+    gross_cents: Mapped[int | None] = mapped_column(Integer)
+    net_cents: Mapped[int | None] = mapped_column(Integer)
+
+    order: Mapped[ExternalOrder] = relationship(back_populates="lines")
 
 
 class Location(Base):
@@ -944,6 +1166,8 @@ class SalesSource(Base):
     # Whether its sales count for its days. A POS left connected while sales are entered by
     # hand is not: its sales are kept and flagged, never counted (DR-31).
     of_record: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Its first day was chosen (a cutover, T3.10): older sales arriving late never move it back.
+    fixed_from: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
@@ -1068,6 +1292,9 @@ class SalesReturn(Base):
     sales_transaction_id: Mapped[int | None] = mapped_column(ref("sales_transactions.id"))
     origin: Mapped[str] = mapped_column(String(16))
     source_reference: Mapped[str] = mapped_column(String(200))
+    # The original sale's reference (e.g. "order:<id>"): how a refund that arrived first is
+    # linked once its order does (WF-17).
+    original_reference: Mapped[str | None] = mapped_column(String(200))
     business_date: Mapped[date] = mapped_column(Date)
     amount_cents: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(12), default="recorded")
@@ -1089,6 +1316,8 @@ class SalesReturnLine(Base):
     tenant_id: Mapped[int] = mapped_column(ref("tenants.id"))
     sales_return_id: Mapped[int] = mapped_column(owned_by("sales_returns.id"), index=True)
     sales_transaction_line_id: Mapped[int | None] = mapped_column(ref("sales_transaction_lines.id"))
+    # The sale line's key, kept so a refund that arrived first is matched to it later.
+    line_key: Mapped[str | None] = mapped_column(String(120))
     quantity: Mapped[Decimal] = mapped_column(Qty)
     amount_cents: Mapped[int | None] = mapped_column(Integer)
 
@@ -2065,10 +2294,15 @@ class StockAlias(Base):
 
 
 class WebhookEvent(Base):
-    """Provider events already acted on, so a retried delivery changes nothing."""
+    """A verified provider event, stored once by its id before anything acts on it (T3.06,
+    DR-21, DOMAIN_MODEL's SyncEvent): a repeated delivery changes nothing. Written only by
+    `app/webhook_events.py`."""
 
     __tablename__ = "webhook_events"
-    __table_args__ = (UniqueConstraint("provider", "event_id"),)
+    __table_args__ = (
+        UniqueConstraint("provider", "event_id"),
+        one_of("webhook_events", "status", WEBHOOK_STATUSES),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     provider: Mapped[str] = mapped_column(String(32))
@@ -2076,6 +2310,14 @@ class WebhookEvent(Base):
     event_type: Mapped[str] = mapped_column(String(80))
     tenant_id: Mapped[int | None] = mapped_column(ref("tenants.id"))
     received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # received → processed, or ignored (an unknown merchant, a type nothing reads).
+    status: Mapped[str] = mapped_column(
+        String(12), default="received", server_default=text("'received'")
+    )
+    # The kind of job that acts on it; None when it is acted on as it arrives.
+    handled_by: Mapped[str | None] = mapped_column(String(40))
+    entity_ids: Mapped[str] = mapped_column(Text, default="[]", server_default=text("'[]'"))
+    processed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class BusinessSettings(Base):

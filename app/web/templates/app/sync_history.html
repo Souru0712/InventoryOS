@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="small"><a href="/app/connection">&larr; {{ provider }} connection</a></p>
+<h1>Sync history</h1>
+<p class="small muted">Every read of {{ provider }}, newest first. A failed read is tried again on the next one; a daily check compares {{ provider }}'s count of each closed day with ours.</p>
+{% if not runs %}<p>Nothing has run yet.</p>{% else %}
+<table>
+  <thead><tr><th>Started (UTC)</th><th>What</th><th>Result</th><th>Details</th></tr></thead>
+  <tbody>
+  {% for run, kind, summary in runs %}
+    <tr>
+      <td>{{ run.started_at.strftime("%d %b %H:%M") }}</td>
+      <td>{{ kind }}</td>
+      <td>{% if run.status.value == "failed" %}<strong>Failed</strong>{% elif run.status.value == "running" %}Running{% else %}OK{% endif %}</td>
+      <td class="small">{% if run.error %}{{ run.error[:200] }}{% else %}{{ summary }}{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

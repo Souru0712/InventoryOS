@@ -44,7 +44,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T0.06 | Security quick fixes (S3, S10, S11, S12) | P0 | S | M0 | T0.01 | Completed (2026-11-05; probe R7 retired) |
 | T0.07 | Async correctness (C8) | P0 | S | M0 | T0.01 | Completed (2026-11-05; no async routes, 60 s Anthropic timeout) |
 | T0.08 | Disable Square write-back; no swallowed failures (C-34, C4) | P0 | S | M0 | T0.01 | Completed (2026-11-05; write-back only, Square count overwrite left to T1.18 by the owner) |
-| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Deferred (C-49: until T3.11 needs a public URL; render.yaml on main, Blueprint and C-48 photo storage to do) |
+| T0.09 | Staging environment on the chosen host | P1 | M | M0 | T0.02, ID-02 | Deferred (C-49, C-52: T3.11 ran on this computer through a tunnel; staging is mandatory before production and validates the C-52 list; render.yaml on main, Blueprint and C-48 photo storage to do) |
 | T0.10 | Structured logs and request ids | P1 | S | M0 | T0.01 | Completed (2026-11-06; JSON logs with request, tenant and user ids) |
 | T0.11 | Governance scaffolding (ADRs, status tracking) | P1 | S | M0 | — | Completed (2026-11-06; one ADR per approved ID, enforced by the docs checker) |
 | T1.01 | Schema hygiene: timestamptz, constraints, delete rules | P0 | M | M1 | T0.02, T0.05 | Completed (2026-11-06; DM-2 applied, probe PA5 retired) |
@@ -94,18 +94,18 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T2.20 | Onboarding flow | P1 | L | M4 | T2.12, T2.13, T1.14 | Completed (2026-11-19; item CSV import with preview and row errors, quick-add, checklist with skip; step 0 routing; one-screen opening count; AC-SAAS-10 needs a non-founder) |
 | T2.21 | Employee home and floor screens | P1 | M | M3 | T2.07, T2.09 | Completed (2026-11-19; /app/floor with alerts and role tasks, Employees land there, shared-device "logged by" picker; 375 px checked) |
 | T2.22 | Standalone end-to-end suite | P0 | M | M4 | T2.20 | Completed (2026-11-19; every R1 workflow through the pages with no POS; adapter boundary check; CI job added, required-check status is the owner's) |
-| T3.01 | Adapter interface and boundary check | P1 | M | M5 | T2.04 | Not started |
-| T3.02 | Square connection lifecycle | P1 | M | M5 | T3.01, T1.12 | Not started |
-| T3.03 | Location mapping and catalog sync | P1 | M | M5 | T3.02 | Not started |
-| T3.04 | Product mapping and reprocessing | P1 | M | M5 | T3.03, T2.05 | Not started |
-| T3.05 | Order-line ingestion | P1 | L | M5 | T3.04, T1.20 | Not started |
-| T3.06 | Webhooks with dedupe via jobs | P1 | M | M5 | T3.05 | Not started |
-| T3.07 | Refunds, voids, discounts | P1 | M | M5 | T3.05 | Not started |
-| T3.08 | Reconciliation and failure recovery | P1 | M | M5 | T3.06 | Not started |
-| T3.09 | Integration health and sales-source status | P1 | S | M5 | T3.08 | Not started |
-| T3.10 | Mode switching with cutover | P1 | M | M5 | T3.05, T2.12 | Not started |
-| T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Not started |
-| T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Not started |
+| T3.01 | Adapter interface and boundary check | P1 | M | M5 | T2.04 | Built on branch, not merged (PosAdapter protocol and normalized types, registry, Square as first adapter, boundary check extended) |
+| T3.02 | Square connection lifecycle | P1 | M | M5 | T3.01, T1.12 | Built on branch, not merged (connection service, one active connection per merchant, product-only scopes, disconnect, revocation detection; PA4 retired) |
+| T3.03 | Location mapping and catalog sync | P1 | M | M5 | T3.02 | Built on branch, not merged (external locations, products and modifiers per connection; Square locations tracked by the business's own; milligram fix; DM-13 backfill, mappings with T3.04) |
+| T3.04 | Product mapping and reprocessing | P1 | M | M5 | T3.03, T2.05 | Built on branch, not merged (product_mappings with history, suggestions by name, make-it-mine, previewed reprocessing as a job from the last count, max 30 days; DM-13 mappings) |
+| T3.05 | Order-line ingestion | P1 | L | M5 | T3.04, T1.20 | Built on branch, not merged (-a staged orders and a cursor per connection, 7-day backfill; -b one sale per completed order, a line per uid, consumption as jobs every 5 min; daily totals voided from the cutover; the hourly sync reads no orders) |
+| T3.06 | Webhooks with dedupe via jobs | P1 | M | M5 | T3.05 | Built on branch, not merged (events stored once by id before acting; order and catalog events queue jobs, processed when they succeed; revocation and counts on arrival; bad signatures refused) |
+| T3.07 | Refunds, voids, discounts | P1 | M | M5 | T3.05 | Built on branch, not merged (refunds as linked sales returns that lower net sales and never restock; orphans linked later; completed-then-voided reverses; discounts change money only; orphan exception type proposed) |
+| T3.08 | Reconciliation and failure recovery | P1 | M | M5 | T3.06 | Built on branch, not merged (hourly 2-hour re-read; daily check of the last 3 closed days opens and recovers pos_reconciliation_mismatch; failed reads kept as sync_failure, cleared by the next success; sync history screen) |
+| T3.09 | Integration health and sales-source status | P1 | S | M5 | T3.08 | Built on branch, not merged (per-location status on the dashboard: Connected health with a stale warning after 2 h, Standalone last day and missing days; health table on the connection page; PD-49 proposed) |
+| T3.10 | Mode switching with cutover | P1 | M | M5 | T3.05, T2.12 | Built on branch, not merged (one cutover for both directions: old source stops, its sales from D voided, the new source's counted; the cutover sticks; Owner-only previewed switch; onboarding step 8; PD-50, PD-51 proposed) |
+| T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Built on branch, not merged (run recorded 22–25 Nov locally through the owner's ngrok tunnel, every step passing; two defects found and fixed on the branch; PD-53 proposed) |
+| T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Built on branch, not merged (`run_sync` and the hourly read are adapter catalog reads, the hourly one a job per business; no code path writes POS daily totals, sale items or POS-counted stock items, or reads Square's counts; MEASUREMENT_UNIT added to the adapter's read; ADR-0085) |
 | T4.01 | Plan and entitlement data model (C-41) | P1 | M | M6 | T1.06 | Not started |
 | T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Not started |
 | T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Not started |
@@ -255,6 +255,11 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Deferred (C-49, 2026-11-06):** `render.yaml` is on `main` (PR #17). The Blueprint, its
   secrets, the C-48 photo storage and the acceptance checks wait until before T3.11, the first
   task that needs a public HTTPS endpoint. G0 is met without this task.
+- **Mandatory before production (C-52, 2026-11-26):** T3.11 ran on this computer through a tunnel
+  (PD-52), which proves development, not production readiness. Before T4.09 deploys to real
+  customers, staging validates: production-like database behaviour; Square OAuth and webhook
+  authentication; webhook retries and duplicate events; background processing; disconnection and
+  recovery; receiving and sales reconciliation.
 
 ### T0.10 Structured logs and request ids · P1 · S
 - **Objective:** JSON logs with request id, tenant id and user id; no personal payloads (OBS-01).
@@ -1060,7 +1065,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Objective:** the full Connected path verified against a real Square sandbox seller (NFR §8 gate 4).
 - **Business reason:** nothing Square-related has ever run live (TR-11).
 - **Requirements:** AC-POS-01..11 (sandbox parts), OA-2.
-- **Technical:** on staging: seed the sandbox seller (`scripts/` seeding script), connect, map, sell, refund, void, disconnect; record the run.
+- **Technical:** on staging: seed the sandbox seller (`scripts/` seeding script), connect, map, sell, refund, void, disconnect; record the run. Steps and log: [SQUARE_SANDBOX_RUN.md](SQUARE_SANDBOX_RUN.md).
 - **Existing code:** sandbox seeding script; `scripts/send_test_webhook.py`.
 - **DB · API · UI:** none.
 - **Security:** sandbox credentials in staging env only.
