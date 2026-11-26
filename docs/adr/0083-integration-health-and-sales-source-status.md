@@ -1,6 +1,6 @@
 # ADR-0083: Integration health and sales-source status
 
-- **Status:** Proposed, 2026-11-20 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.09: POS-FR-02, POS-FR-27, CMD-FR-08, AC-CMD-05, AC-CMD-06)
 - **Tasks:** T3.09
 

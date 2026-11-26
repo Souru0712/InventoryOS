@@ -34,6 +34,7 @@ from app.transform.recipes import (
     SERVING,
     Line,
     RecipeRuleError,
+    back_date_floor,
     check_effective_from,
     check_lines,
     check_quantity,
@@ -186,11 +187,22 @@ def save_recipe(
 ) -> RecipeVersion | None:
     """Add the next version of the owner's recipe; None when nothing changed (RCP-FR-07).
     from_the_start makes a first recipe the one in effect for everything already recorded, as
-    DM-9's migration did: for seeding a business's history (the demo), never for an edit."""
+    DM-9's migration did: for seeding a business's history (the demo), never for an edit. A
+    product size's version may start up to 30 days back (C-51); past sales keep what they took
+    until the owner applies it to them (`app/recipe_reprocess.py`)."""
     now = datetime.now(UTC)
     target = _owner_row(db, org, owner)
-    starts = FROM_THE_START if from_the_start else check_effective_from(effective_from, now)
-    if from_the_start and recipe_of(db, org, owner) is not None:
+    existing = recipe_of(db, org, owner)
+    back_to = None
+    if owner.kind == "variation":
+        earlier = versions(db, org, existing) if existing else []
+        back_to = back_date_floor(now, (v.effective_from for v in earlier))
+    starts = (
+        FROM_THE_START
+        if from_the_start
+        else check_effective_from(effective_from, now, back_to=back_to)
+    )
+    if from_the_start and existing is not None:
         raise RecipeRuleError("Only a first recipe can be in effect from the start.")
     items: dict[int, InventoryItem] = {}
     checked: list[Line] = []

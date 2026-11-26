@@ -16,7 +16,8 @@ passed: G3 waits on two manual checks, and G4 on an unbuilt criterion and two ma
 ## G5 Square connected (M5)
 
 **Status:** passed, 2026-11-26. Signed off by the owner ("sign off G5 as well"). PR #63's head
-`dbeb10d` is green on all six jobs. Stage 3 is complete once PR #63 is merged.
+`dbeb10d` is green on all six jobs. PR #63 was merged on 2026-11-26 (`bc67035`), so Stage 3
+is complete.
 
 **CI evidence.** The Stage 3 pull request (#63, `stage3` → `main`) is green on all six jobs at
 `601c7d1`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,

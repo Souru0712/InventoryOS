@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
 from app.connections import current, name_of
+from app.counts import last_count_at
 from app.models import Location, SalesTransaction
 from app.sales import Cutover, cut_over, cutover_plan, source_of_record
 from app.transform.business_days import business_date
@@ -53,10 +54,11 @@ class Preview:
     cutover: date
     today: date
     plan: Cutover
+    last_count: date | None = None  # a switch never reaches back past it (C-53)
 
     @property
     def earliest(self) -> date:
-        return self.today - REACH
+        return max(self.today - REACH, self.last_count or self.today - REACH)
 
     @property
     def latest(self) -> date:
@@ -138,18 +140,32 @@ def preview(
     place = _location(db, org, location_id)
     provider = provider if kind == "pos_adapter" else None
     today = today_at(place)
-    cutover = cutover or default_cutover(db, org, place, kind)
+    counted = last_count_at(db, org, place.id)
+    last_count = (
+        business_date(counted, place.timezone, place.business_day_cutoff_hour) if counted else None
+    )
+    cutover = cutover or max(default_cutover(db, org, place, kind), last_count or date.min)
     _check(db, org, place, kind, provider, cutover, today)
+    plan = cutover_plan(db, org, place.id, kind, provider, cutover)
+    if counted is not None and last_count is not None:
+        _check_count(place, cutover, plan, counted, last_count)
     record = source_of_record(db, org, place.id, today)
     return Preview(
-        place,
-        record.kind if record else "",
-        kind,
-        provider,
-        cutover,
-        today,
-        cutover_plan(db, org, place.id, kind, provider, cutover),
+        place, record.kind if record else "", kind, provider, cutover, today, plan, last_count
     )
+
+
+def _check_count(
+    place: Location, cutover: date, plan: Cutover, counted: datetime, last_count: date
+) -> None:
+    """Counts are checkpoints (C-53): a switch may not change a sale from before the latest one,
+    nor start before its business day. Older days are corrected by counts and adjustments."""
+    if cutover < last_count or (plan.first_moment is not None and plan.first_moment < counted):
+        raise ModeRuleError(
+            f"{place.name} was counted on {last_count:%d %b %Y}, and a switch never reaches back "
+            "past a count. Choose a later date, or correct earlier days with a count or an "
+            "adjustment."
+        )
 
 
 def switch(

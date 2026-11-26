@@ -9,11 +9,11 @@ next version (app/recipes.py); the past keeps the version it used.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
@@ -32,6 +32,8 @@ from app.models import (
     RecipeVersion,
     Tenant,
 )
+from app.recipe_reprocess import back_dated, queue_apply
+from app.recipe_reprocess import preview as apply_preview
 from app.recipes import (
     FROM_THE_START,
     NewLine,
@@ -47,6 +49,7 @@ from app.recipes import (
 from app.security import location_filter, require_permission, require_tenant, require_writable
 from app.throttle import client_ip
 from app.transform.costing import margin_of
+from app.transform.mappings import MappingRuleError
 from app.transform.recipes import OWNER_KINDS, Line, RecipeRuleError, what_changed
 from app.units import UNITS
 from app.web.flash import flash, pop_flash
@@ -158,6 +161,11 @@ def recipe_card(
         else []
     )
     back, back_label = _back(db, org, owner)
+    waiting = None
+    if kind == "variation" and org.can("recipe.edit"):
+        size = get_scoped(db, org, ProductVariation, owner_id)
+        if size is not None and back_dated(db, org, size) is not None:
+            waiting = apply_preview(db, org, owner_id)
     return templates.TemplateResponse(
         request,
         "app/recipe.html",
@@ -175,6 +183,7 @@ def recipe_card(
             "yield_text": _yield_text,
             "zone": _zone(db, org),
             "from_the_start": FROM_THE_START,
+            "waiting": waiting,
             "back": back,
             "back_label": back_label,
             "can_edit": org.can("recipe.edit")
@@ -417,6 +426,12 @@ def save(
         flash(request, "Nothing changed, so no new version.")
     elif starts is None:
         flash(request, f"Saved version {version.version_no}. Earlier sales keep their version.")
+    elif starts < version.created_at:
+        flash(
+            request,
+            f"Saved version {version.version_no}, starting in the past. Past sales keep what "
+            "they took until you apply it to them.",
+        )
     else:
         flash(request, f"Saved version {version.version_no}; it starts at the time you chose.")
     return RedirectResponse(f"{BASE}/{kind}/{owner_id}", status_code=303)
@@ -445,3 +460,93 @@ def _rerender(
         starts_at=str(form.get("starts_at", "")),
         error=error,
     )
+
+
+# --- applying a back-dated version to past sales (C-51) -----------------------------------------
+
+
+def _start(raw: str) -> date | None:
+    try:
+        return date.fromisoformat(raw.strip()) if raw.strip() else None
+    except ValueError as exc:
+        raise MappingRuleError("A start is a date like 2026-11-05.") from exc
+
+
+@router.get(BASE + "/{kind}/{owner_id}/apply", response_class=HTMLResponse)
+def apply_page(
+    request: Request,
+    kind: str,
+    owner_id: int,
+    start: str = "",
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_permission("recipe.edit")),
+):
+    """C-51: what applying the size's back-dated version to its past sales would take."""
+    owner = _owner(kind, owner_id)
+    card = f"{BASE}/{kind}/{owner_id}"
+    if kind != "variation":
+        raise HTTPException(status_code=404, detail="not found")
+    try:
+        name = owner_name(db, org, owner)
+        shown = apply_preview(db, org, owner_id, _start(start))
+    except (NotFound, RecipeRuleError) as exc:
+        raise HTTPException(status_code=404, detail="not found") from exc
+    except MappingRuleError as exc:
+        flash(request, str(exc), "error")
+        return RedirectResponse(f"{card}/apply", status_code=303)
+    if shown is None:
+        flash(request, "Its recipe does not start in the past, so there is nothing to apply.")
+        return RedirectResponse(card, status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "app/recipe_apply.html",
+        {
+            "title": f"Apply the recipe to past sales: {name}",
+            "tenant": tenant,
+            "message": pop_flash(request),
+            "name": name,
+            "card": card,
+            "preview": shown,
+            "zone": _zone(db, org),
+        },
+    )
+
+
+@router.post(BASE + "/{kind}/{owner_id}/apply")
+def apply_confirm(
+    request: Request,
+    kind: str,
+    owner_id: int,
+    start: str = Form(""),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_writable),
+    org: OrgContext = Depends(require_permission("recipe.edit")),
+):
+    """C-51: the owner's explicit go-ahead; the sales are reprocessed as a job."""
+    owner = _owner(kind, owner_id)
+    card = f"{BASE}/{kind}/{owner_id}"
+    if kind != "variation":
+        raise HTTPException(status_code=404, detail="not found")
+    try:
+        owner_name(db, org, owner)
+        chosen = _start(start)
+        if chosen is None:
+            raise MappingRuleError("Choose the date applying starts from.")
+        shown = queue_apply(db, org, owner_id, chosen, ip=client_ip(request))
+    except (NotFound, RecipeRuleError) as exc:
+        raise HTTPException(status_code=404, detail="not found") from exc
+    except MappingRuleError as exc:
+        db.rollback()
+        flash(request, str(exc), "error")
+        return RedirectResponse(f"{card}/apply", status_code=303)
+    db.commit()
+    if shown is None or shown.sales == 0:
+        flash(request, "No past sales were waiting for it.")
+    else:
+        flash(
+            request,
+            f"Applying it to {shown.sales} past sale(s) since {shown.start:%d %b}; their stock "
+            "updates in a moment.",
+        )
+    return RedirectResponse(card, status_code=303)

@@ -164,6 +164,12 @@ CASES = {
     ("POST", "/app/sales/daily"): lambda ids: {
         "data": {"location_id": ids["location"], "day": "2026-11-02"}
     },
+    ("POST", "/app/sales/daily/close"): lambda ids: {
+        "data": {"location_id": ids["location"], "day": "2026-11-03", "reason": "Holiday"}
+    },
+    ("POST", "/app/sales/daily/reopen"): lambda ids: {
+        "data": {"location_id": ids["location"], "day": "2026-11-03"}
+    },
     ("GET", "/app/usage"): lambda ids: {"params": {"location": ids["location"]}},
     ("GET", "/app/reports"): lambda ids: {"params": {"location": ids["location"]}},
     ("POST", "/app/items/import"): lambda ids: {
@@ -277,6 +283,8 @@ CASES = {
     ("GET", "/app/catalog/{inventory_item_id}/recipes"): lambda ids: {},
     ("GET", "/app/recipes/{kind}/{owner_id}"): lambda ids: {},
     ("GET", "/app/recipes/{kind}/{owner_id}/edit"): lambda ids: {},
+    ("GET", "/app/recipes/{kind}/{owner_id}/apply"): lambda ids: {},
+    ("POST", "/app/recipes/{kind}/{owner_id}/apply"): lambda ids: {"data": {"start": ""}},
     ("POST", "/app/recipes/{kind}/{owner_id}"): lambda ids: {
         "data": {"item": ids["inventory_item"], "quantity": "1", "unit": ""}
     },

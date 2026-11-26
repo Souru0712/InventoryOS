@@ -163,6 +163,7 @@ implementation sessions; the detail lives in `docs/`.
 - A location changes where its sales come from only through `cut_over()` (via
   `app/sales_modes.py`, ADR-0084): from a cutover date the chosen source alone counts, the old
   source's sales from then are voided, earlier days untouched; a chosen start is `fixed_from`.
+  A switch never reaches back past the location's last count (`last_count_at()`, C-53).
 - Every choice that needs the owner is logged as an OPEN `PD-nn` in PRODUCT_DECISIONS §3 and
   cited under "Decisions for the owner" in the task's execution-log entry.
 - Pure business rules in `app/transform/` (no ORM, no I/O).
@@ -207,8 +208,10 @@ implementation sessions; the detail lives in `docs/`.
 - Recipes are versioned (ADR-0051): `recipes`, `recipe_versions`, `recipe_lines`, written only
   by `app/recipes.py` (`save_recipe()`). Versions and lines are append-only: an edit is the
   next version, effective now or later, never earlier, and anything that happened reads the
-  version in effect at its own time (`effective_version()`, DR-16). Lines convert through
-  `entered_base` (DR-11); prepared items never form a circle (DR-17).
+  version in effect at its own time (`effective_version()`, DR-16). A product size's version
+  may start up to 30 days back (C-51, ADR-0087); past sales take it only through the previewed
+  `app/recipe_reprocess.py` job. Lines convert through `entered_base` (DR-11); prepared items
+  never form a circle (DR-17).
 - Recipe costs come from `app/costing.py` (ADR-0052): computed when asked, at one location,
   from the version in effect and today's cost basis; a missing cost is listed, never zero,
   and a margin is "estimated at today's costs". Cost panels sit behind
@@ -229,6 +232,9 @@ implementation sessions; the detail lives in `docs/`.
   transaction `day:<date>` per location and day, a changed day needs a reason (carried to the
   reversal), a POS day is refused; `sales_missing` for open hand-entry days with no sales.
   A member's permissions are `member_permissions()` (PD-37 adds `sales.record` for Employees).
+  A day without sales is accounted for only through `app/location_days.py` (ADR-0086, C-54):
+  saving nothing sold confirms `no_sales`; `close_day()` (with a reason) and `reopen_day()`
+  never touch sales or the ledger. Coverage is covered ÷ expected days (`day_status()`).
 - Reports read the ledger over each location's business days (ADR-0067): `app/reports.py`
   builds the windows, `app/transform/analytics.py` works out the figures per movement at its
   snapshot cost; never sum events, lines or today's costs for a past figure. Every report table

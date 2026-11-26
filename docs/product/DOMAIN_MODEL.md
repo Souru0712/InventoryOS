@@ -288,7 +288,7 @@ Every tenant-owned entity carries `organization_id` (DR-09); location-scoped one
 | DR-13 | Batch conservation: for batch-tracked items, Σ batch remaining = recorded balance (positive part). Unbatched quantity is explicit and raises `batch_shortfall` |
 | DR-14 | An expired batch remains until its remaining quantity is accounted for by a movement (waste, consumption, count, adjustment) |
 | DR-15 | Batch remaining is derived from movements, never edited directly |
-| DR-16 | RecipeVersions are immutable once effective and referenced. Consumption, waste expansion and production reference the version used. Edits create a new version; history never changes |
+| DR-16 | RecipeVersions are immutable once effective and referenced. Consumption, waste expansion and production reference the version used. Edits create a new version; history never changes. A product size's new version may start up to 30 days in the past, but past sales take it only when the owner applies it, previewed (C-51) |
 | DR-17 | Prepared-item recipes cannot form cycles (A uses B uses A) |
 | DR-18 | No double consumption: a product is made-to-order (sale consumes raw lines) or made-ahead (sale consumes the prepared item). Production inputs leave stock once, at production |
 | DR-19 | Historical cost preservation: every movement stores its unit-cost snapshot; ItemCostHistory is append-only. Reports for past periods use snapshots |

@@ -1171,6 +1171,35 @@ class SalesSource(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
+# A day a person marked at a location (PD-54, C-54): open with no sales, or closed (with a reason).
+DAY_MARKS = ("no_sales", "closed")
+
+
+class LocationDay(Base):
+    """A business day a person accounted for without sales (PD-54): open but nothing sold, or
+    closed that once, with a reason. Written only by app/location_days.py; sales and the ledger
+    are never touched by it."""
+
+    __tablename__ = "location_days"
+    __table_args__ = (
+        UniqueConstraint("location_id", "business_date", name="uq_location_days_day"),
+        one_of("location_days", "status", DAY_MARKS),
+        CheckConstraint(
+            "status <> 'closed' OR (reason IS NOT NULL AND reason <> '')",
+            name="ck_location_days_reason",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    location_id: Mapped[int] = mapped_column(ref("locations.id"))
+    business_date: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(12))
+    reason: Mapped[str | None] = mapped_column(String(200))
+    actor_user_id: Mapped[int | None] = mapped_column(ref("users.id"))
+    recorded_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
 class SalesTransaction(Base):
     """One sale, or one day's sales entered as a whole, from one source (T2.04, POS-FR-17,
     DR-30). Its origin is its source's kind and never changes (DR-34). A changed resend is the

@@ -1,6 +1,6 @@
 # ADR-0080: Webhook events stored once and processed as jobs
 
-- **Status:** Proposed, 2026-11-20 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.06: POS-FR-11, DR-21, SEC-11, PERF-07, AC-POS-03,
   AC-POS-10)
 - **Tasks:** T3.06; T3.08 reconciles, T3.09 shows unprocessed events

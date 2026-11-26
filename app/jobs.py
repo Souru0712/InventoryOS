@@ -94,6 +94,7 @@ def _handlers() -> dict[str, Handler]:
     from app.orchestration.reporting import report_sent_recently, send_weekly_report
     from app.order_ingestion import ingest_orders, reconcile_orders
     from app.pos_catalog import refresh_catalog
+    from app.recipe_reprocess import apply as apply_recipe
     from app.waste import dispose_expired
     from app.webhook_events import processed_by
 
@@ -175,6 +176,10 @@ def _handlers() -> dict[str, Handler]:
         # A repeat finds every line already on the mapped size and reprocesses nothing.
         reprocess_mapping(db, org, int(payload["mapping_id"]), date.fromisoformat(payload["since"]))
 
+    def recipe_to_past(db: Session, org: OrgContext, payload: dict) -> None:
+        # A repeat finds every line already on the version and reprocesses nothing.
+        apply_recipe(db, org, int(payload["version_id"]), date.fromisoformat(payload["since"]))
+
     def revoked_email(db: Session, org: OrgContext, payload: dict) -> None:
         # A repeat finds the exception already notified and sends nothing.
         email_owners(db, org, int(payload["connection_id"]))
@@ -184,6 +189,7 @@ def _handlers() -> dict[str, Handler]:
         "consume_sale": consume,
         "connection_revoked_email": revoked_email,
         "reprocess_mapping": remap,
+        "reprocess_recipe": recipe_to_past,
         "ingest_orders": orders,
         "refresh_catalog": catalog,
         "reconcile_orders": reconcile,

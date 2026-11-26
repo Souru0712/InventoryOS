@@ -1,5 +1,6 @@
-"""AC-SAL-08 (STD-FR-07, WF-24): sales-derived reports show where their sales came from (manual,
-imported, POS), and on Standalone days how many open days have sales ("N of M open days")."""
+"""AC-SAL-08 (STD-FR-07, WF-24, PD-54): sales-derived reports show where their sales came from
+(manual, imported, POS), and how Standalone days stand: sales, confirmed no sales, closed or
+missing."""
 
 import csv
 import io
@@ -100,12 +101,12 @@ def test_an_open_day_counts_once_it_is_over_or_has_sales():
         1, first, THURSDAY + timedelta(days=3), THURSDAY, NOT_SUNDAY, record, sold
     )
     # Fri, Sat, Mon, Tue, Wed are over; today has sales; Sunday is closed; the future never counts.
-    assert (found.with_sales, found.open_days, found.missing) == (2, 6, 4)
+    assert (found.with_sales, found.expected, found.missing) == (2, 6, 4)
     assert found.days_by_origin == {"manual": 2}
     unfinished = sales_coverage(
         1, first, THURSDAY, THURSDAY, NOT_SUNDAY, record, {first: {"manual"}}
     )
-    assert (unfinished.with_sales, unfinished.open_days) == (1, 5)  # today without sales: not yet
+    assert (unfinished.with_sales, unfinished.expected) == (1, 5)  # today without sales: not yet
 
 
 def test_only_days_a_standalone_source_owns_need_sales():
@@ -117,7 +118,7 @@ def test_only_days_a_standalone_source_owns_need_sales():
     }
     sold = {first + timedelta(days=1): {"pos_adapter"}}
     found = sales_coverage(1, first, THURSDAY, THURSDAY, 127, record, sold)
-    assert (found.with_sales, found.open_days) == (0, 1)  # the imported day has none
+    assert (found.with_sales, found.expected) == (0, 1)  # the imported day has none
     pos_only = sales_coverage(1, first, THURSDAY, THURSDAY, 127, {first: "pos_adapter"}, {})
     assert not pos_only.standalone and pos_only.days_by_origin == {}
 
@@ -138,7 +139,7 @@ def test_the_report_names_each_origin_and_standalone_coverage(db, bar, location,
     main = found[location.id]
     # Hand entry started five days ago: those five days are over, today has nothing yet.
     assert main.days_by_origin == {"manual": 2}
-    assert (main.with_sales, main.open_days) == (2, 5)
+    assert (main.with_sales, main.expected) == (2, 5)
     assert found[pier.id].days_by_origin == {"pos_adapter": 1}
     assert not found[pier.id].standalone  # a POS day is never "missing"
 
@@ -154,15 +155,17 @@ def test_the_page_and_csv_show_origin_and_coverage(db, bar, location, pier):
         client.post("/login", data={"email": "owner@rosewood.test", "password": "a-good-password"})
         page = client.get("/app/reports", params={"range": "7d"}).text
         assert "Entered by hand on 2 days." in page
-        assert "Sales on <strong>2 of 5 open days</strong>" in page
-        assert "leave out the 3 days without any" in page
+        assert "Covered <strong>2 of 5 expected days (40.0 %)</strong>" in page
+        assert "3 missing, which figures from sales leave out" in page
         assert "POS on 1 day." in page
         assert "Sales: POS, Entered by hand." in page  # cost of sales
         sheet = client.get("/app/reports.csv", params={"table": "sales_coverage", "range": "7d"})
     rows = {r["Location"]: r for r in csv.DictReader(io.StringIO(sheet.text))}
     assert rows["Main"]["Entered by hand"] == "2"
-    assert (rows["Main"]["Open days with sales"], rows["Main"]["Open days"]) == ("2", "5")
-    assert rows["Pier"]["POS"] == "1" and rows["Pier"]["Open days"] == ""
+    main = rows["Main"]
+    assert (main["With sales"], main["Missing"], main["Expected days"]) == ("2", "3", "5")
+    assert main["Coverage %"] == "40.0"
+    assert rows["Pier"]["POS"] == "1" and rows["Pier"]["Expected days"] == ""
     tables = _Tables(db, org, WEEK, None, datetime.now(UTC), False, None)
     header, [row] = TABLES["cost_of_sales"](tables)
     assert dict(zip(header, row, strict=True))["Sales from"] == "POS, Entered by hand"
@@ -177,7 +180,7 @@ def test_the_weekly_summary_states_coverage(db, tenant, bar, location):
     start, end = week_bounds(TODAY)
     _hand_days(db, org, location, size, start, start + timedelta(days=2))
     report = weekly_report(db, org, today=TODAY)
-    assert report.sales_data == (SalesData("Main", "Entered by hand", 2, 7),)
+    assert report.sales_data == (SalesData("Main", "Entered by hand", 2, 7, D("28.6")),)
     html, text = render_pair(
         "email/weekly_report",
         tenant=tenant,
@@ -187,9 +190,138 @@ def test_the_weekly_summary_states_coverage(db, tenant, bar, location):
         base_url="https://app.test",
     )
     for part in (html, text):
-        assert "Entered by hand." in part and "Sales on 2 of 7 open days." in part
+        assert "Entered by hand." in part and "Covered 2 of 7 expected days (28.6 %)." in part
     assert "SALES LAST WEEK" in text
     with TestClient(app) as client:
         client.post("/login", data={"email": "owner@rosewood.test", "password": "a-good-password"})
         page = client.get("/app/report").text
-    assert "Sales on 2 of 7 open days." in page
+    assert "Covered 2 of 7 expected days (28.6 %)." in page
+
+
+# --- PD-54: confirmed days without sales and one-off closures --------------------------------------
+
+
+def test_a_day_is_sales_no_sales_closed_or_missing():
+    from app.transform.analytics import day_status
+
+    monday = date(2026, 11, 23)
+
+    def status(day, sold=False, mark=None, origin="manual"):
+        return day_status(day, THURSDAY, NOT_SUNDAY, origin, sold, mark)
+
+    assert status(monday, sold=True) == "sales"
+    assert status(monday, mark="no_sales") == "no_sales"
+    assert status(monday, mark="closed") == "closed"
+    assert status(monday) == "missing"
+    assert status(monday - timedelta(days=1)) is None  # a weekly closed Sunday
+    assert status(monday, origin="pos_adapter") is None  # a POS reports for itself
+    assert status(THURSDAY) is None and status(THURSDAY, sold=True) == "sales"  # today
+    assert status(THURSDAY + timedelta(days=1), mark="closed") is None  # the future
+
+
+def test_closures_leave_the_denominator_and_confirmed_days_cover():
+    first = THURSDAY - timedelta(days=6)  # Fri 20 to Wed 25 are over; Sunday 22 is weekly closed
+    record = {first + timedelta(days=n): "manual" for n in range(7)}
+    sold = {first: {"manual"}}
+    marked = {first + timedelta(days=1): "no_sales", first + timedelta(days=3): "closed"}
+    found = sales_coverage(1, first, THURSDAY, THURSDAY, NOT_SUNDAY, record, sold, marked)
+    # Fri sales, Sat no sales, Mon closed, Tue and Wed missing; Sun and today not expected.
+    assert (found.with_sales, found.no_sales, found.closed, found.missing) == (1, 1, 1, 2)
+    assert (found.covered, found.expected, found.percent) == (2, 4, D("50.0"))
+
+
+def test_saving_nothing_sold_confirms_the_day(db, bar, location):
+    from sqlalchemy import select
+
+    from app.daily_sales import missing_days
+    from app.models import LocationDay, SalesTransaction
+
+    org, size = bar
+    day = TODAY - timedelta(days=2)
+    assert save_day(db, org, location_id=location.id, day=day, quantities={size.id: D(0)}) is None
+    db.commit()
+    mark = db.scalars(select(LocationDay)).one()
+    assert (mark.business_date, mark.status) == (day, "no_sales")
+    assert db.scalars(select(SalesTransaction)).first() is None, "no sale is invented"
+    flagged = {f.subject_id for f in missing_days(db, org, datetime.now(UTC))}
+    assert f"{location.id}:{day.isoformat()}" not in flagged
+    assert f"{location.id}:{(day + timedelta(days=1)).isoformat()}" in flagged
+    found = {c.location_id: c for c in sales_coverage_report(db, org, WEEK)}[location.id]
+    assert (found.no_sales, found.missing, found.covered) == (1, 1, 1)
+
+    save_day(db, org, location_id=location.id, day=day, quantities={size.id: D(4)})
+    db.commit()
+    assert db.scalars(select(LocationDay)).first() is None, "sales speak for the day now"
+    save_day(db, org, location_id=location.id, day=day, quantities={}, reason="Entered by mistake")
+    db.commit()
+    assert db.scalars(select(LocationDay)).one().status == "no_sales", "corrected to nothing sold"
+    found = {c.location_id: c for c in sales_coverage_report(db, org, WEEK)}[location.id]
+    assert (found.with_sales, found.no_sales) == (0, 1)
+
+
+def test_a_closed_day_is_kept_apart_and_changes_no_sales(db, bar, location, pier):
+    from sqlalchemy import func, select
+
+    from app.daily_sales import missing_days
+    from app.location_days import DayRuleError, close_day, reopen_day
+    from app.models import AuditEvent, InventoryTransaction, SalesTransaction
+    from app.transform.sales import SalesRuleError
+
+    org, size = bar
+    sold_day, holiday = TODAY - timedelta(days=3), TODAY - timedelta(days=2)
+    _hand_days(db, org, location, size, sold_day)
+
+    def counts():
+        return (
+            db.scalar(select(func.count()).select_from(SalesTransaction)),
+            db.scalar(select(func.count()).select_from(InventoryTransaction)),
+        )
+
+    before = counts()
+    with pytest.raises(DayRuleError, match="Say why"):
+        close_day(db, org, location.id, holiday, "  ")
+    with pytest.raises(DayRuleError, match="has sales recorded"):
+        close_day(db, org, location.id, sold_day, "Holiday")
+    with pytest.raises(DayRuleError, match="come from pos"):
+        close_day(db, org, pier.id, TODAY - timedelta(days=1), "Holiday")
+    close_day(db, org, location.id, holiday, "Thanksgiving")
+    db.commit()
+    with pytest.raises(SalesRuleError, match="marked closed"):
+        save_day(db, org, location_id=location.id, day=holiday, quantities={size.id: D(1)})
+    flagged = {f.subject_id for f in missing_days(db, org, datetime.now(UTC))}
+    assert f"{location.id}:{holiday.isoformat()}" not in flagged
+    found = {c.location_id: c for c in sales_coverage_report(db, org, WEEK)}[location.id]
+    assert (found.with_sales, found.closed, found.missing, found.expected) == (1, 1, 1, 2)
+    assert counts() == before, "a closure touches no sale and no stock"
+
+    assert reopen_day(db, org, location.id, holiday) is True
+    db.commit()
+    found = {c.location_id: c for c in sales_coverage_report(db, org, WEEK)}[location.id]
+    assert (found.closed, found.missing) == (0, 2)
+    actions = [e.action for e in db.scalars(select(AuditEvent).order_by(AuditEvent.id))]
+    assert actions[-2:] == ["location.day_closed", "location.day_reopened"]
+
+
+def test_the_daily_page_records_no_sales_and_closures(db, bar, location):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    no_sales, holiday = TODAY - timedelta(days=2), TODAY - timedelta(days=1)
+    with TestClient(app) as client:
+        client.post("/login", data={"email": "owner@rosewood.test", "password": "a-good-password"})
+        saved = client.post(
+            "/app/sales/daily", data={"location_id": location.id, "day": no_sales.isoformat()}
+        )
+        assert "Saved: no sales on" in saved.text and "Recorded: open, no sales." in saved.text
+        closed = client.post(
+            "/app/sales/daily/close",
+            data={"location_id": location.id, "day": holiday.isoformat(), "reason": "Boiler"},
+        )
+        assert "Marked closed" in closed.text and "Closed this day." in closed.text
+        assert "Boiler" in closed.text
+        reopened = client.post(
+            "/app/sales/daily/reopen",
+            data={"location_id": location.id, "day": holiday.isoformat()},
+        )
+        assert "Open again" in reopened.text and 'id="close-day"' in reopened.text

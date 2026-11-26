@@ -64,7 +64,9 @@ def weekly_report(
     waste = consumption_report(db, org, week, now=now)
     names = {p.id: p.name for p in db.scalars(select_scoped(org, Location))}
     sales = [
-        SalesData(names[c.location_id], origin_names(c.days_by_origin), c.with_sales, c.open_days)
+        SalesData(
+            names[c.location_id], origin_names(c.days_by_origin), c.covered, c.expected, c.percent
+        )
         for c in sales_coverage_report(db, org, week, now=now)
         if c.days_by_origin or c.standalone
     ]

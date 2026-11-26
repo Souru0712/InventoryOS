@@ -17,12 +17,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped, update_scoped
 from app.business_settings import settings_for
 from app.exceptions import record_exception
 from app.items import entered_base
+from app.ledger.history import last_count_variance
 from app.ledger.posting import Observation, balance_at, post_count_lines
 from app.models import (
     InventoryCategory,
@@ -359,6 +361,19 @@ def summaries(db: Session, org: OrgContext, location_id: int | None = None) -> l
             -(s.count.posted_at or s.count.started_at).timestamp(),
         ),
     )
+
+
+def last_count_at(db: Session, org: OrgContext, location_id: int) -> datetime | None:
+    """The latest count at a location: a posted session's line (one that matched included) or
+    any count that moved the ledger. Counts are checkpoints nothing rewrites (C-53)."""
+    session = db.scalar(
+        select_scoped(org, StockCountLine)
+        .with_only_columns(func.max(StockCountLine.counted_at))
+        .join(StockCount, StockCount.id == StockCountLine.stock_count_id)
+        .where(StockCount.status == "posted", StockCount.location_id == location_id)
+    )
+    found = [at for at in (session, last_count_variance(db, org, location_id)) if at is not None]
+    return max(found, default=None)
 
 
 def counted_lines(

@@ -1,6 +1,6 @@
 # ADR-0077: The external catalog and location mapping
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.03: POS-FR-03, POS-FR-04, SQ-05..09, audit G11 and SQ8;
   DM-13)
 - **Tasks:** T3.03; T3.04 maps external products and modifiers onto the business's catalog

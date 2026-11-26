@@ -7,7 +7,9 @@ values again records nothing (AC-SAL-02); a changed day is the next revision, an
 person gives travels to the reversal of what the day had taken (STD-FR-05, AC-SAL-03). The day's
 consumption posts straight away, the queued job being the safety net. A day whose sales come
 from another source (a POS) is not entered by hand (AC-SAL-06). An open day with no sales by the
-next day raises `sales_missing` until it is entered (STD-FR-06, AC-SAL-05).
+next day raises `sales_missing` until it is entered (STD-FR-06, AC-SAL-05). Saving a day with
+nothing sold confirms it as a day without sales (PD-54), and a day marked closed takes no
+entries until it is reopened.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.consumption import consume_sale
+from app.location_days import CLOSED, clear_no_sales, confirm_no_sales, mark_of, marks
 from app.models import (
     Location,
     ProductVariation,
@@ -88,10 +91,16 @@ def save_day(
     quantities: dict[int, Decimal],
     reason: str = "",
 ) -> SalesTransaction | None:
-    """Record a day's sales; None when nothing changed. Changing a saved day needs a reason."""
+    """Record a day's sales; None when nothing changed. Changing a saved day needs a reason. A
+    first save with nothing sold confirms the day as open without sales (PD-54)."""
     place = get_scoped(db, org, Location, location_id)
     if place is None:
         raise NotFound(location_id)
+    mark = mark_of(db, org, place.id, day)
+    if mark is not None and mark.status == CLOSED:
+        raise SalesRuleError(
+            f"{day:%d %b %Y} is marked closed ({mark.reason}). Reopen the day to enter its sales."
+        )
     if any(qty < 0 for qty in quantities.values()):
         raise SalesRuleError("A quantity sold cannot be below zero.")
     for variation_id in quantities:
@@ -99,6 +108,11 @@ def save_day(
             raise NotFound(variation_id)
     wanted = {v: q for v, q in quantities.items() if q > 0}
     before = entered(db, org, place.id, day)
+    if not wanted and not before:
+        # Nothing sold is a confirmed day, not an empty one (PD-54).
+        manual_source(db, org, place.id, day)
+        confirm_no_sales(db, org, place.id, day)
+        return None
     if wanted == before:
         return None
     if before and not reason.strip():
@@ -115,6 +129,10 @@ def save_day(
     )
     if sale is None:
         return None
+    if wanted:
+        clear_no_sales(db, org, place.id, day)
+    else:
+        confirm_no_sales(db, org, place.id, day)  # corrected to nothing sold
     try:
         with db.begin_nested():
             consume_sale(db, org, sale.id, reason.strip() or None)
@@ -124,13 +142,15 @@ def save_day(
 
 
 def missing_days(db: Session, org: OrgContext, now: datetime) -> list[Finding]:
-    """Open days at hand-entry locations with no sales recorded by the next day (AC-SAL-05)."""
+    """Open days at hand-entry locations with no sales recorded by the next day (AC-SAL-05), unless
+    a person confirmed the day without sales or closed it (PD-54)."""
     found = []
     for place in db.scalars(select_scoped(org, Location).where(Location.is_active.is_(True))):
         today = business_date(now, place.timezone, place.business_day_cutoff_hour)
+        marked = marks(db, org, place.id, today - timedelta(days=LOOK_BACK_DAYS), today)
         for back in range(1, LOOK_BACK_DAYS + 1):
             day = today - timedelta(days=back)
-            if not place.open_days >> day.weekday() & 1:
+            if not place.open_days >> day.weekday() & 1 or day in marked:
                 continue
             source = source_of_record(db, org, place.id, day)
             if source is None or source.kind != "manual":

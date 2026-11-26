@@ -16,11 +16,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
+from sqlalchemy import exists
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
-from app.consumption import queue_consumption
+from app.consumption import queue_consumption, sale_moment
 from app.exceptions import record_exception
 from app.models import (
     ExternalModifier,
@@ -206,8 +207,10 @@ def origins_of_record(
 def sold_origins(
     db: Session, org: OrgContext, location_id: int, first: date, last: date
 ) -> dict[date, set[str]]:
-    """The origins of each business date's counted sales (DR-34: a sale keeps its source's)."""
+    """The origins of each business date's counted sales (DR-34: a sale keeps its source's). A
+    day corrected to nothing has no line, so it is not a day with sales."""
     found: dict[date, set[str]] = defaultdict(set)
+    line = exists().where(SalesTransactionLine.sales_transaction_id == SalesTransaction.id)
     for day, origin in db.execute(
         select_scoped(org, SalesTransaction)
         .with_only_columns(SalesTransaction.business_date, SalesTransaction.origin)
@@ -217,6 +220,7 @@ def sold_origins(
             SalesTransaction.business_date <= last,
             SalesTransaction.status == "completed",
             SalesTransaction.of_record.is_(True),
+            line,
         )
         .distinct()
     ):
@@ -638,6 +642,26 @@ def lines_to_remap(
     ]
 
 
+def lines_of_size(
+    db: Session, org: OrgContext, variation_id: int, since: date
+) -> list[tuple[SalesTransaction, SalesTransactionLine]]:
+    """The counted lines of a product size since a business date that have taken stock (or
+    found a gap): what applying a back-dated recipe to past sales may change (C-51)."""
+    return [
+        (transaction, line)
+        for transaction in db.scalars(
+            select_scoped(org, SalesTransaction).where(
+                SalesTransaction.status == "completed",
+                SalesTransaction.of_record.is_(True),
+                SalesTransaction.business_date >= since,
+            )
+        )
+        for line in transaction.lines
+        if line.product_variation_id == variation_id
+        and line.consumption_status in ("posted", "gap")
+    ]
+
+
 def remap_lines(
     db: Session, org: OrgContext, provider: str, external_ref: str, variation_id: int, since: date
 ) -> list[int]:
@@ -877,6 +901,7 @@ class Cutover:
 
     voided: tuple[tuple[date, str], ...]  # counted sales of the old source from then: (day, origin)
     counted: tuple[date, ...]  # sales the new source already recorded from then, now counted
+    first_moment: datetime | None = None  # the earliest sale either changes (C-53)
 
 
 def _target(
@@ -921,9 +946,11 @@ def cutover_plan(
     others = [s for s in sources(db, org, location_id) if s.of_record and s is not target]
     voided = _counted_from(db, org, (s.id for s in others), cutover, True)
     counted = _counted_from(db, org, [target.id] if target else [], cutover, False)
+    moments = [sale_moment(db, org, t) for t in [*voided, *counted]]
     return Cutover(
         tuple(sorted((t.business_date, t.origin) for t in voided)),
         tuple(sorted({t.business_date for t in counted})),
+        min(moments, default=None),
     )
 
 

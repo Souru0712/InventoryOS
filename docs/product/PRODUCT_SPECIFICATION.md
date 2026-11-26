@@ -320,7 +320,7 @@ RecipeLine, ModifierEffect, CostSnapshot (recipe).
 | RCP-FR-04 | Recipes may use prepared items (e.g. ginger juice) as ingredients | R1 | J |
 | RCP-FR-05 | Yield and portion: recipe yield quantity (e.g. batch makes 2 L; drink is 1 serving) | R1 | B |
 | RCP-FR-06 | Preparation instructions (text, steps) shown on staff recipe card | R1 | B J |
-| RCP-FR-07 | Versioning: every saved change creates a new RecipeVersion effective from save time (or a chosen future time); consumption uses the version effective at the sale's occurred_at (DR-16) | R1 | B |
+| RCP-FR-07 | Versioning: every saved change creates a new RecipeVersion effective from save time (or a chosen future time; for a product size, up to 30 days back, applied to past sales only on the owner's request, C-51); consumption uses the version effective at the sale's occurred_at (DR-16) | R1 | B |
 | RCP-FR-08 | Recipe history: list versions with who/when/what changed | R1 | B |
 | RCP-FR-09 | "Start from" another variation, scaled by size, then edit | R1 | J |
 | RCP-FR-10 | Recipe cost = Σ(line quantity in base units × ingredient cost basis), adjusted for yield; shows which lines have no cost | R1 | B J |
@@ -593,7 +593,7 @@ column mappings, direct usage records.
 | STD-FR-04 | Direct usage record: ingredient used without a recorded sale (staff meals, samples, catering by weight), reason required → `manual_consumption` | R1 | B |
 | STD-FR-05 | Correcting a saved day replaces it by reversal + re-post, attributed, with reason (WF-26) | R1 | B |
 | STD-FR-06 | Open business days without sales raise `sales_missing`; optional morning reminder | R1 | R |
-| STD-FR-07 | **Origin labelling**: every sales record and every sales-derived figure shows whether it came from manual entry, import or a POS; Standalone reports state coverage (days with sales ÷ open days) — never presented as automated POS data [CONFIRMED] | R1 | B |
+| STD-FR-07 | **Origin labelling**: every sales record and every sales-derived figure shows whether it came from manual entry, import or a POS; Standalone reports state coverage (covered expected days ÷ expected days: a day with sales or confirmed zero sales is covered, a one-off closure is not expected; C-54) — never presented as automated POS data [CONFIRMED] | R1 | B |
 | STD-FR-08 | Count-based actual usage (ANL-FR-14) is the primary usage measure and works with zero sales data | R1 | B |
 | STD-FR-09 | Reorder suggestions fall back to count-based usage where sales data is incomplete, and say so | R1 | B |
 | STD-FR-10 | Theoretical vs actual usage computed only over days with sales entered; other days excluded and disclosed | R1.1 | B |

@@ -1,6 +1,6 @@
 # ADR-0078: Product mapping and reprocessing
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.04: POS-FR-06, POS-FR-14, PD-17, WF-28, REC-FR-12,
   AC-POS-06; DM-13's mapping half)
 - **Tasks:** T3.04; T3.05 builds order lines through these mappings

@@ -328,29 +328,65 @@ class CostOfSales:
         return (Decimal(self.complete) * 100 / Decimal(self.lines)).quantize(Decimal("0.1"))
 
 
-# --- where sales came from, and Standalone coverage (STD-FR-07, AC-SAL-08) ----------------------
+# --- where sales came from, and Standalone coverage (STD-FR-07, AC-SAL-08, PD-54) ----------------
 
 # Sources whose days are Standalone: sales someone records, so a day can be missing.
 STANDALONE_ORIGINS = frozenset({"manual", "file_import"})
+SALES, NO_SALES, CLOSED, MISSING = "sales", "no_sales", "closed", "missing"
+
+
+def day_status(
+    day: date,
+    today: date,
+    open_mask: int,
+    origin_of_record: str | None,
+    sold: bool,
+    mark: str | None,
+) -> str | None:
+    """A Standalone business day's coverage status (PD-54): sales recorded, confirmed no sales,
+    closed that once, or missing; None when no sales are expected of it (a weekly closed day, a
+    day another source owns, after today, or today before anything is recorded)."""
+    if origin_of_record not in STANDALONE_ORIGINS or not open_mask >> day.weekday() & 1:
+        return None
+    if day > today:
+        return None
+    if sold:
+        return SALES
+    if mark in (NO_SALES, CLOSED):
+        return mark
+    return MISSING if day < today else None
 
 
 @dataclass(frozen=True)
 class SalesCoverage:
-    """Where a location's counted sales over a period came from, and how many of its Standalone
-    open days have any."""
+    """Where a location's counted sales over a period came from, and how its Standalone days
+    stand: covered (sales, or confirmed no sales) out of expected (scheduled, not closed)."""
 
     location_id: int
     days_by_origin: dict[str, int]  # business days with counted sales, by origin
-    with_sales: int  # Standalone open days with counted sales
-    open_days: int  # Standalone open days in the period
+    with_sales: int = 0
+    no_sales: int = 0  # confirmed open with nothing sold
+    closed: int = 0  # one-off closures, left out of the expected days
+    missing: int = 0
+
+    @property
+    def covered(self) -> int:
+        return self.with_sales + self.no_sales
+
+    @property
+    def expected(self) -> int:
+        return self.covered + self.missing
 
     @property
     def standalone(self) -> bool:
-        return self.open_days > 0
+        return self.expected + self.closed > 0
 
     @property
-    def missing(self) -> int:
-        return self.open_days - self.with_sales
+    def percent(self) -> Decimal | None:
+        """Covered expected days ÷ expected days × 100 (PD-54)."""
+        if not self.expected:
+            return None
+        return (Decimal(self.covered) * 100 / Decimal(self.expected)).quantize(Decimal("0.1"))
 
 
 def sales_coverage(
@@ -361,20 +397,27 @@ def sales_coverage(
     open_mask: int,
     record: Mapping[date, str],
     sold: Mapping[date, Iterable[str]],
+    marks: Mapping[date, str] | None = None,
 ) -> SalesCoverage:
-    """`record` is each day's source-of-record origin, `sold` the origins of its counted sales.
-    A Standalone open day counts once it is over, or sooner once it has sales, so an unfinished
-    today never shows as missing; days after today never count."""
+    """`record` is each day's source-of-record origin, `sold` the origins of its counted sales,
+    `marks` the days a person confirmed as without sales or closed."""
+    marks = marks or {}
     days_by_origin: dict[str, int] = {}
-    with_sales = open_days = 0
+    counts = {SALES: 0, NO_SALES: 0, CLOSED: 0, MISSING: 0}
     day = first
-    while day <= min(last, today):
-        origins = set(sold.get(day, ()))
+    while day <= last:
+        origins = set(sold.get(day, ())) if day <= today else set()
         for origin in origins:
             days_by_origin[origin] = days_by_origin.get(origin, 0) + 1
-        is_open = open_mask >> day.weekday() & 1
-        if is_open and record.get(day) in STANDALONE_ORIGINS and (day < today or origins):
-            open_days += 1
-            with_sales += bool(origins)
+        status = day_status(day, today, open_mask, record.get(day), bool(origins), marks.get(day))
+        if status is not None:
+            counts[status] += 1
         day += timedelta(days=1)
-    return SalesCoverage(location_id, dict(sorted(days_by_origin.items())), with_sales, open_days)
+    return SalesCoverage(
+        location_id,
+        dict(sorted(days_by_origin.items())),
+        counts[SALES],
+        counts[NO_SALES],
+        counts[CLOSED],
+        counts[MISSING],
+    )

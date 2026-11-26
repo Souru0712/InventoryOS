@@ -1,6 +1,6 @@
 # ADR-0079: Order-line ingestion
 
-- **Status:** Proposed, 2026-11-20 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.05: POS-FR-05, POS-FR-07, SQ-10..13, SQ-18, PD-16;
   AC-POS-02 on the sandbox in T3.11, AC-POS-03 with T3.06's webhooks)
 - **Tasks:** T3.05 (-a cursor and backfill, -b consumption hand-off); T3.06 to T3.08 build on it

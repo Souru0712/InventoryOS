@@ -1,6 +1,6 @@
 # ADR-0076: The POS connection lifecycle
 
-- **Status:** Proposed, 2026-11-19 (built on the stacked branch; accepted when the owner merges it)
+- **Status:** Accepted, 2026-11-26 (owner: "Merge it"; PR #63, merge commit bc67035)
 - **Decision ID:** none (implements T3.02: POS-FR-01, SQ-01..04, DR-22, AC-POS-01, AC-POS-09,
   AC-POS-11; DM-14)
 - **Tasks:** T3.02; T3.03 (location mapping) and T3.05 (ingestion) read connections through it

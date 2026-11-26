@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
+<p class="small"><a href="{{ card }}">&larr; {{ name }}</a></p>
+<h1>Apply the recipe to past sales</h1>
+<p>Version {{ preview.version.version_no }} of {{ name }} starts {{ preview.version.effective_from.astimezone(zone).strftime("%d %b %Y %H:%M") }}, before it was saved on {{ preview.version.created_at.astimezone(zone).strftime("%d %b %Y") }}. Sales since then still took what the earlier recipe said. Nothing changes unless you apply it.</p>
+
+<form method="get" class="inline-form">
+  <label for="start">From</label>
+  <input id="start" type="date" name="start" value="{{ preview.start.isoformat() }}" min="{{ preview.earliest.isoformat() }}" max="{{ preview.today.isoformat() }}">
+  <button class="btn small secondary" type="submit">Preview</button>
+</form>
+<p class="small muted">{% if preview.last_count %}Starts at the last count of what it uses ({{ preview.last_count.isoformat() }}): that count already settled earlier sales.{% else %}Nothing it uses has been counted in the last 30 days, so it can reach 30 days back.{% endif %} At most 30 days.</p>
+
+<div class="card" id="apply-preview">
+  {% if preview.sales %}
+    <p><strong>{{ preview.sales }} sale{{ "" if preview.sales == 1 else "s" }}</strong>, {{ preview.units.normalize() }} sold, would be posted again with this version, each at the moment it happened, taking in all:</p>
+    {% if preview.uses %}<ul>{% for item, amount in preview.uses %}<li>{{ item }}: {{ amount }}</li>{% endfor %}</ul>{% endif %}
+    <p class="small muted">What they took before is given back first.</p>
+    <form method="post" action="{{ card }}/apply">{{ csrf_field(request) }}
+      <input type="hidden" name="start" value="{{ preview.start.isoformat() }}">
+      <button class="btn" type="submit">Apply to {{ preview.sales }} sale{{ "" if preview.sales == 1 else "s" }}</button>
+    </form>
+  {% else %}
+    <p>No sales since {{ preview.start.isoformat() }} are waiting for it.</p>
+  {% endif %}
+  {% if preview.before_start %}<p class="small">{{ preview.before_start }} earlier sale{{ "" if preview.before_start == 1 else "s" }} it covers keep{{ "s" if preview.before_start == 1 else "" }} what {{ "it" if preview.before_start == 1 else "they" }} took.</p>{% endif %}
+</div>
+{% endblock %}

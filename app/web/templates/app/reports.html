@@ -39,7 +39,7 @@
   {% for c in coverage %}
   <p class="small" style="margin:{{ '0' if loop.first else '8px 0 0' }};">{% if places|length > 1 and not location %}<strong>{{ names.get(c.location_id, "") }}:</strong> {% endif %}
     {%- if c.days_by_origin %}{% for origin, n in c.days_by_origin.items() %}{{ origin_labels[origin] }} on {{ n }} day{{ "" if n == 1 else "s" }}{{ ", " if not loop.last }}{% endfor %}.{% else %}No sales recorded in this period.{% endif %}
-    {%- if c.standalone %} Sales on <strong>{{ c.with_sales }} of {{ c.open_days }} open days</strong>{% if c.missing %}; figures from sales leave out the {{ c.missing }} day{{ "" if c.missing == 1 else "s" }} without any{% endif %}.{% endif %}</p>
+    {%- if c.standalone %} Covered <strong>{{ c.covered }} of {{ c.expected }} expected days{% if c.percent is not none %} ({{ c.percent }} %){% endif %}</strong>: {{ c.with_sales }} with sales, {{ c.no_sales }} open with no sales{% if c.closed %}, {{ c.closed }} closed and not expected{% endif %}{% if c.missing %}, {{ c.missing }} missing, which figures from sales leave out{% endif %}.{% endif %}</p>
   {% endfor %}
 </div>
 
