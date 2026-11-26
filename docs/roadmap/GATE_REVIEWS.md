@@ -15,10 +15,12 @@ passed: G3 waits on two manual checks, and G4 on an unbuilt criterion and two ma
 
 ## G5 Square connected (M5)
 
-**Status:** evidence prepared 2026-11-25; not yet passed. It needs:
-1. CI green on PostgreSQL, through the Stage 3 pull request (#63, `stage3` → `main`). No run
-   has finished yet.
-2. The owner's sign-off.
+**Status:** evidence prepared 2026-11-25; CI green 2026-11-26; not yet passed. It needs only
+the owner's sign-off.
+
+**CI evidence.** The Stage 3 pull request (#63, `stage3` → `main`) is green on all six jobs at
+`601c7d1`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,
+Dependency audit, Docker image.
 
 **Pass condition**
 ([TESTING_AND_QUALITY_STRATEGY §5](TESTING_AND_QUALITY_STRATEGY.md#5-stage-exit-gates)):
@@ -92,7 +94,7 @@ Caveats:
     MEASUREMENT_UNIT fix.
   - TR-26 (never deployed): stays open until T0.09 or T4.09.
 
-**Recommendation:** pass G5 once the Stage 3 pull request is green in CI, PostgreSQL included.
+**Recommendation:** pass G5; the Stage 3 pull request is green in CI, PostgreSQL included.
 PD-43 to PD-53 stay open either way; none blocks the gate.
 
 ---
@@ -158,8 +160,8 @@ owner's to arrange (CUSTOMER_VALIDATION_PLAN: Standalone pilots).
 
 ## G3 Operations engine (M3)
 
-**Status:** evidence prepared 2026-11-25; not passed. It needs two manual checks, **AC-WST-01**
-and the manual half of **AC-RCV-04**, and the owner's sign-off.
+**Status:** evidence prepared 2026-11-25; AC-WST-01 recorded 2026-11-26; not passed. It needs
+the manual half of **AC-RCV-04** and the owner's sign-off.
 
 **Pass condition**
 ([TESTING_AND_QUALITY_STRATEGY §5](TESTING_AND_QUALITY_STRATEGY.md#5-stage-exit-gates)):
@@ -173,13 +175,13 @@ and the manual half of **AC-RCV-04**, and the owner's sign-off.
 
 ### Pass condition, item by item
 
-**1. The R1 criteria.** Met, except AC-WST-01 and AC-RCV-04's manual half.
+**1. The R1 criteria.** Met, except AC-RCV-04's manual half.
 
 | Criteria | Tests |
 |---|---|
 | AC-RCP-01..09 recipes: mixed units, versions, card, modifiers, prepared items, scaling, cost changes, sold without a recipe, Employee view | `tests/test_recipes.py`, `tests/test_recipe_screens.py`, `tests/test_costing.py`, `tests/test_consumption.py` (one `test_ac_rcp_0n_…` each) |
 | AC-PRD-01..07 production: inputs to a dated batch, yield and cost, unknown cost, made-ahead vs made-to-order, void, FEFO inputs, finished goods | `tests/test_production.py`, `tests/test_consumption.py` (`test_ac_prd_0n_…`) |
-| AC-WST-01 an Employee logs waste in ≤ 3 taps at 375 px (M) | **Not recorded.** It can be checked in the browser at 375 px on a local run |
+| AC-WST-01 an Employee logs waste in ≤ 3 taps at 375 px (M) | **Met (2026-11-26).** Checked in the browser at 375 × 812 on a local demo café (`stage3` at `0290f43`), signed in as an Employee who picked themself on `/app/floor`. After choosing Whole milk, the form fits one screen with the unit and the batch (soonest-expiring) already set: 1 the quantity (2), 2 the reason (Spoilage), 3 "Log waste". "Waste logged. You can void it for 30 minutes." The ledger holds `waste:1`, −2,000 ml from the batch dated 27 Nov, recorded with the Employee as actor |
 | AC-WST-02..08 waste: reason required, counted once everywhere, a product's recipe, 30-minute void, report and found-short | `tests/test_waste.py` (`test_ac_wst_02_…`, `test_ac_wst_03_and_08_…`, `test_ac_wst_04_…`, `test_ac_wst_05_…`, `test_ac_wst_06_and_07_…`) |
 | AC-BAT-01..08 batches: dated receipt, FEFO/FIFO, inferred vs explicit, conservation, expired kept until counted, expiry flags, auto-dispose, a batch's movements | `tests/test_batches.py`, `tests/test_expiry_actions.py` |
 | AC-RCV-01, -05..08 manual delivery, posts once (also concurrently), short and rejected, packs and price jumps, correction by reversal | `tests/test_receivings.py` (`test_ac_rcv_0n_…`), `tests/test_ledger_writers.py::test_ac_rcv_05_two_simultaneous_applies_post_one_set_of_movements` |
@@ -200,8 +202,7 @@ and the manual half of **AC-RCV-04**, and the owner's sign-off.
 - The note is in `docs/audit/probes/test_audit_probes.py`.
 
 **To pass G3:**
-1. Record AC-WST-01: an Employee logs waste in at most 3 taps on a 375 px screen. This can be done
-   in the browser pane on a local run.
+1. ~~Record AC-WST-01.~~ Done 2026-11-26: three taps at 375 px.
 2. Record AC-RCV-04's manual half: one real invoice read and reviewed.
 
 ---
@@ -305,8 +306,8 @@ task (T1.01 to T1.12) was merged by 2026-11-11, and the evidence was still green
 |---|---|---|
 | G1 Tenancy & access | Passed ("Sign off both") | 2026-11-13 |
 | G2 Ledger engine | Passed ("Sign off both"); R6 moved to G3 as decided on 2026-11-12 | 2026-11-13 |
-| G3 Operations engine | Evidence prepared; awaiting manual checks AC-WST-01 and AC-RCV-04, then sign-off | — |
+| G3 Operations engine | Evidence prepared; AC-WST-01 recorded; awaiting AC-RCV-04's manual half, then sign-off | — |
 | G4 Standalone end-to-end | Evidence prepared; AC-SAL-08 built; awaiting manual checks AC-ANL-07 and AC-SAAS-10, then sign-off | — |
-| G5 Square connected | Evidence prepared; awaiting CI on PostgreSQL (Stage 3 PR #63) and sign-off | — |
+| G5 Square connected | Evidence prepared; PR #63 green on all six jobs, PostgreSQL included; awaiting sign-off | — |
 
 Stage 1 is complete. Stage 2 starts with T2.01 Owned product catalog.
