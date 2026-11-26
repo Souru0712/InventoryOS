@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from: str = "StockPulse <alerts@localhost>"
+    smtp_from: str = "Vontry <alerts@localhost>"
     support_email: str = "support@localhost"
 
     anthropic_api_key: str = ""

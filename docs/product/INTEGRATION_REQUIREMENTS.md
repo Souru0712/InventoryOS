@@ -8,7 +8,7 @@ sources, billing, email, storage and assisted extraction. Module summary: M9 in
 
 | ID | Principle |
 |---|---|
-| INT-P-01 | **Square is an external transaction source, not the inventory ledger** [CONFIRMED]. InventoryOS's ledger is authoritative for ingredient stock |
+| INT-P-01 | **Square is an external transaction source, not the inventory ledger** [CONFIRMED]. Vontry's ledger is authoritative for ingredient stock |
 | INT-P-02 | **Adapters**: provider code translates to/from normalized types; business logic never reads provider payloads [CONFIRMED] |
 | INT-P-03 | Keep four things distinct [CONFIRMED]: imported transaction (ExternalOrder) · expected consumption (ledger `sale_consumption`) · actual physical stock (counts) · verified discrepancies (posted, reviewed variances) |
 | INT-P-04 | Every inbound event is idempotent (event id + entity identity); every outbound write has an idempotency key and goes through an outbox (local commit first) |
@@ -56,7 +56,7 @@ ordering systems such as JuJu's and for unsupported POS systems. See §9.
 | SQ-06 | Import items, variations, modifier lists/modifiers, categories into ExternalProduct/ExternalModifier |
 | SQ-07 | Incremental sync on catalog change webhook (debounced) + scheduled full refresh daily |
 | SQ-08 | Deleted/archived Square variations marked inactive; mappings kept for history |
-| SQ-09 | Square measurement units are informational; InventoryOS units come from recipes/items (existing app mis-maps milligrams: audit SQ8) |
+| SQ-09 | Square measurement units are informational; Vontry units come from recipes/items (existing app mis-maps milligrams: audit SQ8) |
 
 ### 3.3 Orders and consumption
 
@@ -77,7 +77,7 @@ ordering systems such as JuJu's and for unsupported POS systems. See §9.
 The existing app pushes receipts and counts to Square because the owner's original pain was
 online orders accepted for sold-out items. It is off in R1 (C-34); when it returns in R1.1:
 - Only for items Square tracks inventory on, and only as **availability/counts derived from
-  InventoryOS** — InventoryOS remains authoritative.
+  Vontry** — Vontry remains authoritative.
 - Through the outbox (`OutboundCommand`): local commit first, then send with an idempotency key
   derived from the source record; retry with back-off; dead-letter → exception. Never swallow a
   failed write (existing-app defect C4).
@@ -105,7 +105,7 @@ online orders accepted for sold-out items. It is off in R1 (C-34); when it retur
 
 ## 4. Data mapping
 
-| Square | InventoryOS | Notes |
+| Square | Vontry | Notes |
 |---|---|---|
 | Merchant | IntegrationConnection.external_merchant_id | — |
 | Location | BusinessLocation (via connection) | One in R1 |
@@ -114,7 +114,7 @@ online orders accepted for sold-out items. It is off in R1 (C-34); when it retur
 | Order | ExternalOrder | occurred_at = completion time |
 | Order line item | ExternalOrderLine | line uid is the idempotency grain |
 | Return / refund | ExternalRefund | No auto restock |
-| Inventory count (tracked variations) | Only with write-back: compared to InventoryOS → `pos_correction` | — |
+| Inventory count (tracked variations) | Only with write-back: compared to Vontry → `pos_correction` | — |
 
 ## 5. Idempotency keys
 

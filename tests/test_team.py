@@ -173,7 +173,7 @@ def test_someone_with_an_account_joins_with_their_password_and_keeps_their_busin
     invite(owner, "baker@example.test", "administrator")
     token = token_in(mailbox[0])
     page = elsewhere.get("/invitations/accept", params={"token": token})
-    assert "Your StockPulse password" in page.text
+    assert "Your Vontry password" in page.text
 
     wrong = elsewhere.post(
         "/invitations/accept", data={"token": token, "password": "nope-nope-nope"}

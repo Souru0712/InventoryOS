@@ -35,7 +35,7 @@ def test_a_missing_local_file_is_a_storage_error(tmp_path):
 
 
 class FakeS3:
-    """Just enough of a boto3 S3 client to see what StockPulse asks for."""
+    """Just enough of a boto3 S3 client to see what Vontry asks for."""
 
     def __init__(self):
         self.objects = {}

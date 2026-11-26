@@ -101,7 +101,7 @@ Standalone → Connected (and back) is a location setting with a **cutover busin
 manual entries after it are refused or flagged `sales_source_overlap` (DR-31, AC-SAL-06). Billing
 follows the switch (PD-39, T4.02, AC-SAAS-11). No data migration, no re-setup (STD-FR-11).
 
-## 6. Future InventoryOS POS — prerequisites, scope and decision point
+## 6. Future Vontry POS — prerequisites, scope and decision point
 
 **Not in the launch roadmap** (C-29). Stage 8 is an evaluation milestone only.
 
@@ -110,7 +110,7 @@ follows the switch (PD-39, T4.02, AC-SAAS-11). No data migration, no re-setup (S
 | Architectural prerequisites | All delivered by R1 if the plan is followed: owned catalog with variations, modifiers and per-location prices (T2.01, C-36); SalesTransaction with origin and money fields (T2.04); source of record per date (DR-31); consumption engine (T2.05); entitlements with operating mode as a dimension (T4.01) |
 | New domains it would require | Checkout/cart and order lifecycle; payments (authorization, capture, refunds, tips); tax calculation per jurisdiction; receipts (print/email/SMS); cash handling and drawer reconciliation; end-of-day close; discounts and comps at the till; offline operation and later sync; device and printer management; staff clock-in possibly |
 | External dependencies | A payment processor with card-present hardware and hosted card entry (e.g. Square, Stripe Terminal, Adyen — examples, not evaluated); receipt printers, cash drawers, card readers; tax rate data |
-| Security and compliance | Keep card data out of InventoryOS entirely (processor-hosted fields, terminal SDKs) to minimize PCI scope; sales tax and receipt rules; consumer refund rules; uptime during service becomes business-critical |
+| Security and compliance | Keep card data out of Vontry entirely (processor-hosted fields, terminal SDKs) to minimize PCI scope; sales tax and receipt rules; consumer refund rules; uptime during service becomes business-critical |
 | Operations | Real-time support during trading hours; hardware logistics and replacement; outage playbooks; much higher support load than inventory software |
 | Relative complexity [INFERENCE] | Several times the Connected adapter (Stage 3): new UI surface for speed at the till, offline sync, payments state machine, hardware. Not estimable responsibly before Stage 8 discovery |
 | Costs not in the subscription | Processing fees, hardware, card readers, third-party services (passed through; brief §4.3) |

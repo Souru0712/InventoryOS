@@ -967,7 +967,7 @@ class StockItem(Base):
 
 
 class Product(Base):
-    """Something the business sells, owned by InventoryOS (T2.01, C-36). A POS catalog is mapped
+    """Something the business sells, owned by Vontry (T2.01, C-36). A POS catalog is mapped
     onto it (T3.03, T3.04), never the reverse. Deactivated, never deleted (DR-24)."""
 
     __tablename__ = "products"
@@ -1144,7 +1144,7 @@ class InventoryCount(Base):
 
 class SalesSource(Base):
     """Where a location's sales come from over a run of business days (T2.04, DR-31): a POS
-    adapter, entries by hand, a file import, the API or InventoryOS POS. A location has one
+    adapter, entries by hand, a file import, the API or Vontry POS. A location has one
     source of record per business date; its operating mode follows from it (POS-FR-18)."""
 
     __tablename__ = "sales_sources"

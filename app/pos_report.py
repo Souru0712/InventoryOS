@@ -1,4 +1,4 @@
-"""What has reached InventoryOS from a business's POS, as plain lines for a run log (T3.11).
+"""What has reached Vontry from a business's POS, as plain lines for a run log (T3.11).
 
 Read only. Each line names what the sandbox run (docs/roadmap/SQUARE_SANDBOX_RUN.md) checks:
 the connection and its health, which locations track the POS's, the catalog with its units and

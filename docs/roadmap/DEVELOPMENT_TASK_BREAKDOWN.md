@@ -116,7 +116,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T4.08 | Plan and entitlements view | P1 | S | M6 | T4.01 | Not started |
 | T4.09 | Production environment, backups, email | P1 | M | M6 | T0.09 | Not started |
 | T4.10 | Monitoring and alerting | P1 | M | M6 | T4.09 | Not started |
-| T4.11 | Rebrand to InventoryOS | P1 | S | M6 | — | Not started |
+| T4.11 | Rebrand to Vontry | P1 | S | M6 | — | Not started |
 | T4.12 | Legal and support pages | P1 | S | M6 | owner content | Not started |
 | T4.13 | Accessibility review and fixes | P1 | M | M6 | Stage 2 UI | Not started |
 | T4.14 | Load test at design headroom | P1 | M | M6 | T4.09 | Not started |
@@ -188,10 +188,10 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Done when:** documented in `CLAUDE.md` commands.
 
 ### T0.05 Extract the snack-box module (C-37) · P0 · M
-- **Objective:** the snack-box code moves to its own repository; InventoryOS no longer contains it.
+- **Objective:** the snack-box code moves to its own repository; Vontry no longer contains it.
 - **Business reason:** tenant-specific code contradicts C-30; it widens Square scopes for every merchant (S6); removing 35 routes and 11 tables shrinks Stage 1 refactoring.
 - **Requirements:** C-37, SAAS-T-11.
-- **Technical:** (1) owner creates a private repository for the snack-box project; (2) copy the module, its templates, models and tests there (history via `git subtree split` optional) — making it runnable is the snack-box project's own work; (3) remove from InventoryOS: `app/orchestration/boxes.py`, `customers.py`, `referrals.py`, `app/web/boxes.py`, `app/web/shop.py`, snack-box transform modules, templates, the 11 models, `SNACK_BOX_TENANT_IDS` gating (`app/entitlements.py:224-237`), `box_housekeeping` (`app/orchestration/scheduler.py:100`), payment/refund webhook branch (`app/web/webhooks.py:129-143`), scopes `ORDERS_WRITE`, `PAYMENTS_READ`, `PAYMENTS_WRITE` (`app/providers/square/oauth.py:18-21`), `create_payment_link` (`app/providers/square/client.py:144`).
+- **Technical:** (1) owner creates a private repository for the snack-box project; (2) copy the module, its templates, models and tests there (history via `git subtree split` optional) — making it runnable is the snack-box project's own work; (3) remove from Vontry: `app/orchestration/boxes.py`, `customers.py`, `referrals.py`, `app/web/boxes.py`, `app/web/shop.py`, snack-box transform modules, templates, the 11 models, `SNACK_BOX_TENANT_IDS` gating (`app/entitlements.py:224-237`), `box_housekeeping` (`app/orchestration/scheduler.py:100`), payment/refund webhook branch (`app/web/webhooks.py:129-143`), scopes `ORDERS_WRITE`, `PAYMENTS_READ`, `PAYMENTS_WRITE` (`app/providers/square/oauth.py:18-21`), `create_payment_link` (`app/providers/square/client.py:144`).
 - **Existing code:** as listed; tests `tests/test_snack_box_*.py`, `tests/snack_box_support.py`.
 - **DB:** forward migration dropping the 11 tables (destructive; approved by C-37; local data is demo only). **API:** 35 routes removed. **UI:** shop and box templates removed.
 - **Security:** OAuth scope set reduced to five.
@@ -199,7 +199,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Depends on:** T0.02; owner creates the repository.
 - **Acceptance:** no snack-box symbol remains (grep); 53 product routes; migration tests pass; OAuth scopes are the five product scopes.
 - **Tests:** migration test; route-count test; existing product tests green.
-- **Done when:** both repositories committed; InventoryOS CI green.
+- **Done when:** both repositories committed; Vontry CI green.
 - **Note:** on the critical path (T1.01 depends on it). Not bypassed without a documented, owner-approved alternative (e.g. a temporary branch) recorded as a decision.
 
 ### T0.06 Security quick fixes · P0 · S
@@ -631,7 +631,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 ## Stage 2 — Shared operations and Standalone
 
 ### T2.01 Owned product catalog (C-36) · P0 · M
-- **Objective:** InventoryOS owns products, variations and modifiers; POS catalogs will map onto them.
+- **Objective:** Vontry owns products, variations and modifiers; POS catalogs will map onto them.
 - **Business reason:** today products are Square variations (`sold_items`), so a Standalone business cannot define what it sells (G1) and a native POS could never be added.
 - **Requirements:** RCP-FR-01, RCP-FR-03 (scale, add, none in R1), C-36.
 - **Technical:** `products`, `product_variations` (size, price per variation), `modifiers` + effects (scale factor, add lines, none); product screens; products and variations backfilled from existing `sold_items` (DM-9); Square-origin ones also get external-product mappings in T3.03 (DM-13).
@@ -957,7 +957,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Done when:** PA4 retired.
 
 ### T3.03 Location mapping and catalog sync · P1 · M
-- **Objective:** map Square locations to InventoryOS locations; sync items, variations and modifiers into external catalog records.
+- **Objective:** map Square locations to Vontry locations; sync items, variations and modifiers into external catalog records.
 - **Business reason:** locations are created from Square today (G11); modifiers are not synced at all.
 - **Requirements:** POS-FR-03, POS-FR-04; SQ8.
 - **Technical:** `external_products`, `external_modifiers` unique per (connection, external id); existing `sold_items` data migrated into them; tracked location count limited by the entitlement; fix `METRIC_MILLIGRAM` mapping.
@@ -971,7 +971,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Done when:** merged.
 
 ### T3.04 Product mapping and reprocessing · P1 · M
-- **Objective:** map external variations and modifiers to InventoryOS products; fix history after a mapping change.
+- **Objective:** map external variations and modifiers to Vontry products; fix history after a mapping change.
 - **Business reason:** consumption accuracy depends on mapping (packaging matrix limitation).
 - **Requirements:** POS-FR-06, POS-FR-14, PD-17, REC-FR-12 (`unmapped_product`), AC-POS-06, AC-RCP-08.
 - **Technical:** mapping UI with suggestions by name; unmapped list with sales counts; `unmapped_product` exception (deduplicated); reprocess window (default since the last count, max 30 days, with preview) as reversal + re-post.
@@ -1222,8 +1222,8 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Tests:** alert tests.
 - **Done when:** merged.
 
-### T4.11 Rebrand to InventoryOS · P1 · S
-- **Objective:** the product, emails and marketing say InventoryOS (C-24).
+### T4.11 Rebrand to Vontry · P1 · S
+- **Objective:** the product, emails and marketing say Vontry (C-24).
 - **Business reason:** StockPulse branding remains in code (`pyproject.toml` name, config defaults, templates).
 - **Requirements:** C-24.
 - **Technical:** rename user-facing strings, email sender names, marketing pages, `pyproject.toml` project name; no change to Python package paths.
@@ -1344,10 +1344,10 @@ product but does not block launch; it runs at checkpoints.
 
 | ID | Task | Objective | Depends on | Outline acceptance |
 |---|---|---|---|---|
-| T5.01 | JuJu reference tenant | One-way import of JuJu's recipe, ingredient and prep-recipe data into an InventoryOS organization; missing values supplied by the owner, never invented | M3 | Tenant reproduces JuJu's recipes, modifiers (ice, pumps) and prep recipes |
+| T5.01 | JuJu reference tenant | One-way import of JuJu's recipe, ingredient and prep-recipe data into a Vontry organization; missing values supplied by the owner, never invented | M3 | Tenant reproduces JuJu's recipes, modifiers (ice, pumps) and prep recipes |
 | T5.02 | Scripted JuJu operating days | Same scripted inputs in both systems; compare balances, consumption and waste cost | M4, T5.01 | Discrepancies classified per the plan's tolerance |
 | T5.03 | Feedback triage | Findings become bugs, proposed requirements or JuJu-specific notes | T5.02 | Every finding classified; none changes scope silently |
-| T5.04 | JuJu-as-tenant decision | Owner decides whether JuJu uses InventoryOS via the sales API (C-42 revisit) | M7, JuJu live | Decision recorded; shadow mode first if yes |
+| T5.04 | JuJu-as-tenant decision | Owner decides whether JuJu uses Vontry via the sales API (C-42 revisit) | M7, JuJu live | Decision recorded; shadow mode first if yes |
 
 ## Stage 6 — Multi-location (P3, outline)
 

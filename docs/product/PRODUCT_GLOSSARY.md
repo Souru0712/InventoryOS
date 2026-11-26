@@ -7,10 +7,10 @@ conversations. "UI label" is what customers see where it differs from the domain
 
 | Term | Definition |
 |---|---|
-| **InventoryOS** | The commercial SaaS product defined in this package. Built on the InventoryOS codebase (C-25); no InventoryOS release yet |
-| **InventoryOS codebase (formerly StockPulse)** | The Python/FastAPI codebase in the `InventoryOS` repository (formerly `POS-Inventory-Automation`); InventoryOS's chosen foundation (C-25). "StockPulse" is the retired product name (C-24) |
+| **Vontry** | The commercial SaaS product defined in this package. Built on the Vontry codebase (C-25); no Vontry release yet |
+| **Vontry codebase (formerly StockPulse)** | The Python/FastAPI codebase in the `Vontry` repository (formerly `POS-Inventory-Automation`); Vontry's chosen foundation (C-25). "StockPulse" is the retired product name (C-24) |
 | **JuJu / JuJu Juice** | A separate juice-bar business and its own customer + staff platform (`JuJu` repository) |
-| **Snack-box project** | The owner's separate side project: curated and mystery boxes of Japanese snacks for the owner's convenience store. Its code sits inside the InventoryOS codebase today and moves to its own project (C-37). Not InventoryOS |
+| **Snack-box project** | The owner's separate side project: curated and mystery boxes of Japanese snacks for the owner's convenience store. Its code sits inside the Vontry codebase today and moves to its own project (C-37). Not Vontry |
 | **Organization** | A customer business; the tenant. UI: "business" |
 | **Business location** | A physical site of an organization. UI: "location" |
 | **Storage location** | An area inside a business location (walk-in, dry store, line fridge). UI: "storage area" |
@@ -20,7 +20,7 @@ conversations. "UI label" is what customers see where it differs from the domain
 
 | Term | Definition |
 |---|---|
-| **Inventory item** | Anything whose quantity InventoryOS tracks. Types: raw ingredient/material, prepared item, finished good, packaging, supply, resale good. UI: "item" |
+| **Inventory item** | Anything whose quantity Vontry tracks. Types: raw ingredient/material, prepared item, finished good, packaging, supply, resale good. UI: "item" |
 | **Finished good** | An item made in-house and sold as a unit (bottled juice, packaged granola); produced like a prepared item, sold through a "1 ×" recipe |
 | **Supply** | A consumable that is not an ingredient or packaging (cleaning supplies, gloves) |
 | **Ingredient** | An inventory item used in a recipe (raw or prepared). Informal synonym for item in food contexts |
@@ -47,7 +47,7 @@ conversations. "UI label" is what customers see where it differs from the domain
 | **Counted stock** | Quantity physically observed during a count |
 | **Variance** | Counted − expected. Negative = shortage ("found short"), positive = surplus |
 | **Available stock** | Recorded stock minus quantity in expired or on-hold batches |
-| **Reserved stock** | Not used in InventoryOS (no reservation workflow) |
+| **Reserved stock** | Not used in Vontry (no reservation workflow) |
 | **Adjustment** | A manual movement with a reason, not tied to receiving, waste, production, sales or counts |
 | **Reversal** | A movement that exactly negates an earlier movement, used to correct history without editing it |
 | **Opening balance** | The movement that sets an item's starting quantity at onboarding |
@@ -81,7 +81,7 @@ conversations. "UI label" is what customers see where it differs from the domain
 | **Discrepancy** | A difference between any two of the four receiving quantities, or between invoiced and expected price |
 | **Purchase order (PO)** | A request to a supplier; never changes inventory by itself |
 | **Consumption** | Stock leaving through use. *Sales consumption* is computed from sales via recipes; *production consumption* is inputs used in production |
-| **Expected / theoretical consumption** | Consumption computed by InventoryOS from recorded sales × recipe versions |
+| **Expected / theoretical consumption** | Consumption computed by Vontry from recorded sales × recipe versions |
 | **Actual usage** | Usage implied by counts over an interval: opening count + receipts + production output − production input − waste ± adjustments − closing count |
 | **Recorded adjustment** | A deliberate correction (adjustment, count variance, reversal) — neither consumption nor waste |
 | **Manual consumption / direct usage** | Ingredient usage recorded without a sale (staff meals, samples), Standalone |
@@ -119,10 +119,10 @@ conversations. "UI label" is what customers see where it differs from the domain
 |---|---|
 | **POS** | Point-of-sale system (Square, Toast, Clover) |
 | **Connection** | An authorized link between an organization and an external system |
-| **External product / order / refund** | Records as imported from the POS, before InventoryOS interpretation |
+| **External product / order / refund** | Records as imported from the POS, before Vontry interpretation |
 | **Mapping** | Link from an external product or modifier to a product variation or modifier |
 | **Sync** | Fetching external data; *webhook* = push notification from the provider; *reconciliation sync* = scheduled check that catches anything missed |
-| **Write-back** | Sending stock/availability from InventoryOS to the POS (optional) |
+| **Write-back** | Sending stock/availability from Vontry to the POS (optional) |
 | **Outbox** | Queue of outbound writes committed with the local change and sent with retries |
 | **Walk-in** | (JuJu) A sale rung up on the Square POS at the counter that appears as a kitchen ticket |
 
@@ -131,16 +131,16 @@ conversations. "UI label" is what customers see where it differs from the domain
 | Term | Definition |
 |---|---|
 | **Operating mode** | Where a location's sales data comes from: Connected, Standalone, or (future) native POS. One engine for all modes |
-| **Connected mode** | Sales come from an external POS through an adapter (Square first). Sold as InventoryOS Complete |
-| **Standalone mode** | No POS: sales come from daily entry and file imports, plus operational records. Sold as InventoryOS Standalone |
-| **Native POS mode** | Future: InventoryOS itself generates transactions. Would be sold as InventoryOS POS |
+| **Connected mode** | Sales come from an external POS through an adapter (Square first). Sold as Vontry Complete |
+| **Standalone mode** | No POS: sales come from daily entry and file imports, plus operational records. Sold as Vontry Standalone |
+| **Native POS mode** | Future: Vontry itself generates transactions. Would be sold as Vontry POS |
 | **Sales source** | A configured origin of sales for a location (POS adapter, manual, file import, API, native POS); one source of record per business date |
 | **Sales transaction** | One sale or one day's sales, normalized from any source, with lines per product variation |
 | **Origin label** | Marker on every sales record and sales-derived figure: manual, imported, or POS-generated |
 | **Daily sales entry** | Standalone record of quantity sold per product variation for one business day |
 | **Cutover date** | The business date from which a location's new sales source takes over after a mode change |
 | **Coverage** | Share of open business days with sales recorded (Standalone) |
-| **Adapter** | Provider-specific integration code that translates a POS's data into InventoryOS's normalized model |
+| **Adapter** | Provider-specific integration code that translates a POS's data into Vontry's normalized model |
 
 ## Roles
 
@@ -160,9 +160,9 @@ conversations. "UI label" is what customers see where it differs from the domain
 
 | Term | Definition |
 |---|---|
-| **InventoryOS Complete** | Offering for businesses that keep their POS; Connected mode; pricing hypothesis $99/location/month |
-| **InventoryOS Standalone** | Offering for businesses without a POS; Standalone mode; pricing hypothesis $99/month, one location |
-| **InventoryOS POS** | Future native POS offering; pricing hypothesis $149–199/month starting; validation required |
+| **Vontry Complete** | Offering for businesses that keep their POS; Connected mode; pricing hypothesis $99/location/month |
+| **Vontry Standalone** | Offering for businesses without a POS; Standalone mode; pricing hypothesis $99/month, one location |
+| **Vontry POS** | Future native POS offering; pricing hypothesis $149–199/month starting; validation required |
 | **Multi-location** | Expansion dimension for several locations; pricing hypothesis ~$149–199+/month |
 | **Advanced** | Expansion dimension for beyond-core capabilities; pricing hypothesis ~$199–299+/month |
 | **Plan** | A configured billing product (price lives in billing configuration, never in code) |

@@ -1,6 +1,6 @@
 # Product Specification
 
-Authoritative source for **what InventoryOS must do**. Workflows: [BUSINESS_WORKFLOWS](BUSINESS_WORKFLOWS.md).
+Authoritative source for **what Vontry must do**. Workflows: [BUSINESS_WORKFLOWS](BUSINESS_WORKFLOWS.md).
 Entities and integrity rules (`DR-xx`): [DOMAIN_MODEL](DOMAIN_MODEL.md). Permissions: [USER_ROLES_AND_PERMISSIONS](USER_ROLES_AND_PERMISSIONS.md).
 Measurable completion tests (`AC-xx`): [PRODUCT_ACCEPTANCE_CRITERIA](PRODUCT_ACCEPTANCE_CRITERIA.md). Terms: [PRODUCT_GLOSSARY](PRODUCT_GLOSSARY.md).
 
@@ -47,7 +47,7 @@ source** differs.
 |---|---|---|---|
 | **Connected** | Complete ($99/location/month) | External POS through an adapter (Square first; others later) | R1 |
 | **Standalone** | Standalone ($99/month) | Manual daily sales entry, sales file imports, and operational records (receiving, waste, production, counts) | R1 |
-| **POS** | InventoryOS POS ($149–199/month starting) | InventoryOS itself generates transactions | Future — validation required (PD-35) |
+| **POS** | Vontry POS ($149–199/month starting) | Vontry itself generates transactions | Future — validation required (PD-35) |
 
 Rules:
 - A location's mode is derived from its sales source of record (DR-31). Mode is per location, so a
@@ -383,7 +383,7 @@ whether to treat production like POS (allow) or like manual (block).
 ## Module 9 — Sales Sources and POS Integrations (POS)
 
 **Purpose.** Bring sales into the engine from whichever source the location's operating mode uses
-— an external POS (Connected), manual entry or imports (Standalone), or, in future, InventoryOS's
+— an external POS (Connected), manual entry or imports (Standalone), or, in future, Vontry's
 own POS — as one normalized sales model. Detailed integration requirements:
 [INTEGRATION_REQUIREMENTS](INTEGRATION_REQUIREMENTS.md).
 
@@ -412,7 +412,7 @@ mode. Everything else is mode-independent (U-09).
 |---|---|---|---|
 | POS-FR-01 | Square OAuth connect, encrypted token storage, refresh, disconnect, revoked-token detection | R1 | B S |
 | POS-FR-02 | Connection status page: connected merchant, location mapping, last sync, errors | R1 | B S |
-| POS-FR-03 | Map each tracked Square location to an InventoryOS location; tracked count limited by the location entitlement | R1 | B S |
+| POS-FR-03 | Map each tracked Square location to a Vontry location; tracked count limited by the location entitlement | R1 | B S |
 | POS-FR-04 | Catalog sync: items, variations, modifiers → ExternalProduct/ExternalModifier records | R1 | B S |
 | POS-FR-05 | Order ingestion at order-line level with occurred_at, location, variation, modifiers, quantity; webhook + scheduled reconciliation | R1 | B |
 | POS-FR-06 | Product mapping UI: external variation → product variation (→ recipe); external modifier → modifier effect; suggestions by name | R1 | B J |
@@ -429,11 +429,11 @@ mode. Everything else is mode-independent (U-09).
 | POS-FR-26 | Discounts and comps change sales value, never consumption; voids before completion consume nothing; completed-then-voided orders reverse consumption (WF-17) | R1 | B |
 | POS-FR-27 | Integration health per connection: last success, lag, error rate, unprocessed events, token status; alerts on thresholds | R1 | B |
 
-### Future — InventoryOS POS mode
+### Future — Vontry POS mode
 
 | ID | Requirement | Rel | Src |
 |---|---|---|---|
-| POS-FR-25 | InventoryOS POS generates SalesTransactions natively (source `inventoryos_pos`); payment processing via a third party; hardware separate. Requirements are written only after validation (PD-35); nothing in R1 may block it | Future | B |
+| POS-FR-25 | Vontry POS generates SalesTransactions natively (source `inventoryos_pos`); payment processing via a third party; hardware separate. Requirements are written only after validation (PD-35); nothing in R1 may block it | Future | B |
 
 **Dependencies.** M7 recipes, M2 ledger, M10 exceptions. **Acceptance.** AC-POS-01..12, AC-SAL-01..08.
 
@@ -577,7 +577,7 @@ Full matrix: [USER_ROLES_AND_PERMISSIONS](USER_ROLES_AND_PERMISSIONS.md).
 
 ## Module 15 — Standalone Operations (STD)
 
-**Purpose.** Make InventoryOS a complete, useful product for businesses with no POS — not a
+**Purpose.** Make Vontry a complete, useful product for businesses with no POS — not a
 stripped-down trial [CONFIRMED]. Every core module works without a POS (U-09, DR-29); this module
 adds the ways sales and usage are recorded without one and keeps the data's origin honest.
 **Users.** Owner, Administrator, Manager (sales entry and import); Employees if allowed (PD-37).
@@ -707,7 +707,7 @@ ADM business/location/time zone ──► STF auth, roles ──► INV items, u
 
 ### Release plan [CONFIRMED 2026-11-04 — C-29]
 
-Phase 3 priority [CONFIRMED 2026-11-04]: **Complete and Standalone first**; InventoryOS POS evaluated
+Phase 3 priority [CONFIRMED 2026-11-04]: **Complete and Standalone first**; Vontry POS evaluated
 separately; then multi-location and Advanced.
 
 | # | Capability (brief §16) | R1 launch | Staged later |
@@ -729,7 +729,7 @@ separately; then multi-location and Advanced.
 | + | Production (simple, single-step) | **Included in R1** — juice bars/cafés prep daily (JuJu proves it) | Multi-step status, variance analytics (R2) |
 | + | Reorder suggestions | Included (explainable, CSV) | PO creation (R1.1), forecast (R2) |
 | + | Count-based usage | Included (Standalone's primary usage measure) | — |
-| + | InventoryOS POS | **Not in R1** | Separate validation track (PD-35); build only after validation |
+| + | Vontry POS | **Not in R1** | Separate validation track (PD-35); build only after validation |
 | + | Multi-location, Advanced | Location-aware data model and entitlements in R1 | Plans and features per Phase 3 roadmap |
 
 **Why POs are staged, not dropped:** manual and invoice receiving already deliver the receiving
@@ -762,7 +762,7 @@ it does not change the order.
 
 ### Native POS vs external POS integration
 
-| | External POS integration (Connected) | Native InventoryOS POS (Future) |
+| | External POS integration (Connected) | Native Vontry POS (Future) |
 |---|---|---|
 | What is built | Adapter: auth, sync, mapping, webhooks, reconciliation, health | Checkout UI, menu and pricing, order lifecycle, tax calculation, receipts, refunds, tips, cash handling, end-of-day close, payment-processor integration, card readers and hardware, offline operation |
 | Regulatory exposure | Provider API terms | Payment compliance (processor-led), sales tax rules, receipt and consumer rules |
@@ -807,7 +807,7 @@ Advanced · Future.
 
 ## Future capabilities
 
-Not committed; not to distract from R1 [CONFIRMED]: **InventoryOS POS (validation required, PD-35)**;
+Not committed; not to distract from R1 [CONFIRMED]: **Vontry POS (validation required, PD-35)**;
 additional POS integrations (Toast, Clover);
 AI-assisted invoice processing beyond R1's reviewed extraction; demand forecasting; intelligent
 reorder; advanced profitability; multi-location management and transfers UI; advanced supplier

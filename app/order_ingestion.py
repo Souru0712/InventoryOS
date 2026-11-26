@@ -504,7 +504,7 @@ def _reconcile_connection(
                     subject_id=f"{place.id}:{day.isoformat()}",
                     title=(
                         f"{name_of(connection.provider)} recorded {theirs[0]} orders "
-                        f"({theirs[1]} lines) at {place.name} on {day:%d %b}; InventoryOS had "
+                        f"({theirs[1]} lines) at {place.name} on {day:%d %b}; Vontry had "
                         f"{mine[0]} ({mine[1]}). The {len(missing)} that differed were read "
                         "again; this clears when the next check matches."
                     ),

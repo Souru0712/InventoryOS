@@ -43,8 +43,8 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 SUBJECTS = {
-    "verify_email": "Confirm your email for StockPulse",
-    "reset_password": "Reset your StockPulse password",
+    "verify_email": "Confirm your email for Vontry",
+    "reset_password": "Reset your Vontry password",
 }
 PAGES = {"verify_email": "/verify-email", "reset_password": "/password/reset"}
 

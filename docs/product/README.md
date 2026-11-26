@@ -1,13 +1,13 @@
-# InventoryOS — Product Blueprint (Phase 1)
+# Vontry — Product Blueprint (Phase 1)
 
-The internal source of truth for **InventoryOS**, a commercial, multi-tenant inventory and
+The internal source of truth for **Vontry**, a commercial, multi-tenant inventory and
 operations management platform for independent food-service businesses. Written 2026-11-04 for
 humans and AI development agents. Phase 1 is product definition only: no application code, schema
 or existing documentation was changed.
 
-> **Location.** InventoryOS is the new name for StockPulse (C-24) and is built on this repository's
+> **Location.** Vontry is the new name for StockPulse (C-24) and is built on this repository's
 > codebase (C-25); this folder is the permanent home of its product docs (C-28). The repository
-> folder is now `InventoryOS` (formerly `POS-Inventory-Automation`); the code and its branding still
+> folder is now `Vontry` (formerly `POS-Inventory-Automation`); the code and its branding still
 > say StockPulse. Building on this code does **not** mean its current features already meet this
 > blueprint — the Phase 2 audit measures the gaps.
 
@@ -22,8 +22,8 @@ cost and where money is lost. Not a stock-counting app, and not a POS at launch.
 
 | Entity | What it is | Role |
 |---|---|---|
-| **InventoryOS** | The product defined here — the new name for StockPulse (C-24) | Built on the InventoryOS codebase (C-25); no InventoryOS release yet |
-| **InventoryOS codebase (formerly StockPulse)** | `C:\Users\oscar\.vscode\InventoryOS` (renamed from `POS-Inventory-Automation`) — Python inventory app with Square integration; still branded StockPulse in code | Chosen foundation (C-25); current state documented in the [technical audit](../audit/00-INDEX.md); gaps measured in Phase 2 |
+| **Vontry** | The product defined here — the new name for StockPulse (C-24) | Built on the Vontry codebase (C-25); no Vontry release yet |
+| **Vontry codebase (formerly StockPulse)** | `C:\Users\oscar\.vscode\InventoryOS` (renamed from `POS-Inventory-Automation`) — Python inventory app with Square integration; still branded StockPulse in code | Chosen foundation (C-25); current state documented in the [technical audit](../audit/00-INDEX.md); gaps measured in Phase 2 |
 | **JuJu Juice** | `C:\Users\oscar\.vscode\JuJu` — separate juice business with its own customer site and staff/kitchen platform | Real-world reference and demonstration environment; keeps its own brand, experience and requirements |
 
 **Three customer scenarios and operating modes** — one engine; only the source of sales data
@@ -31,9 +31,9 @@ differs ([PRODUCT_VISION §5.3](PRODUCT_VISION.md#53-customer-types-by-pos-situa
 
 | Scenario | Offering | Operating mode | Pricing hypothesis | Status |
 |---|---|---|---|---|
-| A — has a POS, keeps it | InventoryOS Complete | Connected (Square as first adapter, not the foundation) | $99 / location / month | Launch |
-| B — no POS, doesn't want one | InventoryOS Standalone | Standalone (daily sales entry, imports, operational records) | $99 / month, one location | Launch |
-| C — no POS, wants one | InventoryOS POS | Native POS | $149–199 / month starting + pass-through costs | Future — validation required |
+| A — has a POS, keeps it | Vontry Complete | Connected (Square as first adapter, not the foundation) | $99 / location / month | Launch |
+| B — no POS, doesn't want one | Vontry Standalone | Standalone (daily sales entry, imports, operational records) | $99 / month, one location | Launch |
+| C — no POS, wants one | Vontry POS | Native POS | $149–199 / month starting + pass-through costs | Future — validation required |
 | Expansion | Multi-location | Any mode | ~$149–199+ / month | Expansion |
 | Expansion | Advanced | Any mode | ~$199–299+ / month | Expansion |
 
@@ -127,12 +127,12 @@ Full lists: [PRODUCT_DECISIONS §3–5](PRODUCT_DECISIONS.md#3-open-decisions).
 | Native POS validation criteria | PD-35 |
 | Multi-location pricing vs Complete's per-location price | PD-33 |
 
-Decided 2026-11-04: InventoryOS is the new name for StockPulse (C-24); it is built on this codebase
+Decided 2026-11-04: Vontry is the new name for StockPulse (C-24); it is built on this codebase
 (C-25); the target is 21 paying customers with $1,000 MRR gating new products (C-26); the build
 order is engine → Standalone → Square (C-27); the release plan is approved (C-29); one configurable
 product serves every target segment with each business's data separated (C-30); login must include
 verification, reset and throttling (C-31), built by finishing the in-app login (C-32). After the Phase 2 audit: scoped data access for tenant
-isolation (C-33); the ledger owns all stock (C-34) and replaces the old engine (C-35); InventoryOS owns
+isolation (C-33); the ledger owns all stock (C-34) and replaces the old engine (C-35); Vontry owns
 the product catalog (C-36); the snack-box module leaves (C-37); items are per organization (C-38);
 migration history kept (C-39); no pilots on the old engine (C-40); Starter/Pro retired (C-41); JuJu
 parity by specification until R1 (C-42). After Phase 3: implementation decisions approved (C-43) and
@@ -156,8 +156,8 @@ pending product recommendations approved (C-44).
 ## 8. Rules for AI agents
 
 1. Read this README, then PRODUCT_DECISIONS, then the relevant module in PRODUCT_SPECIFICATION.
-2. This codebase is InventoryOS's foundation (C-25), but never assume its current features meet
-   this blueprint — check the Phase 2 audit. JuJu is never InventoryOS.
+2. This codebase is Vontry's foundation (C-25), but never assume its current features meet
+   this blueprint — check the Phase 2 audit. JuJu is never Vontry.
 3. Do not implement anything marked OPEN, and do not hard-code prices.
 4. Every inventory change goes through the ledger rules in [DOMAIN_MODEL §7](DOMAIN_MODEL.md#7-data-integrity-rules).
 5. Square is the first adapter: no POS-specific logic outside adapters; every workflow must work in

@@ -1,4 +1,4 @@
-"""Nothing InventoryOS does writes to Square (C-34, T0.08).
+"""Nothing Vontry does writes to Square (C-34, T0.08).
 
 Write-back returns in R1.1 through the outbox. The push functions are kept for it and refuse to
 run until then; the tests at the bottom pin what they send when it is switched on.

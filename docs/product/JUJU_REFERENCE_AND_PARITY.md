@@ -1,13 +1,13 @@
 # JuJu Juice: Reference and Functionality Parity
 
 Authoritative source for **JuJu's actual workflows** (as found in its repository on 2026-11-04)
-and **its capability relationship with InventoryOS**. Facts here cite JuJu files; anything not
+and **its capability relationship with Vontry**. Facts here cite JuJu files; anything not
 found in code is marked [ASSUMED] or [OPEN].
 
-JuJu is a separate business and product [CONFIRMED]. For InventoryOS it is a **real-world reference
+JuJu is a separate business and product [CONFIRMED]. For Vontry it is a **real-world reference
 and demonstration environment** for validating operational needs — not the commercial product and
 not the definition of every customer's needs. JuJu keeps every capability it needs as a business,
-whether or not InventoryOS has it yet, and retains its own brand, customer experience, business logic
+whether or not Vontry has it yet, and retains its own brand, customer experience, business logic
 and requirements. No shared repository, database, frontend or deployment is assumed.
 
 ## 1. What JuJu is
@@ -129,13 +129,13 @@ rewards; member early access to drops.
 ## 3. Capability matrix
 
 Legend — **JuJu status:** ✅ supports · 🟡 partial · ❌ lacks · ➖ not applicable.
-**Variation:** JuJu needs a brand/business-specific variation of the InventoryOS capability.
-**Share:** the capability should be one shared implementation/spec with InventoryOS.
+**Variation:** JuJu needs a brand/business-specific variation of the Vontry capability.
+**Share:** the capability should be one shared implementation/spec with Vontry.
 **Exclusive:** stays JuJu-only. **StockPulse** column (context for Phase 2, from
 [audit 02](../audit/02-feature-inventory.md)): A verified · B unverified ·
 C partial · D missing.
 
-| InventoryOS capability | JuJu status | Evidence / gap | Variation | Share | Exclusive | StockPulse |
+| Vontry capability | JuJu status | Evidence / gap | Variation | Share | Exclusive | StockPulse |
 |---|---|---|---|---|---|---|
 | Command center dashboard | 🟡 | Alerts bar + `/status` + analytics; no single "needs attention" view | No | Yes | No | A (health score) |
 | Item catalog (CRUD, types, status) | 🟡 | Ingredients CRUD, active flag, prepared items; **no categories, barcodes, storage areas** | No | Yes | No | C (no edit) |
@@ -181,21 +181,21 @@ C partial · D missing.
 
 ## 3a. Capability matrix — shared vs JuJu-specific
 
-| Capability | Needed by JuJu? | Relevant to InventoryOS? | Shared domain capability? | JuJu-specific implementation? | Customer-facing or internal? | Dependencies | Notes |
+| Capability | Needed by JuJu? | Relevant to Vontry? | Shared domain capability? | JuJu-specific implementation? | Customer-facing or internal? | Dependencies | Notes |
 |---|---|---|---|---|---|---|---|
-| Customer-facing website | Yes (has it) | No | No | Yes — entirely JuJu's | Customer-facing | Menu, ordering | Never part of InventoryOS |
-| Menu (display, art, sections, drops) | Yes | Partly (product catalog only) | Product/variant data could be shared | Yes — presentation, drops, art, pricing display | Customer-facing | Products | InventoryOS stores products for recipes; JuJu owns its menu presentation |
-| Products and variants | Yes | Yes | **Yes** (product, variation, modifier, scale/add effects) | Yes — BYO bases, pumps, ice levels as configuration | Internal + customer-facing | Recipes | JuJu's model maps to InventoryOS's generic modifiers |
-| Recipes | Yes | Yes | **Yes** (versioned recipes, prepared items, yields) | Yes — share-based recipe-book authoring, pour rounding | Internal | Ingredients, units | InventoryOS adds versioning JuJu lacks |
+| Customer-facing website | Yes (has it) | No | No | Yes — entirely JuJu's | Customer-facing | Menu, ordering | Never part of Vontry |
+| Menu (display, art, sections, drops) | Yes | Partly (product catalog only) | Product/variant data could be shared | Yes — presentation, drops, art, pricing display | Customer-facing | Products | Vontry stores products for recipes; JuJu owns its menu presentation |
+| Products and variants | Yes | Yes | **Yes** (product, variation, modifier, scale/add effects) | Yes — BYO bases, pumps, ice levels as configuration | Internal + customer-facing | Recipes | JuJu's model maps to Vontry's generic modifiers |
+| Recipes | Yes | Yes | **Yes** (versioned recipes, prepared items, yields) | Yes — share-based recipe-book authoring, pour rounding | Internal | Ingredients, units | Vontry adds versioning JuJu lacks |
 | Ingredients | Yes | Yes | **Yes** (items, units, press-yield conversions) | No | Internal | Units | — |
-| Inventory (ledger, counts, adjustments) | Yes | Yes | **Yes** | No | Internal | Ingredients | JuJu already has a ledger; InventoryOS adds reversals, locations, idempotency keys |
+| Inventory (ledger, counts, adjustments) | Yes | Yes | **Yes** | No | Internal | Ingredients | JuJu already has a ledger; Vontry adds reversals, locations, idempotency keys |
 | Batch production | Yes | Yes | **Yes** (production orders, output batches) | Labels/use-by wording per NYC rules | Internal | Recipes, inventory | — |
 | Expiration | Yes | Yes | **Yes** (batches, FEFO, alerts, disposal policy) | Auto-disposal policy turned on | Internal | Batches | Shelf lives pending DOHMH review |
 | Receiving | Yes | Yes | **Yes** (4-quantity receiving, invoices) | No | Internal | Suppliers, items | JuJu lacks invoices and discrepancies |
 | Suppliers | Yes | Yes | **Yes** | No | Internal | — | JuJu has a contact list only |
 | Waste | Yes | Yes | **Yes** | JuJu reason list | Internal | Inventory | — |
 | Employees (team, roles, MFA) | Yes | Yes | Role model shared conceptually | JuJu's own auth and staff accounts | Internal | Auth | Separate identity systems (C-42: parity by specification until R1) |
-| Kitchen workflows (order board, kitchen display, queue, pickup capacity) | Yes | No (InventoryOS is not a kitchen display) | No | Yes — entirely JuJu's | Internal | Orders | Would only be relevant to a future native POS |
+| Kitchen workflows (order board, kitchen display, queue, pickup capacity) | Yes | No (Vontry is not a kitchen display) | No | Yes — entirely JuJu's | Internal | Orders | Would only be relevant to a future native POS |
 | Orders and sales (online ordering, payments, walk-ins, refunds, loyalty) | Yes | As a **sales source** only | Sales transaction model (via sales API) | Yes — ordering, payments, loyalty stay JuJu's | Customer-facing + internal | Payments (Square) | JuJu would send order lines at "Ready" through POS-FR-16 |
 | Reporting (inventory side: usage, waste, margins, purchasing) | Yes | Yes | **Yes** | No | Internal | Ledger | — |
 | Reporting (sales segments, team prep time, Lab votes) | Yes | No | No | Yes | Internal | Orders | JuJu-only |
@@ -208,12 +208,12 @@ reconciliation, inventory reporting, reorder logic.
 payments, pickup capacity and queue, kitchen display, loyalty and promotions, drops and Lab votes,
 NYC labeling rules, JuJu's recipe-book authoring.
 
-## 4. What InventoryOS should learn from JuJu
+## 4. What Vontry should learn from JuJu
 
 JuJu is ahead of the existing inventory app on the inventory domain itself. These JuJu designs are
-adopted into the InventoryOS spec:
+adopted into the Vontry spec:
 
-| JuJu design | InventoryOS requirement |
+| JuJu design | Vontry requirement |
 |---|---|
 | On-hand = Σ movements, cost snapshot per movement, actor on every movement | INV-FR-15..17, DR-01..03, DR-19 |
 | Counts post a variance movement under a lock | REC-FR-07, DR-12, DR-07 |
@@ -226,9 +226,9 @@ adopted into the InventoryOS spec:
 | "What to buy" accounts for prepared batches already made | ROR-FR-06 |
 | Margin labelled by completeness ("orders whose recipes were complete") | U-06, ANL-FR-12 |
 
-Where InventoryOS deliberately differs from JuJu:
+Where Vontry deliberately differs from JuJu:
 
-| JuJu behaviour | InventoryOS rule | Why |
+| JuJu behaviour | Vontry rule | Why |
 |---|---|---|
 | `undo_batch` deletes the batch and its movements | Undo = reversal movements (DR-02) | Brief: preserve history |
 | Recipes overwritten in place | Versioned (DR-16) | Brief: no retroactive change |
@@ -236,7 +236,7 @@ Where InventoryOS deliberately differs from JuJu:
 | Delivery lots inferred | Real batches per receiving line for batch-tracked items | Brief: batch-level tracking |
 | No location on movements | Location on every movement | Multi-location readiness |
 
-## 5. What JuJu would gain from InventoryOS
+## 5. What JuJu would gain from Vontry
 
 Invoice capture and assisted extraction; multi-line receiving with discrepancies; purchase orders
 and on-order quantities; real delivery batches with FEFO; manual adjustments; count sessions with
@@ -250,31 +250,31 @@ recipe authoring [CONFIRMED].
 
 ## 6. Possible future relationships (no commitment)
 
-Decided 2026-11-04 (C-42): option A, parity by specification, until InventoryOS R1 ships; revisit B after R1.1. Because InventoryOS is built on the Python codebase (C-25), options C and
+Decided 2026-11-04 (C-42): option A, parity by specification, until Vontry R1 ships; revisit B after R1.1. Because Vontry is built on the Python codebase (C-25), options C and
 D are ruled out unless JuJu is rewritten; A and B remain:
 
 | Option | Description | Benefits | Costs / risks |
 |---|---|---|---|
-| **A. Parity by specification** | JuJu and InventoryOS stay independent; JuJu implements InventoryOS rules in its own code when it needs them | Zero coupling; JuJu launch unaffected | Two implementations of the same logic in two languages — what the brief wants to avoid long-term |
-| **B. JuJu as an InventoryOS tenant for back-of-house** | JuJu keeps customer site, orders board and kitchen; sends order lines to InventoryOS at "Ready" through the generic sales source (POS-FR-16); inventory screens move to or are embedded from InventoryOS | One implementation; JuJu dogfoods the product daily | JuJu staff use a second app or an integration surface; network dependency must never block the line (async, retried); migrate JuJu's ledger history; InventoryOS must support JuJu's modifier model (spec does: scale/add modifiers, prepared items) |
-| **C. Shared domain library** — ruled out by C-25 | Same inventory code imported by both | True single implementation | **Blocked by language mismatch** (existing inventory app is Python; JuJu is TypeScript) unless InventoryOS is built in TypeScript or one side is rewritten |
-| **D. InventoryOS grown from JuJu's codebase** — ruled out by C-25 | Generalize JuJu's inventory schema to multi-tenant; JuJu becomes tenant #1; its customer site stays a separate app | JuJu's inventory model is closest to this spec | Retrofitting tenancy into a single-store schema; rebuild SaaS shell, Square OAuth/catalog sync, invoice extraction and Stripe that the existing app already has |
+| **A. Parity by specification** | JuJu and Vontry stay independent; JuJu implements Vontry rules in its own code when it needs them | Zero coupling; JuJu launch unaffected | Two implementations of the same logic in two languages — what the brief wants to avoid long-term |
+| **B. JuJu as a Vontry tenant for back-of-house** | JuJu keeps customer site, orders board and kitchen; sends order lines to Vontry at "Ready" through the generic sales source (POS-FR-16); inventory screens move to or are embedded from Vontry | One implementation; JuJu dogfoods the product daily | JuJu staff use a second app or an integration surface; network dependency must never block the line (async, retried); migrate JuJu's ledger history; Vontry must support JuJu's modifier model (spec does: scale/add modifiers, prepared items) |
+| **C. Shared domain library** — ruled out by C-25 | Same inventory code imported by both | True single implementation | **Blocked by language mismatch** (existing inventory app is Python; JuJu is TypeScript) unless Vontry is built in TypeScript or one side is rewritten |
+| **D. Vontry grown from JuJu's codebase** — ruled out by C-25 | Generalize JuJu's inventory schema to multi-tenant; JuJu becomes tenant #1; its customer site stays a separate app | JuJu's inventory model is closest to this spec | Retrofitting tenancy into a single-store schema; rebuild SaaS shell, Square OAuth/catalog sync, invoice extraction and Stripe that the existing app already has |
 
 Constraints any option must respect:
-1. JuJu's line is never blocked by InventoryOS availability ("stock never stops the line").
+1. JuJu's line is never blocked by Vontry availability ("stock never stops the line").
 2. JuJu's online orders are not Square orders — a Square adapter alone would miss them; JuJu
    needs a first-party order source.
-3. JuJu deducts at **Ready**, not at payment — InventoryOS must support a per-source consumption
+3. JuJu deducts at **Ready**, not at payment — Vontry must support a per-source consumption
    trigger (PD-16).
 4. JuJu's Square account is used for payments only (tagged, not itemized); walk-in matching is by
-   item name. Neither should be changed by InventoryOS work.
+   item name. Neither should be changed by Vontry work.
 5. No change to JuJu's repository, schema or deployment is part of Phase 1.
 6. In operating-mode terms JuJu is neither a Square-connected (Complete) business nor manual
    Standalone: its own ordering platform generates transactions, so it would connect through the
    sales API (POS-FR-16), not the Square adapter.
-7. JuJu is the closest existing reference for what an **InventoryOS POS** would involve (order
+7. JuJu is the closest existing reference for what an **Vontry POS** would involve (order
    capture, kitchen tickets, payment through a processor, refunds, capacity). It is evidence for
-   PD-35 only; JuJu's customer experience is not moved into InventoryOS.
+   PD-35 only; JuJu's customer experience is not moved into Vontry.
 8. Repository boundary: no repository merge is recommended — there is no evidence it would help,
    and the two codebases use different languages.
 

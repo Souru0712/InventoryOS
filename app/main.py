@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 
-app = FastAPI(title="StockPulse", lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(title="Vontry", lifespan=lifespan, docs_url=None, redoc_url=None)
 # Inside the session middleware, so the session's form token is already decoded.
 app.add_middleware(CSRFProtect)
 app.add_middleware(

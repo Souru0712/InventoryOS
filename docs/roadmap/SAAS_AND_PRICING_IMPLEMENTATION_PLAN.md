@@ -36,9 +36,9 @@ add-ons (later)  multi_location, advanced → extra flags / limits, combinable
 
 | Plan code | Offering | Billing basis | Allowed modes | Max locations | Price reference |
 |---|---|---|---|---|---|
-| `complete` | InventoryOS Complete | per location (quantity = active Connected locations) | connected, standalone | by quantity | Stripe price (hypothesis $99/location/month) |
-| `standalone` | InventoryOS Standalone | per business | standalone | 1 (PD-32: extra Standalone locations priced like Complete until Multi-location exists) | Stripe price (hypothesis $99/month) |
-| — | InventoryOS POS | not sold (SAAS-B-20) | — | — | interest captured at sign-up |
+| `complete` | Vontry Complete | per location (quantity = active Connected locations) | connected, standalone | by quantity | Stripe price (hypothesis $99/location/month) |
+| `standalone` | Vontry Standalone | per business | standalone | 1 (PD-32: extra Standalone locations priced like Complete until Multi-location exists) | Stripe price (hypothesis $99/month) |
+| — | Vontry POS | not sold (SAAS-B-20) | — | — | interest captured at sign-up |
 | `multi_location` add-on | Expansion | per location or package (PD-33, decided at Stage 6) | any | many | later |
 | `advanced` add-on | Expansion | per business (PD-34) | any | any | later |
 
@@ -67,12 +67,12 @@ trialing → active → past_due (grace) → read_only (expired | canceled | unp
 
 ## 5. Billing integration boundary
 
-| InventoryOS owns | Stripe owns |
+| Vontry owns | Stripe owns |
 |---|---|
 | Plan catalogue codes and entitlement sets; subscription state as received from verified webhooks; audit of billing events | Payment methods, invoices, receipts, proration, dunning, tax calculation |
 
 Webhooks: signature verified, idempotent by event id, ordering by event time (existing,
-`tenants.stripe_event_at`). No card data touches InventoryOS (SEC-20).
+`tenants.stripe_event_at`). No card data touches Vontry (SEC-20).
 
 ## 6. Usage limits (only where justified)
 

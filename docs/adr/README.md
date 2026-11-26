@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Technical decisions for InventoryOS, one file each. Product decisions live in
+Technical decisions for Vontry, one file each. Product decisions live in
 [PRODUCT_DECISIONS](../product/PRODUCT_DECISIONS.md) as `C-nn`; these records cover how the product
 is built ([ADR-0020](0020-architecture-decision-records.md)). Where they disagree,
 PRODUCT_DECISIONS wins until one of them is corrected.

@@ -1,4 +1,4 @@
-# StockPulse
+# Vontry
 
 Automated inventory intelligence for small businesses on Square.
 
@@ -340,7 +340,7 @@ TEST_DATABASE_URL=postgresql+psycopg://stockpulse:stockpulse@localhost:5433/stoc
 Markdown suggestions come from stock, not from a model: days left sets an urgency tier, the tier
 sets a discount band, and how much faster the lot must sell picks a point inside that band. Every
 recommendation carries the sentences that produced it, and none is ever applied automatically -
-StockPulse tells you what to change the price to; you change it on Square.
+Vontry tells you what to change the price to; you change it on Square.
 
 Two rules keep it honest. Nothing is suggested when the lot is on course to sell in time, so the
 page stays empty on a good week. And no price goes below a 20% margin over cost unless the item's

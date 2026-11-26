@@ -20,7 +20,7 @@ ORIGIN_LABELS = {
     "manual": "Entered by hand",
     "file_import": "Imported",
     "api": "API",
-    "inventoryos_pos": "InventoryOS POS",
+    "inventoryos_pos": "Vontry POS",  # the stored code keeps its first name (C-55)
 }
 TRANSACTION_STATUSES = ("completed", "corrected", "voided")
 CONSUMPTION_STATUSES = ("pending", "posted", "gap", "skipped")

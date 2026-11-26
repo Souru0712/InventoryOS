@@ -65,7 +65,7 @@ after the Phase 2 foundation decision (PD-02).
 | Waste (WST) | WasteEvent, WasteLine, WasteReason | Items, Recipes |
 | Recipes (RCP) | SellableProduct, ProductVariation, Modifier, ModifierEffect, Recipe, RecipeVersion, RecipeLine | Items |
 | Production (PRD) | ProductionOrder | Recipes, Batches |
-| Sales (POS) | SalesSource, SalesTransaction, SalesTransactionLine, SalesReturn (daily entries, imports, adapter output, future InventoryOS POS) | Recipes |
+| Sales (POS) | SalesSource, SalesTransaction, SalesTransactionLine, SalesReturn (daily entries, imports, adapter output, future Vontry POS) | Recipes |
 | Integration adapters (POS) | IntegrationConnection, ExternalProduct, ExternalModifier, ExternalOrder + ExternalOrderLine (staging), ProductMapping, SyncEvent, SyncRun, OutboundCommand | Sales |
 | Reconciliation (REC) | StockCount, StockCountLine, Exception | Ledger |
 | Notifications (CMD/ANL) | Alert | All |
