@@ -642,6 +642,26 @@ def lines_to_remap(
     ]
 
 
+def lines_of_size(
+    db: Session, org: OrgContext, variation_id: int, since: date
+) -> list[tuple[SalesTransaction, SalesTransactionLine]]:
+    """The counted lines of a product size since a business date that have taken stock (or
+    found a gap): what applying a back-dated recipe to past sales may change (C-51)."""
+    return [
+        (transaction, line)
+        for transaction in db.scalars(
+            select_scoped(org, SalesTransaction).where(
+                SalesTransaction.status == "completed",
+                SalesTransaction.of_record.is_(True),
+                SalesTransaction.business_date >= since,
+            )
+        )
+        for line in transaction.lines
+        if line.product_variation_id == variation_id
+        and line.consumption_status in ("posted", "gap")
+    ]
+
+
 def remap_lines(
     db: Session, org: OrgContext, provider: str, external_ref: str, variation_id: int, since: date
 ) -> list[int]:

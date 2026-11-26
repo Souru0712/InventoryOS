@@ -5,6 +5,45 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — C-53, PD-54 (C-54) and C-51 built (branch `after-stage3`)
+
+**Implemented**
+- **C-53, a mode switch never reaches back past the last count:** the cutover date may not
+  precede the business day of the location's latest count (a count that moved the ledger, or a
+  posted session line), and the switch may not void or count a sale from before it
+  (`last_count_at()`, `Cutover.first_moment`). ADR-0084 amended.
+- **PD-54 → C-54, Standalone daily coverage:** `location_days` (written only by
+  `app/location_days.py`, ADR-0086) holds a day a person accounted for without sales:
+  `no_sales` (saving a day with nothing sold) or `closed` (a one-off closure, with a reason,
+  audited, reopenable). A closure is refused over recorded sales and never touches sales or the
+  ledger. Coverage counts each expected day (scheduled weekday, Standalone source, over) as
+  sales, confirmed zero, missing or closed: covered ÷ expected × 100, on the reports page, the
+  `sales_coverage` CSV and the weekly summary; `sales_missing` skips marked days. The daily
+  sales page records no sales, closes and reopens a day.
+- **C-51, back-dated size recipes:** a product size's version may start up to 30 days back and
+  after its previous version; saving changes no sale. The recipe page says how many past sales
+  still took the earlier recipe and links to a preview (`app/recipe_reprocess.py`, from the
+  last count, at most 30 days); confirming queues `reprocess_recipe`, audited as
+  `recipe.applied_to_past`; a repeat does nothing. ADR-0087; ADR-0051 and DR-16 amended.
+- Migrations `f1b4c7e2a9d3` (location days) and `a3c9e5f1b7d4` (job kind), both additive.
+
+**Verified**
+- `tests/test_sales_modes.py::test_c_53_…`, `tests/test_sales_coverage.py` (PD-54: statuses,
+  zero-sales save, closures, page), `tests/test_recipe_backdating.py` (5), isolation cases for
+  the four new routes.
+- Related suites: 160, 290 and 304 passed in three runs. Ruff, mypy and the docs checker clean.
+
+**Decisions for the owner**
+- PD-55 (OPEN): back-dating is built for product sizes only; modifiers and prepared items keep
+  now or later. Recommended: sizes only for R1.
+- A closure is refused on a day with sales recorded (C-54 forbids changing sales); say if a
+  closure should instead be allowed and leave the sales as they are.
+
+**Open issues**
+- None beyond PD-55. Not yet merged: needs a pull request on the owner's word.
+
+---
+
 ## 2026-11-26 — Stage 3 merged (PR #63)
 
 **Implemented**

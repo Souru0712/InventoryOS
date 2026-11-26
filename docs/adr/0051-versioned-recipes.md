@@ -7,6 +7,8 @@
 - **Tasks:** T2.02-a (model and versioning), T2.02-b (editor and staff card); T2.03 (costing),
   T2.05 (consumption), T2.07 (waste expansion), T2.09 (production) read the versions
 
+> Amended 2026-11-26 by [ADR-0087](0087-back-dated-size-recipes.md) (C-51): a product size's version may start up to 30 days back; past sales take it only when applied.
+
 ## Context
 
 Recipes existed only as `recipe_components`: a Square sale item linked to stock rows at one

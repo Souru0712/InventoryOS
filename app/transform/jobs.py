@@ -32,6 +32,8 @@ KINDS: Mapping[str, JobKind] = {
     "connection_revoked_email": JobKind("Telling the Owner the POS connection ended"),
     # Past sales of a newly mapped POS product, reversed and posted again (T3.04, WF-28).
     "reprocess_mapping": JobKind("Reprocessing sales after a mapping"),
+    # Past sales of a size given a back-dated recipe, on the owner's request (C-51).
+    "reprocess_recipe": JobKind("Applying a recipe to past sales"),
     # A connection's changed orders, read from its cursor (T3.05, SQ-11).
     "ingest_orders": JobKind("Reading the POS's orders"),
     # A catalog change at the POS, read as a job, never in the webhook's request (T3.06).

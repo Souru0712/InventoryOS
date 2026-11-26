@@ -320,7 +320,7 @@ RecipeLine, ModifierEffect, CostSnapshot (recipe).
 | RCP-FR-04 | Recipes may use prepared items (e.g. ginger juice) as ingredients | R1 | J |
 | RCP-FR-05 | Yield and portion: recipe yield quantity (e.g. batch makes 2 L; drink is 1 serving) | R1 | B |
 | RCP-FR-06 | Preparation instructions (text, steps) shown on staff recipe card | R1 | B J |
-| RCP-FR-07 | Versioning: every saved change creates a new RecipeVersion effective from save time (or a chosen future time); consumption uses the version effective at the sale's occurred_at (DR-16) | R1 | B |
+| RCP-FR-07 | Versioning: every saved change creates a new RecipeVersion effective from save time (or a chosen future time; for a product size, up to 30 days back, applied to past sales only on the owner's request, C-51); consumption uses the version effective at the sale's occurred_at (DR-16) | R1 | B |
 | RCP-FR-08 | Recipe history: list versions with who/when/what changed | R1 | B |
 | RCP-FR-09 | "Start from" another variation, scaled by size, then edit | R1 | J |
 | RCP-FR-10 | Recipe cost = Σ(line quantity in base units × ingredient cost basis), adjusted for yield; shows which lines have no cost | R1 | B J |

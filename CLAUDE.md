@@ -208,8 +208,10 @@ implementation sessions; the detail lives in `docs/`.
 - Recipes are versioned (ADR-0051): `recipes`, `recipe_versions`, `recipe_lines`, written only
   by `app/recipes.py` (`save_recipe()`). Versions and lines are append-only: an edit is the
   next version, effective now or later, never earlier, and anything that happened reads the
-  version in effect at its own time (`effective_version()`, DR-16). Lines convert through
-  `entered_base` (DR-11); prepared items never form a circle (DR-17).
+  version in effect at its own time (`effective_version()`, DR-16). A product size's version
+  may start up to 30 days back (C-51, ADR-0087); past sales take it only through the previewed
+  `app/recipe_reprocess.py` job. Lines convert through `entered_base` (DR-11); prepared items
+  never form a circle (DR-17).
 - Recipe costs come from `app/costing.py` (ADR-0052): computed when asked, at one location,
   from the version in effect and today's cost basis; a missing cost is listed, never zero,
   and a margin is "estimated at today's costs". Cost panels sit behind

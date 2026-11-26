@@ -3,6 +3,7 @@
 {% if message %}<div class="notice {{ 'error' if message.kind == 'error' else 'ok' }}">{{ message.message }}</div>{% endif %}
 <p class="small"><a href="{{ back }}">&larr; {{ back_label }}</a></p>
 <h1>{{ name }}</h1>
+{% if waiting and waiting.sales %}<div class="notice" id="apply-waiting">Version {{ waiting.version.version_no }} starts before it was saved. {{ waiting.sales }} past sale{{ "" if waiting.sales == 1 else "s" }} still took what the earlier recipe said. <a href="/app/recipes/{{ kind }}/{{ owner.id }}/apply">Review applying it to them</a></div>{% endif %}
 <p class="lede">{{ kind_label }}{% if current %} &middot; version {{ current.version_no }}{% if current.effective_from > from_the_start %}, since {{ current.effective_from.astimezone(zone).strftime("%d %b %Y %H:%M") }}{% endif %} &middot; makes {{ yield_text(current) }}{% endif %}</p>
 
 {% if can_edit %}<p><a class="btn small" href="/app/recipes/{{ kind }}/{{ owner.id }}/edit">{% if current or upcoming %}Edit recipe{% else %}Write the recipe{% endif %}</a></p>{% endif %}

@@ -21,6 +21,7 @@ SERVING = "serving"
 PLACES = Decimal("0.0001")
 # A save "now" may arrive a moment late; anything earlier would rewrite the past (DR-16).
 CLOCK_SKEW = timedelta(minutes=1)
+BACK_DATE_DAYS = 30  # how far back a size's new version may start (C-51, PD-17's reach)
 
 
 class RecipeRuleError(ValueError):
@@ -63,15 +64,34 @@ def check_lines(lines: Sequence[Line], names: Mapping[int, str]) -> list[Line]:
     return list(lines)
 
 
-def check_effective_from(at: datetime | None, now: datetime) -> datetime:
-    """When a new version takes effect: now, or a chosen later moment (RCP-FR-07)."""
+def check_effective_from(
+    at: datetime | None, now: datetime, *, back_to: datetime | None = None
+) -> datetime:
+    """When a new version takes effect: now, or a chosen later moment (RCP-FR-07). Where
+    back-dating is allowed (a product size's recipe, C-51), a past moment no earlier than
+    `back_to`; saving it changes no past sale."""
     if at is None:
         return now
     if at.tzinfo is None or at.utcoffset() is None:
         raise ValueError("an instant needs a time zone")
-    if at < now - CLOCK_SKEW:
-        raise RecipeRuleError("A new version starts now or later; the past keeps its recipe.")
+    if back_to is None or back_to >= now - CLOCK_SKEW:
+        if at < now - CLOCK_SKEW:
+            raise RecipeRuleError("A new version starts now or later; the past keeps its recipe.")
+        return at
+    if at < back_to:
+        raise RecipeRuleError(
+            f"A size's new version can start up to {BACK_DATE_DAYS} days back, and after the "
+            "version before it."
+        )
     return at
+
+
+def back_date_floor(now: datetime, starts: Iterable[datetime]) -> datetime:
+    """The earliest start a size's new version may take (C-51): 30 days back, and after every
+    version it already has, so no version is hidden behind a back-dated one."""
+    floor = now - timedelta(days=BACK_DATE_DAYS)
+    latest = max(starts, default=None)
+    return floor if latest is None else max(floor, latest + timedelta(seconds=1))
 
 
 def find_cycle(owner: int, uses: Mapping[int, Iterable[int]], lines: Iterable[int]) -> list[int]:

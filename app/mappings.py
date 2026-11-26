@@ -384,13 +384,13 @@ class Preview:
     before_recipe: int = 0  # sales from before the size had a recipe: they still use nothing
 
 
-def _today(db: Session, org: OrgContext, now: datetime) -> date:
+def business_today(db: Session, org: OrgContext, now: datetime) -> date:
     places = list(db.scalars(select_scoped(org, Location).where(Location.is_active.is_(True))))
     days = [business_date(now, p.timezone, p.business_day_cutoff_hour) for p in places]
     return max(days) if days else now.date()
 
 
-def _last_count(
+def last_count_for_size(
     db: Session, org: OrgContext, variation: ProductVariation, now: datetime
 ) -> date | None:
     """The business date of the latest count of anything the size uses, at its location."""
@@ -427,8 +427,8 @@ def preview(
     if variation is None:
         raise NotFound("no such size")
     now = datetime.now(UTC)
-    today = _today(db, org, now)
-    last = _last_count(db, org, variation, now)
+    today = business_today(db, org, now)
+    last = last_count_for_size(db, org, variation, now)
     start = check_start(start or default_start(today, last), today)
     pairs = lines_to_remap(
         db,

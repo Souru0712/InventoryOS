@@ -283,6 +283,8 @@ CASES = {
     ("GET", "/app/catalog/{inventory_item_id}/recipes"): lambda ids: {},
     ("GET", "/app/recipes/{kind}/{owner_id}"): lambda ids: {},
     ("GET", "/app/recipes/{kind}/{owner_id}/edit"): lambda ids: {},
+    ("GET", "/app/recipes/{kind}/{owner_id}/apply"): lambda ids: {},
+    ("POST", "/app/recipes/{kind}/{owner_id}/apply"): lambda ids: {"data": {"start": ""}},
     ("POST", "/app/recipes/{kind}/{owner_id}"): lambda ids: {
         "data": {"item": ids["inventory_item"], "quantity": "1", "unit": ""}
     },
