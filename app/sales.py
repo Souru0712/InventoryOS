@@ -187,6 +187,43 @@ def source_of_record(
     return next((s for s in rows if s.id == found), None)
 
 
+def origins_of_record(
+    db: Session, org: OrgContext, location_id: int, first: date, last: date
+) -> dict[date, str]:
+    """Each business date's source-of-record origin, for the dates that have one (DR-31)."""
+    rows = [s for s in sources(db, org, location_id) if s.of_record]
+    kinds = {s.id: s.kind for s in rows}
+    found = {}
+    day = first
+    while day <= last:
+        source_id = of_record(((s.id, _span(s)) for s in rows), day)
+        if source_id is not None:
+            found[day] = kinds[source_id]
+        day += timedelta(days=1)
+    return found
+
+
+def sold_origins(
+    db: Session, org: OrgContext, location_id: int, first: date, last: date
+) -> dict[date, set[str]]:
+    """The origins of each business date's counted sales (DR-34: a sale keeps its source's)."""
+    found: dict[date, set[str]] = defaultdict(set)
+    for day, origin in db.execute(
+        select_scoped(org, SalesTransaction)
+        .with_only_columns(SalesTransaction.business_date, SalesTransaction.origin)
+        .where(
+            SalesTransaction.location_id == location_id,
+            SalesTransaction.business_date >= first,
+            SalesTransaction.business_date <= last,
+            SalesTransaction.status == "completed",
+            SalesTransaction.of_record.is_(True),
+        )
+        .distinct()
+    ):
+        found[day].add(origin)
+    return dict(found)
+
+
 # --- transactions (POS-FR-17, DR-30, DR-34) -----------------------------------------------------
 
 

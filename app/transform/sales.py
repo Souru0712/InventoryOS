@@ -29,6 +29,12 @@ RETURN_CLASSES = ("restock", "waste")
 PLACES = Decimal("0.0001")
 
 
+def origin_names(origins: Iterable[str]) -> str:
+    """Origins as a reader sees them, in a fixed order: "Entered by hand, POS" (STD-FR-07)."""
+    found = set(origins)
+    return ", ".join(ORIGIN_LABELS[o] for o in SALES_ORIGINS if o in found)
+
+
 class SalesRuleError(ValueError):
     """A sale or a source the rules refuse; nothing is written."""
 

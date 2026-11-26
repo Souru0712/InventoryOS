@@ -9,9 +9,9 @@ the ledger's own totals are, so the report's totals match them (AC-ANL-03).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from app.transform.dashboard import movement_value_cents
@@ -326,3 +326,55 @@ class CostOfSales:
         if not self.lines:
             return None
         return (Decimal(self.complete) * 100 / Decimal(self.lines)).quantize(Decimal("0.1"))
+
+
+# --- where sales came from, and Standalone coverage (STD-FR-07, AC-SAL-08) ----------------------
+
+# Sources whose days are Standalone: sales someone records, so a day can be missing.
+STANDALONE_ORIGINS = frozenset({"manual", "file_import"})
+
+
+@dataclass(frozen=True)
+class SalesCoverage:
+    """Where a location's counted sales over a period came from, and how many of its Standalone
+    open days have any."""
+
+    location_id: int
+    days_by_origin: dict[str, int]  # business days with counted sales, by origin
+    with_sales: int  # Standalone open days with counted sales
+    open_days: int  # Standalone open days in the period
+
+    @property
+    def standalone(self) -> bool:
+        return self.open_days > 0
+
+    @property
+    def missing(self) -> int:
+        return self.open_days - self.with_sales
+
+
+def sales_coverage(
+    location_id: int,
+    first: date,
+    last: date,
+    today: date,
+    open_mask: int,
+    record: Mapping[date, str],
+    sold: Mapping[date, Iterable[str]],
+) -> SalesCoverage:
+    """`record` is each day's source-of-record origin, `sold` the origins of its counted sales.
+    A Standalone open day counts once it is over, or sooner once it has sales, so an unfinished
+    today never shows as missing; days after today never count."""
+    days_by_origin: dict[str, int] = {}
+    with_sales = open_days = 0
+    day = first
+    while day <= min(last, today):
+        origins = set(sold.get(day, ()))
+        for origin in origins:
+            days_by_origin[origin] = days_by_origin.get(origin, 0) + 1
+        is_open = open_mask >> day.weekday() & 1
+        if is_open and record.get(day) in STANDALONE_ORIGINS and (day < today or origins):
+            open_days += 1
+            with_sales += bool(origins)
+        day += timedelta(days=1)
+    return SalesCoverage(location_id, dict(sorted(days_by_origin.items())), with_sales, open_days)

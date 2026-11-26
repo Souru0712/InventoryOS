@@ -99,8 +99,7 @@ PD-43 to PD-53 stay open either way; none blocks the gate.
 
 ## G4 Standalone end-to-end (M4)
 
-**Status:** evidence prepared 2026-11-25; not passed. It needs:
-- **AC-SAL-08**, which is only half built;
+**Status:** evidence prepared 2026-11-25; AC-SAL-08 completed 2026-11-26; not passed. It needs:
 - two manual checks: **AC-ANL-07** and **AC-SAAS-10**;
 - the owner's sign-off.
 
@@ -124,7 +123,7 @@ skipped (the Postgres-only tests).
 
 ### Pass condition, item by item
 
-**1. The R1 criteria.** Met, except AC-SAL-08 and AC-ANL-07.
+**1. The R1 criteria.** Met, except AC-ANL-07.
 
 | Criteria | Tests |
 |---|---|
@@ -132,7 +131,7 @@ skipped (the Postgres-only tests).
 | AC-SAL-02, -03, -05 a day's sales: posts once, corrected by reversal with a reason, a missing day flagged | `tests/test_daily_sales.py` (`test_ac_sal_02_…`, `test_ac_sal_03_…`, `test_ac_sal_05_…`) |
 | AC-SAL-04 file import: preview, unmatched listed, re-import adds nothing | `tests/test_sales_import.py::test_ac_sal_04_preview_posts_matched_lists_unmatched_and_reimport_adds_nothing` |
 | AC-SAL-07 provider code only in the adapter | `tests/test_standalone.py::test_ac_sal_07_provider_code_lives_only_in_the_adapter` |
-| AC-SAL-08 origin shown; Standalone coverage "N of M open days" | **Partly met.** Every sale stores its origin (`tests/test_sales.py`, `tests/test_daily_sales.py`, `tests/test_sales_import.py`), and the import preview names the source a skipped day belongs to. No sales-derived report shows origin, and no Standalone report shows "N of M open days" coverage |
+| AC-SAL-08 origin shown; Standalone coverage "N of M open days" | **Met (2026-11-26).** Every sale stores its origin (`tests/test_sales.py`, `tests/test_daily_sales.py`, `tests/test_sales_import.py`). The reports page names where each location's sales came from and, on Standalone days, "Sales on N of M open days"; so do cost of sales, its CSV, a `sales_coverage` CSV and the weekly summary (page and email): `tests/test_sales_coverage.py`. How M is counted is PD-54 (OPEN) |
 | AC-REC-01..05 counts: storage order, expected at count time, one variance per line, review thresholds | `tests/test_count_sessions.py` (`test_ac_rec_01_…` to `test_ac_rec_04_…`), `tests/test_count_screens.py` (AC-REC-01, -05) |
 | AC-REC-06..09 exceptions: one per problem, auto-resolve, dismiss with a reason, no amounts for Employees | `tests/test_exceptions.py` (`test_ac_rec_06_…` to `test_ac_rec_09_…`) |
 | AC-ROR-01, -03, -05 reorder: worked example, count first, never orders | `tests/test_reorder.py` (`test_ac_ror_01_the_worked_example`, `test_ac_ror_03_count_first`, `test_ac_ror_05_…`) |
@@ -150,9 +149,8 @@ has to complete onboarding and record receiving, waste, production and counts. T
 owner's to arrange (CUSTOMER_VALIDATION_PLAN: Standalone pilots).
 
 **To pass G4:**
-1. Build AC-SAL-08's two missing parts: origin on sales-derived reports, and "N of M open days"
-   coverage on Standalone reports. This is a small task; no owner decision is needed, since the
-   criterion is already decided.
+1. ~~Build AC-SAL-08's two missing parts.~~ Done 2026-11-26 (origin on sales-derived reports,
+   "N of M open days" on Standalone reports).
 2. Record AC-ANL-07 once email delivery is configured.
 3. Observe AC-SAAS-10 with a non-founder.
 
@@ -308,7 +306,7 @@ task (T1.01 to T1.12) was merged by 2026-11-11, and the evidence was still green
 | G1 Tenancy & access | Passed ("Sign off both") | 2026-11-13 |
 | G2 Ledger engine | Passed ("Sign off both"); R6 moved to G3 as decided on 2026-11-12 | 2026-11-13 |
 | G3 Operations engine | Evidence prepared; awaiting manual checks AC-WST-01 and AC-RCV-04, then sign-off | — |
-| G4 Standalone end-to-end | Evidence prepared; awaiting AC-SAL-08 (half built) and manual checks AC-ANL-07 and AC-SAAS-10, then sign-off | — |
+| G4 Standalone end-to-end | Evidence prepared; AC-SAL-08 built; awaiting manual checks AC-ANL-07 and AC-SAAS-10, then sign-off | — |
 | G5 Square connected | Evidence prepared; awaiting CI on PostgreSQL (Stage 3 PR #63) and sign-off | — |
 
 Stage 1 is complete. Stage 2 starts with T2.01 Owned product catalog.

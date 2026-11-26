@@ -23,7 +23,7 @@ from app.notify.email import render_pair, send_email, wants
 from app.orchestration.dashboard import needs_attention
 from app.orchestration.health import expiry_figures
 from app.orchestration.views import expiry_positions, stock_views, tenant_currency
-from app.reports import consumption_report
+from app.reports import consumption_report, sales_coverage_report
 from app.security import member_permissions
 from app.transform.business_days import business_date
 from app.transform.dashboard import DateRange
@@ -31,12 +31,14 @@ from app.transform.reports import (
     EXCEPTIONS_SHOWN,
     LOW_STOCK_SHOWN,
     OpenException,
+    SalesData,
     WeeklySummary,
     low_stock,
     money,
     qty,
     week_bounds,
 )
+from app.transform.sales import origin_names
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +60,14 @@ def weekly_report(
     now = now or datetime.now(UTC)
     start, end = week_bounds(today or _today(db, org, now))
     valuation = value_stock(db, org)
-    waste = consumption_report(db, org, DateRange("custom", start, end), now=now)
+    week = DateRange("custom", start, end)
+    waste = consumption_report(db, org, week, now=now)
+    names = {p.id: p.name for p in db.scalars(select_scoped(org, Location))}
+    sales = [
+        SalesData(names[c.location_id], origin_names(c.days_by_origin), c.with_sales, c.open_days)
+        for c in sales_coverage_report(db, org, week, now=now)
+        if c.days_by_origin or c.standalone
+    ]
     figures = expiry_figures(expiry_positions(db, org, now=now), get_settings().expiry_horizon_days)
     low = low_stock(stock_views(db, org))
     open_now = needs_attention(db, org)
@@ -77,6 +86,7 @@ def weekly_report(
             for view in open_now[:EXCEPTIONS_SHOWN]
         ),
         exceptions_open=len(open_now),
+        sales_data=tuple(sales),
     )
 
 

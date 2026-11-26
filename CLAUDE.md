@@ -233,6 +233,8 @@ implementation sessions; the detail lives in `docs/`.
   builds the windows, `app/transform/analytics.py` works out the figures per movement at its
   snapshot cost; never sum events, lines or today's costs for a past figure. Every report table
   exports through `/app/reports.csv` (ADR-0068) from the same report objects as its page.
+  Where sales came from and Standalone coverage ("N of M open days", AC-SAL-08) are
+  `sales_coverage_report()`; a figure from sales names its origins.
 - Items come in from a file or the quick-add grid through `app/item_import.py` (ADR-0071), each
   row tried through `create_item()`; the onboarding checklist (`app/onboarding.py`) is computed
   from the business's records; only step 0's answer, skipped steps and the opening count's time

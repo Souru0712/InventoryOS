@@ -34,8 +34,17 @@
 {% macro csv_link(name) %}{% if can(request, "data.export") %} <a class="small" href="/app/reports.csv?table={{ name }}&{{ csv_query }}">CSV</a>{% endif %}{% endmacro %}
 {% macro amount(i, value) %}{{ value|qty(i.display_unit if i else "") }}{% endmacro %}
 
+<h2>Where the sales come from{{ csv_link('sales_coverage') }}</h2>
+<div class="card" id="sales-coverage">
+  {% for c in coverage %}
+  <p class="small" style="margin:{{ '0' if loop.first else '8px 0 0' }};">{% if places|length > 1 and not location %}<strong>{{ names.get(c.location_id, "") }}:</strong> {% endif %}
+    {%- if c.days_by_origin %}{% for origin, n in c.days_by_origin.items() %}{{ origin_labels[origin] }} on {{ n }} day{{ "" if n == 1 else "s" }}{{ ", " if not loop.last }}{% endfor %}.{% else %}No sales recorded in this period.{% endif %}
+    {%- if c.standalone %} Sales on <strong>{{ c.with_sales }} of {{ c.open_days }} open days</strong>{% if c.missing %}; figures from sales leave out the {{ c.missing }} day{{ "" if c.missing == 1 else "s" }} without any{% endif %}.{% endif %}</p>
+  {% endfor %}
+</div>
+
 <h2>Consumption{{ csv_link('consumption') }}</h2>
-<p class="small muted">What left stock, by where it went: sold (through recipes), used in production, wasted, and used by hand.</p>
+<p class="small muted">What left stock, by where it went: sold (through recipes{% if sales_from %}; sales: {{ sales_from }}{% endif %}), used in production, wasted, and used by hand.</p>
 {% if consumption.rows %}
 <div class="table-wrap">
 <table>
@@ -61,7 +70,7 @@
 <h2>Cost of sales{{ csv_link('cost_of_sales') }}</h2>
 <div class="card">
   {% if costs %}<p style="margin:0;">Ingredients sold through recipes cost <strong>{{ cost_of_sales.cents|money(currency) }}</strong>{% if cost_of_sales.uncosted %} <span class="small muted">plus some with no cost</span>{% endif %}, at the cost recorded when each sale took them.</p>{% endif %}
-  <p class="small muted" style="margin:{{ '8px' if costs else '0' }} 0 0;">{% if cost_of_sales.lines %}{{ cost_of_sales.complete }} of {{ cost_of_sales.lines }} sold lines ({{ cost_of_sales.coverage_percent }} %) had a recipe that took their ingredients; the rest used nothing from stock.{% else %}No sales recorded in this period.{% endif %}</p>
+  <p class="small muted" style="margin:{{ '8px' if costs else '0' }} 0 0;">{% if cost_of_sales.lines %}{{ cost_of_sales.complete }} of {{ cost_of_sales.lines }} sold lines ({{ cost_of_sales.coverage_percent }} %) had a recipe that took their ingredients; the rest used nothing from stock. Sales: {{ sales_from }}.{% else %}No sales recorded in this period.{% endif %}</p>
 </div>
 
 <h2>Count-based usage{{ csv_link('count_usage') }}</h2>

@@ -30,6 +30,7 @@ from app.models import (
     WasteReason,
 )
 from app.receivings import discrepancies
+from app.sales import origins_of_record, sold_origins
 from app.transform.analytics import (
     AtRisk,
     ConsumptionReport,
@@ -40,6 +41,7 @@ from app.transform.analytics import (
     Moved,
     Price,
     PriceChange,
+    SalesCoverage,
     Timed,
     VarianceReport,
     consumption,
@@ -47,6 +49,7 @@ from app.transform.analytics import (
     count_variance,
     expiry_losses,
     price_changes,
+    sales_coverage,
 )
 from app.transform.business_days import business_date, business_day_end, business_day_start
 from app.transform.dashboard import DateRange
@@ -232,6 +235,37 @@ def cost_of_sales_report(
         sum(1 for status in statuses if status == "posted"),
         any(row.uncosted and row.qty["sales"] > 0 for row in used.rows.values()),
     )
+
+
+def sales_coverage_report(
+    db: Session,
+    org: OrgContext,
+    period: DateRange,
+    *,
+    location_id: int | None = None,
+    now: datetime | None = None,
+) -> list[SalesCoverage]:
+    """Where each location's counted sales over the period came from (manual, imported, POS),
+    and on its Standalone days, how many open days have sales (STD-FR-07, AC-SAL-08)."""
+    now = now or datetime.now(UTC)
+    spans = days(db, org, period, now, location_id)
+    found = []
+    for place in _places(db, org, location_id):
+        first, last = spans[place.id]
+        today = business_date(now, place.timezone, place.business_day_cutoff_hour)
+        until = min(last, today)
+        found.append(
+            sales_coverage(
+                place.id,
+                first,
+                last,
+                today,
+                place.open_days,
+                origins_of_record(db, org, place.id, first, until) if first <= until else {},
+                sold_origins(db, org, place.id, first, until) if first <= until else {},
+            )
+        )
+    return found
 
 
 def count_usage_report(

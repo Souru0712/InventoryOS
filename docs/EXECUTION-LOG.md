@@ -5,6 +5,40 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — AC-SAL-08 completed: sales origin and Standalone coverage (G4 follow-up)
+
+The G4 review found AC-SAL-08 half built: every sale stored its origin, but no report showed it
+and no Standalone report showed coverage. This finishes it on `stage3` (STD-FR-07, WF-24).
+
+**Implemented**
+- **The rule** (`sales_coverage()` in `app/transform/analytics.py`, pure): per location over a
+  period, the business days with counted sales by origin, and on Standalone days how many open
+  days have sales. An open day counts while a hand-entry or file-import source is of record;
+  today counts once it has sales; a POS day, a closed day or a day after today never counts.
+- **The reader:** `sales_coverage_report()` in `app/reports.py`. It reads sources of record
+  (`origins_of_record()`) and counted sales (`sold_origins()`) through `app/sales.py`.
+- **Reports page:** a "Where the sales come from" card, e.g. "Entered by hand on 5 days. Sales
+  on 5 of 6 open days; figures from sales leave out the 1 day without any". Consumption and
+  cost of sales name their sales' origins.
+- **CSV:** a new `sales_coverage` table, and a "Sales from" column on `cost_of_sales`.
+- **Weekly summary** (page and both email parts): "Sales last week", per location, its origins
+  and "Sales on N of M open days" (WF-24's sales-data coverage).
+
+**Verified**
+- `tests/test_sales_coverage.py` (6): the rule (open days, today, the future, closed days,
+  non-Standalone days), origin order, the report with a hand-entry and a POS location, the page
+  and both CSV tables, and the weekly summary, its page and email.
+- The report, reports II, email, daily sales, sales, sales status, sales import, isolation,
+  headers and Standalone tests: 201 passed. Ruff, mypy and the docs checker are clean.
+
+**Decisions for the owner**
+- PD-54 (OPEN): which days Standalone coverage counts. Recommended: as built.
+
+**Open issues**
+- None. G4 still waits on the manual checks AC-ANL-07 and AC-SAAS-10, and sign-off.
+
+---
+
 ## 2026-11-25 — T3.12 Remove the legacy Square sync path (built on branch)
 
 **Implemented**
