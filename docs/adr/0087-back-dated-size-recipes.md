@@ -1,6 +1,6 @@
 # ADR-0087: A size's recipe may start in the past; past sales take it only when applied
 
-- **Status:** Proposed, 2026-11-26 (built on branch `after-stage3`)
+- **Status:** Accepted, 2026-11-26 (owner: "merge PR #65"; merge commit 3c5755d)
 - **Decision ID:** none (implements C-51, PD-53; amends ADR-0051 and DR-16 for product sizes)
 - **Tasks:** none (owner decision C-51, a follow-up to T2.02, T3.04 and the T3.11 run)
 

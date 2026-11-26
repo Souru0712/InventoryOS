@@ -5,6 +5,21 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — Stage 3 follow-ups merged (PR #65)
+
+**Implemented**
+- PR #65 merged into `main` with a merge commit (`3c5755d`, owner: "merge PR #65"): C-53, PD-54
+  (C-54) and C-51. ADR-0086 and ADR-0087 are Accepted.
+
+**Verified**
+- CI on `566ebdb`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,
+  Dependency audit and Docker image all green.
+
+**Open issues**
+- PD-55 stays open (back-dating limited to product sizes).
+
+---
+
 ## 2026-11-26 — Product renamed to Vontry (C-55)
 
 **Implemented**
