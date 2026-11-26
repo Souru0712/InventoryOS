@@ -84,25 +84,28 @@ notification URL exactly: https, no trailing slash.
 the cheap options, and bounce webhooks that are simple to consume. Resend is the easiest to set up;
 SES is cheapest at volume and the most work.
 
-- [ ] Provider account
-- [ ] Sending domain added there, e.g. `mail.yourdomain.com`
-- [ ] **SPF**: a TXT record on the sending domain, contents from the provider
+**Chosen: Resend, sending from `vontry.app` (verified 2026-11-26).**
+
+- [x] Provider account
+- [x] Sending domain added there (`vontry.app` itself, the owner's choice over a subdomain)
+- [x] **SPF**: a TXT record on the sending domain, contents from the provider
       (typically `v=spf1 include:<provider> ~all`)
-- [ ] **DKIM**: the CNAME or TXT records they give you, one per selector
-- [ ] **DMARC**: TXT at `_dmarc.yourdomain.com`, starting at
+- [x] **DKIM**: the CNAME or TXT records they give you, one per selector
+- [x] **DMARC**: TXT at `_dmarc.yourdomain.com`, starting at
       `v=DMARC1; p=none; rua=mailto:you@yourdomain.com`, tightened to `p=quarantine` once the
       reports come back clean
-- [ ] Into `.env`: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
-- [ ] From-addresses on that domain: `SMTP_FROM`, and optionally one per kind of email
+- [x] Into `.env`: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
+- [x] From-addresses on that domain: `SMTP_FROM`, and optionally one per kind of email
       (`SMTP_FROM_ACCOUNT`, `SMTP_FROM_ALERTS`, `SMTP_FROM_REPORTS`; blank uses `SMTP_FROM`)
-- [ ] `SUPPORT_EMAIL`: the Reply-To on every email, an inbox you read
+- [ ] `SUPPORT_EMAIL`: the Reply-To on every email, an inbox you read. Set to
+      `support@vontry.app`; it still needs a Cloudflare Email Routing rule (mail to it bounced)
 - [ ] A Gmail address and an Outlook/Hotmail address you control, for the delivery test
+      (Gmail delivered 2026-11-26, AC-ANL-07; Outlook not tried)
 
-**Tell me which provider you chose** and I will wire its bounce webhook into the suppression list
-that is already built. The payload shape and signature scheme are provider-specific, so that part
-cannot be written blind.
+**Still to build:** Resend's bounce and complaint webhook into the suppression list that is
+already built; until then an address is suppressed only by hand (`python -m app.cli email --suppress <address>`).
 
-Until this exists, email is written to the log instead of sent. That is why nothing has arrived.
+Without `SMTP_HOST`, email is written to the log instead of sent.
 
 ## 4. Anthropic key, invoices, and packaging photos (your Phase B, item 10)
 

@@ -5,6 +5,30 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — AC-ANL-07: the weekly summary delivered through Resend
+
+**Implemented**
+- Email goes out through Resend over SMTP from the verified domain `vontry.app` (the owner
+  added the DNS records in Cloudflare and the settings in `.env`; the key never entered the
+  conversation). `SUPPORT_EMAIL` is `support@vontry.app`.
+
+**Verified**
+- AC-ANL-07: the waste demo's weekly summary (Rosewood Coffee, week of 16 Nov) was sent from
+  `Vontry Reports <reports@vontry.app>` to its Owner, set to the owner's Gmail on a throwaway copy
+  of the database; the owner reported it delivered. Its figures (stock value $656.35, waste $0.00,
+  money at risk $154.01, low stock 1, open exceptions 11) match `/app/report`.
+- Public DNS shows the DKIM, `send`, `rsend` and DMARC records, and Email Routing's MX and SPF on
+  the root, without overlap.
+
+**Open issues**
+- The copy sent to `support@vontry.app` bounced ("recipient not found"): Email Routing is on but
+  no rule exists for that address. Replies to any email bounce until it does.
+- Resend's bounce and complaint webhook is not wired into the suppression list (NEEDS-YOU §3).
+- The run was local; repeating it on staging stays with PD-52 and T4.09. G4 still needs
+  AC-SAAS-10 and the owner's sign-off.
+
+---
+
 ## 2026-11-26 — One sender per kind of email
 
 **Implemented**
