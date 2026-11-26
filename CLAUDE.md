@@ -163,6 +163,7 @@ implementation sessions; the detail lives in `docs/`.
 - A location changes where its sales come from only through `cut_over()` (via
   `app/sales_modes.py`, ADR-0084): from a cutover date the chosen source alone counts, the old
   source's sales from then are voided, earlier days untouched; a chosen start is `fixed_from`.
+  A switch never reaches back past the location's last count (`last_count_at()`, C-53).
 - Every choice that needs the owner is logged as an OPEN `PD-nn` in PRODUCT_DECISIONS §3 and
   cited under "Decisions for the owner" in the task's execution-log entry.
 - Pure business rules in `app/transform/` (no ORM, no I/O).

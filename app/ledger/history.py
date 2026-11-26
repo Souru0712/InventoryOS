@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext, select_scoped
@@ -360,6 +361,19 @@ def balances_before(
             key = (location_id, item_id)
             result[key] = result.get(key, Decimal(0)) + Decimal(qty)
     return result
+
+
+def last_count_variance(db: Session, org: OrgContext, location_id: int) -> datetime | None:
+    """When a count last moved the ledger at a location (C-53)."""
+    return db.scalar(
+        select_scoped(org, InventoryMovement)
+        .with_only_columns(func.max(InventoryMovement.occurred_at))
+        .where(
+            InventoryMovement.location_id == location_id,
+            InventoryMovement.movement_type == "count_variance",
+            InventoryMovement.reverses_movement_id.is_(None),
+        )
+    )
 
 
 def counted_at(db: Session, org: OrgContext, item_ids: Iterable[int]) -> list[tuple[int, datetime]]:

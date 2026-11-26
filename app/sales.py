@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
-from app.consumption import queue_consumption
+from app.consumption import queue_consumption, sale_moment
 from app.exceptions import record_exception
 from app.models import (
     ExternalModifier,
@@ -877,6 +877,7 @@ class Cutover:
 
     voided: tuple[tuple[date, str], ...]  # counted sales of the old source from then: (day, origin)
     counted: tuple[date, ...]  # sales the new source already recorded from then, now counted
+    first_moment: datetime | None = None  # the earliest sale either changes (C-53)
 
 
 def _target(
@@ -921,9 +922,11 @@ def cutover_plan(
     others = [s for s in sources(db, org, location_id) if s.of_record and s is not target]
     voided = _counted_from(db, org, (s.id for s in others), cutover, True)
     counted = _counted_from(db, org, [target.id] if target else [], cutover, False)
+    moments = [sale_moment(db, org, t) for t in [*voided, *counted]]
     return Cutover(
         tuple(sorted((t.business_date, t.origin) for t in voided)),
         tuple(sorted({t.business_date for t in counted})),
+        min(moments, default=None),
     )
 
 

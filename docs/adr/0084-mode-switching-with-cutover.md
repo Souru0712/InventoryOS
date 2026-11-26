@@ -27,6 +27,9 @@ other way left the POS source of record, so hand entry stayed refused.
 3. **The rules** (`app/sales_modes.py`):
    - Connected needs a location tracking a POS location of an active connection.
    - D lies within 30 days of today, either way (PD-50).
+   - D never reaches back past the location's last count, and the switch changes no sale from
+     before it (C-53, added 2026-11-26): counts are checkpoints; older days are corrected by
+     counts and adjustments.
    - Switching to the source already in use on D is refused.
    - The default D is today for joining a POS; for leaving one, it is the day after the POS's last
      day with sales (WF-25).

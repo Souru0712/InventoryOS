@@ -218,3 +218,30 @@ def test_the_owner_previews_then_switches_on_the_page(owner):
     assert "takes its sales from sales file imports from" in done.text
     refused = client.get(f"/app/locations/{place_id}/sales-source", params={"to": "pos"}).text
     assert "Connect Square first." in refused
+
+
+def test_c_53_a_switch_never_reaches_back_past_a_count(db, shop):
+    """Counts are checkpoints: a switch may not change a sale from before the latest one."""
+    from app.models import StockItem
+    from tests.ledger_helpers import counted_to
+
+    org, place, size, milk = shop
+    today = today_at(place)
+    counted_day = today - timedelta(days=3)
+    _by_hand(db, org, place, size, counted_day - timedelta(days=1), 1)
+    morning = _pos(db, org, place, size, "o-am", 2, _at_noon(counted_day) - timedelta(hours=3))
+    _settle(db)
+    stock = db.scalars(select(StockItem).where(StockItem.inventory_item_id == milk.id)).one()
+    counted_to(db, stock, 5000, at=_at_noon(counted_day))
+    db.commit()
+
+    with pytest.raises(ModeRuleError, match="was counted on"):
+        preview(db, org, place.id, "pos_adapter", "square", counted_day - timedelta(days=1))
+    with pytest.raises(ModeRuleError, match="was counted on"):  # the 9:00 sale predates the count
+        preview(db, org, place.id, "pos_adapter", "square", counted_day)
+    shown = preview(db, org, place.id, "pos_adapter", "square", counted_day + timedelta(days=1))
+    assert shown.last_count == counted_day and shown.earliest == counted_day
+    switch(db, org, place.id, "pos_adapter", "square", counted_day + timedelta(days=1))
+    _settle(db)
+    assert db.get(SalesTransaction, morning.id).of_record is False, "before the switch"
+    assert balance(db, org, place.id, milk.id) == D(5000), "the count stands"
