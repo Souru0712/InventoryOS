@@ -31,6 +31,29 @@ _env = Environment(
 CATEGORIES = ("stock_alerts", "expiry_alerts", "weekly_report")
 
 
+# Who each kind of email comes from, so a reader tells account mail, alerts and reports apart at
+# a glance. A kind not listed here, or a sender left blank, comes from SMTP_FROM.
+SENDERS = {
+    "verify_email": "account",
+    "reset_password": "account",
+    "invitation": "account",
+    "alert_digest": "alerts",
+    "connection_revoked": "alerts",
+    "weekly_report": "reports",
+}
+
+
+def sender_for(kind: str) -> str:
+    """The From address for an email of this kind."""
+    settings = get_settings()
+    own = {
+        "account": settings.smtp_from_account,
+        "alerts": settings.smtp_from_alerts,
+        "reports": settings.smtp_from_reports,
+    }.get(SENDERS.get(kind, ""), "")
+    return own or settings.smtp_from
+
+
 def render(template: str, **context: object) -> str:
     return _env.get_template(template).render(**context)
 
@@ -117,7 +140,7 @@ def send_email(
 
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = settings.smtp_from
+    message["From"] = sender_for(kind)
     message["To"] = to_email
     message["Reply-To"] = settings.support_email
     message.set_content(text)

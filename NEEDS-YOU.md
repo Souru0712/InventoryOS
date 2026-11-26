@@ -93,7 +93,9 @@ SES is cheapest at volume and the most work.
       `v=DMARC1; p=none; rua=mailto:you@yourdomain.com`, tightened to `p=quarantine` once the
       reports come back clean
 - [ ] Into `.env`: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
-- [ ] A from-address on that domain: `SMTP_FROM`, `SUPPORT_EMAIL`
+- [ ] From-addresses on that domain: `SMTP_FROM`, and optionally one per kind of email
+      (`SMTP_FROM_ACCOUNT`, `SMTP_FROM_ALERTS`, `SMTP_FROM_REPORTS`; blank uses `SMTP_FROM`)
+- [ ] `SUPPORT_EMAIL`: the Reply-To on every email, an inbox you read
 - [ ] A Gmail address and an Outlook/Hotmail address you control, for the delivery test
 
 **Tell me which provider you chose** and I will wire its bounce webhook into the suppression list

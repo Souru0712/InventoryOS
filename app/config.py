@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = "Vontry <alerts@localhost>"
+    # One sender per kind of email (app/notify/email.py SENDERS); blank falls back to smtp_from.
+    smtp_from_account: str = ""
+    smtp_from_alerts: str = ""
+    smtp_from_reports: str = ""
     support_email: str = "support@localhost"
 
     anthropic_api_key: str = ""

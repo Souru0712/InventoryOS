@@ -5,6 +5,28 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — One sender per kind of email
+
+**Implemented**
+- Each kind of email has its own From address, so people tell account mail, alerts and reports
+  apart (owner: "Yes, split senders"). `SENDERS` in `app/notify/email.py` groups the kinds:
+  - account (`SMTP_FROM_ACCOUNT`): confirm email, password reset, invitations;
+  - alerts (`SMTP_FROM_ALERTS`): the alert digest and a POS disconnection;
+  - reports (`SMTP_FROM_REPORTS`): the weekly summary.
+- A sender left blank, or a kind not listed, comes from `SMTP_FROM`, so a deployment that sets
+  only `SMTP_FROM` sends as before. All senders sit on one verified sending domain (the owner
+  chose `vontry.app` itself over a subdomain); no extra DNS records.
+- `.env.example` (which still said StockPulse) and `NEEDS-YOU.md` list the new settings.
+
+**Verified**
+- `tests/test_email.py`: the digest, the weekly summary and a confirmation email each carry their
+  own sender; a blank or unknown one falls back to `SMTP_FROM`.
+
+**Files changed**
+- `app/config.py`, `app/notify/email.py`, `tests/test_email.py`, `.env.example`, `NEEDS-YOU.md`.
+
+---
+
 ## 2026-11-26 — Rename to Vontry merged (PR #66)
 
 **Implemented**
