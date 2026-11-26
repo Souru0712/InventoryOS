@@ -69,7 +69,7 @@ own webhook subscription and signature key, redirect URL on the real domain.
 
 ## 2. A public URL for webhooks
 
-Square and Stripe both have to reach the app. Either:
+Square, Stripe and Resend (bounces) all have to reach the app. Either:
 
 - **ngrok**: `ngrok http 8000`, then set `APP_BASE_URL` to the https URL it prints. It changes each
   restart unless you pay for a reserved domain.
@@ -102,8 +102,13 @@ SES is cheapest at volume and the most work.
 - [ ] A Gmail address and an Outlook/Hotmail address you control, for the delivery test
       (Gmail delivered 2026-11-26, AC-ANL-07; Outlook not tried)
 
-**Still to build:** Resend's bounce and complaint webhook into the suppression list that is
-already built; until then an address is suppressed only by hand (`python -m app.cli email --suppress <address>`).
+- [ ] **Bounce and complaint webhook** (built, ADR-0088): in Resend → Webhooks, add an endpoint
+      `https://<APP_BASE_URL>/webhooks/resend` for the events `email.bounced` and
+      `email.complained`, then paste its signing secret (`whsec_...`) into `.env` as
+      `RESEND_WEBHOOK_SECRET` and restart. It needs a public URL (section 2). From then on a hard
+      bounce or a spam complaint stops mail to that address without you acting; until then an
+      address is suppressed only by hand (`python -m app.cli email --suppress <address>`).
+      Clearing one (`--allow <address>`) clears only Vontry's list: remove it in Resend too.
 
 Without `SMTP_HOST`, email is written to the log instead of sent.
 

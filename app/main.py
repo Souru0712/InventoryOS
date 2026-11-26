@@ -32,6 +32,7 @@ from app.web import (
     daily_sales,
     dashboard,
     deliveries,
+    email_webhooks,
     exceptions,
     floor,
     health,
@@ -143,6 +144,7 @@ app.include_router(connections.router)
 app.include_router(mappings.router)
 app.include_router(sales_modes.router)
 app.include_router(webhooks.router)
+app.include_router(email_webhooks.router)
 app.include_router(billing.router)
 
 

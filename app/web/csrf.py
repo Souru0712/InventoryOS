@@ -24,7 +24,7 @@ FIELD = "csrf_token"
 HEADER = "x-csrf-token"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # Signed by the provider, sent without a browser's cookies.
-EXEMPT_PATHS = {"/webhooks/square", "/billing/webhook"}
+EXEMPT_PATHS = {"/webhooks/square", "/webhooks/resend", "/billing/webhook"}
 
 
 def csrf_token(request: Request) -> str:
