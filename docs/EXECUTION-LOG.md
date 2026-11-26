@@ -5,6 +5,22 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — Rename to Vontry merged (PR #66)
+
+**Implemented**
+- PR #66 merged into `main` with a merge commit (`0e2ae92`, owner: "Merge when green"): the
+  rename to Vontry (C-55) and the record of PR #65.
+
+**Verified**
+- CI on `dc28dc7`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,
+  Dependency audit and Docker image all green.
+
+**Open issues**
+- Outside the code, for the owner: the Square app's name in the Developer Console, the GitHub
+  repository's name, and verifying the Resend domain `vontry.app` (AC-ANL-07).
+
+---
+
 ## 2026-11-26 — Stage 3 follow-ups merged (PR #65)
 
 **Implemented**
