@@ -13,7 +13,6 @@ from app.main import app
 from app.models import (
     AlertKind,
     Location,
-    Plan,
     StockItem,
     SubscriptionStatus,
     Tenant,
@@ -21,6 +20,7 @@ from app.models import (
 from app.orchestration.alerts import all_proposals
 from app.orchestration.subscriptions import change_plan
 from app.orchestration.views import expiry_positions
+from app.plans import plan_by_code
 from app.units import Dimension
 from tests.batch_helpers import dated
 
@@ -166,11 +166,11 @@ def test_square_keeps_the_fields_it_owns_and_the_owner_keeps_the_rest(client):
 # --- archiving and the plan's allowance ---------------------------------------------------------
 
 
-def _starter(tenant_id: int) -> None:
+def _standalone(tenant_id: int) -> None:
     with SessionLocal() as db:
         tenant = db.get(Tenant, tenant_id)
         tenant.subscription_status = SubscriptionStatus.ACTIVE
-        tenant.plan = Plan.STARTER
+        tenant.billing_plan = plan_by_code(db, "standalone")
         db.commit()
 
 
@@ -192,7 +192,7 @@ def test_archiving_keeps_the_location_and_its_stock_on_record(client):
 
 def test_the_plan_allowance_holds_for_new_and_restored_locations(client):
     _add(client)
-    _starter(_tenant().id)  # Starter covers one location
+    _standalone(_tenant().id)  # Standalone covers one location
 
     refused = _add(client, name="Second")
     assert refused.status_code == 400
@@ -218,7 +218,7 @@ def test_an_archived_location_stays_off_whatever_the_plan_says(db, tenant):
     db.commit()
 
     tenant.subscription_status = SubscriptionStatus.ACTIVE
-    change_plan(db, tenant, "pro")  # an upgrade turns covered locations back on
+    change_plan(db, tenant, "complete")  # a plan change turns covered locations back on
     db.commit()
     db.expire_all()
     assert db.get(Location, location.id).is_active is False

@@ -1,11 +1,14 @@
 """What the customer has paid for, decided once and enforced on the server.
 
-The matrix at the bottom walks one account through its whole life: trial, Starter, Pro, downgrade,
-a failed payment, the grace period, cancellation.
+The matrix at the bottom walks one account through its whole life: trial, Standalone, Complete,
+back again, a failed payment, the grace period, cancellation. Plans come from the catalogue
+(T4.01, ADR-0089); the core is never gated by plan (C-41, E-05).
 """
 
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,15 +21,23 @@ from app.entitlements import (
     NotEntitled,
     access,
     allows,
-    effective_plan,
-    history_days,
+    entitlements,
     location_allowance,
     require,
     start_trial,
     state,
+    usage_limit,
 )
 from app.main import app
-from app.models import Location, Plan, StockItem, SubscriptionStatus, Tenant, TrackMode
+from app.models import (
+    BillingPlan,
+    Entitlement,
+    Location,
+    StockItem,
+    SubscriptionStatus,
+    Tenant,
+    TrackMode,
+)
 from app.orchestration.subscriptions import (
     apply_location_limit,
     change_plan,
@@ -35,13 +46,29 @@ from app.orchestration.subscriptions import (
     mark_past_due,
     start_subscription,
 )
+from app.plans import DEFAULT_PLAN, INITIAL_CATALOGUE, plan_by_code
 from app.units import Dimension
 
 NOW = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 
 
-def account(status: SubscriptionStatus, plan: str = "pro", **fields) -> Tenant:
-    return Tenant(name="Rosewood", plan=Plan(plan), subscription_status=status, **fields)
+def catalogue_plan(code: str) -> BillingPlan:
+    """A plan as the initial catalogue defines it, outside any database."""
+    entry = next(e for e in INITIAL_CATALOGUE if e["code"] == code)
+    plan = BillingPlan(code=code, name=entry["name"], billing_basis=entry["billing_basis"])
+    plan.entitlement = Entitlement(
+        allowed_modes=list(entry["allowed_modes"]),
+        max_locations=entry["max_locations"],
+        capability_flags=list(entry["capability_flags"]),
+        limits=dict(entry["limits"]),
+    )
+    return plan
+
+
+def account(status: SubscriptionStatus, plan: str = "complete", **fields) -> Tenant:
+    return Tenant(
+        name="Rosewood", billing_plan=catalogue_plan(plan), subscription_status=status, **fields
+    )
 
 
 # --- status to access ---------------------------------------------------------------------------
@@ -81,45 +108,79 @@ def test_a_trial_that_ran_out_an_hour_ago_closes_without_waiting_for_a_job():
     )
 
 
-# --- plan to capabilities -----------------------------------------------------------------------
+# --- plan to entitlements (C-41, E-02..05, AC-SAAS-08) ------------------------------------------
 
 
-def test_a_trial_is_given_the_full_product():
-    tenant = start_trial(Tenant(name="Rosewood"), NOW)
-    assert effective_plan(tenant) == "pro"
+def test_a_trial_is_of_the_plan_it_chose():
+    """PD-56: no bigger plan during the trial, so nothing is taken away when it converts."""
+    tenant = start_trial(account(SubscriptionStatus.ACTIVE, "standalone"), NOW)
+    assert tenant.subscription_status is SubscriptionStatus.TRIALING
     assert tenant.trial_ends_at == NOW + timedelta(days=TRIAL_DAYS)
-    assert allows(tenant, "reorder_csv", NOW) and allows(tenant, "custom_thresholds", NOW)
+    assert entitlements(tenant).plan == "standalone"
 
 
-@pytest.mark.parametrize("capability", ["reorder_csv", "custom_thresholds", "history_30_day"])
-def test_starter_does_not_get_the_pro_features(capability):
-    assert allows(account(SubscriptionStatus.ACTIVE, "starter"), capability, NOW) is False
-    assert allows(account(SubscriptionStatus.ACTIVE, "pro"), capability, NOW) is True
+@pytest.mark.parametrize("plan", ["complete", "standalone"])
+def test_the_core_is_never_gated_by_plan(plan):
+    """Complete and Standalone differ in sales source and locations, never in the core (E-05)."""
+    tenant = account(SubscriptionStatus.ACTIVE, plan)
+    for question in ("inventory_write", "add_location", "notifications"):
+        assert allows(tenant, question, NOW) is True, (plan, question)
+    assert entitlements(tenant).capability_flags == frozenset(), "no Advanced flags at launch"
 
 
-def test_starter_covers_one_location_and_pro_covers_as_many_as_they_have():
-    assert location_allowance(account(SubscriptionStatus.ACTIVE, "starter")) == 1
-    assert location_allowance(account(SubscriptionStatus.ACTIVE, "pro")) is None
+def test_standalone_covers_one_location_and_complete_as_many_as_they_have():
+    assert location_allowance(account(SubscriptionStatus.ACTIVE, "standalone")) == 1
+    assert location_allowance(account(SubscriptionStatus.ACTIVE, "complete")) is None
 
 
-def test_starter_sees_todays_score_and_pro_sees_the_month_behind_it():
-    assert history_days(account(SubscriptionStatus.ACTIVE, "starter")) == 0
-    assert history_days(account(SubscriptionStatus.ACTIVE, "pro")) == 30
+def test_each_plan_names_its_sales_modes():
+    standalone = entitlements(account(SubscriptionStatus.ACTIVE, "standalone"))
+    complete = entitlements(account(SubscriptionStatus.ACTIVE, "complete"))
+    assert standalone.allowed_modes == {"standalone"}
+    assert complete.allowed_modes == {"connected", "standalone"}
 
 
-def test_a_lapsed_pro_account_cannot_write_but_keeps_reading():
-    lapsed = account(SubscriptionStatus.EXPIRED, "pro")
+def test_a_capability_beyond_the_core_is_whatever_the_plan_lists():
+    tenant = account(SubscriptionStatus.ACTIVE, "complete")
+    assert allows(tenant, "forecasting", NOW) is False
+    tenant.billing_plan.entitlement.capability_flags = ["forecasting"]
+    assert allows(tenant, "forecasting", NOW) is True, "configuration alone grants it"
+
+
+def test_configuration_alone_changes_what_a_plan_allows(db, tenant):
+    """AC-SAAS-08: editing the entitlement row, with no code change, moves the limits."""
+    tenant.billing_plan = plan_by_code(db, "standalone")
+    db.commit()
+    assert location_allowance(tenant) == 1
+
+    plan_by_code(db, "standalone").entitlement.max_locations = 3
+    plan_by_code(db, "standalone").entitlement.limits = {"invoice_extractions_per_day": 5}
+    db.commit()
+    assert location_allowance(tenant) == 3
+    assert usage_limit(tenant, "invoice_extractions_per_day") == 5
+
+
+def test_a_business_made_without_a_plan_has_the_default_plans_entitlements(db, tenant):
+    assert tenant.plan_id is None
+    assert entitlements(tenant).plan == DEFAULT_PLAN
+
+
+def test_a_schema_built_from_the_models_starts_with_the_catalogue(db):
+    assert {plan.code for plan in db.query(BillingPlan)} == {"complete", "standalone"}
+    assert all(plan.entitlement is not None for plan in db.query(BillingPlan))
+
+
+def test_a_lapsed_account_cannot_write_but_keeps_reading():
+    lapsed = account(SubscriptionStatus.EXPIRED, "complete")
     assert allows(lapsed, "inventory_write", NOW) is False
-    assert allows(lapsed, "custom_thresholds", NOW) is False, (
-        "writing is writing, whatever the plan"
-    )
+    assert allows(lapsed, "add_location", NOW) is False, "writing is writing, whatever the plan"
     # Nothing here hides a page: reading is never gated.
     assert access(lapsed, NOW) is Access.READ_ONLY
 
 
-def test_requiring_something_the_plan_lacks_says_what_to_do():
-    with pytest.raises(NotEntitled, match="part of Pro"):
-        require(account(SubscriptionStatus.ACTIVE, "starter"), "reorder_csv", NOW)
+def test_requiring_something_the_plan_lacks_says_so():
+    with pytest.raises(NotEntitled, match="not part of your plan"):
+        require(account(SubscriptionStatus.ACTIVE, "standalone"), "forecasting", NOW)
 
 
 # --- what the page says --------------------------------------------------------------------------
@@ -162,30 +223,35 @@ def three_locations(db, tenant):
     return tenant
 
 
-def test_starter_tracks_one_location_and_keeps_the_others_on_record(db, three_locations):
+def test_standalone_tracks_one_location_and_keeps_the_others_on_record(db, three_locations):
     tenant = three_locations
     tenant.subscription_status = SubscriptionStatus.ACTIVE
-    tenant.plan = Plan.STARTER
+    tenant.billing_plan = plan_by_code(db, "standalone")
     db.commit()
 
     apply_location_limit(db, tenant)
     db.commit()
 
     active = db.query(Location).filter(Location.is_active.is_(True)).all()
-    assert len(active) == 1, "Starter covers one location"
-    assert db.query(Location).count() == 4, "nothing is deleted; the rest wait for an upgrade"
+    assert len(active) == 1, "Standalone covers one location"
+    assert db.query(Location).count() == 4, "nothing is deleted (E-07); the rest wait"
 
 
-def test_upgrading_turns_the_other_locations_back_on(db, three_locations):
+def test_moving_to_complete_turns_the_other_locations_back_on(db, three_locations):
     tenant = three_locations
     tenant.subscription_status = SubscriptionStatus.ACTIVE
-    change_plan(db, tenant, "starter")
+    change_plan(db, tenant, "standalone")
     db.commit()
     assert db.query(Location).filter(Location.is_active.is_(True)).count() == 1
 
-    change_plan(db, tenant, "pro")
+    change_plan(db, tenant, "complete")
     db.commit()
     assert db.query(Location).filter(Location.is_active.is_(True)).count() == 4
+
+
+def test_a_plan_the_catalogue_does_not_have_is_refused(db, tenant):
+    with pytest.raises(ValueError, match="no plan 'pro'"):
+        change_plan(db, tenant, "pro")
 
 
 # --- time passing ---------------------------------------------------------------------------------
@@ -199,7 +265,7 @@ def test_the_nightly_job_ends_trials_that_are_over(db, tenant):
     db.commit()
 
     assert tenant.subscription_status is SubscriptionStatus.EXPIRED
-    assert tenant.plan is Plan.STARTER, "they fall back to the floor, not to nothing"
+    assert entitlements(tenant).plan == DEFAULT_PLAN, "the plan stays; access is what closes"
 
 
 def test_the_job_leaves_a_running_trial_alone(db, tenant):
@@ -214,24 +280,24 @@ def test_the_job_leaves_a_running_trial_alone(db, tenant):
 
 
 def test_the_complete_lifecycle(db, tenant):
-    """Trial, Starter, Pro, downgrade, failed payment, grace, cancellation, read-only."""
+    """Trial, Standalone, Complete, back, failed payment, grace, cancellation, read-only."""
+    tenant.billing_plan = plan_by_code(db, "standalone")
     start_trial(tenant, NOW - timedelta(days=1))
     db.commit()
-    assert effective_plan(tenant) == "pro" and access(tenant, NOW) is Access.FULL
+    assert entitlements(tenant).plan == "standalone" and access(tenant, NOW) is Access.FULL
 
-    start_subscription(db, tenant, "starter", subscription_id="sub_1", customer_id="cus_1")
+    start_subscription(db, tenant, "standalone", subscription_id="sub_1", customer_id="cus_1")
     db.commit()
-    assert effective_plan(tenant) == "starter"
-    assert allows(tenant, "reorder_csv", NOW) is False
+    assert location_allowance(tenant) == 1
     assert tenant.stripe_subscription_id == "sub_1"
 
-    change_plan(db, tenant, "pro")
+    change_plan(db, tenant, "complete")
     db.commit()
-    assert allows(tenant, "reorder_csv", NOW) is True
+    assert location_allowance(tenant) is None
 
-    change_plan(db, tenant, "starter")
+    change_plan(db, tenant, "standalone")
     db.commit()
-    assert allows(tenant, "reorder_csv", NOW) is False, "a downgrade takes the feature back"
+    assert location_allowance(tenant) == 1, "a downgrade takes the locations back"
 
     mark_past_due(db, tenant, NOW)
     db.commit()
@@ -243,7 +309,7 @@ def test_the_complete_lifecycle(db, tenant):
     mark_past_due(db, tenant, NOW + timedelta(days=3))
     assert tenant.past_due_since == first_failure
 
-    start_subscription(db, tenant, "starter")
+    start_subscription(db, tenant, "standalone")
     db.commit()
     assert access(tenant, NOW) is Access.FULL and tenant.past_due_since is None
 
@@ -264,7 +330,7 @@ def client():
         yield test_client
 
 
-def signed_up(client, status: SubscriptionStatus, plan: str = "pro") -> int:
+def signed_up(client, status: SubscriptionStatus, plan: str = "complete") -> int:
     client.post(
         "/signup",
         data={
@@ -276,7 +342,7 @@ def signed_up(client, status: SubscriptionStatus, plan: str = "pro") -> int:
     with SessionLocal() as db:
         tenant = db.query(Tenant).one()
         tenant.subscription_status = status
-        tenant.plan = Plan(plan)
+        tenant.billing_plan = plan_by_code(db, plan)
         if status is SubscriptionStatus.TRIALING:
             tenant.trial_ends_at = datetime.now(UTC) - timedelta(days=1)
         location = Location(
@@ -300,7 +366,7 @@ def signed_up(client, status: SubscriptionStatus, plan: str = "pro") -> int:
         return tenant.id
 
 
-def test_signing_up_starts_a_trial_on_the_full_product(client):
+def test_signing_up_starts_a_trial_on_the_default_plan(client):
     client.post(
         "/signup",
         data={
@@ -311,19 +377,33 @@ def test_signing_up_starts_a_trial_on_the_full_product(client):
     )
     with SessionLocal() as db:
         tenant = db.query(Tenant).one()
+        assert tenant.billing_plan.code == DEFAULT_PLAN
     assert tenant.subscription_status is SubscriptionStatus.TRIALING
-    assert effective_plan(tenant) == "pro"
     assert tenant.trial_ends_at is not None
 
 
+def test_signing_up_for_a_plan_trials_that_plan(client):
+    client.post(
+        "/signup",
+        data={
+            "business_name": "Rosewood",
+            "email": "owner@rosewood.test",
+            "password": "a-good-password",
+            "plan": "standalone",
+        },
+    )
+    with SessionLocal() as db:
+        assert db.query(Tenant).one().billing_plan.code == "standalone"
+
+
 def test_a_lapsed_account_can_still_read_every_page(client):
-    signed_up(client, SubscriptionStatus.EXPIRED, "starter")
+    signed_up(client, SubscriptionStatus.EXPIRED, "standalone")
     for path in ("/app", "/app/expiring", "/app/receiving", "/app/health", "/app/reorder"):
         assert client.get(path).status_code == 200, path
 
 
 def test_a_lapsed_account_is_refused_when_it_tries_to_change_stock(client):
-    signed_up(client, SubscriptionStatus.EXPIRED, "starter")
+    signed_up(client, SubscriptionStatus.EXPIRED, "standalone")
     response = client.post(
         "/app/expiring/label",
         data={"stock_item_id": 1, "quantity": "4", "expires_on": "2030-01-01"},
@@ -337,22 +417,14 @@ def test_a_lapsed_account_is_refused_when_it_tries_to_change_stock(client):
 
 
 def test_an_expired_trial_is_refused_the_same_way(client):
-    signed_up(client, SubscriptionStatus.TRIALING, "pro")
+    signed_up(client, SubscriptionStatus.TRIALING, "complete")
     assert client.post("/app/items/1/count", data={"quantity": "8"}).status_code == 402
 
 
-def test_starter_is_refused_the_pro_features_by_the_server(client):
-    signed_up(client, SubscriptionStatus.ACTIVE, "starter")
-
-    # The reorder CSV is core, on every plan (E-05, T2.15).
-    assert client.get("/app/reorder.csv").status_code == 200
-    thresholds = client.post("/app/items/1/thresholds", data={"reorder_point": "5"})
-    assert thresholds.status_code == 402
-    assert "Pro" in thresholds.text
-
-
-def test_pro_gets_them(client):
-    signed_up(client, SubscriptionStatus.ACTIVE, "pro")
+@pytest.mark.parametrize("plan", ["standalone", "complete"])
+def test_every_plan_gets_the_core_features_from_the_server(client, plan):
+    """PA2 retired: reorder CSV and custom reorder points are core on every plan (E-05)."""
+    signed_up(client, SubscriptionStatus.ACTIVE, plan)
 
     assert client.get("/app/reorder.csv").status_code == 200
     assert (
@@ -361,14 +433,36 @@ def test_pro_gets_them(client):
         ).status_code
         == 303
     )
+    assert client.get("/app/health").status_code == 200
 
 
 def test_a_paying_account_is_never_shown_the_banner(client):
-    signed_up(client, SubscriptionStatus.ACTIVE, "pro")
+    signed_up(client, SubscriptionStatus.ACTIVE, "complete")
     page = client.get("/app")
     assert "trial" not in page.text.lower() or "left of your trial" not in page.text
 
 
 def test_the_banner_tells_a_lapsed_account_what_happened(client):
-    signed_up(client, SubscriptionStatus.EXPIRED, "starter")
+    signed_up(client, SubscriptionStatus.EXPIRED, "standalone")
     assert "still here" in client.get("/app").text
+
+
+# --- prices live at the provider (AC-SAAS-12, E-01, DR-36) ----------------------------------------
+
+PLAN_PRICE = re.compile(r"\$\s?\d+(?:\.\d{2})?\s*(?:/|per|a)\s*(?:month|mo\b|location)", re.I)
+
+
+def test_no_plan_price_is_written_in_the_product():
+    """A plan names its provider price; the amount is never in code or app templates. The public
+    marketing pages still quote the pricing hypotheses until T4.02 reads them from the plans."""
+    root = Path(__file__).resolve().parent.parent / "app"
+    found = []
+    for path in sorted(root.rglob("*")):
+        if path.suffix not in {".py", ".html", ".txt"} or "__pycache__" in path.parts:
+            continue
+        if path.name == "marketing.py" or "marketing" in path.relative_to(root).parts:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if PLAN_PRICE.search(line):
+                found.append(f"{path.relative_to(root)}:{number}: {line.strip()}")
+    assert found == [], "\n".join(found)

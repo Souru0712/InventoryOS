@@ -106,7 +106,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T3.10 | Mode switching with cutover | P1 | M | M5 | T3.05, T2.12 | Completed (2026-11-26; one cutover for both directions: old source stops, its sales from D voided, the new source's counted; the cutover sticks; Owner-only previewed switch; onboarding step 8; PD-50, PD-51 proposed) |
 | T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Completed (2026-11-26; run recorded 22–25 Nov locally through the owner's ngrok tunnel, every step passing; two defects found and fixed on the branch; PD-53 proposed) |
 | T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Completed (2026-11-26; `run_sync` and the hourly read are adapter catalog reads, the hourly one a job per business; no code path writes POS daily totals, sale items or POS-counted stock items, or reads Square's counts; MEASUREMENT_UNIT added to the adapter's read; ADR-0085) |
-| T4.01 | Plan and entitlement data model (C-41) | P1 | M | M6 | T1.06 | Not started |
+| T4.01 | Plan and entitlement data model (C-41) | P1 | M | M6 | T1.06 | Completed (2026-11-26; plans and entitlements tables, Complete and Standalone seeded, every business on Complete (DM-15); allows() reads the plan's entitlements, core never gated; invoice cap is a plan limit; PA2 retired; PD-56 proposed) |
 | T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Not started |
 | T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Not started |
 | T4.04 | Stripe test-mode lifecycle run | P1 | S | M6 | T4.03, T0.09 | Not started |
@@ -1104,6 +1104,11 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Acceptance:** AC-SAAS-08, AC-SAAS-12; probe PA2 inverted.
 - **Tests:** entitlement matrix tests.
 - **Done when:** PA2 retired.
+- **Outcome (2026-11-26):** ADR-0089. `plans` and `entitlements` (allowed modes, max locations,
+  capability flags, limits) seeded by migration `b7d2e9f4c1a6`; `tenants.plan_id` backfilled to
+  Complete; `allows()`, `location_allowance()` and `usage_limit()` read the plan; Starter/Pro,
+  `CAPABILITIES`, `PLAN_IDS` and the price settings removed (the legacy `tenants.plan` column
+  stays, unread). Allowed modes are stored, enforced by T4.02 with the plan change at cutover.
 
 ### T4.02 Stripe catalogue and per-location billing · P1 · M
 - **Objective:** sell Complete per location and Standalone per business, with plan change at mode cutover.

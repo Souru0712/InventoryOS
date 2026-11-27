@@ -1488,3 +1488,49 @@ def test_dm13_each_carried_over_pos_product_maps_to_the_size_its_sold_item_becam
             assert "product_mappings" not in inspect(connection).get_table_names()
     finally:
         engine.dispose()
+
+
+BEFORE_DM15 = "a3c9e5f1b7d4"
+
+
+def test_dm15_every_business_gets_a_plan_and_the_downgrade_removes_the_catalogue(fresh_url):
+    """T4.01, DM-15: the catalogue is seeded with Complete and Standalone, and every existing
+    business, whatever its legacy plan, gets Complete with an entitlement set."""
+    config = alembic_config(fresh_url)
+    command.upgrade(config, BEFORE_DM15)
+    engine = create_engine(fresh_url, poolclass=NullPool)
+    tenant = (
+        "INSERT INTO tenants (name, plan, subscription_status, report_day, report_hour, timezone,"
+        " created_at, expiry_alert_days, auto_dispose_prepared, employees_enter_sales)"
+        " VALUES (:name, :plan, 'ACTIVE', 0, 7, 'UTC', '2026-11-26 12:00:00', 2, false, false)"
+    )
+    try:
+        with engine.begin() as connection:
+            for name, plan in (("Corner", "STARTER"), ("Harbour", "PRO")):
+                connection.execute(text(tenant), {"name": name, "plan": plan})
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            plans = connection.execute(
+                text(
+                    "SELECT p.code, p.billing_basis, p.provider_price_ref, e.max_locations"
+                    " FROM plans p JOIN entitlements e ON e.plan_id = p.id ORDER BY p.code"
+                )
+            ).all()
+            on = connection.execute(
+                text(
+                    "SELECT t.name, p.code FROM tenants t JOIN plans p ON p.id = t.plan_id"
+                    " ORDER BY t.name"
+                )
+            ).all()
+        assert [tuple(row) for row in plans] == [
+            ("complete", "per_location", None, None),
+            ("standalone", "per_business", None, 1),
+        ]
+        assert [tuple(row) for row in on] == [("Corner", "complete"), ("Harbour", "complete")]
+        command.downgrade(config, BEFORE_DM15)
+        with engine.connect() as connection:
+            tables = inspect(connection).get_table_names()
+            assert "plans" not in tables and "entitlements" not in tables
+            assert connection.execute(text("SELECT COUNT(*) FROM tenants")).scalar_one() == 2
+    finally:
+        engine.dispose()

@@ -5,6 +5,50 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — T4.01 Plan and entitlement data model
+
+**Implemented**
+- The plan catalogue as data (C-41, ADR-0089): `plans` (code, name, billing basis, provider price
+  reference, active) and one `entitlements` row per plan (allowed modes, max locations,
+  capability flags, usage limits). Migration `b7d2e9f4c1a6` (DM-15, expand and backfill) seeds
+  Vontry Complete and Vontry Standalone and gives every business Complete through
+  `tenants.plan_id`; a schema built from the models gets the same rows.
+- `allows()` answers subscription questions from access alone and anything else from the plan's
+  capability flags; `location_allowance()` and the new `usage_limit()` read the entitlement set.
+  The reorder CSV, custom reorder points and the 30-day health history are no longer gated (E-05).
+- The invoice-reading cap is the plan's `invoice_extractions_per_day` limit (E-09), no longer a
+  setting. Sign-up takes a sellable plan code; checkout sends that plan's provider price; Stripe
+  prices map back to plans. `CAPABILITIES`, `PLAN_IDS`, the Starter/Pro writes and the
+  `STRIPE_PRICE_*` settings are gone; the legacy `tenants.plan` column stays, unread.
+
+**Verified**
+- `tests/test_entitlements.py` (the matrix on Complete and Standalone, AC-SAAS-08 by editing an
+  entitlement row, AC-SAAS-12's no-plan-price check, the core features on every plan from the
+  server), `tests/test_billing.py`, `tests/test_migrations.py::test_dm15_...` (upgrade over two
+  businesses, downgrade), the migration/model diff. Full suite on SQLite: 1365 passed, 34
+  skipped (Postgres-only); ruff, mypy and the docs checker clean. Probe PA2 retired.
+
+**Files changed**
+- `app/models.py`, `app/plans.py` (new), `app/entitlements.py`, `app/orchestration/subscriptions.py`,
+  `app/orchestration/stripe_events.py`, `app/access/system.py`, `app/web/auth.py`,
+  `app/web/billing.py`, `app/web/dashboard.py`, `app/web/health.py`, `app/web/receiving.py`,
+  `app/cli.py`, `app/config.py`, three templates, the migration, tests, `.env.example`,
+  `NEEDS-YOU.md`, `CLAUDE.md`, ADR-0089.
+
+**Open issues**
+- The public pricing and landing pages still quote Starter/Pro and the hypotheses: T4.02.
+- Allowed modes are stored, not yet enforced: T4.02 enforces them with the plan change at cutover.
+- Plans' provider prices have no way to be set yet: T4.02.
+
+**Decisions for the owner**
+- PD-56 (OPEN): a trial is of the plan picked at sign-up, Complete when none (built), rather than
+  every trial on Complete.
+
+**Next task**
+- T4.08 Plan and entitlements view, or T4.02 Stripe catalogue and per-location billing.
+
+---
+
 ## 2026-11-26 — T4.11 Rebrand to Vontry
 
 **Implemented**

@@ -18,6 +18,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
+    insert,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
@@ -71,6 +73,8 @@ COUNT_SOURCES = ("manual", "opening", "receipt", "scan")
 IDENTIFIER_SOURCES = ("manual", "square", "scan")
 BATCH_SOURCES = ("receipt", "label", "scan", "production")
 SUPPRESSION_SOURCES = ("bounce", "complaint", "manual")
+# How a plan is billed (E-06, SAAS-B-18): per location (Complete) or once per business.
+BILLING_BASES = ("per_location", "per_business")
 # R1 role presets (USER_ROLES_AND_PERMISSIONS §2, PD-11); their permissions arrive in T1.06.
 MEMBERSHIP_ROLES = ("owner", "administrator", "manager", "employee", "read_only")
 MEMBERSHIP_STATUSES = ("active", "revoked")
@@ -183,12 +187,91 @@ class SyncStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class BillingPlan(Base):
+    """A plan in the catalogue (C-41, E-03): what it is called, how it is billed and the
+    provider's price for it. Prices live in the billing provider (E-01, DR-36): this row only
+    names the price. A plan is retired, never deleted, so a business can stay on it (E-08)."""
+
+    __tablename__ = "plans"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_plans_code"),
+        CheckConstraint(
+            "billing_basis IN ('per_location', 'per_business')", name="ck_plans_billing_basis"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(40))
+    name: Mapped[str] = mapped_column(String(80))
+    billing_basis: Mapped[str] = mapped_column(String(20))
+    provider_price_ref: Mapped[str | None] = mapped_column(String(120))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    entitlement: Mapped[Entitlement] = relationship(back_populates="plan", uselist=False)
+
+
+class Entitlement(Base):
+    """What a plan entitles a business to (E-02, SAAS-B-17): the sales modes it may use, how
+    many active locations, the capability flags beyond the core, and usage limits. Core
+    operations are never listed here: they need only an active subscription (E-05)."""
+
+    __tablename__ = "entitlements"
+    __table_args__ = (
+        UniqueConstraint("plan_id", name="uq_entitlements_plan"),
+        CheckConstraint(
+            "max_locations IS NULL OR max_locations >= 1", name="ck_entitlements_max_locations"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(owned_by("plans.id"))
+    allowed_modes: Mapped[list] = mapped_column(JSON, default=list)
+    max_locations: Mapped[int | None] = mapped_column(Integer)  # None: as many as they have
+    capability_flags: Mapped[list] = mapped_column(JSON, default=list)
+    limits: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    plan: Mapped[BillingPlan] = relationship(back_populates="entitlement")
+
+
+@event.listens_for(Entitlement.__table__, "after_create")
+def _initial_catalogue(target, connection, **_kw) -> None:
+    """A schema built from these models (tests, APP_ENV=test) starts with the catalogue that
+    migration b7d2e9f4c1a6 seeds on a real database."""
+    from app.plans import INITIAL_CATALOGUE
+
+    for entry in INITIAL_CATALOGUE:
+        created = connection.execute(
+            insert(BillingPlan).values(
+                code=entry["code"],
+                name=entry["name"],
+                billing_basis=entry["billing_basis"],
+                active=True,
+                created_at=utcnow(),
+            )
+        )
+        connection.execute(
+            insert(Entitlement).values(
+                plan_id=created.inserted_primary_key[0],
+                allowed_modes=list(entry["allowed_modes"]),
+                max_locations=entry["max_locations"],
+                capability_flags=list(entry["capability_flags"]),
+                limits=dict(entry["limits"]),
+            )
+        )
+
+
 class Tenant(Base):
     __tablename__ = "tenants"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
+    # Legacy (Starter/Pro, C-41): nothing reads it since T4.01; dropped by a later contract step.
     plan: Mapped[Plan] = mapped_column(Enum(Plan), default=Plan.PRO)
+    # The catalogue plan (T4.01). Unset only for a business made without signing up (tests,
+    # scripts): it then has the default plan's entitlements (app/plans.py).
+    plan_id: Mapped[int | None] = mapped_column(ref("plans.id"))
+    billing_plan: Mapped[BillingPlan | None] = relationship()
 
     # The subscription, as Stripe sees it and as we enforce it. app/entitlements.py is the only
     # place that decides what these mean.

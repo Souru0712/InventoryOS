@@ -8,23 +8,34 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.db import Base, SessionLocal, engine
-from app.entitlements import Access, access, allows, effective_plan
+from app.entitlements import Access, access, allows, location_allowance
 from app.main import app
-from app.models import Plan, SubscriptionStatus, Tenant
-from app.orchestration.stripe_events import handle_event, plan_for_price, price_for_plan
+from app.models import SubscriptionStatus, Tenant
+from app.orchestration.stripe_events import handle_event
+from app.plans import plan_by_code, plan_for_price, plan_of
 
-STARTER_PRICE, PRO_PRICE = "price_starter_29", "price_pro_59"
+STANDALONE_PRICE, COMPLETE_PRICE = "price_standalone", "price_complete"
 NOW = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture(autouse=True)
 def prices(monkeypatch):
     settings = get_settings()
-    monkeypatch.setattr(settings, "stripe_price_starter", STARTER_PRICE, raising=False)
-    monkeypatch.setattr(settings, "stripe_price_pro", PRO_PRICE, raising=False)
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_x", raising=False)
     monkeypatch.setattr(settings, "stripe_webhook_secret", "whsec_x", raising=False)
     return settings
+
+
+def price_catalogue(session) -> None:
+    """The catalogue with each plan naming its Stripe price, as T4.02's setup will."""
+    plan_by_code(session, "standalone").provider_price_ref = STANDALONE_PRICE
+    plan_by_code(session, "complete").provider_price_ref = COMPLETE_PRICE
+    session.commit()
+
+
+@pytest.fixture(autouse=True)
+def catalogue(db):
+    price_catalogue(db)
 
 
 def stamp(moment: datetime) -> int:
@@ -50,21 +61,21 @@ def event(kind: str, obj: dict, created: datetime = NOW) -> dict:
 # --- prices are ours, not the browser's ----------------------------------------------------------
 
 
-def test_a_plan_maps_to_the_configured_price_and_back():
-    assert price_for_plan("starter") == STARTER_PRICE
-    assert price_for_plan("pro") == PRO_PRICE
-    assert plan_for_price(PRO_PRICE) == "pro"
-    assert price_for_plan("enterprise") is None
+def test_each_plan_names_its_provider_price_and_back(db):
+    """The price lives at Stripe; the plan row only names it (E-01, DR-36)."""
+    assert plan_by_code(db, "standalone").provider_price_ref == STANDALONE_PRICE
+    assert plan_for_price(db, COMPLETE_PRICE).code == "complete"
+    assert plan_by_code(db, "enterprise") is None
 
 
-def test_a_price_we_do_not_sell_is_not_turned_into_a_plan():
-    assert plan_for_price("price_somebody_elses") is None
+def test_a_price_we_do_not_sell_is_not_turned_into_a_plan(db):
+    assert plan_for_price(db, "price_somebody_elses") is None
 
 
 def test_the_checkout_form_cannot_name_its_own_price(db, tenant, client_for):
     """A posted plan is a key into our table, never a price id we would pass to Stripe."""
     client = client_for(SubscriptionStatus.TRIALING)
-    response = client.post("/billing/checkout", data={"plan": "price_pro_59"})
+    response = client.post("/billing/checkout", data={"plan": COMPLETE_PRICE})
     assert response.status_code == 400
 
 
@@ -81,7 +92,7 @@ def test_checkout_completing_records_who_they_are(db, tenant):
                 "customer": "cus_1",
                 "subscription": "sub_1",
                 "client_reference_id": str(tenant.id),
-                "metadata": {"tenant_id": str(tenant.id), "plan": "starter"},
+                "metadata": {"tenant_id": str(tenant.id), "plan": "standalone"},
             },
         ),
     )
@@ -91,64 +102,64 @@ def test_checkout_completing_records_who_they_are(db, tenant):
     assert tenant.stripe_customer_id == "cus_1"
     assert tenant.stripe_subscription_id == "sub_1"
     assert tenant.subscription_status is SubscriptionStatus.ACTIVE
-    assert effective_plan(tenant) == "starter"
+    assert plan_of(tenant).code == "standalone"
 
 
 def test_a_created_subscription_grants_the_plan_it_paid_for(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
 
-    handle_event(db, event("customer.subscription.created", subscription(PRO_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(COMPLETE_PRICE)))
     db.commit()
 
     assert tenant.subscription_status is SubscriptionStatus.ACTIVE
-    assert effective_plan(tenant) == "pro"
+    assert plan_of(tenant).code == "complete"
     assert tenant.current_period_end == NOW + timedelta(days=30)
-    assert allows(tenant, "reorder_csv", NOW) is True
+    assert location_allowance(tenant) is None
 
 
 def test_an_upgrade_in_stripe_is_an_upgrade_here(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    handle_event(db, event("customer.subscription.created", subscription(STARTER_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(STANDALONE_PRICE)))
     db.commit()
-    assert allows(tenant, "reorder_csv", NOW) is False
+    assert location_allowance(tenant) == 1
 
     handle_event(
         db,
         event(
             "customer.subscription.updated",
-            subscription(PRO_PRICE),
+            subscription(COMPLETE_PRICE),
             created=NOW + timedelta(minutes=1),
         ),
     )
     db.commit()
-    assert effective_plan(tenant) == "pro" and allows(tenant, "reorder_csv", NOW) is True
+    assert plan_of(tenant).code == "complete" and location_allowance(tenant) is None
 
 
-def test_a_downgrade_takes_the_pro_features_back(db, tenant):
+def test_a_downgrade_takes_the_extra_locations_back(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    handle_event(db, event("customer.subscription.created", subscription(PRO_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(COMPLETE_PRICE)))
     handle_event(
         db,
         event(
             "customer.subscription.updated",
-            subscription(STARTER_PRICE),
+            subscription(STANDALONE_PRICE),
             created=NOW + timedelta(minutes=1),
         ),
     )
     db.commit()
 
-    assert effective_plan(tenant) == "starter"
-    assert allows(tenant, "reorder_csv", NOW) is False
+    assert plan_of(tenant).code == "standalone"
+    assert location_allowance(tenant) == 1
     assert access(tenant, NOW) is Access.FULL, "a downgrade is still a paying customer"
 
 
 def test_a_failed_payment_starts_the_grace_period(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    handle_event(db, event("customer.subscription.created", subscription(STARTER_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(STANDALONE_PRICE)))
     db.commit()
 
     handle_event(
@@ -170,7 +181,7 @@ def test_a_failed_payment_starts_the_grace_period(db, tenant):
 def test_a_retry_that_works_puts_them_back(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    handle_event(db, event("customer.subscription.created", subscription(STARTER_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(STANDALONE_PRICE)))
     handle_event(
         db, event("invoice.payment_failed", {"customer": "cus_1"}, created=NOW + timedelta(days=1))
     )
@@ -197,14 +208,14 @@ def test_a_retry_that_works_puts_them_back(db, tenant):
 def test_pausing_a_subscription_makes_the_account_read_only(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    handle_event(db, event("customer.subscription.created", subscription(PRO_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(COMPLETE_PRICE)))
     db.commit()
 
     handle_event(
         db,
         event(
             "customer.subscription.paused",
-            subscription(PRO_PRICE, "paused"),
+            subscription(COMPLETE_PRICE, "paused"),
             created=NOW + timedelta(days=1),
         ),
     )
@@ -217,12 +228,12 @@ def test_pausing_a_subscription_makes_the_account_read_only(db, tenant):
 def test_resuming_it_gives_the_plan_back(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    handle_event(db, event("customer.subscription.created", subscription(PRO_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(COMPLETE_PRICE)))
     handle_event(
         db,
         event(
             "customer.subscription.paused",
-            subscription(PRO_PRICE, "paused"),
+            subscription(COMPLETE_PRICE, "paused"),
             created=NOW + timedelta(days=1),
         ),
     )
@@ -230,7 +241,7 @@ def test_resuming_it_gives_the_plan_back(db, tenant):
         db,
         event(
             "customer.subscription.resumed",
-            subscription(PRO_PRICE),
+            subscription(COMPLETE_PRICE),
             created=NOW + timedelta(days=2),
         ),
     )
@@ -243,14 +254,14 @@ def test_resuming_it_gives_the_plan_back(db, tenant):
 def test_cancelling_ends_it_and_keeps_everything_readable(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    handle_event(db, event("customer.subscription.created", subscription(PRO_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(COMPLETE_PRICE)))
     db.commit()
 
     handle_event(
         db,
         event(
             "customer.subscription.deleted",
-            subscription(PRO_PRICE, "canceled"),
+            subscription(COMPLETE_PRICE, "canceled"),
             created=NOW + timedelta(days=40),
         ),
     )
@@ -267,27 +278,27 @@ def test_cancelling_ends_it_and_keeps_everything_readable(db, tenant):
 def test_the_same_event_twice_changes_nothing_the_second_time(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    payload = event("customer.subscription.created", subscription(PRO_PRICE))
+    payload = event("customer.subscription.created", subscription(COMPLETE_PRICE))
 
     handle_event(db, payload)
     db.commit()
-    first = (tenant.subscription_status, tenant.plan, tenant.current_period_end)
+    first = (tenant.subscription_status, tenant.plan_id, tenant.current_period_end)
 
     handle_event(db, payload)
     db.commit()
-    assert (tenant.subscription_status, tenant.plan, tenant.current_period_end) == first
+    assert (tenant.subscription_status, tenant.plan_id, tenant.current_period_end) == first
 
 
 def test_an_older_event_arriving_late_cannot_undo_a_newer_one(db, tenant):
     """Stripe does not promise order. A stale `updated` must not revive a cancelled account."""
     tenant.stripe_customer_id = "cus_1"
     db.commit()
-    handle_event(db, event("customer.subscription.created", subscription(PRO_PRICE)))
+    handle_event(db, event("customer.subscription.created", subscription(COMPLETE_PRICE)))
     handle_event(
         db,
         event(
             "customer.subscription.deleted",
-            subscription(PRO_PRICE, "canceled"),
+            subscription(COMPLETE_PRICE, "canceled"),
             created=NOW + timedelta(days=40),
         ),
     )
@@ -297,7 +308,7 @@ def test_an_older_event_arriving_late_cannot_undo_a_newer_one(db, tenant):
         db,
         event(
             "customer.subscription.updated",
-            subscription(PRO_PRICE),
+            subscription(COMPLETE_PRICE),
             created=NOW + timedelta(days=39),
         ),
     )
@@ -311,17 +322,17 @@ def test_a_status_stripe_invents_is_treated_as_lapsed_not_as_paid(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
     handle_event(
-        db, event("customer.subscription.updated", subscription(PRO_PRICE, "something_new"))
+        db, event("customer.subscription.updated", subscription(COMPLETE_PRICE, "something_new"))
     )
     db.commit()
 
-    assert access(tenant, NOW) is Access.READ_ONLY, "unknown means read-only, never free Pro"
+    assert access(tenant, NOW) is Access.READ_ONLY, "unknown means read-only, never free"
 
 
 def test_an_event_for_an_account_we_do_not_know_is_dropped(db):
-    assert handle_event(db, event("customer.subscription.created", subscription(PRO_PRICE))) == {
-        "ignored": "unknown account"
-    }
+    assert handle_event(
+        db, event("customer.subscription.created", subscription(COMPLETE_PRICE))
+    ) == {"ignored": "unknown account"}
 
 
 def test_an_event_we_do_not_handle_is_left_alone(db, tenant):
@@ -375,9 +386,11 @@ def stripe(monkeypatch):
 
 @pytest.fixture
 def client_for(monkeypatch):
-    def build(status: SubscriptionStatus, plan: str = "pro", customer: str | None = None):
+    def build(status: SubscriptionStatus, plan: str = "complete", customer: str | None = None):
         Base.metadata.drop_all(engine)
         Base.metadata.create_all(engine)
+        with SessionLocal() as session:
+            price_catalogue(session)
         test_client = TestClient(app)
         test_client.__enter__()
         test_client.post(
@@ -391,7 +404,7 @@ def client_for(monkeypatch):
         with SessionLocal() as db:
             tenant = db.query(Tenant).one()
             tenant.subscription_status = status
-            tenant.plan = Plan(plan)
+            tenant.billing_plan = plan_by_code(db, plan)
             tenant.stripe_customer_id = customer
             db.commit()
         return test_client
@@ -401,12 +414,12 @@ def client_for(monkeypatch):
 
 def test_choosing_a_plan_in_the_app_goes_to_stripe_with_our_price(client_for, stripe):
     client = client_for(SubscriptionStatus.TRIALING)
-    response = client.post("/billing/checkout", data={"plan": "pro"}, follow_redirects=False)
+    response = client.post("/billing/checkout", data={"plan": "complete"}, follow_redirects=False)
 
     assert response.status_code == 303
     assert response.headers["location"].startswith("https://checkout.stripe.test/")
-    assert stripe.created["line_items"] == [{"price": PRO_PRICE, "quantity": 1}]
-    assert stripe.created["metadata"]["plan"] == "pro"
+    assert stripe.created["line_items"] == [{"price": COMPLETE_PRICE, "quantity": 1}]
+    assert stripe.created["metadata"]["plan"] == "complete"
     assert stripe.created["mode"] == "subscription"
 
 
@@ -414,8 +427,13 @@ def test_a_visitor_who_picks_a_plan_signs_up_first_then_pays(stripe):
     """Account creation comes before checkout, so nothing is orphaned in Stripe."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    with SessionLocal() as session:
+        price_catalogue(session)
     with TestClient(app) as client:
-        assert 'name="plan" value="starter"' in client.get("/signup?plan=starter").text
+        assert 'name="plan" value="standalone"' in client.get("/signup?plan=standalone").text
+        assert 'name="plan" value=' not in client.get("/signup?plan=starter").text, (
+            "a retired or unknown plan is not offered"
+        )
 
         page = client.post(
             "/signup",
@@ -423,7 +441,7 @@ def test_a_visitor_who_picks_a_plan_signs_up_first_then_pays(stripe):
                 "business_name": "Rosewood",
                 "email": "o@rosewood.test",
                 "password": "a-good-password",
-                "plan": "starter",
+                "plan": "standalone",
             },
         )
         assert page.status_code == 200
@@ -437,7 +455,7 @@ def test_a_visitor_who_picks_a_plan_signs_up_first_then_pays(stripe):
 
 
 def test_the_portal_is_how_a_customer_cancels(client_for, stripe):
-    client = client_for(SubscriptionStatus.ACTIVE, "starter", customer="cus_1")
+    client = client_for(SubscriptionStatus.ACTIVE, "standalone", customer="cus_1")
     response = client.post("/billing/portal", follow_redirects=False)
 
     assert response.status_code == 303
@@ -447,7 +465,7 @@ def test_the_portal_is_how_a_customer_cancels(client_for, stripe):
 
 
 def test_settings_offers_the_portal_only_once_there_is_something_to_manage(client_for, stripe):
-    with_subscription = client_for(SubscriptionStatus.ACTIVE, "starter", customer="cus_1")
+    with_subscription = client_for(SubscriptionStatus.ACTIVE, "standalone", customer="cus_1")
     assert "Manage or cancel subscription" in with_subscription.get("/app/settings").text
 
     on_trial = client_for(SubscriptionStatus.TRIALING)
@@ -465,7 +483,7 @@ def test_the_webhook_applies_the_event_and_only_with_a_signature(client_for, str
         {
             "customer": "cus_1",
             "subscription": "sub_1",
-            "metadata": {"tenant_id": str(tenant_id), "plan": "pro"},
+            "metadata": {"tenant_id": str(tenant_id), "plan": "complete"},
         },
     )
     response = client.post(

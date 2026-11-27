@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext, select_scoped
 from app.access.system import trialing_tenants
 from app.entitlements import location_allowance
-from app.models import Location, Plan, SubscriptionStatus, Tenant
+from app.models import BillingPlan, Location, SubscriptionStatus, Tenant
+from app.plans import plan_by_code
 
 log = logging.getLogger(__name__)
 
@@ -29,9 +30,8 @@ def expire_due_trials(db: Session, now: datetime | None = None) -> list[int]:
         if ends is None:
             continue
         if ends <= now:
+            # The plan stays: an expired trial is read-only on the plan it tried (E-07).
             tenant.subscription_status = SubscriptionStatus.EXPIRED
-            # The floor everyone falls back to; what they actually buy decides the rest.
-            tenant.plan = Plan.STARTER
             expired.append(tenant.id)
             log.info("trial ended for tenant %s", tenant.id)
     db.flush()
@@ -41,8 +41,8 @@ def expire_due_trials(db: Session, now: datetime | None = None) -> list[int]:
 def apply_location_limit(db: Session, tenant: Tenant) -> int:
     """Keep only as many locations active as the plan covers, oldest first.
 
-    Nothing is deleted: a Starter account that connects three Square locations keeps all three
-    on record, and tracking the other two is what upgrading turns back on.
+    Nothing is deleted (E-07): a one-location plan that connects three Square locations keeps
+    all three on record, and tracking the other two is what a plan covering them turns back on.
     """
     allowance = location_allowance(tenant)
     locations = list(
@@ -78,7 +78,7 @@ def start_subscription(
     period_end: datetime | None = None,
 ) -> Tenant:
     """A payment went through: the account is on a plan it has paid for."""
-    tenant.plan = Plan(plan)
+    tenant.billing_plan = _catalogue_plan(db, plan)
     tenant.subscription_status = SubscriptionStatus.ACTIVE
     tenant.past_due_since = None
     if subscription_id:
@@ -95,11 +95,19 @@ def start_subscription(
 
 def change_plan(db: Session, tenant: Tenant, plan: str) -> Tenant:
     """An upgrade or a downgrade. A downgrade can take locations out of use, so the limit reruns."""
-    tenant.plan = Plan(plan)
+    tenant.billing_plan = _catalogue_plan(db, plan)
     apply_location_limit(db, tenant)
     db.flush()
     log.info("tenant %s moved to %s", tenant.id, plan)
     return tenant
+
+
+def _catalogue_plan(db: Session, code: str) -> BillingPlan:
+    """The catalogue plan a billing event names; an unknown one is an error, never a guess."""
+    plan = plan_by_code(db, code)
+    if plan is None:
+        raise ValueError(f"no plan {code!r} in the catalogue")
+    return plan
 
 
 def mark_past_due(db: Session, tenant: Tenant, now: datetime | None = None) -> Tenant:

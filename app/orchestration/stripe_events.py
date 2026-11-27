@@ -19,8 +19,6 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext
 from app.access.system import tenant_by_id, tenant_by_stripe_id
 from app.audit import record_audit
-from app.config import get_settings
-from app.entitlements import PLAN_IDS, STARTER
 from app.models import SubscriptionStatus, Tenant
 from app.orchestration.subscriptions import (
     apply_location_limit,
@@ -28,6 +26,7 @@ from app.orchestration.subscriptions import (
     mark_past_due,
     start_subscription,
 )
+from app.plans import plan_by_code, plan_for_price, plan_of
 
 log = logging.getLogger(__name__)
 
@@ -56,27 +55,6 @@ HANDLED = (
 )
 
 
-def price_for_plan(plan: str) -> str | None:
-    """The configured price id for a plan. Chosen here, never taken from the browser."""
-    settings = get_settings()
-    return {"starter": settings.stripe_price_starter, "pro": settings.stripe_price_pro}.get(plan)
-
-
-def plan_for_price(price_id: str | None) -> str | None:
-    """Which plan a Stripe price belongs to, so an upgrade in Stripe is understood here."""
-    if not price_id:
-        return None
-    settings = get_settings()
-    for plan, configured in (
-        ("starter", settings.stripe_price_starter),
-        ("pro", settings.stripe_price_pro),
-    ):
-        if configured and configured == price_id:
-            return plan
-    log.warning("stripe price %s is not one of ours", price_id)
-    return None
-
-
 def _moment(value: Any) -> datetime | None:
     """Stripe sends seconds since the epoch."""
     if not value:
@@ -87,12 +65,16 @@ def _moment(value: Any) -> datetime | None:
         return None
 
 
-def _subscription_plan(subscription: dict) -> str | None:
+def _subscription_plan(db: Session, subscription: dict) -> str | None:
+    """The catalogue plan whose provider price the subscription is for (E-03)."""
     items = ((subscription.get("items") or {}).get("data")) or []
     for item in items:
-        plan = plan_for_price((item.get("price") or {}).get("id"))
-        if plan:
-            return plan
+        price = (item.get("price") or {}).get("id")
+        plan = plan_for_price(db, price)
+        if plan is not None:
+            return plan.code
+        if price:
+            log.warning("stripe price %s is not one of ours", price)
     return None
 
 
@@ -137,9 +119,7 @@ def _mark_seen(tenant: Tenant, event: dict) -> None:
 def apply_subscription(db: Session, tenant: Tenant, subscription: dict) -> str:
     """Bring the account in line with one Stripe subscription object."""
     status = STATUS_MAP.get(subscription.get("status") or "", SubscriptionStatus.EXPIRED)
-    plan = _subscription_plan(subscription) or (
-        tenant.plan.value if tenant.plan.value in PLAN_IDS else STARTER
-    )
+    plan = _subscription_plan(db, subscription) or plan_of(tenant).code
     period_start = _moment(subscription.get("current_period_start"))
     period_end = _moment(subscription.get("current_period_end"))
 
@@ -174,7 +154,7 @@ def apply_subscription(db: Session, tenant: Tenant, subscription: dict) -> str:
 
 def _plan_state(tenant: Tenant) -> dict:
     return {
-        "plan": getattr(tenant.plan, "value", tenant.plan),
+        "plan": plan_of(tenant).code,
         "status": getattr(tenant.subscription_status, "value", tenant.subscription_status),
     }
 
@@ -208,7 +188,7 @@ def handle_event(db: Session, event: dict) -> dict:
             if isinstance(subscription, str):
                 tenant.stripe_subscription_id = subscription
             plan = (payload.get("metadata") or {}).get("plan")
-            if plan in PLAN_IDS:
+            if plan and plan_by_code(db, plan) is not None:
                 start_subscription(
                     db,
                     tenant,

@@ -167,8 +167,10 @@ The code is finished and tested against recorded Stripe payloads. What is missin
 and one run through test mode.
 
 - [ ] Stripe account, **test mode** first
-- [ ] Starter product with a $29/month price; Pro product with a $59/month price
-- [ ] Price ids into `.env`: `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`
+- [ ] Products and prices for Vontry Complete (per location) and Vontry Standalone (per
+      business), at the prices you choose (Starter and Pro are retired, C-41)
+- [ ] Each price id into its plan's `provider_price_ref` (T4.02 adds the way to set it; until
+      then checkout answers that no price is configured)
 - [ ] `STRIPE_SECRET_KEY` (test key first, live key later)
 - [ ] Customer Portal enabled in the dashboard, with cancellation allowed
 - [ ] Stripe CLI installed

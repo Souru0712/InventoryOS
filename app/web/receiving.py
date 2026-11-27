@@ -15,9 +15,9 @@ from starlette.datastructures import FormData
 from app.access import OrgContext, get_scoped, select_scoped
 from app.access.permissions import VIEW_COSTS
 from app.catalog import active_stock
-from app.config import get_settings
 from app.costing import cost_changes_from
 from app.db import get_db
+from app.entitlements import usage_limit
 from app.extract.invoice import SUPPORTED_MEDIA
 from app.jobs import enqueue
 from app.models import Document, DocumentStatus, Job, Location, StockItem, Tenant, User
@@ -104,7 +104,12 @@ def read_later(db: Session, org: OrgContext, document: Document) -> bool:
             select_scoped(org, Job).where(Job.kind == "extract_document", Job.created_at >= since)
         ).all()
     )
-    if read_today >= get_settings().extraction_daily_cap:
+    tenant = get_scoped(db, org, Tenant, org.tenant_id)
+    if tenant is None:
+        raise ValueError(f"tenant {org.tenant_id} not found")
+    # A usage limit with a real cost is the plan's (E-09), not a setting.
+    cap = usage_limit(tenant, "invoice_extractions_per_day")
+    if cap is not None and read_today >= cap:
         document.status = DocumentStatus.NEEDS_REVIEW
         document.error = (
             "Today's limit for reading invoices is reached. Receive this delivery by hand "

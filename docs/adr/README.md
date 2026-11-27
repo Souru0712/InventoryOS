@@ -119,3 +119,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0085](0085-legacy-square-sync-removed.md) | Legacy Square sync removed; the hourly catalog read is a job | T3.12 | Accepted |
 | [ADR-0086](0086-location-days-and-standalone-coverage.md) | Location days: confirmed no-sales days and one-off closures | C-54 | Accepted |
 | [ADR-0087](0087-back-dated-size-recipes.md) | A size's recipe may start in the past; past sales take it only when applied | C-51 | Accepted |
+| [ADR-0089](0089-plans-and-entitlements-as-data.md) | Plans and entitlements are data; the core is never gated | C-41 | Proposed |

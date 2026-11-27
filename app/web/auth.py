@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.access.system import memberships_of, user_by_email
 from app.db import get_db
-from app.entitlements import PLAN_IDS, start_trial
+from app.entitlements import start_trial
 from app.mfa import start_challenge
 from app.models import Membership, Tenant, User
+from app.plans import DEFAULT_PLAN, plan_by_code, sellable
 from app.security import (
     MIN_PASSWORD_LENGTH,
     choose_membership,
@@ -33,11 +34,12 @@ TOO_MANY = "Too many attempts. Wait a few minutes and try again, or reset your p
 
 
 @router.get("/signup", response_class=HTMLResponse)
-def signup_form(request: Request, plan: str = ""):
+def signup_form(request: Request, plan: str = "", db: Session = Depends(get_db)):
+    chosen = sellable(db, plan)
     return templates.TemplateResponse(
         request,
         "auth/signup.html",
-        {"title": "Start free", "plan": plan if plan in PLAN_IDS else ""},
+        {"title": "Start free", "plan": chosen.code if chosen else ""},
     )
 
 
@@ -51,6 +53,7 @@ def signup(
     db: Session = Depends(get_db),
 ):
     email = email.strip().lower()
+    chosen = sellable(db, plan)
     if len(password) < MIN_PASSWORD_LENGTH:
         return templates.TemplateResponse(
             request,
@@ -60,7 +63,7 @@ def signup(
                 "error": f"Use at least {MIN_PASSWORD_LENGTH} characters for your password.",
                 "business_name": business_name,
                 "email": email,
-                "plan": plan if plan in PLAN_IDS else "",
+                "plan": chosen.code if chosen else "",
             },
             status_code=400,
         )
@@ -73,12 +76,18 @@ def signup(
                 "error": "That email already has an account. Log in instead.",
                 "business_name": business_name,
                 "email": email,
-                "plan": plan if plan in PLAN_IDS else "",
+                "plan": chosen.code if chosen else "",
             },
             status_code=400,
         )
 
-    tenant = start_trial(Tenant(name=business_name.strip() or "My business"))
+    # The trial is of the plan they picked, or the default plan (PD-56).
+    tenant = start_trial(
+        Tenant(
+            name=business_name.strip() or "My business",
+            billing_plan=chosen or plan_by_code(db, DEFAULT_PLAN),
+        )
+    )
     db.add(tenant)
     db.flush()
     user = User(tenant_id=tenant.id, email=email, password_hash=hash_password(password))
@@ -93,9 +102,9 @@ def signup(
     # Someone who picked a plan on the way in goes straight to paying for it; everyone else
     # starts their trial in the app. The account exists either way, so nothing is orphaned
     # in Stripe and nobody types their details twice.
-    if plan in PLAN_IDS:
+    if chosen is not None:
         return templates.TemplateResponse(
-            request, "auth/to_checkout.html", {"title": "One more step", "plan": plan}
+            request, "auth/to_checkout.html", {"title": "One more step", "plan": chosen.code}
         )
     return RedirectResponse("/app", status_code=303)
 

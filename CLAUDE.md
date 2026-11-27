@@ -184,6 +184,11 @@ implementation sessions; the detail lives in `docs/`.
 - Schema (ADR-0025): instants are `UTCDateTime` (aware UTC; naive values refused); every foreign
   key is `ref()` (RESTRICT) or `owned_by()` (CASCADE, parts of a parent only), or `earlier()`
   for a self-reference in an append-only table (ADR-0040); CHECKs are named.
+- Plans and entitlements are data (`app/plans.py`, ADR-0089): a business's plan names its
+  provider price and an entitlement set (modes, max locations, capability flags, limits);
+  every check goes through `allows()`, `location_allowance()` or `usage_limit()` in
+  `app/entitlements.py`. The core is never gated by plan (C-41, E-05); nothing reads the
+  legacy `tenants.plan` column.
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).
 - Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
   `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or

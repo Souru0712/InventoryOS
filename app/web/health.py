@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext
 from app.db import get_db
-from app.entitlements import history_days
 from app.models import Tenant
 from app.orchestration.health import current, over_time
 from app.reorder import plan
@@ -30,6 +29,8 @@ from app.units import format_approx, format_qty
 from app.web.templating import templates
 
 router = APIRouter()
+
+HISTORY_DAYS = 30
 
 
 @router.get("/app/health", response_class=HTMLResponse)
@@ -50,9 +51,8 @@ def health_page(
             "tenant": tenant,
             "report": health.report,
             "actions": health.actions,
-            # Starter sees today's score; the history behind it is part of Pro.
-            "trend": over_time(db, org, health.report, now.date(), days=history_days(tenant)),
-            "history_days": history_days(tenant),
+            # The history is core, on every plan (C-41, E-05).
+            "trend": over_time(db, org, health.report, now.date(), days=HISTORY_DAYS),
             "by_id": {item.item.id: item for item in health.input.items},
             "currency": health.input.currency,
         },

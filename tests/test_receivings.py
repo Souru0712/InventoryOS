@@ -308,12 +308,13 @@ def test_a_cost_changed_without_cost_rights_is_flagged(db, dock, tenant, locatio
 
 
 def test_reading_invoices_stops_at_the_daily_cap(db, dock, location, monkeypatch):
-    from app.config import get_settings
     from app.models import Document, DocumentStatus
+    from app.plans import DEFAULT_PLAN, plan_by_code
     from app.web.receiving import read_later
 
     org, _item = dock
-    monkeypatch.setattr(get_settings(), "extraction_daily_cap", 1)
+    # The cap is the plan's usage limit (E-09), set here as configuration would set it.
+    plan_by_code(db, DEFAULT_PLAN).entitlement.limits = {"invoice_extractions_per_day": 1}
     first, second = (
         Document(
             tenant_id=org.tenant_id,

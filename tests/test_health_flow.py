@@ -15,7 +15,6 @@ from app.main import app
 from app.models import (
     HealthSnapshot,
     Location,
-    Plan,
     SoldItem,
     StockItem,
     Tenant,
@@ -185,19 +184,27 @@ def test_a_damaged_snapshot_costs_the_comparison_not_the_page(db, tenant, locati
     assert trend.compared_with == TODAY - timedelta(days=1)
 
 
-def test_the_nightly_job_keeps_every_active_tenant_and_skips_cancelled_ones(db, tenant, location):
+def test_the_nightly_job_keeps_every_business_including_a_lapsed_one(db, tenant, location):
+    """A lapsed business is read-only and still evaluated (E-07); the legacy plan column that
+    once skipped some is no longer read (T4.01)."""
+    from app.models import SubscriptionStatus
     from app.orchestration import scheduler
 
     stock(db, tenant, location, "coke")
-    closed = Tenant(name="Closed Down", plan=Plan.CANCELED)
-    db.add(closed)
+    lapsed = Tenant(name="Closed Down", subscription_status=SubscriptionStatus.CANCELED)
+    db.add(lapsed)
+    db.flush()
+    old_shop = Location(tenant_id=lapsed.id, name="Old shop")
+    db.add(old_shop)
+    db.flush()
+    stock(db, lapsed, old_shop, "tea")
     db.commit()
 
     scheduler.record_health_snapshots()
 
     db.expire_all()
     assert db.query(HealthSnapshot).filter_by(tenant_id=tenant.id).count() == 1
-    assert db.query(HealthSnapshot).filter_by(tenant_id=closed.id).count() == 0
+    assert db.query(HealthSnapshot).filter_by(tenant_id=lapsed.id).count() == 1
 
 
 def test_the_cli_prints_the_score_and_keeps_a_snapshot(db, tenant, location, capsys):

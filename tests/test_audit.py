@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.access import OrgContext, UnscopedAccess, update_scoped
-from app.config import get_settings
 from app.db import Base, SessionLocal, engine
 from app.main import app
 from app.models import AuditEvent, Location, Membership, MembershipLocation, Tenant, User
@@ -19,7 +18,7 @@ from app.security import hash_password
 from tests.accounts import confirm_email
 
 OWNER = {"email": "owner@corner.test", "password": "a-good-password"}
-PRO_PRICE = "price_pro_59"
+COMPLETE_PRICE = "price_complete"
 
 
 def browser(ip: str = "203.0.113.5") -> TestClient:
@@ -198,15 +197,16 @@ def test_connecting_square_is_recorded(corner, monkeypatch):
 
 
 def test_a_plan_change_from_stripe_is_recorded_as_the_product(db, tenant, monkeypatch):
-    settings = get_settings()
-    monkeypatch.setattr(settings, "stripe_price_pro", PRO_PRICE, raising=False)
+    from app.plans import plan_by_code
+
+    plan_by_code(db, "complete").provider_price_ref = COMPLETE_PRICE
     tenant.stripe_customer_id, tenant.stripe_subscription_id = "cus_1", "sub_1"
     db.commit()
     subscription = {
         "id": "sub_1",
         "customer": "cus_1",
         "status": "active",
-        "items": {"data": [{"price": {"id": PRO_PRICE}}]},
+        "items": {"data": [{"price": {"id": COMPLETE_PRICE}}]},
     }
     event = {
         "id": "evt_1",
@@ -218,7 +218,7 @@ def test_a_plan_change_from_stripe_is_recorded_as_the_product(db, tenant, monkey
     db.commit()
     (recorded,) = events("billing.")
     assert recorded.actor_kind == "system" and recorded.actor_user_id is None
-    assert recorded.after == {"plan": "pro", "status": "active"}
+    assert recorded.after == {"plan": "complete", "status": "active"}
     handle_event(db, event | {"id": "evt_2"})
     db.commit()
     assert len(events("billing.")) == 1  # nothing changed the second time

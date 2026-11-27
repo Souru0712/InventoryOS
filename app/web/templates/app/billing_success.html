@@ -2,7 +2,7 @@
 {% block content %}
 <div style="max-width: 560px;">
   <h1>You are subscribed</h1>
-  <p class="lede">Thanks &mdash; {{ tenant.name }} is on the {{ tenant.plan.value }} plan.</p>
+  <p class="lede">Thanks &mdash; {{ tenant.name }} is on {{ subscription(tenant).plan_name }}.</p>
   <div class="card">
     <p style="margin-top:0;">Next: make sure your reorder points reflect how you actually run.</p>
     <p><a class="btn" href="/app">Open inventory</a></p>

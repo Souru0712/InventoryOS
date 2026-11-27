@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext
 from app.config import get_settings
 from app.db import get_db
-from app.entitlements import PLAN_IDS
 from app.models import Tenant, User
-from app.orchestration.stripe_events import handle_event, price_for_plan
+from app.orchestration.stripe_events import handle_event
+from app.plans import sellable
 from app.security import require_permission, require_tenant, require_user
 from app.web.inputs import raw_body
 from app.web.templating import templates
@@ -48,9 +48,11 @@ def checkout(
     """Start a Stripe checkout for this account. Signing up comes first, so there is an account
     to attach the subscription to and nobody types their details twice."""
     settings = get_settings()
-    if plan not in PLAN_IDS:
+    chosen = sellable(db, plan)
+    if chosen is None:
         raise HTTPException(status_code=400, detail=f"unknown plan {plan!r}")
-    price_id = price_for_plan(plan)
+    # The plan names its provider price; the price itself lives at the provider (E-01).
+    price_id = chosen.provider_price_ref
     if not price_id:
         raise HTTPException(status_code=503, detail=f"no Stripe price configured for {plan}")
 

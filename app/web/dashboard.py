@@ -21,7 +21,6 @@ from app.config import get_settings
 from app.connections import MerchantTaken, NotConnected, connect
 from app.costs import value_stock
 from app.db import get_db
-from app.entitlements import require
 from app.items import entered_base
 from app.jobs import enqueue
 from app.ledger.posting import post_count
@@ -503,7 +502,6 @@ def update_thresholds(
     tenant: Tenant = Depends(require_writable),
     org: OrgContext = Depends(require_permission("item.edit")),
 ):
-    require(tenant, "custom_thresholds")
     item = get_scoped(db, org, StockItem, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="stock item not found")

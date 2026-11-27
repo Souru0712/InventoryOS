@@ -290,8 +290,9 @@ def cmd_billing(args: argparse.Namespace) -> int:
             print(f"  grace ends       {account['grace_ends_at']}")
         print(f"  stripe customer  {tenant.stripe_customer_id or '-'}")
         print(f"  subscription     {tenant.stripe_subscription_id or '-'}")
-        for capability in ("inventory_write", "reorder_csv", "custom_thresholds", "history_30_day"):
-            print(f"  {capability:<17} {'yes' if allows(tenant, capability) else 'no'}")
+        print(f"  plan name        {account['plan_name']}")
+        print(f"  max locations    {account['max_locations'] or 'as many as they have'}")
+        print(f"  inventory_write  {'yes' if allows(tenant, 'inventory_write') else 'no'}")
     return 0
 
 

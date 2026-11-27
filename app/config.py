@@ -56,7 +56,6 @@ class Settings(BaseSettings):
     # SEC-13: uploads are at most 15 MB.
     max_upload_mb: int = 15
     # RCV-FR-14, S9: invoice photos read per business in any 24 hours; beyond it, by hand.
-    extraction_daily_cap: int = 40
 
     # Where invoice photos live. "local" is a directory, which must be a persistent volume when
     # deployed; "s3" is any S3-compatible bucket (AWS, R2, Backblaze, Spaces, MinIO).
@@ -74,8 +73,6 @@ class Settings(BaseSettings):
 
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
-    stripe_price_starter: str = ""
-    stripe_price_pro: str = ""
 
     sync_interval_minutes: int = 60
     # How often each connected business's orders are read (T3.05; webhooks arrive with T3.06).

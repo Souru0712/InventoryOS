@@ -1,31 +1,32 @@
 """What a customer has paid for, decided in one place.
 
-The pricing page is marketing; this module is the product. Every feature question - can they add
-another location, download the reorder CSV, set a custom reorder point, receive a delivery at all -
-is answered here, from the subscription state, so no route ever asks `if plan == "pro"` on its own.
+The pricing page is marketing; this module is the product. Every entitlement question - can they
+change stock, add another location, use a capability beyond the core - is answered here, so no
+route ever asks about a plan on its own (SAAS-B-09).
 
-The shape is: account -> subscription status -> plan -> capabilities -> access.
+The shape is: account -> subscription status -> access, and account -> plan -> entitlement set
+(app/plans.py, ADR-0089). Core operations need only an active subscription and are never gated
+by plan (E-05, C-41); the entitlement set holds the location allowance, the capability flags
+beyond the core and the usage limits, all as data.
 """
 
 from __future__ import annotations
 
 import enum
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from app.models import Plan, SubscriptionStatus, Tenant
+from app.models import SubscriptionStatus, Tenant
+from app.plans import plan_of
 
 log = logging.getLogger(__name__)
 
-# A trial runs a month on the full product, so the features worth paying for are the ones they use.
+# A trial runs a month on the plan the business chose, without a card (C-44).
 TRIAL_DAYS = 30
-TRIAL_PLAN = "pro"
 # A card expires and nobody notices for a week. Stripe keeps retrying; so do we, with access.
 GRACE_DAYS = 7
-
-STARTER, PRO = "starter", "pro"
-PLAN_IDS = (STARTER, PRO)
 
 
 class Access(str, enum.Enum):
@@ -37,31 +38,28 @@ class Access(str, enum.Enum):
 
 
 @dataclass(frozen=True)
-class Capabilities:
-    """One plan's limits. Add a field here, not an `if` somewhere else."""
+class EntitlementSet:
+    """One business's entitlements, read from its plan (E-02)."""
 
-    locations: int | None  # None means unlimited
-    history_days: int
-    reorder_csv: bool
-    custom_thresholds: bool
+    plan: str
+    plan_name: str
+    allowed_modes: frozenset[str]
+    max_locations: int | None  # None means as many as they have
+    capability_flags: frozenset[str]
+    limits: Mapping[str, int]
 
 
-CAPABILITIES: dict[str, Capabilities] = {
-    STARTER: Capabilities(locations=1, history_days=0, reorder_csv=False, custom_thresholds=False),
-    PRO: Capabilities(locations=None, history_days=30, reorder_csv=True, custom_thresholds=True),
-}
-
-# Every capability a route can ask about, and what it means if it is missing.
+# What it means when an operation is refused. Capability flags beyond the core are named by the
+# plan catalogue; one without a sentence here is refused with the generic one.
 DENIAL_REASONS = {
     "inventory_write": "Your subscription has lapsed, so stock cannot be changed. Everything is still here to read.",
-    "add_location": "Starter covers one location. Pro covers as many as you have.",
-    "reorder_csv": "The reorder list as a CSV is part of Pro.",
-    "custom_thresholds": "Custom reorder points and par levels are part of Pro.",
-    "history_30_day": "30 days of health history is part of Pro.",
+    "add_location": "Your plan covers no more locations. Archive one, or change plan to add another.",
     "notifications": "Your subscription has lapsed, so alerts and the weekly report are paused.",
 }
 
-WRITING = {"inventory_write", "add_location", "custom_thresholds"}
+# Subscription-level questions: answered by access alone, whatever the plan (E-05).
+WRITING = {"inventory_write", "add_location"}
+SUBSCRIPTION = WRITING | {"notifications"}
 
 
 class NotEntitled(PermissionError):
@@ -72,16 +70,18 @@ class NotEntitled(PermissionError):
         super().__init__(DENIAL_REASONS.get(capability, "That is not part of your plan."))
 
 
-def effective_plan(tenant: Tenant) -> str:
-    """The plan whose capabilities apply now. A trial is given the full product on purpose."""
-    if tenant.subscription_status is SubscriptionStatus.TRIALING:
-        return TRIAL_PLAN
-    plan = getattr(tenant.plan, "value", tenant.plan)
-    return plan if plan in PLAN_IDS else STARTER
-
-
-def capabilities(tenant: Tenant) -> Capabilities:
-    return CAPABILITIES[effective_plan(tenant)]
+def entitlements(tenant: Tenant) -> EntitlementSet:
+    """The business's entitlement set, from its plan in the catalogue."""
+    plan = plan_of(tenant)
+    granted = plan.entitlement
+    return EntitlementSet(
+        plan=plan.code,
+        plan_name=plan.name,
+        allowed_modes=frozenset(granted.allowed_modes or ()),
+        max_locations=granted.max_locations,
+        capability_flags=frozenset(granted.capability_flags or ()),
+        limits=dict(granted.limits or {}),
+    )
 
 
 def trial_days_left(tenant: Tenant, now: datetime | None = None) -> int | None:
@@ -124,23 +124,15 @@ def access(tenant: Tenant, now: datetime | None = None) -> Access:
 
 
 def allows(tenant: Tenant, capability: str, now: datetime | None = None) -> bool:
-    """The one question every route asks."""
-    if capability in WRITING and access(tenant, now) is not Access.FULL:
-        return False
+    """The one question every route asks.
 
-    limits = capabilities(tenant)
-    if capability == "reorder_csv":
-        return limits.reorder_csv
-    if capability == "custom_thresholds":
-        return limits.custom_thresholds
-    if capability == "history_30_day":
-        return limits.history_days >= 30
-    if capability == "notifications":
+    Changing stock, adding a location and receiving alerts need an active subscription; anything
+    else is a capability flag of the business's plan. The location count itself is checked
+    against `location_allowance()` where locations are added.
+    """
+    if capability in SUBSCRIPTION:
         return access(tenant, now) is Access.FULL
-    if capability in ("inventory_write", "add_location"):
-        return True
-    log.warning("asked about an unknown capability %r", capability)
-    return False
+    return capability in entitlements(tenant).capability_flags
 
 
 def require(tenant: Tenant, capability: str, now: datetime | None = None) -> None:
@@ -151,11 +143,12 @@ def require(tenant: Tenant, capability: str, now: datetime | None = None) -> Non
 
 def location_allowance(tenant: Tenant) -> int | None:
     """How many locations this account may track. None means as many as they have."""
-    return capabilities(tenant).locations
+    return entitlements(tenant).max_locations
 
 
-def history_days(tenant: Tenant) -> int:
-    return capabilities(tenant).history_days
+def usage_limit(tenant: Tenant, name: str) -> int | None:
+    """A usage limit with a real cost (E-09), such as invoices read a day; None when unlimited."""
+    return entitlements(tenant).limits.get(name)
 
 
 def state(tenant: Tenant, now: datetime | None = None) -> dict:
@@ -164,9 +157,12 @@ def state(tenant: Tenant, now: datetime | None = None) -> dict:
     current = access(tenant, now)
     days_left = trial_days_left(tenant, now)
     status = tenant.subscription_status
+    granted = entitlements(tenant)
     return {
         "status": status.value,
-        "plan": effective_plan(tenant),
+        "plan": granted.plan,
+        "plan_name": granted.plan_name,
+        "max_locations": granted.max_locations,
         "access": current.value,
         "read_only": current is Access.READ_ONLY,
         "trial_days_left": days_left,
@@ -210,10 +206,9 @@ def _message(
 
 
 def start_trial(tenant: Tenant, now: datetime | None = None) -> Tenant:
-    """Every new account starts on the full product, for TRIAL_DAYS."""
+    """A new account tries its plan for TRIAL_DAYS (PD-56: the plan it chose, not a bigger one)."""
     now = now or datetime.now(UTC)
     tenant.subscription_status = SubscriptionStatus.TRIALING
-    tenant.plan = Plan(TRIAL_PLAN)
     tenant.trial_started_at = now
     tenant.trial_ends_at = now + timedelta(days=TRIAL_DAYS)
     return tenant

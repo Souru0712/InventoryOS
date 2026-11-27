@@ -17,7 +17,6 @@ from app.models import (
     Invitation,
     Job,
     Membership,
-    Plan,
     ProviderConnection,
     SubscriptionStatus,
     Tenant,
@@ -73,8 +72,9 @@ def connected_tenant_ids(db: Session) -> list[int]:
 
 
 def subscribed_tenants(db: Session) -> list[Tenant]:
-    """Every organization that has not cancelled, for the nightly and weekly jobs."""
-    return list(db.scalars(select(Tenant).where(Tenant.plan != Plan.CANCELED)))
+    """Every organization, for the nightly and weekly jobs. A lapsed one stays read-only and
+    keeps being evaluated (E-07); what it may receive is decided by `allows()`."""
+    return list(db.scalars(select(Tenant).order_by(Tenant.id)))
 
 
 def trialing_tenants(db: Session) -> list[Tenant]:
