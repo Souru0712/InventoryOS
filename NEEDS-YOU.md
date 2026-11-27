@@ -102,8 +102,9 @@ SES is cheapest at volume and the most work.
       from Resend was forwarded and arrived, 2026-11-27 00:33 UTC).
       Resend's own receiving stays off: its MX would take the root from Cloudflare; a subdomain
       if Vontry ever reads mail itself
-- [ ] A Gmail address and an Outlook/Hotmail address you control, for the delivery test
-      (Gmail delivered 2026-11-26, AC-ANL-07; Outlook not tried)
+- [x] Delivery test (owner: "completed with the 2 test emails", 2026-11-27): the weekly summary
+      straight to Gmail (AC-ANL-07) and a test forwarded through `support@vontry.app`. Outlook
+      was not tried; worth one send before the first customer on an Outlook address
 
 - [ ] **Bounce and complaint webhook** (built, ADR-0088): in Resend → Webhooks, add an endpoint
       `https://<APP_BASE_URL>/webhooks/resend` for the events `email.bounced` and
