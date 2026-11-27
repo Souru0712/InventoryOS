@@ -107,7 +107,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T3.11 | Square sandbox end-to-end run | P1 | S | M5 | T3.10, T0.09 | Completed (2026-11-26; run recorded 22–25 Nov locally through the owner's ngrok tunnel, every step passing; two defects found and fixed on the branch; PD-53 proposed) |
 | T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Completed (2026-11-26; `run_sync` and the hourly read are adapter catalog reads, the hourly one a job per business; no code path writes POS daily totals, sale items or POS-counted stock items, or reads Square's counts; MEASUREMENT_UNIT added to the adapter's read; ADR-0085) |
 | T4.01 | Plan and entitlement data model (C-41) | P1 | M | M6 | T1.06 | Completed (2026-11-26; plans and entitlements tables, Complete and Standalone seeded, every business on Complete (DM-15); allows() reads the plan's entitlements, core never gated; invoice cap is a plan limit; PA2 retired; PD-56 proposed) |
-| T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Not started |
+| T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Completed (2026-11-27; Complete billed per POS-connected location, Standalone per business; a cutover moves the plan to the narrowest that fits, prorated by Stripe; prices set by CLI from Stripe; pricing page from the catalogue; PD-57 proposed; AC-SAAS-11's manual half is T4.04) |
 | T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Not started |
 | T4.04 | Stripe test-mode lifecycle run | P1 | S | M6 | T4.03, T0.09 | Not started |
 | T4.05 | Full data export | P1 | M | M6 | T2.17 | Not started |
@@ -1122,6 +1122,12 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Acceptance:** AC-SAAS-11; changing a price in configuration changes new subscriptions only (AC-SAAS-12).
 - **Tests:** recorded-payload billing tests.
 - **Done when:** merged.
+- **Outcome (2026-11-27):** ADR-0090. `app/transform/billing.py` (fit, narrowest plan, quantity)
+  and `app/billing.py` (the `sync_subscription` job, queued by a confirmed cutover for its date
+  and by location changes; Stripe asked to change price and quantity with proration; the webhook
+  records the item and quantity); checkout refuses a plan that does not fit; `app.cli plans`
+  sets a plan's Stripe price and copies it for display; the pricing and landing pages read the
+  catalogue and no longer sell the setup package (SAAS-B-12, PD-06 open).
 
 ### T4.03 Subscription lifecycle policies · P1 · S
 - **Objective:** apply the approved trial, grace and read-only policies (PD-05, PD-07).

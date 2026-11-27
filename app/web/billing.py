@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext
+from app.billing import fit_reason, quantity_for
 from app.config import get_settings
 from app.db import get_db
 from app.models import Tenant, User
@@ -51,6 +52,10 @@ def checkout(
     chosen = sellable(db, plan)
     if chosen is None:
         raise HTTPException(status_code=400, detail=f"unknown plan {plan!r}")
+    # A plan that does not cover the business's sales modes or locations is not sold to it.
+    reason = fit_reason(db, org, chosen)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     # The plan names its provider price; the price itself lives at the provider (E-01).
     price_id = chosen.provider_price_ref
     if not price_id:
@@ -59,7 +64,8 @@ def checkout(
     stripe = _stripe()
     session = stripe.checkout.Session.create(
         mode="subscription",
-        line_items=[{"price": price_id, "quantity": 1}],
+        # Per location: the POS-connected locations; per business: one (SAAS-B-18).
+        line_items=[{"price": price_id, "quantity": quantity_for(db, org, chosen)}],
         customer=tenant.stripe_customer_id or None,
         customer_email=None if tenant.stripe_customer_id else user.email,
         client_reference_id=str(tenant.id),

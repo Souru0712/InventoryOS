@@ -205,6 +205,11 @@ class BillingPlan(Base):
     name: Mapped[str] = mapped_column(String(80))
     billing_basis: Mapped[str] = mapped_column(String(20))
     provider_price_ref: Mapped[str | None] = mapped_column(String(120))
+    # The provider price as last read from the provider, for the pricing page only (T4.02):
+    # copied when the price is set, never typed in or used to charge.
+    display_amount_cents: Mapped[int | None] = mapped_column(Integer)
+    display_currency: Mapped[str | None] = mapped_column(String(3))
+    display_interval: Mapped[str | None] = mapped_column(String(10))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
@@ -286,6 +291,10 @@ class Tenant(Base):
     past_due_since: Mapped[datetime | None] = mapped_column(UTCDateTime)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(80))
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(80))
+    # The subscription's one item and its quantity as Stripe last reported them (T4.02): a plan
+    # billed per location changes the quantity and the price of this item.
+    stripe_subscription_item_id: Mapped[str | None] = mapped_column(String(80))
+    billed_quantity: Mapped[int | None] = mapped_column(Integer)
     # When the newest Stripe event we applied was created, so an older one arriving late
     # cannot undo a newer state.
     stripe_event_at: Mapped[datetime | None] = mapped_column(UTCDateTime)

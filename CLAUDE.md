@@ -188,7 +188,10 @@ implementation sessions; the detail lives in `docs/`.
   provider price and an entitlement set (modes, max locations, capability flags, limits);
   every check goes through `allows()`, `location_allowance()` or `usage_limit()` in
   `app/entitlements.py`. The core is never gated by plan (C-41, E-05); nothing reads the
-  legacy `tenants.plan` column.
+  legacy `tenants.plan` column. The subscription follows the business (`app/billing.py`,
+  ADR-0090): a confirmed cutover or a location change queues `sync_subscription`, which
+  moves the plan (narrowest that fits, at a cutover) and the per-location quantity, at
+  Stripe once subscribed. Plans' prices are set with `app.cli plans`, never typed in.
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).
 - Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
   `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or

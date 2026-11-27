@@ -236,37 +236,31 @@
     <div class="wrap">
       <div class="price-head">
         <div class="lbl">04 &mdash; Pricing</div>
-        <h2 class="h2">Two plans, and a setup<br>you don't have to do yourself.</h2>
+        <h2 class="h2">One product,<br>two ways to feed it sales.</h2>
       </div>
       <div class="plans">
         {% for plan in plans %}
-        <div class="plan{% if plan.one_time %} lead{% endif %}">
+        <div class="plan">
           <div class="pn">{{ plan.name }}</div>
           <div class="amt">
-            <b>${{ plan.price }}</b>
-            <s>{{ "one time" if plan.one_time else "per month" }}</s>
+            {% if plan.price %}<b>{{ plan.price }}</b><s>{{ plan.per }}</s>{% else %}<s>Price announced at launch</s>{% endif %}
           </div>
-          <p class="bl">{{ plan.blurb }}</p>
+          <p class="bl">{{ plan.reach }}</p>
           <ul>
             {% for feature in plan.features %}
             <li><i>&#9679;</i><span>{{ feature }}</span></li>
             {% endfor %}
           </ul>
           <div class="plan-cta">
-            {% if plan.one_time %}
-              <a class="link" href="mailto:{{ settings.support_email }}?subject=Setup%20package">Book setup</a>
-            {% else %}
-              <a class="link" href="/signup">Choose {{ plan.name }}</a>
-            {% endif %}
+            <a class="link" href="/signup?plan={{ plan.code }}">Choose {{ plan.name }}</a>
           </div>
         </div>
         {% endfor %}
       </div>
       <div class="price-close">
-        <p class="small">30 days free on Pro, then the plan you pick. Connect Square when you are ready.</p>
+        <p class="small">30 days free on the plan you pick, no card. Every plan has the whole core: stock, recipes, receiving, counts, waste, reorder and reports.</p>
         <div class="cluster">
-          <a class="link" href="/signup">Or start on Starter</a>
-          <a class="pill" href="mailto:{{ settings.support_email }}?subject=Setup%20package">Book the $149 setup</a>
+          <a class="link" href="/pricing">See what each plan includes</a>
         </div>
       </div>
     </div>

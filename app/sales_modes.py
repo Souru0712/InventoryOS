@@ -6,8 +6,9 @@ from the chosen source and from it alone. The old source stops the day before; i
 from D are voided, giving back what they took, after a preview. Sales the new source already
 recorded from D (kept but not counted until now) start counting. Earlier days keep their history.
 Connected needs a location tracking a POS location of an active connection. The default D for
-leaving a POS is the day after its last day with sales. Audited. The plan following the mode is
-T4.02's (PD-39).
+leaving a POS is the day after its last day with sales. Audited. From the cutover date the plan
+follows the mode (T4.02, PD-39/C-44): the preview names the plan the business moves to, and
+confirming queues the change for that date (`app/billing.py`).
 """
 
 from __future__ import annotations
@@ -20,9 +21,10 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
+from app.billing import plan_after, queue_after_cutover
 from app.connections import current, name_of
 from app.counts import last_count_at
-from app.models import Location, SalesTransaction
+from app.models import BillingPlan, Location, SalesTransaction
 from app.sales import Cutover, cut_over, cutover_plan, source_of_record
 from app.transform.business_days import business_date
 
@@ -55,6 +57,7 @@ class Preview:
     today: date
     plan: Cutover
     last_count: date | None = None  # a switch never reaches back past it (C-53)
+    next_plan: BillingPlan | None = None  # the plan the business moves to from the cutover
 
     @property
     def earliest(self) -> date:
@@ -150,8 +153,17 @@ def preview(
     if counted is not None and last_count is not None:
         _check_count(place, cutover, plan, counted, last_count)
     record = source_of_record(db, org, place.id, today)
+    mode_after = CONNECTED if kind == "pos_adapter" else STANDALONE
     return Preview(
-        place, record.kind if record else "", kind, provider, cutover, today, plan, last_count
+        place,
+        record.kind if record else "",
+        kind,
+        provider,
+        cutover,
+        today,
+        plan,
+        last_count,
+        plan_after(db, org, place.id, mode_after),
     )
 
 
@@ -208,6 +220,7 @@ def switch(
         },
         ip=ip,
     )
+    queue_after_cutover(db, org, shown.location, cutover)  # the plan follows (T4.02)
     return shown
 
 

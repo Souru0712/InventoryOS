@@ -5,6 +5,51 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-27 — T4.02 Stripe catalogue and per-location billing
+
+**Implemented**
+- Fit and quantity as pure rules (`app/transform/billing.py`): a plan fits when it covers the
+  business's sales modes and active locations; Complete is billed for active POS-connected
+  locations, at least one; Standalone is one unit (SAAS-B-18).
+- The plan follows the business (`app/billing.py`, ADR-0090, C-44): confirming a cutover queues
+  `sync_subscription` for the cutover date, which moves the business to the narrowest plan that
+  fits; adding, archiving or restoring a location queues it for the quantity. Before subscribing
+  the change is made here (audited); once subscribed, Stripe is asked to change the item's price
+  and quantity with proration and its webhook applies it, now recording the item and quantity.
+  The cutover preview names the plan the business moves to.
+- Checkout refuses a plan that does not fit, with the reason, and sends the quantity.
+- `python -m app.cli plans [--code X --price price_...]` lists the catalogue or points a plan at
+  an active recurring Stripe price, copying its amount for display (AC-SAAS-12).
+- The pricing and landing pages read the catalogue (names, billing basis, display price, copy
+  chosen by entitlements); the setup package is no longer offered (SAAS-B-12 while PD-06 is
+  open), and the FAQ no longer says counts go back to Square (C-34).
+- Migration `c8e3f1a5d2b7` (additive): subscription item and quantity, plans' display price,
+  the `sync_subscription` job kind.
+
+**Verified**
+- `tests/test_plan_follows.py` (15): the rules, a Standalone trial moved to Complete by a cutover
+  to Square (preview and audit), a future cutover queued for its day, only a cutover narrowing
+  the plan, Stripe asked once for a second connected location with proration, leaving Square at
+  Stripe, the webhook's item and quantity, setting a price, checkout quantity and refusal, a new
+  location queueing a sync, the pricing page from the catalogue. Neighbouring suites (sales
+  modes, billing, entitlements, locations, jobs, migrations, web) pass. Full suite on SQLite:
+  1402 passed, 34 skipped (Postgres-only); ruff, mypy and the docs checker clean.
+- Checked in the browser: the pricing page and the landing page's pricing section render from
+  the catalogue, with no console errors.
+
+**Open issues**
+- The manual half of AC-SAAS-11 (a Stripe test-mode switch with proration) is T4.04's run.
+- The new marketing copy is the owner's to review; the setup package returns only with PD-06.
+
+**Decisions for the owner**
+- PD-57 (OPEN): a hand-entry location inside a Complete business is not billed (SAAS-B-18, built).
+- PD-06 stays open: the setup package was on sale despite SAAS-B-12; it is withdrawn until approved.
+
+**Next task**
+- T4.03 Subscription lifecycle policies (needs ID-14), or T4.08 Plan and entitlements view.
+
+---
+
 ## 2026-11-26 — T4.01 Plan and entitlement data model
 
 **Implemented**

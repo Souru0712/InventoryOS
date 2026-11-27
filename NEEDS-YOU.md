@@ -174,8 +174,9 @@ and one run through test mode.
 - [ ] Stripe account, **test mode** first
 - [ ] Products and prices for Vontry Complete (per location) and Vontry Standalone (per
       business), at the prices you choose (Starter and Pro are retired, C-41)
-- [ ] Each price id into its plan's `provider_price_ref` (T4.02 adds the way to set it; until
-      then checkout answers that no price is configured)
+- [ ] Each price set on its plan: `python -m app.cli plans --code complete --price price_...`
+      and the same for `standalone` (the price must be active and recurring; the pricing page
+      shows its amount from then on). Complete's price is per unit: the app sends the quantity
 - [ ] `STRIPE_SECRET_KEY` (test key first, live key later)
 - [ ] Customer Portal enabled in the dashboard, with cancellation allowed
 - [ ] Stripe CLI installed

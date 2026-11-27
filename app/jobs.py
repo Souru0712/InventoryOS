@@ -83,6 +83,7 @@ def _waiting(db: Session, org: OrgContext, kind: str, dedupe_key: str | None) ->
 
 def _handlers() -> dict[str, Handler]:
     # Imported here: these modules queue follow-up work through this one.
+    from app.billing import sync as sync_subscription
     from app.business_settings import alert_email_key
     from app.connections import NotConnected, email_owners
     from app.consumption import consume_sale
@@ -180,6 +181,10 @@ def _handlers() -> dict[str, Handler]:
         # A repeat finds every line already on the version and reprocesses nothing.
         apply_recipe(db, org, int(payload["version_id"]), date.fromisoformat(payload["since"]))
 
+    def subscription(db: Session, org: OrgContext, payload: dict) -> None:
+        # A repeat finds the plan and quantity already in line and asks nothing of Stripe.
+        sync_subscription(db, org, str(payload.get("reason") or "locations"))
+
     def revoked_email(db: Session, org: OrgContext, payload: dict) -> None:
         # A repeat finds the exception already notified and sends nothing.
         email_owners(db, org, int(payload["connection_id"]))
@@ -190,6 +195,7 @@ def _handlers() -> dict[str, Handler]:
         "connection_revoked_email": revoked_email,
         "reprocess_mapping": remap,
         "reprocess_recipe": recipe_to_past,
+        "sync_subscription": subscription,
         "ingest_orders": orders,
         "refresh_catalog": catalog,
         "reconcile_orders": reconcile,

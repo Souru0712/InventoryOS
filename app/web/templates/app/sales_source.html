@@ -32,6 +32,9 @@
     <li>{{ preview.plan.counted|length }} day{{ "" if preview.plan.counted|length == 1 else "s" }} of {{ target }} sales already recorded from then start counting and take from stock: {% for day in preview.plan.counted %}{{ day.strftime("%d %b") }}{{ ", " if not loop.last }}{% endfor %}.</li>
     {% endif %}
     <li>Earlier days keep their sales as they are.</li>
+    {% if preview.next_plan %}
+    <li>From then your plan becomes <strong>{{ preview.next_plan.name }}</strong>{% if tenant and tenant.stripe_subscription_id %}; Stripe prorates the difference{% endif %}.</li>
+    {% endif %}
   </ul>
   <form method="post" action="/app/locations/{{ location_id }}/sales-source">{{ csrf_field(request) }}
     <input type="hidden" name="to" value="{{ to }}">

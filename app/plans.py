@@ -57,6 +57,13 @@ def sellable(db: Session, code: str) -> BillingPlan | None:
     return plan if plan is not None and plan.active else None
 
 
+def public_plans(db: Session) -> list[BillingPlan]:
+    """The plans on sale, in catalogue order, for the pricing page."""
+    return list(
+        db.scalars(select(BillingPlan).where(BillingPlan.active.is_(True)).order_by(BillingPlan.id))
+    )
+
+
 def plan_for_price(db: Session, price_ref: str | None) -> BillingPlan | None:
     """Which plan a provider price belongs to, so a change made at the provider is understood."""
     if not price_ref:

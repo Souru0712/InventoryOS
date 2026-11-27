@@ -16,12 +16,14 @@ from app import jobs
 from app.access import OrgContext, select_scoped
 from app.access.system import user_by_email
 from app.batches import date_stock
+from app.billing import set_price
 from app.config import require_deployable
 from app.costs import set_cost
 from app.db import init_db, run_migrations, session_scope, stamp_migrations
 from app.entitlements import allows, state
 from app.ledger.posting import SYSTEM, post_opening
 from app.models import (
+    BillingPlan,
     EmailSuppression,
     IdentifierType,
     Location,
@@ -55,6 +57,7 @@ from app.orchestration.receiving import parse_document
 from app.orchestration.reporting import send_weekly_report, weekly_report
 from app.orchestration.sync import run_sync
 from app.order_ingestion import ingest_orders
+from app.plans import plan_by_code
 from app.pos_report import pos_report
 from app.products import products_from_sold_items
 from app.recipes import NewLine, Owner, save_recipe
@@ -242,6 +245,30 @@ def cmd_reset_mfa(args: argparse.Namespace) -> int:
         disable(db, user)
         revoke_sessions(db, user.id)
         print(f"user {user.id}: two-step sign-in is off and every session ended")
+    return 0
+
+
+def cmd_plans(args: argparse.Namespace) -> int:
+    """List the plan catalogue, or point a plan at a Stripe price (T4.02, ADR-0090)."""
+    with session_scope() as db:
+        if args.code:
+            plan = plan_by_code(db, args.code)
+            if plan is None:
+                print(f"no plan {args.code!r}")
+                return 1
+            if args.price:
+                set_price(db, plan, args.price)
+                print(f"{plan.code} now sells at {plan.provider_price_ref}")
+        for plan in db.scalars(select(BillingPlan).order_by(BillingPlan.id)):
+            shown = (
+                f"{plan.display_amount_cents / 100:.2f} {plan.display_currency}/{plan.display_interval}"
+                if plan.display_amount_cents is not None
+                else "no price yet"
+            )
+            print(
+                f"{plan.code:<12} {plan.name:<20} {plan.billing_basis:<13} "
+                f"{plan.provider_price_ref or '-':<32} {shown}{'' if plan.active else ' (retired)'}"
+            )
     return 0
 
 
@@ -621,6 +648,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("reset-mfa", help="turn two-step sign-in off for a locked-out person")
     p.add_argument("--email", required=True)
     p.set_defaults(func=cmd_reset_mfa)
+
+    p = sub.add_parser("plans", help="see the plan catalogue, or set a plan's Stripe price")
+    p.add_argument("--code", help="the plan to change, e.g. complete")
+    p.add_argument("--price", help="the Stripe price id it sells at from now on")
+    p.set_defaults(func=cmd_plans)
 
     p = sub.add_parser("email", help="see or change suppressed email addresses")
     p.add_argument("--suppress", help="stop sending to this address")

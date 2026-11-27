@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import changes, record_audit
+from app.billing import queue as queue_billing
 from app.db import get_db
 from app.entitlements import location_allowance
 from app.models import Location, Tenant
@@ -224,6 +225,7 @@ def create_location(
         after=_values(location),
         ip=client_ip(request),
     )
+    queue_billing(db, org)  # the billed locations may change (T4.02)
     db.commit()
     log.info("location %s added", location.id)
     return RedirectResponse("/app/locations?saved=1", status_code=303)
@@ -316,6 +318,7 @@ def archive_location(
             location_id=location.id,
             ip=client_ip(request),
         )
+        queue_billing(db, org)  # the billed locations may change (T4.02)
         db.commit()
         log.info("location %s archived", location.id)
     return RedirectResponse("/app/locations?archived=1", status_code=303)
@@ -346,6 +349,7 @@ def restore_location(
         location_id=location.id,
         ip=client_ip(request),
     )
+    queue_billing(db, org)  # the billed locations may change (T4.02)
     db.commit()
     log.info("location %s restored", location.id)
     return RedirectResponse("/app/locations?restored=1", status_code=303)

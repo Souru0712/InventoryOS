@@ -148,6 +148,14 @@ def apply_subscription(db: Session, tenant: Tenant, subscription: dict) -> str:
 
     if subscription.get("id"):
         tenant.stripe_subscription_id = subscription["id"]
+    # The one item a plan is billed through, and how many units Stripe bills (T4.02).
+    items = ((subscription.get("items") or {}).get("data")) or []
+    if items:
+        tenant.stripe_subscription_item_id = (
+            items[0].get("id") or tenant.stripe_subscription_item_id
+        )
+        if items[0].get("quantity") is not None:
+            tenant.billed_quantity = int(items[0]["quantity"])
     apply_location_limit(db, tenant)
     db.flush()
     return status.value
