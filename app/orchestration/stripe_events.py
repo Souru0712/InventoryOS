@@ -22,6 +22,7 @@ from app.audit import record_audit
 from app.models import SubscriptionStatus, Tenant
 from app.orchestration.subscriptions import (
     apply_location_limit,
+    change_plan,
     end_subscription,
     mark_past_due,
     start_subscription,
@@ -138,7 +139,7 @@ def apply_subscription(db: Session, tenant: Tenant, subscription: dict) -> str:
             tenant.subscription_status = SubscriptionStatus.TRIALING
             tenant.trial_ends_at = _moment(subscription.get("trial_end")) or tenant.trial_ends_at
     elif status is SubscriptionStatus.PAST_DUE:
-        tenant.plan = type(tenant.plan)(plan)
+        change_plan(db, tenant, plan)
         tenant.current_period_end = period_end or tenant.current_period_end
         mark_past_due(db, tenant)
     else:
@@ -212,7 +213,7 @@ def handle_event(db: Session, event: dict) -> dict:
         else:
             # created, updated, resumed: the payload says what it now is.
             result["status"] = apply_subscription(db, tenant, payload)
-        result["plan"] = tenant.plan.value
+        result["plan"] = plan_of(tenant).code
 
     elif kind == "invoice.payment_failed":
         # The grace period runs from when the payment actually failed, not from when we got

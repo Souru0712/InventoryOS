@@ -20,6 +20,9 @@ issues · decisions · next task.
   setting. Sign-up takes a sellable plan code; checkout sends that plan's provider price; Stripe
   prices map back to plans. `CAPABILITIES`, `PLAN_IDS`, the Starter/Pro writes and the
   `STRIPE_PRICE_*` settings are gone; the legacy `tenants.plan` column stays, unread.
+- Fixed after the first commit: a subscription Stripe reports as `past_due` still wrote the
+  legacy plan column (an error on that event); it now changes the catalogue plan, and the
+  event result names the catalogue plan (`tests/test_billing.py`).
 
 **Verified**
 - `tests/test_entitlements.py` (the matrix on Complete and Standalone, AC-SAAS-08 by editing an

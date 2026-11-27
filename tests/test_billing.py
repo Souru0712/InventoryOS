@@ -178,6 +178,27 @@ def test_a_failed_payment_starts_the_grace_period(db, tenant):
     assert access(tenant, NOW + timedelta(days=9)) is Access.READ_ONLY
 
 
+def test_a_subscription_reported_past_due_keeps_its_plan_and_starts_the_grace(db, tenant):
+    """Stripe can say past_due on the subscription itself, not only through a failed invoice."""
+    tenant.stripe_customer_id = "cus_1"
+    db.commit()
+    handle_event(db, event("customer.subscription.created", subscription(STANDALONE_PRICE)))
+    result = handle_event(
+        db,
+        event(
+            "customer.subscription.updated",
+            subscription(COMPLETE_PRICE, "past_due"),
+            created=NOW + timedelta(days=1),
+        ),
+    )
+    db.commit()
+
+    assert result["plan"] == "complete" and result["status"] == "past_due"
+    assert plan_of(tenant).code == "complete"
+    assert tenant.subscription_status is SubscriptionStatus.PAST_DUE
+    assert tenant.past_due_since is not None
+
+
 def test_a_retry_that_works_puts_them_back(db, tenant):
     tenant.stripe_customer_id = "cus_1"
     db.commit()
