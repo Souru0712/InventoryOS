@@ -43,9 +43,19 @@ issues · decisions · next task.
   `NEEDS-YOU.md`.
 
 **Open issues**
-- The owner's step (NEEDS-YOU §3): add the Resend webhook for `email.bounced` and
-  `email.complained` at `https://<APP_BASE_URL>/webhooks/resend` and put its signing secret in
-  `.env`. That needs a public URL (NEEDS-YOU §2). Not configured in Resend from here.
+- The owner's step is done for development. The owner added the Resend webhook for
+  `email.bounced` and `email.complained` on the ngrok URL (`APP_BASE_URL`) and put its secret
+  in `.env`. At deploy the endpoint moves to the production URL.
+- Tested end to end on 2026-11-27, on a throwaway database. The app was reached through
+  ngrok; an unsigned call got 400. One email went to Resend's simulated-bounce address
+  `bounced@resend.dev` (id `01a21a9b-152b-7503-a3fc-130011c2954a`). Two seconds later the
+  webhook answered 200 and the address was suppressed as `bounce`, with a reason naming only
+  the bounce kind and the email id. The log lines carry the type, the delivery id and the
+  email id, never the address.
+- The owner's local `stockpulse.db` cannot run the current code. It is at revision
+  `948e22969d09` (the snack-box era) without `inventory_events`, so startup migrations fail
+  at the first step (`5c1d0f2a9b31`). That step failed before changing anything; the file is
+  untouched. A fresh or reseeded local database is the owner's call.
 - Resend keeps its own suppression list. `email --allow` clears only Vontry's.
 - Resolved the same day. `vontry.app` had no routing rule, only a disabled catch-all, so
   earlier tests to `support@vontry.app` bounced with "recipient not found". (One was briefly

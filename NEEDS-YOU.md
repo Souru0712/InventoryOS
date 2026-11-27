@@ -105,7 +105,9 @@ SES is cheapest at volume and the most work.
 - [ ] A Gmail address and an Outlook/Hotmail address you control, for the delivery test
       (Gmail delivered 2026-11-26, AC-ANL-07; Outlook not tried)
 
-- [ ] **Bounce and complaint webhook** (built, ADR-0088): in Resend → Webhooks, add an endpoint
+- [x] **Bounce and complaint webhook** (built, ADR-0088; set up 2026-11-27 on the ngrok URL,
+      tested end to end). **At deploy:** move the Resend endpoint to the production URL, as
+      for Square. The steps, for reference: in Resend → Webhooks, add an endpoint
       `https://<APP_BASE_URL>/webhooks/resend` for the events `email.bounced` and
       `email.complained`, then paste its signing secret (`whsec_...`) into `.env` as
       `RESEND_WEBHOOK_SECRET` and restart. It needs a public URL (section 2). From then on a hard
