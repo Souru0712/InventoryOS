@@ -34,6 +34,7 @@ from app.web import (
     deliveries,
     email_webhooks,
     exceptions,
+    exports,
     floor,
     health,
     item_import,
@@ -146,6 +147,7 @@ app.include_router(sales_modes.router)
 app.include_router(webhooks.router)
 app.include_router(email_webhooks.router)
 app.include_router(billing.router)
+app.include_router(exports.router)
 
 
 @app.exception_handler(NotEntitled)

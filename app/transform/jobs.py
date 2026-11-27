@@ -36,6 +36,8 @@ KINDS: Mapping[str, JobKind] = {
     "reprocess_recipe": JobKind("Applying a recipe to past sales"),
     # The plan and billed quantity follow the business's locations and sales modes (T4.02).
     "sync_subscription": JobKind("Updating the subscription"),
+    # A business's data exported whole, as a zip of CSVs and invoice files (T4.05, SAAS-D-01).
+    "export_data": JobKind("Preparing a data export", max_attempts=3),
     # A connection's changed orders, read from its cursor (T3.05, SQ-11).
     "ingest_orders": JobKind("Reading the POS's orders"),
     # A catalog change at the POS, read as a job, never in the webhook's request (T3.06).

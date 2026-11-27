@@ -102,6 +102,14 @@
 </div>
 {% endif %}
 
+{% if can(request, "data.export") %}
+<h2>Your data</h2>
+<div class="card" style="max-width:620px;">
+  <p style="margin:0 0 10px;">Download every record of the business, with its invoice photos, at any time.</p>
+  <a class="btn secondary" href="/app/exports">Export your data</a>
+</div>
+{% endif %}
+
 <h2>Billing</h2>
 <div class="card" style="max-width:620px;">
   <p style="margin:0 0 4px;">

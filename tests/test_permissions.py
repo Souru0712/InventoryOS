@@ -30,7 +30,7 @@ from app.models import (
 from app.security import hash_password
 from app.units import Dimension
 from tests.test_async_correctness import api_routes
-from tests.test_isolation import CASES, PATH_ROWS, _business, invitation
+from tests.test_isolation import CASES, PATH_ROWS, _business, data_export, invitation
 
 # Routes anyone may call: the public site, signing in and out, and signed provider webhooks.
 PUBLIC = {
@@ -181,6 +181,7 @@ def client_factory():
         owner = db.get(Membership, people["owner"])
         ids["invitation"] = invitation(db, tenant.id, owner.user_id)
         ids["user"] = owner.user_id
+        ids["export"] = data_export(db, tenant.id, owner.user_id)
         db.commit()
         ids["membership"] = people["owner"]
 

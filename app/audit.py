@@ -31,6 +31,7 @@ CATEGORIES = {
     "mapping": "POS mappings",
     "billing": "Plan and billing",
     "exception": "Exceptions",
+    "data": "Data exports",
 }
 PAGE = 100
 

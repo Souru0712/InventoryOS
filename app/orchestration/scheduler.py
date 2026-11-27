@@ -21,9 +21,10 @@ from apscheduler.schedulers.base import BaseScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from app.access import OrgContext
-from app.access.system import connected_tenant_ids, subscribed_tenants
+from app.access.system import connected_tenant_ids, expired_exports, subscribed_tenants
 from app.config import get_settings
 from app.db import SCHEDULER_LOCK, LeaderLock, session_scope
+from app.exports import expire
 from app.jobs import drain, enqueue
 from app.observability import log_context, new_request_id
 from app.orchestration.health import record_snapshot
@@ -187,6 +188,17 @@ def record_health_snapshots() -> None:
                 log.exception("health snapshot failed for tenant %s", tenant_id)
 
 
+def expire_exports() -> None:
+    """A data export's file is deleted when its download time is over (T4.05)."""
+    try:
+        with session_scope() as db:
+            expired = expire(db, expired_exports(db, datetime.now(UTC)))
+        if expired:
+            log.info("expired %s data exports", expired)
+    except Exception:
+        log.exception("could not expire data exports")
+
+
 def prune_throttles() -> None:
     """Throttle counters whose windows and locks are long over are only history."""
     try:
@@ -261,6 +273,14 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         hour=1,
         minute=5,
         id="close_finished_trials",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        _job(expire_exports),
+        "cron",
+        minute=40,
+        id="expire_exports",
         max_instances=1,
         coalesce=True,
     )

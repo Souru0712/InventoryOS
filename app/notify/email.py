@@ -37,6 +37,7 @@ SENDERS = {
     "verify_email": "account",
     "reset_password": "account",
     "invitation": "account",
+    "data_export": "account",
     "alert_digest": "alerts",
     "connection_revoked": "alerts",
     "weekly_report": "reports",

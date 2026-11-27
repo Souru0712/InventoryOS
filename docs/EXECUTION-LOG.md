@@ -5,6 +5,39 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-27 — T4.05 Full data export
+
+**Implemented**
+- `app/exports.py` (ADR-0092): asking for an export (`POST /app/exports`, `data.export`, audited)
+  queues `export_data`; the job writes one CSV per table of the business's records (49 tables,
+  from locations and items to the ledger, receivings, documents, waste, counts, production,
+  exceptions, sales and the audit trail) and every invoice file into a zip, with a README of row
+  counts. Secret columns are never written; money columns only for someone who sees costs;
+  formula-like cells are quoted. The asker is emailed (sender: account) when it is ready.
+- `/app/exports` lists recent exports; only the asker downloads, for three days; an hourly sweep
+  marks them expired and deletes the file (storage gains `delete()`). Exporting works read-only
+  (SAAS-D-02). A full export needs access to every location (PD-58).
+- Migration `d4f7a2c9e6b1` (additive): `data_exports` and the `export_data` job kind. Exports
+  are business-wide in the scoped layer. Linked from Settings.
+
+**Verified**
+- `tests/test_exports.py` (10): every listed table and each SAAS-D-01 entity in the zip with the
+  invoice photo (AC-ADM-03), only this business's rows, no secret columns, no money columns
+  without costs, every-location rule, one pending export at a time, the email, a repeat of the
+  job, expiry deleting the file, a read-only business exporting and downloading, the asker only.
+- Isolation and permission cases for the download; the read-only route guard lists `/app/exports`.
+- Full suite on SQLite: 1430 passed and 2 failed: the export named the ledger and audit models,
+  which only their writers may. It now lists tables by name; the audit, ledger, export,
+  isolation, permission, scoped-access and lifecycle suites then passed (210).
+
+**Decisions for the owner**
+- PD-58 (OPEN): a full export needs access to every location (built).
+
+**Next task**
+- T4.06 Account deletion and retention.
+
+---
+
 ## 2026-11-27 — T4.08 Plan and entitlements view
 
 **Implemented**

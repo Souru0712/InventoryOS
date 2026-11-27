@@ -196,6 +196,10 @@ implementation sessions; the detail lives in `docs/`.
   AC-SAAS-07), or is listed with its reason in `OPEN_WHEN_READ_ONLY` in
   `tests/test_lifecycle.py` (a test fails otherwise). Trial and grace lengths are the
   `TRIAL_DAYS` and `GRACE_DAYS` settings (ADR-0091).
+- A full data export is `app/exports.py` (ADR-0092): a job writes one CSV per table in
+  `TABLES` plus every invoice file; a new table of business records joins `TABLES`.
+  Secret columns never leave; money columns only for someone who sees costs; only the
+  asker downloads, for three days, then the file is deleted.
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).
 - Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
   `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or

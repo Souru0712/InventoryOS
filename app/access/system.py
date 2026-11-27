@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    DataExport,
     Invitation,
     Job,
     Membership,
@@ -75,6 +76,15 @@ def subscribed_tenants(db: Session) -> list[Tenant]:
     """Every organization, for the nightly and weekly jobs. A lapsed one stays read-only and
     keeps being evaluated (E-07); what it may receive is decided by `allows()`."""
     return list(db.scalars(select(Tenant).order_by(Tenant.id)))
+
+
+def expired_exports(db: Session, now: datetime) -> list[DataExport]:
+    """Every business's exports whose download time is over, for the nightly sweep (T4.05)."""
+    return list(
+        db.scalars(
+            select(DataExport).where(DataExport.status == "ready", DataExport.expires_at <= now)
+        )
+    )
 
 
 def trialing_tenants(db: Session) -> list[Tenant]:

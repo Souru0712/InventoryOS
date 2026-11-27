@@ -110,7 +110,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Completed (2026-11-27; Complete billed per POS-connected location, Standalone per business; a cutover moves the plan to the narrowest that fits, prorated by Stripe; prices set by CLI from Stripe; pricing page from the catalogue; PD-57 proposed; AC-SAAS-11's manual half is T4.04) |
 | T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Completed (2026-11-27; trial and grace days as configuration (30, 7); paying mid-trial keeps its days; Stripe unpaid read-only; every write route guarded or listed with a reason, six guarded; AC-SAAS-07) |
 | T4.04 | Stripe test-mode lifecycle run | P1 | S | M6 | T4.03, T0.09 | Not started |
-| T4.05 | Full data export | P1 | M | M6 | T2.17 | Not started |
+| T4.05 | Full data export | P1 | M | M6 | T2.17 | Completed (2026-11-27; a job writes one CSV per business table and every invoice file into a zip; asker-only download for 3 days, then deleted; works read-only; secrets never, money only with costs; AC-ADM-03; PD-58 proposed) |
 | T4.06 | Account deletion and retention | P1 | M | M6 | T4.05 | Not started |
 | T4.07 | Founder console and audited support access | P1 | M | M6 | T1.12, T1.20 | Not started |
 | T4.08 | Plan and entitlements view | P1 | S | M6 | T4.01 | Completed (2026-11-27; /app/subscription: plan, status, billed or would-be quantity, what it includes, locations and invoices read against the limits, portal; `subscription.view` for Owners and Administrators) |
@@ -1171,6 +1171,9 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Acceptance:** AC-ADM-03.
 - **Tests:** export completeness test.
 - **Done when:** merged.
+- **Outcome (2026-11-27):** ADR-0092. `app/exports.py` (`request_export`, the `export_data`
+  job, `expire`), `/app/exports` and its download, the hourly `expire_exports` sweep, migration
+  `d4f7a2c9e6b1`. `tests/test_exports.py` checks every listed table and each SAAS-D-01 entity.
 
 ### T4.06 Account deletion and retention · P1 · M
 - **Objective:** deletion on request and retention after cancellation per approved policy.

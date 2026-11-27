@@ -27,6 +27,8 @@ class Storage(Protocol):
 
     def get(self, key: str) -> bytes: ...
 
+    def delete(self, key: str) -> None: ...
+
     def check(self) -> None: ...
 
 
@@ -55,6 +57,13 @@ class LocalStorage:
             return self._path(key).read_bytes()
         except OSError as exc:
             raise StorageError(f"could not read {key}: {exc}") from exc
+
+    def delete(self, key: str) -> None:
+        """Remove a file; one already gone is not an error."""
+        try:
+            self._path(key).unlink(missing_ok=True)
+        except OSError as exc:
+            raise StorageError(f"could not delete {key}: {exc}") from exc
 
     def check(self) -> None:
         # One probe per worker: web processes sharing a volume must not delete each other's.
@@ -100,6 +109,12 @@ class S3Storage:
             return self.client.get_object(Bucket=self.bucket, Key=self._key(key))["Body"].read()
         except Exception as exc:
             raise StorageError(f"could not download {self._key(key)}: {exc}") from exc
+
+    def delete(self, key: str) -> None:
+        try:
+            self.client.delete_object(Bucket=self.bucket, Key=self._key(key))
+        except Exception as exc:
+            raise StorageError(f"could not delete {self._key(key)}: {exc}") from exc
 
     def check(self) -> None:
         try:

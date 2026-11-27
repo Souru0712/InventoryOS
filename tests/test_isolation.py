@@ -121,6 +121,7 @@ SALES_CSV = b"date,item,qty\r\n2026-11-02,Bars,3\r\n"
 ITEMS_CSV = b"Name,Unit,Quantity\r\nFresh basil,g,100\r\n"
 
 CASES = {
+    ("GET", "/app/exports/{export_id}/download"): lambda ids: {},
     ("GET", "/app"): lambda ids: {"params": {"location": ids["location"]}},
     ("GET", "/app/expiring"): lambda ids: {"params": {"location": ids["location"]}},
     ("GET", "/app/health"): lambda ids: {"params": {"location": ids["location"]}},
@@ -423,6 +424,7 @@ PATH_ROWS = {
     "import_id": "sales_import",
     "digest": "item_file",
     "external_location_id": "external_location",
+    "export_id": "export",
     "external_product_id": "external_product",
     "external_modifier_id": "external_modifier",
 }
@@ -674,6 +676,26 @@ def _business(db, tenant_id: int, tag: str, code: str) -> dict[str, int]:
     }
 
 
+def data_export(db, tenant_id: int, user_id: int) -> int:
+    """A finished export of the business, asked for by user_id, its zip in storage."""
+    from app.models import DataExport
+
+    key = f"exports/{tenant_id}/iso.zip"
+    get_storage().put(key, b"PK\x05\x06" + b"\x00" * 18, "application/zip")
+    row = DataExport(
+        tenant_id=tenant_id,
+        requested_by=user_id,
+        status="ready",
+        storage_key=key,
+        size_bytes=22,
+        finished_at=datetime.now(UTC),
+        expires_at=datetime.now(UTC) + timedelta(days=3),
+    )
+    db.add(row)
+    db.flush()
+    return row.id
+
+
 def invitation(db, tenant_id: int, inviter_id: int) -> int:
     """A pending invitation to the business, sent by inviter_id."""
     row = Invitation(
@@ -715,6 +737,7 @@ def world():
         theirs["membership"] = their_membership.id
         theirs["invitation"] = invitation(db, juniper.id, their_owner.id)
         theirs["user"] = their_owner.id
+        theirs["export"] = data_export(db, juniper.id, their_owner.id)
         db.commit()
     with TestClient(app) as client:
         client.post(
@@ -733,6 +756,7 @@ def world():
             mine["membership"] = own.id
             mine["invitation"] = invitation(db, rosewood.id, own.user_id)
             mine["user"] = own.user_id
+            mine["export"] = data_export(db, rosewood.id, own.user_id)
             db.commit()
         yield client, mine, theirs
 

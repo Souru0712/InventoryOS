@@ -51,6 +51,7 @@ OPEN_WHEN_READ_ONLY = {
     "/billing/checkout": "subscribing again (SAAS-B-08)",
     "/billing/portal": "billing",
     "/billing/webhook": "billing",
+    "/app/exports": "an export works in every state (SAAS-D-02)",
 }
 
 

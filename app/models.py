@@ -1265,6 +1265,32 @@ class SalesSource(Base):
 
 # A day a person marked at a location (PD-54, C-54): open with no sales, or closed (with a reason).
 DAY_MARKS = ("no_sales", "closed")
+EXPORT_STATUSES = ("pending", "ready", "failed", "expired")
+
+
+class DataExport(Base):
+    """A business's data exported whole (T4.05, SAAS-D-01): a zip of CSVs and invoice files made
+    by a job, downloadable by whoever asked until it expires, then deleted."""
+
+    __tablename__ = "data_exports"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'ready', 'failed', 'expired')", name="ck_data_exports_status"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ref("tenants.id"), index=True)
+    requested_by: Mapped[int] = mapped_column(ref("users.id"))
+    # Whether the asker sees costs: a role without them gets the export without money columns.
+    with_costs: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(10), default="pending")
+    storage_key: Mapped[str | None] = mapped_column(String(300))
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class LocationDay(Base):

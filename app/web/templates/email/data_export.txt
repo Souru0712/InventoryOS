@@ -1,0 +1,9 @@
+Your data export is ready
+
+Every record of your business, as CSV files with your invoice photos, in one zip. Sign in to download it{% if expires_at %} before {{ expires_at.strftime("%d %b %Y %H:%M") }} UTC{% endif %}; after that it is deleted.
+
+Open your exports:
+
+{{ link }}
+
+If you did not ask for this, tell the business's Owner.

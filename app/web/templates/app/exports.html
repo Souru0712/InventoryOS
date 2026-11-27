@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Export your data</h1>
+{% if message %}<div class="notice">{{ message }}</div>{% endif %}
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+<div class="card" style="max-width:680px;">
+  <p style="margin:0 0 12px;">Every record of the business as CSV files, one per table, with every invoice photo, in one zip: items, recipes and their versions, suppliers, stock movements, batches, deliveries, waste, counts, exceptions and sales. It works whatever the state of the subscription.</p>
+  <p class="small muted" style="margin:0 0 12px;">It is prepared in the background; we email you when it is ready. Only you can download it, for three days; then it is deleted.</p>
+  <form method="post" action="/app/exports">{{ csrf_field(request) }}
+    <button class="btn" type="submit">Prepare an export</button>
+  </form>
+</div>
+
+{% if exports %}
+<h2>Recent exports</h2>
+<div class="card" style="max-width:680px;">
+  <table class="small">
+    <tr><th>Asked for</th><th>Status</th><th></th></tr>
+    {% for export in exports %}
+    <tr>
+      <td>{{ export.created_at.strftime("%d %b %Y %H:%M") }} UTC</td>
+      <td>{% if export.status == "pending" %}Preparing{% elif export.status == "ready" %}Ready{% if export.expires_at %} until {{ export.expires_at.strftime("%d %b %H:%M") }} UTC{% endif %}{% elif export.status == "expired" %}Expired{% else %}Failed{% endif %}</td>
+      <td>{% if export.id in mine %}<a href="/app/exports/{{ export.id }}/download">Download</a>{% elif export.status == "ready" %}<span class="muted">Asked for by someone else</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

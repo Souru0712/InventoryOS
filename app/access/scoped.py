@@ -17,6 +17,7 @@ from app.models import (
     Alert,
     AuditEvent,
     BusinessSettings,
+    DataExport,
     Document,
     DocumentLine,
     EmailLog,
@@ -135,6 +136,7 @@ ORGANIZATION_MODELS: frozenset[type[Base]] = frozenset(
         ImportMapping,
         ImportName,
         ModifierScale,
+        DataExport,  # a full export is of the whole business (PD-58)
     }
 )
 

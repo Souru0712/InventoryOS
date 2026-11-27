@@ -87,6 +87,7 @@ def _handlers() -> dict[str, Handler]:
     from app.business_settings import alert_email_key
     from app.connections import NotConnected, email_owners
     from app.consumption import consume_sale
+    from app.exports import build as build_export
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
     from app.mappings import reprocess as reprocess_mapping
@@ -181,6 +182,10 @@ def _handlers() -> dict[str, Handler]:
         # A repeat finds every line already on the version and reprocesses nothing.
         apply_recipe(db, org, int(payload["version_id"]), date.fromisoformat(payload["since"]))
 
+    def export(db: Session, org: OrgContext, payload: dict) -> None:
+        # A repeat finds the export no longer pending and writes nothing.
+        build_export(db, org, int(payload["export_id"]))
+
     def subscription(db: Session, org: OrgContext, payload: dict) -> None:
         # A repeat finds the plan and quantity already in line and asks nothing of Stripe.
         sync_subscription(db, org, str(payload.get("reason") or "locations"))
@@ -196,6 +201,7 @@ def _handlers() -> dict[str, Handler]:
         "reprocess_mapping": remap,
         "reprocess_recipe": recipe_to_past,
         "sync_subscription": subscription,
+        "export_data": export,
         "ingest_orders": orders,
         "refresh_catalog": catalog,
         "reconcile_orders": reconcile,
