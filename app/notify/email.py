@@ -38,6 +38,8 @@ SENDERS = {
     "reset_password": "account",
     "invitation": "account",
     "data_export": "account",
+    "deletion_scheduled": "account",
+    "deletion_done": "account",
     "alert_digest": "alerts",
     "connection_revoked": "alerts",
     "weekly_report": "reports",

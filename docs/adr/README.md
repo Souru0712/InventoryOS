@@ -124,3 +124,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0090](0090-subscription-follows-the-business.md) | The subscription follows the business: per-location quantity, plan at cutover | C-44 | Proposed |
 | [ADR-0091](0091-subscription-lifecycle-policies.md) | Subscription lifecycle policies as configuration; read-only refuses every write | C-44 | Proposed |
 | [ADR-0092](0092-full-data-export.md) | Full data export: a job writes a zip of every table and invoice file | SAAS-D-01 | Proposed |
+| [ADR-0093](0093-account-deletion-and-retention.md) | Account deletion and retention: a cancellable window, then a full erase | C-44 | Proposed |

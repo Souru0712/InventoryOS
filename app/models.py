@@ -268,6 +268,12 @@ def _initial_catalogue(target, connection, **_kw) -> None:
 
 class Tenant(Base):
     __tablename__ = "tenants"
+    __table_args__ = (
+        CheckConstraint(
+            "deletion_reason IS NULL OR deletion_reason IN ('owner', 'retention')",
+            name="ck_tenants_deletion_reason",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
@@ -311,6 +317,14 @@ class Tenant(Base):
     # PD-37: daily sales are entered by Managers and above unless the Owner lets Employees.
     employees_enter_sales: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Deletion (T4.06, SAAS-D-04): asked for by an Owner or scheduled when retention ends; due
+    # after a cancellable window. A deleted business keeps only this row, emptied, as a tombstone.
+    deletion_requested_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    deletion_due_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # An id, not a reference: the person's own row is deleted with the business.
+    deletion_requested_by: Mapped[int | None] = mapped_column(Integer)
+    deletion_reason: Mapped[str | None] = mapped_column(String(10))
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     users: Mapped[list[User]] = relationship(back_populates="tenant")
 

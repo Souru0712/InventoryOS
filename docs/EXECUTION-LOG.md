@@ -5,6 +5,37 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-27 — T4.06 Account deletion and retention
+
+**Implemented**
+- An Owner asks at `/app/settings/deletion`, re-entering their password (throttled); the deletion
+  falls due after 7 days (`DELETION_WINDOW_DAYS`), every Owner is emailed a link to cancel it, and
+  a banner shows on every page until then. Works in every subscription state (ADR-0093).
+- A nightly sweep schedules the deletion of a business read-only past 90 days (`RETENTION_DAYS`,
+  C-44), counted from when its access ended; subscribing again cancels it.
+- The `delete_business` job, when due: cancels the Stripe subscription, revokes the POS
+  connection, deletes invoice, import and export files and every row with the business's id
+  (`erase_business()`, children before parents), with the sessions of its memberships and the
+  accounts of people whose only business it was; keeps the business row emptied as a tombstone;
+  confirms by email, then removes that email's own log rows.
+- Migration `e5a8b3d1f7c2` (additive): deletion state on `tenants`, the `delete_business` job.
+
+**Verified**
+- `tests/test_deletion.py` (10) and `tests/test_retention_rules.py` (3): the password, the
+  window and its job time, cancelling, nothing before it closes, no row or file of the business
+  left (foreign keys enforced), POS revoked and Stripe cancelled, the confirmation, a shared
+  member kept, a repeat doing nothing, retention after 90 days and not at 80, subscribing again,
+  the page, the banner, Owners only, read-only allowed.
+- Full suite on SQLite: 1445 passed, 34 skipped (Postgres-only); ruff, mypy, docs checker clean.
+
+**Decisions for the owner**
+- PD-59 (OPEN): the notice before a retention deletion is the same 7-day window (built).
+
+**Next task**
+- T4.07 Founder console and audited support access.
+
+---
+
 ## 2026-11-27 — T4.05 Full data export
 
 **Implemented**

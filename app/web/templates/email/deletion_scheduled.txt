@@ -1,0 +1,7 @@
+{{ business }} will be deleted
+
+{% if reason == "retention" %}The subscription ended long enough ago that the business's data is due to be deleted.{% else %}An Owner asked for the business to be deleted.{% endif %} On {{ due.strftime("%d %b %Y %H:%M") }} UTC every record and file is deleted, and that cannot be undone.
+
+Until then you can {% if reason == "retention" %}subscribe again, or {% endif %}cancel it, and export everything first:
+
+{{ link }}

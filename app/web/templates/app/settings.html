@@ -110,6 +110,13 @@
 </div>
 {% endif %}
 
+{% if can(request, "account.delete") %}
+<div class="card" style="max-width:620px; margin-top:12px;">
+  <p style="margin:0 0 10px;">{% if tenant.deletion_due_at %}<strong>This business will be deleted on {{ tenant.deletion_due_at.strftime("%d %b %Y") }}.</strong>{% else %}Delete the business and everything in it.{% endif %}</p>
+  <a class="btn secondary" href="/app/settings/deletion">{{ "Keep the business" if tenant.deletion_due_at else "Delete the business" }}</a>
+</div>
+{% endif %}
+
 <h2>Billing</h2>
 <div class="card" style="max-width:620px;">
   <p style="margin:0 0 4px;">

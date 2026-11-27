@@ -52,6 +52,8 @@ OPEN_WHEN_READ_ONLY = {
     "/billing/portal": "billing",
     "/billing/webhook": "billing",
     "/app/exports": "an export works in every state (SAAS-D-02)",
+    "/app/settings/deletion": "deleting the business works in every state (SAAS-D-04)",
+    "/app/settings/deletion/cancel": "keeping the business works in every state",
 }
 
 

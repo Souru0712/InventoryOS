@@ -9,11 +9,15 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import Delete, delete, or_, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
+from app.db import Base
 from app.models import (
+    AuthToken,
     DataExport,
     Invitation,
     Job,
@@ -22,6 +26,7 @@ from app.models import (
     SubscriptionStatus,
     Tenant,
     User,
+    UserSession,
 )
 
 
@@ -85,6 +90,59 @@ def expired_exports(db: Session, now: datetime) -> list[DataExport]:
             select(DataExport).where(DataExport.status == "ready", DataExport.expires_at <= now)
         )
     )
+
+
+def _deleted(db: Session, statement: Delete) -> int:
+    return cast("CursorResult[Any]", db.execute(statement)).rowcount
+
+
+def lapsed_tenants(db: Session) -> list[Tenant]:
+    """Businesses without full access and with no deletion scheduled, for the retention sweep."""
+    return list(
+        db.scalars(
+            select(Tenant).where(
+                Tenant.deleted_at.is_(None),
+                Tenant.deletion_due_at.is_(None),
+                Tenant.subscription_status.in_(
+                    [
+                        SubscriptionStatus.EXPIRED,
+                        SubscriptionStatus.CANCELED,
+                        SubscriptionStatus.PAUSED,
+                        SubscriptionStatus.PAST_DUE,
+                    ]
+                ),
+            )
+        )
+    )
+
+
+def erase_business(db: Session, tenant_id: int) -> dict[str, int]:
+    """Delete every row a business owns, children before parents; the people whose only business
+    it was go with it (SAAS-D-05). The business's own row is left for the caller to empty.
+
+    Only `app/deletion.py` calls this, once a deletion has fallen due (T4.06, ADR-0093).
+    """
+    memberships = select(Membership.id).where(Membership.tenant_id == tenant_id)
+    members = select(Membership.user_id).where(Membership.tenant_id == tenant_id)
+    elsewhere = select(Membership.user_id).where(Membership.tenant_id != tenant_id)
+    only_here = list(
+        db.scalars(select(User.id).where(User.id.in_(members), User.id.not_in(elsewhere)))
+    )
+    counts: dict[str, int] = {}
+    counts["sessions"] = _deleted(
+        db,
+        delete(UserSession).where(
+            or_(UserSession.membership_id.in_(memberships), UserSession.user_id.in_(only_here))
+        ),
+    )
+    counts["auth_tokens"] = _deleted(db, delete(AuthToken).where(AuthToken.user_id.in_(only_here)))
+    for table in reversed(Base.metadata.sorted_tables):
+        if table.name in ("users", "tenants") or "tenant_id" not in table.c:
+            continue
+        counts[table.name] = _deleted(db, delete(table).where(table.c.tenant_id == tenant_id))
+    counts["users"] = _deleted(db, delete(User).where(User.id.in_(only_here)))
+    db.flush()
+    return counts
 
 
 def trialing_tenants(db: Session) -> list[Tenant]:

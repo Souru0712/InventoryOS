@@ -1,0 +1,5 @@
+Your business is deleted
+
+On {{ day.strftime("%d %b %Y") }} every record and file of the business was deleted from Vontry, and its POS connection and subscription were ended. Copies in our backups age out on their normal schedule.
+
+This is the last email about it.

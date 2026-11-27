@@ -87,6 +87,7 @@ def _handlers() -> dict[str, Handler]:
     from app.business_settings import alert_email_key
     from app.connections import NotConnected, email_owners
     from app.consumption import consume_sale
+    from app.deletion import run_deletion
     from app.exports import build as build_export
     from app.extract.invoice import ExtractionError
     from app.ledger.verify import drifts, findings
@@ -182,6 +183,10 @@ def _handlers() -> dict[str, Handler]:
         # A repeat finds every line already on the version and reprocesses nothing.
         apply_recipe(db, org, int(payload["version_id"]), date.fromisoformat(payload["since"]))
 
+    def delete_business(db: Session, org: OrgContext, payload: dict) -> None:
+        # A repeat finds the business already deleted, or no longer due, and does nothing.
+        run_deletion(db, org)
+
     def export(db: Session, org: OrgContext, payload: dict) -> None:
         # A repeat finds the export no longer pending and writes nothing.
         build_export(db, org, int(payload["export_id"]))
@@ -202,6 +207,7 @@ def _handlers() -> dict[str, Handler]:
         "reprocess_recipe": recipe_to_past,
         "sync_subscription": subscription,
         "export_data": export,
+        "delete_business": delete_business,
         "ingest_orders": orders,
         "refresh_catalog": catalog,
         "reconcile_orders": reconcile,

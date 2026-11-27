@@ -285,6 +285,12 @@
     <a class="btn small" href="/app/settings/mfa" style="margin-left:6px;">Turn it on</a>
   </div>
 {% endif %}
+{% if tenant is defined and tenant and tenant.deletion_due_at and not tenant.deleted_at %}
+  <div class="notice error" style="margin-bottom:16px;">
+    This business will be deleted on {{ tenant.deletion_due_at.strftime("%d %b %Y") }}.
+    <a href="/app/settings/deletion" style="margin-left:6px;">Keep it</a>
+  </div>
+{% endif %}
 {% if tenant is defined and tenant %}
   {% set account = subscription(tenant) %}
   {% if account.message %}

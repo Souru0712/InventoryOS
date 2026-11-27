@@ -90,6 +90,10 @@ class Settings(BaseSettings):
     # this many days of full access after a payment fails, before read-only.
     trial_days: int = 30
     grace_days: int = 7
+    # Retention after lapsing (C-44, PD-07): read-only this many days, then deleted after the
+    # same cancellable window an Owner's own request gets (SAAS-D-03, SAAS-D-04).
+    retention_days: int = 90
+    deletion_window_days: int = 7
     expiry_horizon_days: int = 30
 
     @classmethod

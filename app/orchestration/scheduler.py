@@ -24,6 +24,7 @@ from app.access import OrgContext
 from app.access.system import connected_tenant_ids, expired_exports, subscribed_tenants
 from app.config import get_settings
 from app.db import SCHEDULER_LOCK, LeaderLock, session_scope
+from app.deletion import sweep_retention
 from app.exports import expire
 from app.jobs import drain, enqueue
 from app.observability import log_context, new_request_id
@@ -188,6 +189,17 @@ def record_health_snapshots() -> None:
                 log.exception("health snapshot failed for tenant %s", tenant_id)
 
 
+def sweep_retention_deletions() -> None:
+    """A business read-only past its retention is scheduled for deletion (T4.06, PD-07)."""
+    try:
+        with session_scope() as db:
+            scheduled = sweep_retention(db)
+        if scheduled:
+            log.info("retention over: deletion scheduled for tenants %s", scheduled)
+    except Exception:
+        log.exception("could not sweep retention")
+
+
 def expire_exports() -> None:
     """A data export's file is deleted when its download time is over (T4.05)."""
     try:
@@ -273,6 +285,15 @@ def _add_jobs(scheduler: BaseScheduler) -> None:
         hour=1,
         minute=5,
         id="close_finished_trials",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        _job(sweep_retention_deletions),
+        "cron",
+        hour=1,
+        minute=35,
+        id="sweep_retention_deletions",
         max_instances=1,
         coalesce=True,
     )

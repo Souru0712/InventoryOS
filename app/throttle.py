@@ -46,6 +46,8 @@ LINK_IP = Rule("link-ip", 10, 15 * MINUTE, MINUTE, HOUR)
 INVITE_ACCOUNT = Rule("invite-account", 20, HOUR, HOUR, HOUR)
 # Two-step sign-in codes (T1.11): a million codes, so a handful of guesses, as with passwords.
 MFA_ACCOUNT = Rule("mfa-account", 5, 15 * MINUTE, MINUTE, HOUR)
+# Re-entering a password to delete the business (T4.06): a guess at a secret.
+DELETE_ACCOUNT = Rule("delete-account", 5, 15 * MINUTE, MINUTE, HOUR)
 
 # A row whose window and lock are this long over is history; the nightly job removes it.
 KEEP_FOR = timedelta(days=1)

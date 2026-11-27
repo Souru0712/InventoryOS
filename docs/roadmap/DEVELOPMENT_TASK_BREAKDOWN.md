@@ -111,7 +111,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Completed (2026-11-27; trial and grace days as configuration (30, 7); paying mid-trial keeps its days; Stripe unpaid read-only; every write route guarded or listed with a reason, six guarded; AC-SAAS-07) |
 | T4.04 | Stripe test-mode lifecycle run | P1 | S | M6 | T4.03, T0.09 | Not started |
 | T4.05 | Full data export | P1 | M | M6 | T2.17 | Completed (2026-11-27; a job writes one CSV per business table and every invoice file into a zip; asker-only download for 3 days, then deleted; works read-only; secrets never, money only with costs; AC-ADM-03; PD-58 proposed) |
-| T4.06 | Account deletion and retention | P1 | M | M6 | T4.05 | Not started |
+| T4.06 | Account deletion and retention | P1 | M | M6 | T4.05 | Completed (2026-11-27; Owner request with password, 7-day cancellable window, banner; retention sweep after 90 days read-only; the due job cancels Stripe, revokes the POS, deletes files and every business row and its sole members, keeps a tombstone, confirms; AC-ADM-05; PD-59 proposed) |
 | T4.07 | Founder console and audited support access | P1 | M | M6 | T1.12, T1.20 | Not started |
 | T4.08 | Plan and entitlements view | P1 | S | M6 | T4.01 | Completed (2026-11-27; /app/subscription: plan, status, billed or would-be quantity, what it includes, locations and invoices read against the limits, portal; `subscription.view` for Owners and Administrators) |
 | T4.09 | Production environment, backups, email | P1 | M | M6 | T0.09 | Not started |
@@ -1187,6 +1187,9 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Acceptance:** AC-ADM-05.
 - **Tests:** deletion leaves no tenant rows or files (Postgres).
 - **Done when:** merged.
+- **Outcome (2026-11-27):** ADR-0093. `app/deletion.py` (request, cancel, retention sweep, the
+  `delete_business` job), `erase_business()` in `app/access/system.py`, `/app/settings/deletion`,
+  migration `e5a8b3d1f7c2`. AC-ADM-05's manual half (a real POS revocation) waits for a run.
 
 ### T4.07 Founder console and audited support access · P1 · M
 - **Objective:** the founder can find a tenant, see subscription and sync health, re-run jobs and get time-boxed support access.

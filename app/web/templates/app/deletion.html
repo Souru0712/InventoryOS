@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Delete the business</h1>
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+{% if tenant.deletion_due_at %}
+<div class="card" style="max-width:680px;">
+  <p style="margin:0 0 12px;"><strong>{{ tenant.name }} will be deleted on {{ tenant.deletion_due_at.strftime("%d %b %Y %H:%M") }} UTC.</strong>
+  {% if tenant.deletion_reason == "retention" %}The subscription ended {{ retention_days }} days ago or more.{% else %}An Owner asked for it.{% endif %}
+  Every record and file goes then, and that cannot be undone.</p>
+  <p class="small muted" style="margin:0 0 12px;">Export everything first if you want a copy: <a href="/app/exports">Export your data</a>.</p>
+  <form method="post" action="/app/settings/deletion/cancel">{{ csrf_field(request) }}
+    <button class="btn" type="submit">Keep the business</button>
+  </form>
+</div>
+{% else %}
+<div class="card" style="max-width:680px;">
+  <p style="margin:0 0 12px;">Deleting removes every record and file of {{ tenant.name }}: stock, recipes, deliveries, sales, the team and their access. The POS connection is revoked and the subscription is cancelled. It happens {{ window_days }} days after you ask; until then any Owner can cancel it.</p>
+  <p class="small muted" style="margin:0 0 12px;">Want a copy first? <a href="/app/exports">Export your data</a>.</p>
+  <form method="post" action="/app/settings/deletion">{{ csrf_field(request) }}
+    <label class="small" for="password">Your password, to confirm it is you</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button class="btn danger" type="submit" style="margin-top:10px;">Delete {{ tenant.name }}</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

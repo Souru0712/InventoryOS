@@ -81,6 +81,11 @@ def start_subscription(
     tenant.billing_plan = _catalogue_plan(db, plan)
     tenant.subscription_status = SubscriptionStatus.ACTIVE
     tenant.past_due_since = None
+    if tenant.deletion_reason == "retention" and tenant.deleted_at is None:
+        # Subscribing again keeps the business (SAAS-D-03); an Owner's own request stands.
+        tenant.deletion_requested_at = tenant.deletion_due_at = None
+        tenant.deletion_reason = tenant.deletion_requested_by = None
+        log.info("tenant %s subscribed again: retention deletion cancelled", tenant.id)
     if subscription_id:
         tenant.stripe_subscription_id = subscription_id
     if customer_id:

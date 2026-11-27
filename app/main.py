@@ -31,6 +31,7 @@ from app.web import (
     counts,
     daily_sales,
     dashboard,
+    deletion,
     deliveries,
     email_webhooks,
     exceptions,
@@ -148,6 +149,7 @@ app.include_router(webhooks.router)
 app.include_router(email_webhooks.router)
 app.include_router(billing.router)
 app.include_router(exports.router)
+app.include_router(deletion.router)
 
 
 @app.exception_handler(NotEntitled)

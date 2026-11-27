@@ -200,6 +200,10 @@ implementation sessions; the detail lives in `docs/`.
   `TABLES` plus every invoice file; a new table of business records joins `TABLES`.
   Secret columns never leave; money columns only for someone who sees costs; only the
   asker downloads, for three days, then the file is deleted.
+- A business is deleted only by `app/deletion.py` (ADR-0093): an Owner's request or the end
+  of retention, after a cancellable window; the job erases every row with its `tenant_id`
+  through `erase_business()` and keeps an emptied tombstone row. It is the one sanctioned
+  removal of ledger and audit rows.
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).
 - Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
   `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or
