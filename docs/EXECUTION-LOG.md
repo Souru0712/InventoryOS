@@ -76,6 +76,58 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — Resend's bounces and complaints fill the suppression list (ADR-0088)
+
+**Implemented**
+- `POST /webhooks/resend` (`app/web/email_webhooks.py`): public and signed, like Square's (plain
+  `def`, raw body from `app/web/inputs.py`, no session, CSRF-exempt, in the public route list).
+  `RESEND_WEBHOOK_SECRET` (the `whsec_...` value) in `app/config.py` and `.env.example`. Blank or
+  malformed refuses every call (503).
+- `app/notify/resend.py` checks Svix's signature with the standard library only: HMAC-SHA256 of
+  `{svix-id}.{svix-timestamp}.{body}`, keyed with the base64 part after `whsec_`, compared in
+  constant time with each `v1,` entry. A timestamp more than 5 minutes off is refused (400).
+  Scheme and payloads confirmed against Resend's and Svix's docs.
+- A `Permanent` bounce suppresses each recipient as `bounce`, a complaint as `complaint`. Soft
+  bounces and other event types are answered 200 and ignored. Repeats update the same row.
+  The stored reason and the logs carry the event type, delivery id and Resend email id, never
+  the address or the provider's message.
+
+**Verified**
+- `tests/test_resend_webhook.py` (21):
+  - Svix's published test vector verifies;
+  - a signed hard bounce suppresses, with the address lower-cased and kept out of the logs;
+  - transient, temporary, undetermined and blank bounces suppress nothing;
+  - a complaint to two recipients suppresses both as `complaint`;
+  - a repeat leaves one row, and other types are ignored;
+  - one matching signature among several is accepted;
+  - a forged, empty or wrong-key signature, a timestamp 301 s off either way or not a number, a
+    missing id, or a body changed after signing gets 400 and writes nothing;
+  - an empty or malformed secret gets 503.
+- `tests/test_permissions.py`, `tests/test_sessions.py`, `tests/test_email.py`,
+  `tests/test_async_correctness.py`, `tests/test_isolation.py`, `tests/test_standalone.py` pass;
+  ruff, mypy and `scripts/check_docs.py` clean.
+
+**Files changed**
+- `app/notify/resend.py`, `app/web/email_webhooks.py`, `app/main.py`, `app/config.py`,
+  `app/web/csrf.py`, `.env.example`, `tests/test_resend_webhook.py`, `tests/test_permissions.py`,
+  `tests/test_sessions.py`, `docs/adr/0088-resend-bounce-webhook.md`, `docs/adr/README.md`,
+  `NEEDS-YOU.md`.
+
+**Open issues**
+- The owner's step (NEEDS-YOU §3): add the Resend webhook for `email.bounced` and
+  `email.complained` at `https://<APP_BASE_URL>/webhooks/resend` and put its signing secret in
+  `.env`. That needs a public URL (NEEDS-YOU §2). Not configured in Resend from here.
+- Resend keeps its own suppression list. `email --allow` clears only Vontry's.
+- `support@vontry.app` still bounces until a Cloudflare Email Routing rule exists for it. This
+  webhook will then record such a bounce instead of leaving it unseen.
+- The full suite was not run here, only the targeted tests above. CI runs it on the PR.
+- ADR-0088 is Proposed until the owner accepts it. T4.09 stays open (backups, production).
+
+**Decisions for the owner**
+- None new. Accepting ADR-0088 (a new public route) is the owner's.
+
+---
+
 ## 2026-11-26 — AC-ANL-07: the weekly summary delivered through Resend
 
 **Implemented**

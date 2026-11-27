@@ -50,12 +50,14 @@ class Settings(BaseSettings):
     smtp_from_alerts: str = ""
     smtp_from_reports: str = ""
     support_email: str = "support@localhost"
+    # The `whsec_...` signing secret of the Resend webhook that reports bounces and complaints
+    # (ADR-0088). Blank refuses every call to /webhooks/resend.
+    resend_webhook_secret: str = ""
 
     anthropic_api_key: str = ""
     extractor_model: str = "claude-opus-5"
     # SEC-13: uploads are at most 15 MB.
     max_upload_mb: int = 15
-    # RCV-FR-14, S9: invoice photos read per business in any 24 hours; beyond it, by hand.
 
     # Where invoice photos live. "local" is a directory, which must be a persistent volume when
     # deployed; "s3" is any S3-compatible bucket (AWS, R2, Backblaze, Spaces, MinIO).

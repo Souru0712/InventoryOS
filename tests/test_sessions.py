@@ -239,8 +239,8 @@ def test_signing_in_issues_a_new_form_token(client):
 
 
 def test_provider_webhooks_need_no_token_they_are_signed(client):
-    """Square and Stripe post without cookies; their signature is the check."""
-    for path in ("/webhooks/square", "/billing/webhook"):
+    """Square, Resend and Stripe post without cookies; their signature is the check."""
+    for path in ("/webhooks/square", "/webhooks/resend", "/billing/webhook"):
         response = client.post(path, content=b"{}", headers=NO_TOKEN)
         assert response.status_code != 403, path
 
