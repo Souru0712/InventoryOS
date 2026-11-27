@@ -20,7 +20,7 @@ from app.models import Location, SyncRun, Tenant, User
 from app.order_ingestion import order_summary
 from app.pos_catalog import MappingError, NotFound, external_locations, summary, track_location
 from app.sales_status import connection_health
-from app.security import require_permission, require_tenant, require_verified
+from app.security import require_permission, require_tenant, require_verified, require_writable
 from app.throttle import client_ip
 from app.web.flash import flash, pop_flash
 from app.web.templating import templates
@@ -161,6 +161,7 @@ def track_pos_location(
     external_location_id: int,
     location_id: str = Form(""),
     db: Session = Depends(get_db),
+    _writable: Tenant = Depends(require_writable),  # read-only refuses it (AC-SAAS-07)
     org: OrgContext = Depends(require_permission("pos.manage")),
 ):
     """Which of the business's locations tracks a Square location; none leaves it untracked."""

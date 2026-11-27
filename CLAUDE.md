@@ -192,6 +192,10 @@ implementation sessions; the detail lives in `docs/`.
   ADR-0090): a confirmed cutover or a location change queues `sync_subscription`, which
   moves the plan (narrowest that fits, at a cutover) and the per-location quantity, at
   Stripe once subscribed. Plans' prices are set with `app.cli plans`, never typed in.
+- A route that writes depends on `require_writable` (a read-only business is refused,
+  AC-SAAS-07), or is listed with its reason in `OPEN_WHEN_READ_ONLY` in
+  `tests/test_lifecycle.py` (a test fails otherwise). Trial and grace lengths are the
+  `TRIAL_DAYS` and `GRACE_DAYS` settings (ADR-0091).
 - No prices in domain code (DR-36); no per-customer or per-segment code (C-30).
 - Every response carries CSP and the other security headers (`app/web/headers.py`). Inline
   `<script>` tags need `nonce="{{ request.state.csp_nonce }}"`; no inline event handlers or

@@ -8,6 +8,7 @@ is applied by app/orchestration/stripe_events.py.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -17,7 +18,7 @@ from app.access import OrgContext
 from app.billing import fit_reason, quantity_for
 from app.config import get_settings
 from app.db import get_db
-from app.models import Tenant, User
+from app.models import SubscriptionStatus, Tenant, User
 from app.orchestration.stripe_events import handle_event
 from app.plans import sellable
 from app.security import require_permission, require_tenant, require_user
@@ -62,6 +63,16 @@ def checkout(
         raise HTTPException(status_code=503, detail=f"no Stripe price configured for {plan}")
 
     stripe = _stripe()
+    subscription_data: dict = {"metadata": {"tenant_id": str(tenant.id), "plan": plan}}
+    # Paying during the trial keeps its remaining days (C-44): Stripe starts billing at its end.
+    # Stripe takes a trial end only 48 hours or more ahead; a trial nearly over is billed now.
+    ends = tenant.trial_ends_at
+    if (
+        tenant.subscription_status is SubscriptionStatus.TRIALING
+        and ends is not None
+        and ends - datetime.now(UTC) >= timedelta(hours=48)
+    ):
+        subscription_data["trial_end"] = int(ends.timestamp())
     session = stripe.checkout.Session.create(
         mode="subscription",
         # Per location: the POS-connected locations; per business: one (SAAS-B-18).
@@ -72,7 +83,7 @@ def checkout(
         success_url=f"{settings.app_base_url}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{settings.app_base_url}/pricing",
         metadata={"tenant_id": str(tenant.id), "plan": plan},
-        subscription_data={"metadata": {"tenant_id": str(tenant.id), "plan": plan}},
+        subscription_data=subscription_data,
     )
     log.info("tenant %s started checkout for %s", tenant.id, plan)
     return RedirectResponse(session.url, status_code=303)

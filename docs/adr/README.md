@@ -122,3 +122,4 @@ Task status and the record of work follow the roadmap's
 | [ADR-0088](0088-resend-bounce-webhook.md) | Resend's bounces and complaints fill the suppression list | T4.09 | Proposed |
 | [ADR-0089](0089-plans-and-entitlements-as-data.md) | Plans and entitlements are data; the core is never gated | C-41 | Proposed |
 | [ADR-0090](0090-subscription-follows-the-business.md) | The subscription follows the business: per-location quantity, plan at cutover | C-44 | Proposed |
+| [ADR-0091](0091-subscription-lifecycle-policies.md) | Subscription lifecycle policies as configuration; read-only refuses every write | C-44 | Proposed |

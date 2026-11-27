@@ -5,6 +5,38 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-27 — T4.03 Subscription lifecycle policies
+
+**Implemented**
+- The approved lifecycle (C-44, ADR-0091) as configuration: `TRIAL_DAYS` (30) and `GRACE_DAYS`
+  (7), read through `trial_days()` and `grace_days()`.
+- Paying during a trial keeps its days: checkout passes the trial's end to Stripe as `trial_end`
+  (48 hours or more ahead, Stripe's minimum; otherwise billed now).
+- Stripe's `unpaid` is read-only at once (SAAS §3), with the card-update banner.
+- AC-SAAS-07: every write route depends on `require_writable` or is listed with its reason; the
+  sales-source switch, the three POS mapping routes (one reprocesses sales), POS location
+  tracking and the expiry photo read were open to a read-only business and are now refused.
+
+**Verified**
+- `tests/test_lifecycle.py` (15): the route guard, configured lengths, the approved defaults,
+  each Stripe status's access, the unpaid banner, POS ingestion continuing while read-only,
+  trial days kept at checkout and a nearly-over trial billed at once, a read-only business
+  reading pages and subscribing again while a write is refused. Full suite on SQLite: 1417
+  passed, 34 skipped (Postgres-only); ruff, mypy and the docs checker clean.
+
+**Files changed**
+- `app/config.py`, `app/entitlements.py`, `app/orchestration/stripe_events.py`,
+  `app/web/billing.py`, `app/web/connections.py`, `app/web/mappings.py`,
+  `app/web/sales_modes.py`, `app/web/scanning.py`, tests, `.env.example`, `CLAUDE.md`, ADR-0091.
+
+**Decisions for the owner**
+- None new (C-44 applied).
+
+**Next task**
+- T4.08 Plan and entitlements view.
+
+---
+
 ## 2026-11-27 — T4.02 Stripe catalogue and per-location billing
 
 **Implemented**

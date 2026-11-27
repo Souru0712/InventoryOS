@@ -11,7 +11,7 @@ subscription back to life.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.access import OrgContext
 from app.access.system import tenant_by_id, tenant_by_stripe_id
 from app.audit import record_audit
+from app.entitlements import grace_days
 from app.models import SubscriptionStatus, Tenant
 from app.orchestration.subscriptions import (
     apply_location_limit,
@@ -142,6 +143,11 @@ def apply_subscription(db: Session, tenant: Tenant, subscription: dict) -> str:
         change_plan(db, tenant, plan)
         tenant.current_period_end = period_end or tenant.current_period_end
         mark_past_due(db, tenant)
+        if subscription.get("status") == "unpaid":
+            # Stripe has stopped retrying the card: no grace is left, so read-only (SAAS §3).
+            spent = datetime.now(UTC) - timedelta(days=grace_days())
+            if tenant.past_due_since is None or tenant.past_due_since > spent:
+                tenant.past_due_since = spent
     else:
         tenant.current_period_end = period_end or tenant.current_period_end
         end_subscription(db, tenant, status)

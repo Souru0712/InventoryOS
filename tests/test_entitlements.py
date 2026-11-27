@@ -15,17 +15,17 @@ from fastapi.testclient import TestClient
 
 from app.db import Base, SessionLocal, engine
 from app.entitlements import (
-    GRACE_DAYS,
-    TRIAL_DAYS,
     Access,
     NotEntitled,
     access,
     allows,
     entitlements,
+    grace_days,
     location_allowance,
     require,
     start_trial,
     state,
+    trial_days,
     usage_limit,
 )
 from app.main import app
@@ -87,7 +87,7 @@ def account(status: SubscriptionStatus, plan: str = "complete", **fields) -> Ten
         (SubscriptionStatus.PAST_DUE, {"past_due_since": NOW - timedelta(days=2)}, Access.FULL),
         (
             SubscriptionStatus.PAST_DUE,
-            {"past_due_since": NOW - timedelta(days=GRACE_DAYS + 1)},
+            {"past_due_since": NOW - timedelta(days=grace_days() + 1)},
             Access.READ_ONLY,
         ),
         (SubscriptionStatus.EXPIRED, {}, Access.READ_ONLY),
@@ -115,7 +115,7 @@ def test_a_trial_is_of_the_plan_it_chose():
     """PD-56: no bigger plan during the trial, so nothing is taken away when it converts."""
     tenant = start_trial(account(SubscriptionStatus.ACTIVE, "standalone"), NOW)
     assert tenant.subscription_status is SubscriptionStatus.TRIALING
-    assert tenant.trial_ends_at == NOW + timedelta(days=TRIAL_DAYS)
+    assert tenant.trial_ends_at == NOW + timedelta(days=trial_days())
     assert entitlements(tenant).plan == "standalone"
 
 
@@ -258,7 +258,7 @@ def test_a_plan_the_catalogue_does_not_have_is_refused(db, tenant):
 
 
 def test_the_nightly_job_ends_trials_that_are_over(db, tenant):
-    start_trial(tenant, NOW - timedelta(days=TRIAL_DAYS + 1))
+    start_trial(tenant, NOW - timedelta(days=trial_days() + 1))
     db.commit()
 
     assert expire_due_trials(db, NOW) == [tenant.id]
@@ -302,7 +302,7 @@ def test_the_complete_lifecycle(db, tenant):
     mark_past_due(db, tenant, NOW)
     db.commit()
     assert access(tenant, NOW) is Access.FULL, "the shop keeps working while the card is retried"
-    assert access(tenant, NOW + timedelta(days=GRACE_DAYS + 1)) is Access.READ_ONLY
+    assert access(tenant, NOW + timedelta(days=grace_days() + 1)) is Access.READ_ONLY
 
     # A retry that also fails must not restart the grace period.
     first_failure = tenant.past_due_since

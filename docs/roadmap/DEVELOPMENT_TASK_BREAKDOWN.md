@@ -108,7 +108,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T3.12 | Remove the legacy Square sync path | P1 | S | M5 | T3.11 | Completed (2026-11-26; `run_sync` and the hourly read are adapter catalog reads, the hourly one a job per business; no code path writes POS daily totals, sale items or POS-counted stock items, or reads Square's counts; MEASUREMENT_UNIT added to the adapter's read; ADR-0085) |
 | T4.01 | Plan and entitlement data model (C-41) | P1 | M | M6 | T1.06 | Completed (2026-11-26; plans and entitlements tables, Complete and Standalone seeded, every business on Complete (DM-15); allows() reads the plan's entitlements, core never gated; invoice cap is a plan limit; PA2 retired; PD-56 proposed) |
 | T4.02 | Stripe catalogue and per-location billing | P1 | M | M6 | T4.01 | Completed (2026-11-27; Complete billed per POS-connected location, Standalone per business; a cutover moves the plan to the narrowest that fits, prorated by Stripe; prices set by CLI from Stripe; pricing page from the catalogue; PD-57 proposed; AC-SAAS-11's manual half is T4.04) |
-| T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Not started |
+| T4.03 | Subscription lifecycle policies | P1 | S | M6 | T4.02, ID-14 | Completed (2026-11-27; trial and grace days as configuration (30, 7); paying mid-trial keeps its days; Stripe unpaid read-only; every write route guarded or listed with a reason, six guarded; AC-SAAS-07) |
 | T4.04 | Stripe test-mode lifecycle run | P1 | S | M6 | T4.03, T0.09 | Not started |
 | T4.05 | Full data export | P1 | M | M6 | T2.17 | Not started |
 | T4.06 | Account deletion and retention | P1 | M | M6 | T4.05 | Not started |
@@ -1141,6 +1141,10 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Acceptance:** AC-SAAS-07.
 - **Tests:** existing entitlement tests adapted.
 - **Done when:** merged.
+- **Outcome (2026-11-27):** ADR-0091. `TRIAL_DAYS`/`GRACE_DAYS` settings; checkout passes the
+  trial's end to Stripe; `unpaid` read-only at once; `tests/test_lifecycle.py` holds every write
+  route to `require_writable` or a listed reason. The sales-source switch, POS mappings and
+  reprocessing, POS location tracking and the expiry photo now refuse a read-only business.
 
 ### T4.04 Stripe test-mode lifecycle run · P1 · S
 - **Objective:** the billing lifecycle verified in Stripe test mode (NFR §8 gate 5).

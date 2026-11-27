@@ -314,7 +314,7 @@ def _photo_limit() -> int:
 def scan_expiry(
     photo: UploadFile = File(...),
     db: Session = Depends(get_db),
-    tenant: Tenant = Depends(require_tenant),
+    tenant: Tenant = Depends(require_writable),  # it only leads to a write (AC-SAAS-07)
     org: OrgContext = Depends(require_permission("count.record")),
     _verified: User = Depends(require_verified),
 ):

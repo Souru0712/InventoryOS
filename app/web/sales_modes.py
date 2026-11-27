@@ -23,7 +23,7 @@ from app.sales_modes import (
     preview,
     switch,
 )
-from app.security import require_permission, require_tenant
+from app.security import require_permission, require_tenant, require_writable
 from app.throttle import client_ip
 from app.web.flash import flash, pop_flash
 from app.web.templating import templates
@@ -94,6 +94,7 @@ def sales_source_switch(
     to: str = Form("hand"),
     cutover: str = Form(""),
     db: Session = Depends(get_db),
+    _writable: Tenant = Depends(require_writable),  # read-only refuses it (AC-SAAS-07)
     org: OrgContext = Depends(require_permission("subscription.manage")),
 ):
     kind, provider = _choice(to)

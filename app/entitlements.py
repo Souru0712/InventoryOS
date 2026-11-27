@@ -18,15 +18,21 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from app.config import get_settings
 from app.models import SubscriptionStatus, Tenant
 from app.plans import plan_of
 
 log = logging.getLogger(__name__)
 
-# A trial runs a month on the plan the business chose, without a card (C-44).
-TRIAL_DAYS = 30
-# A card expires and nobody notices for a week. Stripe keeps retrying; so do we, with access.
-GRACE_DAYS = 7
+
+def trial_days() -> int:
+    """How long a trial runs, on the plan the business chose and without a card (C-44)."""
+    return get_settings().trial_days
+
+
+def grace_days() -> int:
+    """Full access after a payment fails, while Stripe retries the card (C-44, SAAS-B-06)."""
+    return get_settings().grace_days
 
 
 class Access(str, enum.Enum):
@@ -98,7 +104,7 @@ def trial_days_left(tenant: Tenant, now: datetime | None = None) -> int | None:
 def grace_ends(tenant: Tenant) -> datetime | None:
     """When a failed payment stops being forgiven."""
     since = tenant.past_due_since
-    return since + timedelta(days=GRACE_DAYS) if since else None
+    return since + timedelta(days=grace_days()) if since else None
 
 
 def access(tenant: Tenant, now: datetime | None = None) -> Access:
@@ -187,7 +193,7 @@ def _message(
         return None
     if status is SubscriptionStatus.PAST_DUE and current is Access.FULL:
         until = grace_ends(tenant)
-        days = max(0, (until - now).days) if until else GRACE_DAYS
+        days = max(0, (until - now).days) if until else grace_days()
         return (
             f"Your last payment did not go through. Update your card within {days} "
             f"day{'s' if days != 1 else ''} to keep receiving and counting stock."
@@ -206,9 +212,9 @@ def _message(
 
 
 def start_trial(tenant: Tenant, now: datetime | None = None) -> Tenant:
-    """A new account tries its plan for TRIAL_DAYS (PD-56: the plan it chose, not a bigger one)."""
+    """A new account tries its plan for trial_days() (PD-56: the plan it chose, not a bigger one)."""
     now = now or datetime.now(UTC)
     tenant.subscription_status = SubscriptionStatus.TRIALING
     tenant.trial_started_at = now
-    tenant.trial_ends_at = now + timedelta(days=TRIAL_DAYS)
+    tenant.trial_ends_at = now + timedelta(days=trial_days())
     return tenant

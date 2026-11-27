@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     # How often the scheduler process's worker looks for due background jobs.
     job_poll_seconds: int = 5
     alert_cooldown_hours: int = 24
+    # The subscription lifecycle (C-44, T4.03): a trial of this many days without a card, and
+    # this many days of full access after a payment fails, before read-only.
+    trial_days: int = 30
+    grace_days: int = 7
     expiry_horizon_days: int = 30
 
     @classmethod
