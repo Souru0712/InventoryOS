@@ -15,15 +15,17 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.access import OrgContext
-from app.billing import fit_reason, quantity_for
+from app.billing import fit_reason, invoices_read_today, quantity_for, use_of
 from app.config import get_settings
 from app.db import get_db
+from app.entitlements import entitlements, state
 from app.models import SubscriptionStatus, Tenant, User
 from app.orchestration.stripe_events import handle_event
-from app.plans import sellable
+from app.plans import plan_of, sellable
 from app.security import require_permission, require_tenant, require_user
+from app.transform.billing import MODE_WORDS
 from app.web.inputs import raw_body
-from app.web.templating import templates
+from app.web.templating import money, templates
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,6 +39,41 @@ def _stripe():
 
     stripe.api_key = settings.stripe_secret_key
     return stripe
+
+
+@router.get("/app/subscription", response_class=HTMLResponse)
+def subscription_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(require_tenant),
+    org: OrgContext = Depends(require_permission("subscription.view")),
+):
+    """What the plan includes, its limits and what the business uses of them (ADM-FR-15, T4.08)."""
+    plan = plan_of(tenant)
+    subscribed = bool(tenant.stripe_subscription_id)
+    return templates.TemplateResponse(
+        request,
+        "app/subscription.html",
+        {
+            "title": "Your plan",
+            "tenant": tenant,
+            "account": state(tenant),
+            "plan": plan,
+            "granted": entitlements(tenant),
+            "use": use_of(db, org),
+            "subscribed": subscribed,
+            # What Stripe bills now, or what it would bill on subscribing (SAAS-B-18).
+            "billed": tenant.billed_quantity if subscribed else quantity_for(db, org, plan),
+            "price": (
+                money(plan.display_amount_cents, plan.display_currency or "USD")
+                if plan.display_amount_cents is not None
+                else None
+            ),
+            "read_today": invoices_read_today(db, org),
+            "mode_words": MODE_WORDS,
+            "billing_configured": bool(get_settings().stripe_secret_key),
+        },
+    )
 
 
 @router.post("/billing/checkout")

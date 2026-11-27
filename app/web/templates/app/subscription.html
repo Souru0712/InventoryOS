@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Your plan</h1>
+
+<div class="card" style="max-width:680px;">
+  <p style="margin:0 0 4px;">
+    <strong>{{ plan.name }}</strong>
+    <span class="pill {{ 'ok' if not account.read_only else 'expired' }}" style="margin-left:6px;">{{ account.status.replace("_", " ") }}</span>
+  </p>
+  <p class="small muted" style="margin:0 0 12px;">
+    {% if price %}{{ price }} {{ "per location" if plan.billing_basis == "per_location" else "for the business" }} a {{ plan.display_interval or "month" }}{% else %}Billed {{ "per location" if plan.billing_basis == "per_location" else "per business" }}{% endif %}.
+    {% if account.trial_days_left is not none %}{{ account.trial_days_left }} day{{ "s" if account.trial_days_left != 1 else "" }} left of your trial.
+    {% elif tenant.current_period_end %}Renews {{ tenant.current_period_end.strftime("%d %b %Y") }}.{% endif %}
+  </p>
+  {% if account.message %}<p class="small" style="margin:0 0 12px;">{{ account.message }}</p>{% endif %}
+  <p class="small" style="margin:0;">
+    {% if subscribed %}Billed for <strong>{{ billed }}</strong> {{ "location" if billed == 1 else "locations" }}{% if plan.billing_basis == "per_location" %} taking sales from a POS{% endif %}.
+    {% elif plan.billing_basis == "per_location" %}On subscribing, billed for <strong>{{ billed }}</strong> {{ "location" if billed == 1 else "locations" }}: those taking sales from a POS, at least one.
+    {% else %}One subscription for the business.{% endif %}
+  </p>
+</div>
+
+<h2>What it includes</h2>
+<div class="card" style="max-width:680px;">
+  <ul class="small" style="padding-left:18px; margin:0;">
+    <li>The whole core: stock, recipes and costs, receiving, counts, waste, batches, reorder suggestions, reports and export.</li>
+    <li>Sales: {% for mode in granted.allowed_modes|sort %}{{ mode_words.get(mode, mode) }}{{ " or " if not loop.last }}{% endfor %}.</li>
+    <li>Locations: {% if granted.max_locations is none %}as many as you have{% else %}{{ granted.max_locations }}{% endif %}.</li>
+    {% for flag in granted.capability_flags|sort %}<li>{{ flag.replace("_", " ")|capitalize }}</li>{% endfor %}
+  </ul>
+</div>
+
+<h2>What you use</h2>
+<div class="card" style="max-width:680px;">
+  <table class="small">
+    <tr><td>Active locations</td><td><strong>{{ use.locations }}</strong>{% if granted.max_locations is not none %} of {{ granted.max_locations }}{% endif %}</td></tr>
+    <tr><td>Taking sales from a POS</td><td><strong>{{ use.connected }}</strong></td></tr>
+    {% if "invoice_extractions_per_day" in granted.limits %}
+    <tr><td>Invoices read in the last 24 hours</td><td><strong>{{ read_today }}</strong> of {{ granted.limits["invoice_extractions_per_day"] }}</td></tr>
+    {% endif %}
+  </table>
+</div>
+
+{% if can(request, "subscription.manage") and tenant.stripe_customer_id and billing_configured %}
+<form method="post" action="/billing/portal" style="margin-top:16px;">{{ csrf_field(request) }}
+  <button class="btn small" type="submit">Manage or cancel subscription</button>
+</form>
+{% elif can(request, "subscription.manage") %}
+<p class="small" style="margin-top:16px;"><a href="/pricing">See the plans</a></p>
+{% else %}
+<p class="small muted" style="margin-top:16px;">The account owner manages the subscription.</p>
+{% endif %}
+{% endblock %}

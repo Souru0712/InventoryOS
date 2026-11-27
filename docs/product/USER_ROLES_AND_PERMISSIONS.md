@@ -91,6 +91,7 @@ option) · ¢ without cost fields.
 | `team.manage` (org) | Invite, change role/scope (not above own), revoke | ✓ | ✓ | — | — | — | — | — | — |
 | `owner.manage` (org) | Add/remove Owners, transfer ownership | ✓ | — | — | — | — | — | — | — |
 | `subscription.manage` (org) | Plan, location quantity, payment method, cancel | ✓ | — | — | — | — | — | — | — |
+| `subscription.view` (org) | See the plan, what it includes, its limits and usage (ADM-FR-15, T4.08) | ✓ | ✓ | — | — | — | — | — | — |
 | `audit.view` | Business audit history | ✓ | ✓ | ✓ (own locations) | — | — | — | — | — |
 | `account.delete` (org) | Request organization deletion | ✓ | — | — | — | — | — | — | — |
 

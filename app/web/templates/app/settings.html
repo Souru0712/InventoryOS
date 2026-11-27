@@ -105,7 +105,7 @@
 <h2>Billing</h2>
 <div class="card" style="max-width:620px;">
   <p style="margin:0 0 4px;">
-    <strong>{{ account.plan_name }}</strong>
+    <strong>{{ account.plan_name }}</strong>{% if can(request, "subscription.view") %} <a class="small" href="/app/subscription" style="margin-left:6px;">What it includes</a>{% endif %}
     <span class="pill {{ 'ok' if not account.read_only else 'expired' }}" style="margin-left:6px;">
       {{ account.status.replace("_", " ") }}
     </span>

@@ -5,6 +5,39 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-27 — T4.08 Plan and entitlements view
+
+**Implemented**
+- `GET /app/subscription` (ADM-FR-09, ADM-FR-15): the plan, its status and renewal or trial
+  days, its price when set, what Stripe bills (or would bill on subscribing), what the plan
+  includes (the core, its sales modes, its locations, any capability flags), and usage against
+  the limits: active and POS-connected locations, invoices read in the last 24 hours against
+  the daily cap. The Stripe portal button for those who manage the subscription. Linked from
+  the Billing card in Settings.
+- A new permission, `subscription.view`, for Owners and Administrators (the task's security
+  line); USER_ROLES_AND_PERMISSIONS §3 lists it. The invoices-read count is shared with the cap
+  (`invoices_read_today()` in `app/billing.py`).
+
+**Verified**
+- `tests/test_subscription_page.py` (4): values match the entitlement set on Complete and on
+  Standalone (over its one-location limit, shown), the billed quantity once subscribed, and
+  access for Owner and Administrator, refused to Manager and Employee.
+- Permissions, isolation, receiving, settings, web, lifecycle and security-header suites pass
+  (212); ruff and mypy clean. Checked in the browser: the page renders, no console errors.
+
+**Files changed**
+- `app/web/billing.py`, `app/web/templates/app/subscription.html` (new),
+  `app/web/templates/app/settings.html`, `app/billing.py`, `app/web/receiving.py`,
+  `app/access/permissions.py`, `docs/product/USER_ROLES_AND_PERMISSIONS.md`, tests.
+
+**Decisions for the owner**
+- None: Owner/Administrator is the task's own security line.
+
+**Next task**
+- T4.05 Full data export.
+
+---
+
 ## 2026-11-27 — T4.03 Subscription lifecycle policies
 
 **Implemented**

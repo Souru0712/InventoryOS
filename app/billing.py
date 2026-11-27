@@ -12,7 +12,7 @@ and Stripe's webhook applies it. The work runs as the `sync_subscription` job, s
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -23,7 +23,7 @@ from app.access import OrgContext, get_scoped, select_scoped
 from app.audit import record_audit
 from app.config import get_settings
 from app.jobs import enqueue
-from app.models import BillingPlan, Location, Tenant
+from app.models import BillingPlan, Job, Location, Tenant
 from app.orchestration.subscriptions import apply_location_limit
 from app.plans import plan_of
 from app.sales import source_of_record
@@ -86,6 +86,16 @@ def use_of(db: Session, org: OrgContext) -> Use:
 def fit_reason(db: Session, org: OrgContext, plan: BillingPlan) -> str | None:
     """Why this business cannot take the plan now (its modes or locations), or None."""
     return unfit(offer(plan), use_of(db, org))
+
+
+def invoices_read_today(db: Session, org: OrgContext) -> int:
+    """Invoice photos queued for reading in the last 24 hours: the plan's costed limit (E-09)."""
+    since = datetime.now(UTC) - timedelta(hours=24)
+    return len(
+        db.scalars(
+            select_scoped(org, Job).where(Job.kind == "extract_document", Job.created_at >= since)
+        ).all()
+    )
 
 
 def quantity_for(db: Session, org: OrgContext, plan: BillingPlan) -> int:

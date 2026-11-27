@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import PurePosixPath
 
@@ -14,13 +14,14 @@ from starlette.datastructures import FormData
 
 from app.access import OrgContext, get_scoped, select_scoped
 from app.access.permissions import VIEW_COSTS
+from app.billing import invoices_read_today
 from app.catalog import active_stock
 from app.costing import cost_changes_from
 from app.db import get_db
 from app.entitlements import usage_limit
 from app.extract.invoice import SUPPORTED_MEDIA
 from app.jobs import enqueue
-from app.models import Document, DocumentStatus, Job, Location, StockItem, Tenant, User
+from app.models import Document, DocumentStatus, Location, StockItem, Tenant, User
 from app.orchestration.extraction_quality import correction_stats
 from app.orchestration.receiving import (
     AlreadyApplied,
@@ -98,12 +99,7 @@ def receiving_index(
 def read_later(db: Session, org: OrgContext, document: Document) -> bool:
     """Queue the photo to be read; asking again while it waits queues it once. Beyond the
     business's daily reading cap it is left for entry by hand (RCV-FR-14, S9)."""
-    since = datetime.now(UTC) - timedelta(hours=24)
-    read_today = len(
-        db.scalars(
-            select_scoped(org, Job).where(Job.kind == "extract_document", Job.created_at >= since)
-        ).all()
-    )
+    read_today = invoices_read_today(db, org)
     tenant = get_scoped(db, org, Tenant, org.tenant_id)
     if tenant is None:
         raise ValueError(f"tenant {org.tenant_id} not found")

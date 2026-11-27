@@ -113,7 +113,7 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 | T4.05 | Full data export | P1 | M | M6 | T2.17 | Not started |
 | T4.06 | Account deletion and retention | P1 | M | M6 | T4.05 | Not started |
 | T4.07 | Founder console and audited support access | P1 | M | M6 | T1.12, T1.20 | Not started |
-| T4.08 | Plan and entitlements view | P1 | S | M6 | T4.01 | Not started |
+| T4.08 | Plan and entitlements view | P1 | S | M6 | T4.01 | Completed (2026-11-27; /app/subscription: plan, status, billed or would-be quantity, what it includes, locations and invoices read against the limits, portal; `subscription.view` for Owners and Administrators) |
 | T4.09 | Production environment, backups, email | P1 | M | M6 | T0.09 | Not started |
 | T4.10 | Monitoring and alerting | P1 | M | M6 | T4.09 | Not started |
 | T4.11 | Rebrand to Vontry | P1 | S | M6 | — | Completed (2026-11-26; pages, emails, senders and marketing say Vontry since C-55; grep test on templates, app strings and public pages; the project name stays an internal identifier) |
@@ -1210,6 +1210,9 @@ every task is *Not started* or *Ready*; none is complete. Stages, milestones and
 - **Acceptance:** values match the entitlement set.
 - **Tests:** rendering tests.
 - **Done when:** merged.
+- **Outcome (2026-11-27):** `GET /app/subscription` reads `entitlements()`, `use_of()` and
+  `invoices_read_today()` (the same count the invoice cap uses); linked from Settings. A new
+  permission, `subscription.view`, gives it to Owners and Administrators (USER_ROLES §3).
 
 ### T4.09 Production environment, backups, email · P1 · M
 - **Objective:** production ready to receive customers (NFR §8 gates 6–7).

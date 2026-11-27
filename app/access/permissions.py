@@ -50,6 +50,7 @@ PERMISSIONS: Mapping[str, str] = {
     "team.manage": "Invite, change role or scope, revoke",
     "owner.manage": "Add or remove Owners, transfer ownership",
     "subscription.manage": "Plan, location quantity, payment method, cancel",
+    "subscription.view": "See the plan, what it includes, its limits and usage",
     "audit.view": "Business audit history",
     "account.delete": "Request organization deletion",
 }
@@ -94,6 +95,7 @@ _ADMINISTRATOR = _MANAGER | {
     "location.manage",
     "settings.manage",
     "team.manage",
+    "subscription.view",
 }
 _OWNER = _ADMINISTRATOR | {"owner.manage", "subscription.manage", "account.delete"}
 
