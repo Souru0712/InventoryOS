@@ -46,6 +46,7 @@ PUBLIC = {
     ("POST", "/login"),
     ("POST", "/logout"),
     ("POST", "/webhooks/square"),
+    ("POST", "/webhooks/resend"),
     ("POST", "/billing/webhook"),
     ("GET", "/verify-email"),
     ("POST", "/verify-email"),

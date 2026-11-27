@@ -5,6 +5,137 @@ issues · decisions · next task.
 
 ---
 
+## 2026-11-26 — Resend's bounces and complaints fill the suppression list (ADR-0088)
+
+**Implemented**
+- `POST /webhooks/resend` (`app/web/email_webhooks.py`): public and signed, like Square's (plain
+  `def`, raw body from `app/web/inputs.py`, no session, CSRF-exempt, in the public route list).
+  `RESEND_WEBHOOK_SECRET` (the `whsec_...` value) in `app/config.py` and `.env.example`. Blank or
+  malformed refuses every call (503).
+- `app/notify/resend.py` checks Svix's signature with the standard library only: HMAC-SHA256 of
+  `{svix-id}.{svix-timestamp}.{body}`, keyed with the base64 part after `whsec_`, compared in
+  constant time with each `v1,` entry. A timestamp more than 5 minutes off is refused (400).
+  Scheme and payloads confirmed against Resend's and Svix's docs.
+- A `Permanent` bounce suppresses each recipient as `bounce`, a complaint as `complaint`. Soft
+  bounces and other event types are answered 200 and ignored. Repeats update the same row.
+  The stored reason and the logs carry the event type, delivery id and Resend email id, never
+  the address or the provider's message.
+
+**Verified**
+- `tests/test_resend_webhook.py` (21):
+  - Svix's published test vector verifies;
+  - a signed hard bounce suppresses, with the address lower-cased and kept out of the logs;
+  - transient, temporary, undetermined and blank bounces suppress nothing;
+  - a complaint to two recipients suppresses both as `complaint`;
+  - a repeat leaves one row, and other types are ignored;
+  - one matching signature among several is accepted;
+  - a forged, empty or wrong-key signature, a timestamp 301 s off either way or not a number, a
+    missing id, or a body changed after signing gets 400 and writes nothing;
+  - an empty or malformed secret gets 503.
+- `tests/test_permissions.py`, `tests/test_sessions.py`, `tests/test_email.py`,
+  `tests/test_async_correctness.py`, `tests/test_isolation.py`, `tests/test_standalone.py` pass;
+  ruff, mypy and `scripts/check_docs.py` clean.
+
+**Files changed**
+- `app/notify/resend.py`, `app/web/email_webhooks.py`, `app/main.py`, `app/config.py`,
+  `app/web/csrf.py`, `.env.example`, `tests/test_resend_webhook.py`, `tests/test_permissions.py`,
+  `tests/test_sessions.py`, `docs/adr/0088-resend-bounce-webhook.md`, `docs/adr/README.md`,
+  `NEEDS-YOU.md`.
+
+**Open issues**
+- The owner's step is done for development. The owner added the Resend webhook for
+  `email.bounced` and `email.complained` on the ngrok URL (`APP_BASE_URL`) and put its secret
+  in `.env`. At deploy the endpoint moves to the production URL.
+- Tested end to end on 2026-11-27, on a throwaway database. The app was reached through
+  ngrok; an unsigned call got 400. One email went to Resend's simulated-bounce address
+  `bounced@resend.dev` (id `01a21a9b-152b-7503-a3fc-130011c2954a`). Two seconds later the
+  webhook answered 200 and the address was suppressed as `bounce`, with a reason naming only
+  the bounce kind and the email id. The log lines carry the type, the delivery id and the
+  email id, never the address.
+- The owner's local `stockpulse.db` cannot run the current code. It is at revision
+  `948e22969d09` (the snack-box era) without `inventory_events`, so startup migrations fail
+  at the first step (`5c1d0f2a9b31`). That step failed before changing anything; the file is
+  untouched. A fresh or reseeded local database is the owner's call.
+- Resend keeps its own suppression list. `email --allow` clears only Vontry's.
+- Resolved the same day. `vontry.app` had no routing rule, only a disabled catch-all, so
+  earlier tests to `support@vontry.app` bounced with "recipient not found". (One was briefly
+  recorded as arrived.) With the owner's approval ("Yes, create it"), a rule now forwards
+  `support@vontry.app` to the owner's verified Gmail. The owner removed the address from
+  Resend's own suppression list, where the bounces had put it. A test (id
+  `01a21a6b-9b09-7443-bb68-305ba153ee80`) then shows as Forwarded in Cloudflare's activity log,
+  and the owner confirmed it arrived in their Gmail.
+  The root's MX is still Cloudflare's alone. Resend receiving stays off: its MX would take the
+  root from Email Routing.
+- The full suite was not run here, only the targeted tests above. CI runs it on the PR.
+- ADR-0088 is Proposed until the owner accepts it. T4.09 stays open (backups, production).
+
+**Decisions for the owner**
+- None new. Accepting ADR-0088 (a new public route) is the owner's.
+
+---
+
+## 2026-11-26 — AC-ANL-07: the weekly summary delivered through Resend
+
+**Implemented**
+- Email goes out through Resend over SMTP from the verified domain `vontry.app` (the owner
+  added the DNS records in Cloudflare and the settings in `.env`; the key never entered the
+  conversation). `SUPPORT_EMAIL` is `support@vontry.app`.
+
+**Verified**
+- AC-ANL-07: the waste demo's weekly summary (Rosewood Coffee, week of 16 Nov) was sent from
+  `Vontry Reports <reports@vontry.app>` to its Owner, set to the owner's Gmail on a throwaway copy
+  of the database; the owner reported it delivered. Its figures (stock value $656.35, waste $0.00,
+  money at risk $154.01, low stock 1, open exceptions 11) match `/app/report`.
+- Public DNS shows the DKIM, `send`, `rsend` and DMARC records, and Email Routing's MX and SPF on
+  the root, without overlap.
+
+**Open issues**
+- The copy sent to `support@vontry.app` bounced ("recipient not found"): Email Routing is on but
+  no rule exists for that address. Replies to any email bounce until it does.
+- Resend's bounce and complaint webhook is not wired into the suppression list (NEEDS-YOU §3).
+- The run was local; repeating it on staging stays with PD-52 and T4.09. G4 still needs
+  AC-SAAS-10 and the owner's sign-off.
+
+---
+
+## 2026-11-26 — One sender per kind of email
+
+**Implemented**
+- Each kind of email has its own From address, so people tell account mail, alerts and reports
+  apart (owner: "Yes, split senders"). `SENDERS` in `app/notify/email.py` groups the kinds:
+  - account (`SMTP_FROM_ACCOUNT`): confirm email, password reset, invitations;
+  - alerts (`SMTP_FROM_ALERTS`): the alert digest and a POS disconnection;
+  - reports (`SMTP_FROM_REPORTS`): the weekly summary.
+- A sender left blank, or a kind not listed, comes from `SMTP_FROM`, so a deployment that sets
+  only `SMTP_FROM` sends as before. All senders sit on one verified sending domain (the owner
+  chose `vontry.app` itself over a subdomain); no extra DNS records.
+- `.env.example` (which still said StockPulse) and `NEEDS-YOU.md` list the new settings.
+
+**Verified**
+- `tests/test_email.py`: the digest, the weekly summary and a confirmation email each carry their
+  own sender; a blank or unknown one falls back to `SMTP_FROM`.
+
+**Files changed**
+- `app/config.py`, `app/notify/email.py`, `tests/test_email.py`, `.env.example`, `NEEDS-YOU.md`.
+
+---
+
+## 2026-11-26 — Rename to Vontry merged (PR #66)
+
+**Implemented**
+- PR #66 merged into `main` with a merge commit (`0e2ae92`, owner: "Merge when green"): the
+  rename to Vontry (C-55) and the record of PR #65.
+
+**Verified**
+- CI on `dc28dc7`: Tests (SQLite), Tests (PostgreSQL 16), Standalone (no POS), Lint and types,
+  Dependency audit and Docker image all green.
+
+**Open issues**
+- Outside the code, for the owner: the Square app's name in the Developer Console, the GitHub
+  repository's name, and verifying the Resend domain `vontry.app` (AC-ANL-07).
+
+---
+
 ## 2026-11-26 — Stage 3 follow-ups merged (PR #65)
 
 **Implemented**

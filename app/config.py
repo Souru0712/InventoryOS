@@ -45,7 +45,14 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = "Vontry <alerts@localhost>"
+    # One sender per kind of email (app/notify/email.py SENDERS); blank falls back to smtp_from.
+    smtp_from_account: str = ""
+    smtp_from_alerts: str = ""
+    smtp_from_reports: str = ""
     support_email: str = "support@localhost"
+    # The `whsec_...` signing secret of the Resend webhook that reports bounces and complaints
+    # (ADR-0088). Blank refuses every call to /webhooks/resend.
+    resend_webhook_secret: str = ""
 
     anthropic_api_key: str = ""
     extractor_model: str = "claude-opus-5"

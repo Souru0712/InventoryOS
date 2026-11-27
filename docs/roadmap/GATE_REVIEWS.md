@@ -103,8 +103,9 @@ None of PD-43 to PD-54 blocked the gate. PD-43 to PD-53 were decided on 2026-11-
 
 ## G4 Standalone end-to-end (M4)
 
-**Status:** evidence prepared 2026-11-25; AC-SAL-08 completed 2026-11-26; not passed. It needs:
-- two manual checks: **AC-ANL-07** and **AC-SAAS-10**;
+**Status:** evidence prepared 2026-11-25; AC-SAL-08 completed and AC-ANL-07 recorded
+2026-11-26; not passed. It needs:
+- one manual check: **AC-SAAS-10**;
 - the owner's sign-off.
 
 **Pass condition**
@@ -127,7 +128,7 @@ skipped (the Postgres-only tests).
 
 ### Pass condition, item by item
 
-**1. The R1 criteria.** Met, except AC-ANL-07.
+**1. The R1 criteria.** Met.
 
 | Criteria | Tests |
 |---|---|
@@ -142,7 +143,7 @@ skipped (the Postgres-only tests).
 | AC-ROR-02, -04 inputs and formula shown; CSV grouped by supplier | `tests/test_reorder.py::test_the_page_explains_and_the_csv_is_grouped_by_supplier` |
 | AC-ANL-01, -02 past figures at their own cost; valuation basis | `tests/test_costs.py` (`test_ac_anl_01_…`, `test_ac_anl_02_…`) |
 | AC-ANL-03..06, -08 reports on the ledger, business days, exports, usage between counts | `tests/test_reports.py`, `tests/test_reports_ii.py`, `tests/test_reorder.py::test_ac_anl_08_use_from_two_counts` |
-| AC-ANL-07 the weekly summary email reaches Owners (M) | **Not recorded.** It needs a real delivery through the production email provider (PD-24, Resend) |
+| AC-ANL-07 the weekly summary email reaches Owners (M) | **Met (2026-11-26).** The demo business's weekly summary (week of 16 Nov) was sent through Resend from `reports@vontry.app` (domain verified) to an Owner at the owner's Gmail, and the owner reported it delivered. It carried stock value $656.35, waste $0.00, money at risk $154.01, low stock 1 and 11 open exceptions, the same figures as `/app/report`. Sent from a local run (no staging exists yet, TR-26): the repeat on staging stays with PD-52 and T4.09. A copy to `support@vontry.app` bounced (no routing rule for that address yet), which is a mailbox setup, not the summary |
 
 **2. The Standalone end-to-end job is green with no POS settings.** Met.
 - The CI job "Standalone (no POS)" passed on `main` (`2c496e3`).
@@ -155,7 +156,8 @@ owner's to arrange (CUSTOMER_VALIDATION_PLAN: Standalone pilots).
 **To pass G4:**
 1. ~~Build AC-SAL-08's two missing parts.~~ Done 2026-11-26 (origin on sales-derived reports,
    "N of M open days" on Standalone reports).
-2. Record AC-ANL-07 once email delivery is configured.
+2. ~~Record AC-ANL-07 once email delivery is configured.~~ Done 2026-11-26 (delivered through
+   Resend).
 3. Observe AC-SAAS-10 with a non-founder.
 
 ---
@@ -309,7 +311,7 @@ task (T1.01 to T1.12) was merged by 2026-11-11, and the evidence was still green
 | G1 Tenancy & access | Passed ("Sign off both") | 2026-11-13 |
 | G2 Ledger engine | Passed ("Sign off both"); R6 moved to G3 as decided on 2026-11-12 | 2026-11-13 |
 | G3 Operations engine | Evidence prepared; AC-WST-01 recorded; awaiting AC-RCV-04's manual half, then sign-off | — |
-| G4 Standalone end-to-end | Evidence prepared; AC-SAL-08 built; awaiting manual checks AC-ANL-07 and AC-SAAS-10, then sign-off | — |
+| G4 Standalone end-to-end | Evidence prepared; AC-SAL-08 built; AC-ANL-07 recorded; awaiting AC-SAAS-10, then sign-off | — |
 | G5 Square connected | Passed ("sign off G5 as well"); PR #63 green on all six jobs at `dbeb10d` | 2026-11-26 |
 
 Stage 1 is complete. Stage 2 starts with T2.01 Owned product catalog.

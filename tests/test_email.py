@@ -16,7 +16,7 @@ from app.models import (
     TrackMode,
     User,
 )
-from app.notify.email import suppress
+from app.notify.email import send_email, sender_for, suppress
 from app.orchestration.alerts import send_alert_digest
 from app.orchestration.reporting import send_weekly_report
 from app.security import hash_password
@@ -152,6 +152,51 @@ def test_the_weekly_summary_goes_to_owners_and_members_who_see_costs(db, tenant,
     db.commit()
     assert send_weekly_report(db, OrgContext.system(tenant.id)) is True
     assert {m["To"] for m in mail} == {"owner@rosewood.test", "manager@rosewood.test"}
+
+
+# --- who it comes from ------------------------------------------------------------------------
+
+DEFAULT = "Vontry <hello@mail.vontry.test>"
+ACCOUNT = "Vontry <account@mail.vontry.test>"
+ALERTS = "Vontry Alerts <alerts@mail.vontry.test>"
+REPORTS = "Vontry Reports <reports@mail.vontry.test>"
+
+
+@pytest.fixture
+def senders(monkeypatch):
+    settings = get_settings()
+    for name, value in {
+        "smtp_from": DEFAULT,
+        "smtp_from_account": ACCOUNT,
+        "smtp_from_alerts": ALERTS,
+        "smtp_from_reports": REPORTS,
+    }.items():
+        monkeypatch.setattr(settings, name, value, raising=False)
+
+
+def test_each_kind_of_email_comes_from_its_own_sender(db, tenant, milk, mail, senders):
+    alert(db, tenant, milk, AlertKind.LOW_STOCK, "Whole milk is at 4 l, below its reorder point")
+    assert send_alert_digest(db, OrgContext.system(tenant.id)) is True
+    assert send_weekly_report(db, OrgContext.system(tenant.id)) is True
+    assert send_email(
+        db, tenant.id, "new@rosewood.test", "Confirm", "<p>Hi</p>", "verify_email", "Hi"
+    )
+
+    assert [message["From"] for message in mail] == [ALERTS, REPORTS, ACCOUNT]
+
+
+def test_account_mail_alerts_and_reports_each_have_a_sender(senders):
+    assert {sender_for(kind) for kind in ("verify_email", "reset_password", "invitation")} == {
+        ACCOUNT
+    }
+    assert sender_for("alert_digest") == sender_for("connection_revoked") == ALERTS
+    assert sender_for("weekly_report") == REPORTS
+
+
+def test_a_blank_or_unknown_sender_falls_back_to_smtp_from(monkeypatch, senders):
+    monkeypatch.setattr(get_settings(), "smtp_from_reports", "", raising=False)
+    assert sender_for("weekly_report") == DEFAULT
+    assert sender_for("a_kind_nobody_mapped") == DEFAULT
 
 
 # --- what each person asked for ---------------------------------------------------------------
